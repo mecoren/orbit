@@ -275,4 +275,40 @@ describe("mock IPC 契约", () => {
       expect("uuid" in t).toBe(false);
     }
   });
+
+  it("④-4 分页/看板通道 keyword 下推（与 core build_task_where 同口径）", () => {
+    type Page = { items: Array<{ id: number; description: string | null }>; has_more: boolean };
+    type Board = {
+      groups: Array<{ key: string; items: Array<{ id: number }>; total: number }>;
+      total: number;
+    };
+    const db = seedTasks(45);
+    const page = mockCommands.todo_tasks_page as (args: unknown, ctx: unknown) => Page;
+    const board = mockCommands.todo_tasks_board as (args: unknown, ctx: unknown) => Board;
+
+    // 标题命中：只剩目标行；搜索通道 description 回真值（面板本地收敛要读）
+    const byTitle = page({ filter: { keyword: "契约任务 007" }, cursor: null, limit: 100 }, { db });
+    expect(byTitle.items.map((t) => t.id)).toEqual([8]);
+    expect(byTitle.items[0].description).toBe("描述 7");
+
+    // 描述命中：标题不含关键词，只有服务端 LIKE 才能搜到（e2e 曾在此静默返回全库）
+    const byDesc = page({ filter: { keyword: "描述 11" }, cursor: null, limit: 100 }, { db });
+    expect(byDesc.items.map((t) => t.id)).toEqual([12]);
+
+    // 看板同口径：组总数与列内行都按关键词收敛
+    const b = board(
+      {
+        filter: { keyword: "契约任务 01" },
+        groupBy: "project",
+        limitPerGroup: 100,
+        dayStart: 0,
+        dayEnd: 0,
+      },
+      { db },
+    );
+    expect(b.total).toBe(10);
+    expect(b.groups.map((g) => g.key)).toEqual(["ungrouped"]);
+    expect(b.groups[0].total).toBe(10);
+    expect(b.groups[0].items).toHaveLength(10);
+  });
 });

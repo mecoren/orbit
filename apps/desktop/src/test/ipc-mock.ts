@@ -1238,7 +1238,13 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       return { items: [], next_cursor: null, has_more: false };
     }
     const size = Math.min(Math.max(Number(limit) || 1, 1), 1000);
-    const sorted = sortTaskRows(filterTaskRows(db, filter), key, filter?.sort_dir);
+    // keyword 必须与 core `build_task_where` 同口径叠加：省略会让搜索时
+    // 分页通道返回全库（e2e 表现为「搜了关键词，不匹配的行还在」）
+    const sorted = sortTaskRows(
+      filterByKeyword(filterTaskRows(db, filter), filter?.keyword),
+      key,
+      filter?.sort_dir,
+    );
     const rest = cursor ? tasksAfterCursor(sorted, key, cursor, filter?.sort_dir) : sorted;
     const page = rest.slice(0, size);
     const hasMore = rest.length > size;
@@ -1274,7 +1280,8 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   todo_tasks_board: ({ filter, groupBy, limitPerGroup, dayStart, dayEnd }, { db }) => {
     // 四象限与 groupEisenhower 一致：只看未完成。用追加过滤而不是覆盖 done——
     // 用户显式筛「已完成」时结果应为空（与前端同一行为）
-    const rows = filterTaskRows(db, filter).filter(
+    // keyword 与 core 看板通道同口径（build_task_where 含 LIKE 子句）
+    const rows = filterByKeyword(filterTaskRows(db, filter), filter?.keyword).filter(
       (t) => groupBy !== "quadrant" || t.done !== 1,
     );
     const key = (filter?.sort_key ?? "manual") as MockTaskSortKey;
