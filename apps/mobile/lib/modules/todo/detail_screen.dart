@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../core/layout/orbit_breakpoints.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../core/theme/app_shapes.dart';
@@ -88,7 +89,9 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
     final id = widget.taskId;
     if (id == null) return;
     try {
-      await ref.read(orbitBridgeProvider).todoTaskUpdate(id, encodePatch(patch));
+      await ref
+          .read(orbitBridgeProvider)
+          .todoTaskUpdate(id, encodePatch(patch));
       if (!mounted) return;
       ref.invalidate(todoTasksProvider);
       ref.invalidate(taskDetailProvider(id));
@@ -101,7 +104,9 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
   /// 任务下一实例——引擎下沉后与桌面同口径）；取消完成仍走普通 patch
   Future<void> _toggleDone(TodoTask task) async {
     final id = widget.taskId;
-    if (id == null || task.isDone) return _patchTask(buildDoneTogglePatch(task));
+    if (id == null || task.isDone) {
+      return _patchTask(buildDoneTogglePatch(task));
+    }
     try {
       final res = await ref.read(orbitBridgeProvider).todoTaskComplete(id);
       if (!mounted) return;
@@ -182,8 +187,11 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
   /// 我的一天：加入今天（本地零点）/ 移出（null）——与桌面 toggleMyDayValue 同口径
   Future<void> _toggleMyDay(TodoTask task) {
     final now = DateTime.now();
-    final todayZero =
-        DateTime(now.year, now.month, now.day).millisecondsSinceEpoch;
+    final todayZero = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).millisecondsSinceEpoch;
     return _patchTask({'my_day_date': task.isInMyDay ? null : todayZero});
   }
 
@@ -193,8 +201,9 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
   /// 复制任务：克隆后 toast + 原页替换为新副本详情（对齐桌面复制后选中切到副本）
   Future<void> _duplicateTask(TodoTask task) async {
     try {
-      final copy =
-          await ref.read(orbitBridgeProvider).todoTaskDuplicate(task.id);
+      final copy = await ref
+          .read(orbitBridgeProvider)
+          .todoTaskDuplicate(task.id);
       if (!mounted) return;
       WaitToast.success('已复制为「${copy.title}」');
       ref.invalidate(todoTasksProvider);
@@ -251,19 +260,30 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                     // 初次加载骨架：标题 + 信息行占位（重查有旧值时不闪，直接旧内容）
                     loading: () => const _DetailSkeleton(),
                     error: (_, _) => const _ErrorView(),
-                    data: (detail) => _DetailView(
-                      // key 仅绑 id，不纳入 updatedAt——若含之，任何 patch 后
-                      // invalidate 会导致整树按新 key 替换重建，旧 ListView
-                      // 延迟卸载与新 ListView 挂载同帧共存，_scrollController
-                      // 瞬时双附着触发断言。各区块外部变更同步已由
-                      // didUpdateWidget / provider 回读覆盖，无需整树重置。
-                      key: ValueKey('task-detail:${detail.id}'),
-                      detail: detail,
-                      scrollController: _scrollController,
-                      onPatch: _patchTask,
-                      onToggleDone: _toggleDone,
-                      onSetStatus: _setStatus,
-                      onRefresh: _refreshDetail,
+                    // #107 平板：详情限宽（760）水平居中，行宽不随屏宽无限拉伸。
+                    // 用 topCenter 而非 Center：意图只是「限宽」，纵向仍贴顶
+                    // （换了短内容分支也不会被垂直居中拽到屏幕中间）
+                    data: (detail) => Align(
+                      alignment: Alignment.topCenter,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          maxWidth: OrbitBreakpoints.contentMaxWidth,
+                        ),
+                        // key 仅绑 id，不纳入 updatedAt——若含之，任何 patch 后
+                        // invalidate 会导致整树按新 key 替换重建，旧 ListView
+                        // 延迟卸载与新 ListView 挂载同帧共存，_scrollController
+                        // 瞬时双附着触发断言。各区块外部变更同步已由
+                        // didUpdateWidget / provider 回读覆盖，无需整树重置。
+                        child: _DetailView(
+                          key: ValueKey('task-detail:${detail.id}'),
+                          detail: detail,
+                          scrollController: _scrollController,
+                          onPatch: _patchTask,
+                          onToggleDone: _toggleDone,
+                          onSetStatus: _setStatus,
+                          onRefresh: _refreshDetail,
+                        ),
+                      ),
                     ),
                   ),
           ),
@@ -331,7 +351,8 @@ class _DetailSkeleton extends StatelessWidget {
     return ListView(
       physics: const NeverScrollableScrollPhysics(),
       padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top +
+        top:
+            MediaQuery.of(context).padding.top +
             OrbitPageHeader.rowHeight +
             AppDimens.space12,
         left: AppDimens.space16,
@@ -376,7 +397,8 @@ class _DetailView extends StatelessWidget {
     return ListView(
       controller: scrollController,
       padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top +
+        top:
+            MediaQuery.of(context).padding.top +
             OrbitPageHeader.rowHeight +
             AppDimens.space12,
         left: AppDimens.space16,
@@ -385,7 +407,11 @@ class _DetailView extends StatelessWidget {
       ),
       children: [
         // 十区块固定顺序（docs/05 §4.3）
-        _TitleSection(detail: detail, onPatch: onPatch, onToggleDone: onToggleDone),
+        _TitleSection(
+          detail: detail,
+          onPatch: onPatch,
+          onToggleDone: onToggleDone,
+        ),
         const SizedBox(height: AppDimens.space12),
         _InfoSection(
           detail: detail,
@@ -451,8 +477,9 @@ class _TitleSection extends StatefulWidget {
 
 class _TitleSectionState extends State<_TitleSection> {
   bool _editing = false;
-  late final TextEditingController _controller =
-      TextEditingController(text: widget.detail.title);
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.detail.title,
+  );
 
   @override
   void didUpdateWidget(covariant _TitleSection oldWidget) {
@@ -614,8 +641,10 @@ class _InfoSection extends ConsumerWidget {
                   SelectItem(
                     value: '${p.id}',
                     label: p.title,
-                    colorDot: hexToColor(p.hexColor,
-                        fallback: OrbitAccents.todoAccent),
+                    colorDot: hexToColor(
+                      p.hexColor,
+                      fallback: OrbitAccents.todoAccent,
+                    ),
                   ),
               ],
               current: detail.projectId == null ? '' : '${detail.projectId}',
@@ -625,7 +654,9 @@ class _InfoSection extends ConsumerWidget {
           ),
           InfoTile(
             label: '截止日期',
-            value: detail.dueDate != null ? formatDueShort(detail.dueDate!) : '无',
+            value: detail.dueDate != null
+                ? formatDueShort(detail.dueDate!)
+                : '无',
             onClick: () => _pickDueDate(context),
             // 有值才可清除；patch {"due_date": null} 走三态清空语义
             onClear: detail.dueDate == null
@@ -634,9 +665,14 @@ class _InfoSection extends ConsumerWidget {
           ),
           InfoTile(
             label: '开始日期',
-            value: detail.startDate != null ? formatDueShort(detail.startDate!) : '无',
-            onClick: () => _pickDateField(context,
-                current: detail.startDate, key: 'start_date'),
+            value: detail.startDate != null
+                ? formatDueShort(detail.startDate!)
+                : '无',
+            onClick: () => _pickDateField(
+              context,
+              current: detail.startDate,
+              key: 'start_date',
+            ),
             onClear: detail.startDate == null
                 ? null
                 : () => onPatch(const {'start_date': null}),
@@ -831,9 +867,8 @@ class _DescriptionSectionState extends State<_DescriptionSection> {
       shape: bottomSheetTopShape,
       builder: (_) => _DescriptionEditSheet(
         initial: widget.detail.description ?? '',
-        onApply: (text) => widget.onPatch(
-          {'description': text.isEmpty ? null : text},
-        ),
+        onApply: (text) =>
+            widget.onPatch({'description': text.isEmpty ? null : text}),
       ),
     );
   }
@@ -841,10 +876,7 @@ class _DescriptionSectionState extends State<_DescriptionSection> {
 
 /// 描述编辑抽屉：多行输入自适应高度（70% 屏高上限）+ 保存/取消
 class _DescriptionEditSheet extends StatefulWidget {
-  const _DescriptionEditSheet({
-    required this.initial,
-    required this.onApply,
-  });
+  const _DescriptionEditSheet({required this.initial, required this.onApply});
 
   final String initial;
   final void Function(String text) onApply;
@@ -854,8 +886,9 @@ class _DescriptionEditSheet extends StatefulWidget {
 }
 
 class _DescriptionEditSheetState extends State<_DescriptionEditSheet> {
-  late final TextEditingController _controller =
-      TextEditingController(text: widget.initial);
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initial,
+  );
 
   @override
   void dispose() {
@@ -896,10 +929,7 @@ class _DescriptionEditSheetState extends State<_DescriptionEditSheet> {
           maxLength: 5000,
           autofocus: true,
           style: TextStyle(fontSize: 15, color: colors.bodyText),
-          decoration: const InputDecoration(
-            hintText: '请输入描述',
-            counterText: '',
-          ),
+          decoration: const InputDecoration(hintText: '请输入描述', counterText: ''),
         ),
       ),
       actions: OrbitSheetActions(
@@ -926,6 +956,7 @@ class _SubtasksSection extends ConsumerStatefulWidget {
 
 class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
   bool _adding = false;
+
   /// M10：行内「加子级」——非 null 时为所挂父行的 uuid（顶层添加走 _adding）
   String? _addingUnderUuid;
   final _draftController = TextEditingController();
@@ -958,13 +989,17 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
       _adding = false;
       _addingUnderUuid = null;
     });
-    await _mutate(() => ref
-        .read(orbitBridgeProvider)
-        .todoSubtaskCreate(TodoSubtaskCreateInput(
-          taskId: widget.detail.id,
-          title: title,
-          parentUuid: parentUuid,
-        )));
+    await _mutate(
+      () => ref
+          .read(orbitBridgeProvider)
+          .todoSubtaskCreate(
+            TodoSubtaskCreateInput(
+              taskId: widget.detail.id,
+              title: title,
+              parentUuid: parentUuid,
+            ),
+          ),
+    );
   }
 
   /// 删除确认（对齐评论删除惯例：软删无恢复入口，防误触。
@@ -981,7 +1016,8 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
     );
     if (!confirmed || !mounted) return;
     await _mutate(
-        () => ref.read(orbitBridgeProvider).todoSubtaskDelete(subtask.id));
+      () => ref.read(orbitBridgeProvider).todoSubtaskDelete(subtask.id),
+    );
   }
 
   /// M10：提到顶层（嵌套行的降级出口，误嵌套不必删了重建）
@@ -1015,8 +1051,7 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
 
     // M10：parent_uuid 树 → DFS 渲染序列（容错口径与桌面 subtask-tree.ts、
     // project_tree.dart 同源；写侧合法性由 Rust validate_subtask_parent 拦）
-    final nodes =
-        flattenSubtaskTree(buildSubtaskTree(subtasks), (_) => false);
+    final nodes = flattenSubtaskTree(buildSubtaskTree(subtasks), (_) => false);
     final childCountByUuid = <String, int>{};
     for (final s in subtasks) {
       final p = normalizeParentUuid(s.parentUuid);
@@ -1036,8 +1071,9 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
               child: LinearProgressIndicator(
                 value: progress,
                 minHeight: 6,
-                backgroundColor:
-                    OrbitAccents.todoAccent.withValues(alpha: 0.15),
+                backgroundColor: OrbitAccents.todoAccent.withValues(
+                  alpha: 0.15,
+                ),
                 valueColor: const AlwaysStoppedAnimation<Color>(
                   OrbitAccents.todoAccent,
                 ),
@@ -1049,7 +1085,10 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
             Padding(
               // M10：depth 缩进体现层级（16px/层，与侧栏项目树同刻度）
               padding: EdgeInsets.only(
-                  left: node.depth * 16, top: 2, bottom: 2),
+                left: node.depth * 16,
+                top: 2,
+                bottom: 2,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1059,10 +1098,14 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
                       OrbitCheckbox(
                         checked: node.subtask.isDone,
                         size: AppDimens.subtaskCheckboxSize,
-                        onToggle: () => _mutate(() => ref
-                            .read(orbitBridgeProvider)
-                            .todoSubtaskToggleDone(
-                                node.subtask.id, !node.subtask.isDone)),
+                        onToggle: () => _mutate(
+                          () => ref
+                              .read(orbitBridgeProvider)
+                              .todoSubtaskToggleDone(
+                                node.subtask.id,
+                                !node.subtask.isDone,
+                              ),
+                        ),
                       ),
                       const SizedBox(width: AppDimens.space8),
                       Expanded(
@@ -1073,51 +1116,63 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
                             fontSize: 15,
                             color: colors.bodyText,
                           ),
-                          doneColor:
-                              colors.secondaryText.withValues(alpha: 0.5),
+                          doneColor: colors.secondaryText.withValues(
+                            alpha: 0.5,
+                          ),
                         ),
                       ),
                       // M10：行内「加子级」——在当前行下建嵌套子任务
                       IconButton(
                         visualDensity: VisualDensity.compact,
                         tooltip: '添加子级',
-                        icon: Icon(OrbitIcons.add,
-                            size: AppDimens.iconSizeSm,
-                            color: colors.secondaryText),
-                        onPressed: () => setState(() =>
-                            _addingUnderUuid = _addingUnderUuid == node.subtask.uuid
-                                ? null
-                                : node.subtask.uuid),
+                        icon: Icon(
+                          OrbitIcons.add,
+                          size: AppDimens.iconSizeSm,
+                          color: colors.secondaryText,
+                        ),
+                        onPressed: () => setState(
+                          () => _addingUnderUuid =
+                              _addingUnderUuid == node.subtask.uuid
+                              ? null
+                              : node.subtask.uuid,
+                        ),
                       ),
                       // M10：提到顶层（仅嵌套行出现）
                       if (node.depth > 0)
                         IconButton(
                           visualDensity: VisualDensity.compact,
                           tooltip: '提到顶层',
-                          icon: Icon(OrbitIcons.indentDecrease,
-                              size: AppDimens.iconSizeSm,
-                              color: colors.secondaryText),
+                          icon: Icon(
+                            OrbitIcons.indentDecrease,
+                            size: AppDimens.iconSizeSm,
+                            color: colors.secondaryText,
+                          ),
                           onPressed: () => _liftToTop(node.subtask),
                         ),
                       // 转独立任务（承接父任务上下文；对齐桌面行尾入口）
                       IconButton(
                         visualDensity: VisualDensity.compact,
                         tooltip: '转为独立任务',
-                        icon: Icon(OrbitIcons.openExternal,
-                            size: AppDimens.iconSizeSm,
-                            color: colors.secondaryText),
+                        icon: Icon(
+                          OrbitIcons.openExternal,
+                          size: AppDimens.iconSizeSm,
+                          color: colors.secondaryText,
+                        ),
                         onPressed: () => _promote(node.subtask),
                       ),
                       // close 删除（确认弹窗防误触，对齐桌面/评论删除惯例）
                       IconButton(
                         tooltip: '删除子任务',
                         visualDensity: VisualDensity.compact,
-                        icon: Icon(OrbitIcons.close,
-                            size: AppDimens.iconSizeSm,
-                            color: colors.secondaryText),
+                        icon: Icon(
+                          OrbitIcons.close,
+                          size: AppDimens.iconSizeSm,
+                          color: colors.secondaryText,
+                        ),
                         onPressed: () => _confirmDelete(
-                            node.subtask,
-                            childCountByUuid[node.subtask.uuid] ?? 0),
+                          node.subtask,
+                          childCountByUuid[node.subtask.uuid] ?? 0,
+                        ),
                       ),
                     ],
                   ),
@@ -1132,22 +1187,27 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
                               controller: _draftController,
                               autofocus: true,
                               style: TextStyle(
-                                  fontSize: 15, color: colors.bodyText),
+                                fontSize: 15,
+                                color: colors.bodyText,
+                              ),
                               decoration: const InputDecoration(
                                 hintText: '子任务标题',
                                 isDense: true,
                                 filled: false,
                                 contentPadding: EdgeInsets.symmetric(
-                                    vertical: AppDimens.space8),
+                                  vertical: AppDimens.space8,
+                                ),
                               ),
                               onSubmitted: (_) => _submitDraft(),
                             ),
                           ),
                           IconButton(
                             tooltip: '确定',
-                            icon: const Icon(OrbitIcons.check,
-                                size: AppDimens.iconSizeMd,
-                                color: OrbitAccents.todoAccent),
+                            icon: const Icon(
+                              OrbitIcons.check,
+                              size: AppDimens.iconSizeMd,
+                              color: OrbitAccents.todoAccent,
+                            ),
                             onPressed: _submitDraft,
                           ),
                         ],
@@ -1163,31 +1223,35 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
                       child: TextField(
                         controller: _draftController,
                         autofocus: true,
-                        style:
-                            TextStyle(fontSize: 15, color: colors.bodyText),
+                        style: TextStyle(fontSize: 15, color: colors.bodyText),
                         decoration: const InputDecoration(
                           hintText: '子任务标题',
                           isDense: true,
                           filled: false,
-                          contentPadding:
-                              EdgeInsets.symmetric(vertical: AppDimens.space8),
+                          contentPadding: EdgeInsets.symmetric(
+                            vertical: AppDimens.space8,
+                          ),
                         ),
                         onSubmitted: (_) => _submitDraft(),
                       ),
                     ),
                     IconButton(
                       tooltip: '确定',
-                      icon: const Icon(OrbitIcons.check,
-                          size: AppDimens.iconSizeMd,
-                          color: OrbitAccents.todoAccent),
+                      icon: const Icon(
+                        OrbitIcons.check,
+                        size: AppDimens.iconSizeMd,
+                        color: OrbitAccents.todoAccent,
+                      ),
                       onPressed: _submitDraft,
                     ),
                   ],
                 )
               : TextButton.icon(
                   onPressed: () => setState(() => _adding = true),
-                  icon: const Icon(OrbitIcons.add,
-                      size: AppDimens.iconSizeSm + 2),
+                  icon: const Icon(
+                    OrbitIcons.add,
+                    size: AppDimens.iconSizeSm + 2,
+                  ),
                   label: const Text('添加子任务'),
                 ),
         ],
@@ -1225,9 +1289,7 @@ class _LabelsSection extends StatelessWidget {
               ),
               decoration: BoxDecoration(
                 borderRadius: AppShapes.small,
-                border: Border.all(
-                  color: colors.divider,
-                ),
+                border: Border.all(color: colors.divider),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -1243,10 +1305,7 @@ class _LabelsSection extends StatelessWidget {
                   const SizedBox(width: AppDimens.space8),
                   Text(
                     label.title,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: colors.bodyText,
-                    ),
+                    style: TextStyle(fontSize: 13, color: colors.bodyText),
                   ),
                 ],
               ),
@@ -1321,10 +1380,9 @@ class _LabelEditSheetState extends ConsumerState<_LabelEditSheet> {
     try {
       final bridge = ref.read(orbitBridgeProvider);
       for (final labelId in diff.attachLabelIds) {
-        await bridge.todoTaskLabelCreate(TodoTaskLabelCreateInput(
-          taskId: widget.taskId,
-          labelId: labelId,
-        ));
+        await bridge.todoTaskLabelCreate(
+          TodoTaskLabelCreateInput(taskId: widget.taskId, labelId: labelId),
+        );
       }
       for (final taskLabelId in diff.detachTaskLabelIds) {
         await bridge.todoTaskLabelDelete(taskLabelId);
@@ -1340,7 +1398,9 @@ class _LabelEditSheetState extends ConsumerState<_LabelEditSheet> {
     final title = _titleController.text.trim();
     if (title.isEmpty) return;
     try {
-      await ref.read(orbitBridgeProvider).todoLabelCreate(
+      await ref
+          .read(orbitBridgeProvider)
+          .todoLabelCreate(
             TodoLabelCreateInput(title: title, hexColor: _newColorHex),
           );
       _titleController.clear();
@@ -1357,14 +1417,19 @@ class _LabelEditSheetState extends ConsumerState<_LabelEditSheet> {
     final colors = AppColors.ofContext(context);
     final labels = ref.watch(todoLabelsProvider).value ?? const <TodoLabel>[];
     final attachedIds =
-        ref.watch(taskDetailProvider(widget.taskId)).value?.labels
-                .map((l) => l.id)
-                .toSet() ??
-            <int>{};
+        ref
+            .watch(taskDetailProvider(widget.taskId))
+            .value
+            ?.labels
+            .map((l) => l.id)
+            .toSet() ??
+        <int>{};
 
     // 键盘避让：底部 padding 跟随 viewInsets
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: SafeArea(
         top: false,
         child: ConstrainedBox(
@@ -1389,8 +1454,7 @@ class _LabelEditSheetState extends ConsumerState<_LabelEditSheet> {
               Flexible(
                 child: labels.isEmpty
                     ? Padding(
-                        padding:
-                            const EdgeInsets.all(AppDimens.space16),
+                        padding: const EdgeInsets.all(AppDimens.space16),
                         child: Text(
                           '暂无可选标签',
                           style: TextStyle(
@@ -1453,11 +1517,7 @@ class _LabelEditSheetState extends ConsumerState<_LabelEditSheet> {
                   0,
                 ),
                 decoration: BoxDecoration(
-                  border: Border(
-                    top: BorderSide(
-                      color: colors.divider,
-                    ),
-                  ),
+                  border: Border(top: BorderSide(color: colors.divider)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1469,7 +1529,9 @@ class _LabelEditSheetState extends ConsumerState<_LabelEditSheet> {
                             controller: _titleController,
                             maxLength: 50,
                             style: TextStyle(
-                                fontSize: 15, color: colors.bodyText),
+                              fontSize: 15,
+                              color: colors.bodyText,
+                            ),
                             decoration: const InputDecoration(
                               hintText: '新建标签',
                               counterText: '',
@@ -1480,9 +1542,11 @@ class _LabelEditSheetState extends ConsumerState<_LabelEditSheet> {
                         ),
                         IconButton(
                           tooltip: '新建标签',
-                          icon: Icon(OrbitIcons.add,
-                              size: AppDimens.iconSizeLg,
-                              color: OrbitAccents.todoAccent),
+                          icon: Icon(
+                            OrbitIcons.add,
+                            size: AppDimens.iconSizeLg,
+                            color: OrbitAccents.todoAccent,
+                          ),
                           onPressed: _createLabel,
                         ),
                       ],
@@ -1501,17 +1565,17 @@ class _LabelEditSheetState extends ConsumerState<_LabelEditSheet> {
                               child: Container(
                                 width: 26,
                                 height: 26,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: hexToColor(hex),
-                                border: Border.all(
-                                  width: _newColorHex == hex ? 3 : 1,
-                                  color: _newColorHex == hex
-                                      ? OrbitAccents.themeAccent
-                                      : colors.outline,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: hexToColor(hex),
+                                  border: Border.all(
+                                    width: _newColorHex == hex ? 3 : 1,
+                                    color: _newColorHex == hex
+                                        ? OrbitAccents.themeAccent
+                                        : colors.outline,
+                                  ),
                                 ),
                               ),
-                            ),
                             ),
                           ),
                       ],
@@ -1587,8 +1651,7 @@ class _RemindersSection extends ConsumerWidget {
           durationMinutes: durationMinutes,
         ))
           SelectItem<String>(value: '${p.ms}', label: p.label),
-        const SelectItem<String>(
-            value: _reminderCustomKey, label: '自定义时间…'),
+        const SelectItem<String>(value: _reminderCustomKey, label: '自定义时间…'),
       ],
       onSelect: (v) async {
         if (v == _reminderCustomKey) {
@@ -1698,8 +1761,9 @@ class _RemindersSection extends ConsumerWidget {
               children: [
                 for (final reminder in reminders)
                   Padding(
-                    padding:
-                        const EdgeInsets.symmetric(vertical: AppDimens.space4),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: AppDimens.space4,
+                    ),
                     child: Row(
                       children: [
                         Icon(
@@ -1720,8 +1784,9 @@ class _RemindersSection extends ConsumerWidget {
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
-                                        fontSize: 15,
-                                        color: colors.bodyText),
+                                      fontSize: 15,
+                                      color: colors.bodyText,
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(width: AppDimens.space8),
@@ -1742,8 +1807,8 @@ class _RemindersSection extends ConsumerWidget {
                                       : '开启持续提醒（未完成则每 5 分钟再提醒）',
                                   child: InkWell(
                                     borderRadius: AppShapes.full,
-                                    onTap: () => _toggleConstant(
-                                        context, ref, reminder),
+                                    onTap: () =>
+                                        _toggleConstant(context, ref, reminder),
                                     child: SizedBox(
                                       height: AppDimens.touchTarget,
                                       child: Center(
@@ -1755,8 +1820,9 @@ class _RemindersSection extends ConsumerWidget {
                                           decoration: BoxDecoration(
                                             borderRadius: AppShapes.full,
                                             color: reminder.constant
-                                                ? colors.warning
-                                                    .withValues(alpha: 0.15)
+                                                ? colors.warning.withValues(
+                                                    alpha: 0.15,
+                                                  )
                                                 : colors.surfaceSecondary,
                                           ),
                                           child: Text(
@@ -1782,8 +1848,9 @@ class _RemindersSection extends ConsumerWidget {
                                     ),
                                     decoration: BoxDecoration(
                                       borderRadius: AppShapes.full,
-                                      color: OrbitAccents.todoAccent
-                                          .withValues(alpha: 0.1),
+                                      color: OrbitAccents.todoAccent.withValues(
+                                        alpha: 0.1,
+                                      ),
                                     ),
                                     child: Text(
                                       rep.repeatLabelExt(
@@ -1812,9 +1879,11 @@ class _RemindersSection extends ConsumerWidget {
                         IconButton(
                           tooltip: '删除提醒',
                           visualDensity: VisualDensity.compact,
-                          icon: Icon(OrbitIcons.close,
-                              size: AppDimens.iconSizeSm,
-                              color: colors.secondaryText),
+                          icon: Icon(
+                            OrbitIcons.close,
+                            size: AppDimens.iconSizeSm,
+                            color: colors.secondaryText,
+                          ),
                           onPressed: () async {
                             final confirmed = await showConfirmBottomSheet(
                               context,
@@ -1833,8 +1902,9 @@ class _RemindersSection extends ConsumerWidget {
                               // 同步撤掉该任务的系统闹钟：残留闹钟与「后台推迟
                               // 产物」在系统侧无法区分，不取消会在下次重排的孤儿
                               // 补齐里被误判而把刚删的提醒建回来
-                              await NotificationService.instance
-                                  .cancelAlarmFor(reminder.taskId);
+                              await NotificationService.instance.cancelAlarmFor(
+                                reminder.taskId,
+                              );
                             });
                           },
                         ),
@@ -1889,19 +1959,22 @@ class _RelationsSectionState extends ConsumerState<_RelationsSection> {
       if (_peers.containsKey(id) || _loadingPeers.contains(id)) continue;
       _loadingPeers.add(id);
       final future = ref.read(orbitBridgeProvider).todoTaskGet(id);
-      future.then((t) {
-        if (!mounted) return;
-        setState(() {
-          _peers[id] = t;
-          _loadingPeers.remove(id);
-        });
-      }, onError: (_) {
-        if (!mounted) return;
-        setState(() {
-          _peers[id] = null;
-          _loadingPeers.remove(id);
-        });
-      });
+      future.then(
+        (t) {
+          if (!mounted) return;
+          setState(() {
+            _peers[id] = t;
+            _loadingPeers.remove(id);
+          });
+        },
+        onError: (_) {
+          if (!mounted) return;
+          setState(() {
+            _peers[id] = null;
+            _loadingPeers.remove(id);
+          });
+        },
+      );
     }
   }
 
@@ -1922,9 +1995,7 @@ class _RelationsSectionState extends ConsumerState<_RelationsSection> {
     );
     if (!confirmed || !mounted) return;
     try {
-      await ref
-          .read(orbitBridgeProvider)
-          .todoTaskRelationDelete(relation.id);
+      await ref.read(orbitBridgeProvider).todoTaskRelationDelete(relation.id);
       widget.onChanged();
       if (mounted) WaitToast.success('已解除关联');
     } catch (e) {
@@ -1973,18 +2044,20 @@ class _RelationsSectionState extends ConsumerState<_RelationsSection> {
                   ),
                   onSubmitted: (_) async {
                     setSheet(() => searching = true);
-                      try {
-                        final r = await ref
-                            .read(orbitBridgeProvider)
-                            .globalSearch(queryCtl.text.trim(), limit: 20);
-                        setSheet(() {
-                          hits = r.tasks
-                              .where((t) =>
+                    try {
+                      final r = await ref
+                          .read(orbitBridgeProvider)
+                          .globalSearch(queryCtl.text.trim(), limit: 20);
+                      setSheet(() {
+                        hits = r.tasks
+                            .where(
+                              (t) =>
                                   t.id != widget.taskId &&
-                                  !linkedIds.contains(t.id))
-                              .toList();
-                          searching = false;
-                        });
+                                  !linkedIds.contains(t.id),
+                            )
+                            .toList();
+                        searching = false;
+                      });
                     } catch (_) {
                       setSheet(() => searching = false);
                     }
@@ -2045,7 +2118,9 @@ class _RelationsSectionState extends ConsumerState<_RelationsSection> {
     );
     if (targetId == null) return;
     try {
-      await ref.read(orbitBridgeProvider).todoTaskRelationCreate(
+      await ref
+          .read(orbitBridgeProvider)
+          .todoTaskRelationCreate(
             TodoTaskRelationCreateInput(
               taskId: widget.taskId,
               otherTaskId: targetId,
@@ -2117,8 +2192,7 @@ class _RelationsSectionState extends ConsumerState<_RelationsSection> {
                                 relation.relationType,
                             style: TextStyle(
                               fontSize: 11,
-                              color: AppColors.ofContext(context)
-                                  .secondaryText,
+                              color: AppColors.ofContext(context).secondaryText,
                             ),
                           ),
                           const SizedBox(width: 4),
@@ -2166,7 +2240,9 @@ class _CommentsSectionState extends ConsumerState<_CommentsSection> {
     if (content.isEmpty) return;
     _inputController.clear();
     try {
-      await ref.read(orbitBridgeProvider).todoCommentCreate(
+      await ref
+          .read(orbitBridgeProvider)
+          .todoCommentCreate(
             TodoCommentCreateInput(taskId: widget.detail.id, content: content),
           );
       widget.onChanged();
@@ -2255,9 +2331,7 @@ class _CommentsSectionState extends ConsumerState<_CommentsSection> {
             width: double.infinity,
             padding: const EdgeInsets.only(top: AppDimens.space8),
             decoration: BoxDecoration(
-              border: Border(
-                top: BorderSide(color: colors.divider),
-              ),
+              border: Border(top: BorderSide(color: colors.divider)),
             ),
             child: Row(
               children: [
@@ -2276,9 +2350,11 @@ class _CommentsSectionState extends ConsumerState<_CommentsSection> {
                 ),
                 IconButton(
                   tooltip: '发送',
-                  icon: const Icon(OrbitIcons.send,
-                      size: AppDimens.iconSizeMd,
-                      color: OrbitAccents.todoAccent),
+                  icon: const Icon(
+                    OrbitIcons.send,
+                    size: AppDimens.iconSizeMd,
+                    color: OrbitAccents.todoAccent,
+                  ),
                   onPressed: _submit,
                 ),
               ],
@@ -2334,8 +2410,9 @@ class _AttachmentsSectionState extends ConsumerState<_AttachmentsSection> {
 
   Future<void> _load() async {
     try {
-      final list =
-          await ref.read(orbitBridgeProvider).taskAttachmentsList(widget.taskId);
+      final list = await ref
+          .read(orbitBridgeProvider)
+          .taskAttachmentsList(widget.taskId);
       if (mounted) setState(() => _attachments = list);
       unawaited(_loadThumbs(list));
     } catch (_) {
@@ -2385,12 +2462,9 @@ class _AttachmentsSectionState extends ConsumerState<_AttachmentsSection> {
   Future<void> _uploadBytes(String name, List<int> bytes, String source) async {
     setState(() => _busy = true);
     try {
-      await ref.read(orbitBridgeProvider).taskAttachmentAdd(
-            widget.taskId,
-            name,
-            _mimeFromName(name),
-            bytes,
-          );
+      await ref
+          .read(orbitBridgeProvider)
+          .taskAttachmentAdd(widget.taskId, name, _mimeFromName(name), bytes);
       await _load();
       if (mounted) WaitToast.success('已添加附件（$source）');
     } catch (e) {
@@ -2404,7 +2478,9 @@ class _AttachmentsSectionState extends ConsumerState<_AttachmentsSection> {
   Future<void> _uploadPath(String name, String path, String source) async {
     setState(() => _busy = true);
     try {
-      await ref.read(orbitBridgeProvider).taskAttachmentAddPath(
+      await ref
+          .read(orbitBridgeProvider)
+          .taskAttachmentAddPath(
             widget.taskId,
             name,
             _mimeFromName(name),
@@ -2435,24 +2511,29 @@ class _AttachmentsSectionState extends ConsumerState<_AttachmentsSection> {
       final shot = await ImagePicker().pickImage(source: ImageSource.camera);
       if (shot == null) return;
       final bytes = await shot.readAsBytes();
-      final name =
-          'photo-${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final name = 'photo-${DateTime.now().millisecondsSinceEpoch}.jpg';
       await _uploadBytes(name, bytes, '拍照');
     } catch (_) {
       if (mounted) WaitToast.destructive('相机不可用');
     }
   }
 
-
-
   String _mimeFromName(String name) {
     final ext = name.split('.').last.toLowerCase();
     const map = {
-      'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
-      'gif': 'image/gif', 'webp': 'image/webp', 'pdf': 'application/pdf',
-      'txt': 'text/plain', 'md': 'text/markdown', 'csv': 'text/csv',
-      'json': 'application/json', 'zip': 'application/zip',
-      'mp3': 'audio/mpeg', 'mp4': 'video/mp4',
+      'png': 'image/png',
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'gif': 'image/gif',
+      'webp': 'image/webp',
+      'pdf': 'application/pdf',
+      'txt': 'text/plain',
+      'md': 'text/markdown',
+      'csv': 'text/csv',
+      'json': 'application/json',
+      'zip': 'application/zip',
+      'mp3': 'audio/mpeg',
+      'mp4': 'video/mp4',
     };
     return map[ext] ?? 'application/octet-stream';
   }
@@ -2463,11 +2544,13 @@ class _AttachmentsSectionState extends ConsumerState<_AttachmentsSection> {
       return;
     }
     try {
-      final bytes =
-          await ref.read(orbitBridgeProvider).taskAttachmentRead(att.hash);
+      final bytes = await ref
+          .read(orbitBridgeProvider)
+          .taskAttachmentRead(att.hash);
       final dir = await getTemporaryDirectory();
       final target = File(
-          '${dir.path}/orbit-att-${att.hash}${_extOf(att.originalName)}');
+        '${dir.path}/orbit-att-${att.hash}${_extOf(att.originalName)}',
+      );
       await target.writeAsBytes(bytes);
       if (!mounted) return;
       if (att.mimeType.startsWith('image/')) {
@@ -2512,6 +2595,33 @@ class _AttachmentsSectionState extends ConsumerState<_AttachmentsSection> {
     return parts.length > 1 ? '.${parts.last}' : '';
   }
 
+  /// 另存到用户选择的目录（#107）：流式导出，不把整份字节读进 Dart 堆。
+  /// Android 走系统目录选择器；iOS 无目录选择（返回 null）→ 静默返回，
+  /// 仍可用行首「打开」走系统分享/预览。
+  Future<void> _saveAs(TaskAttachmentView att) async {
+    if (att.isLocalCached == 0) {
+      WaitToast.info('附件尚未从云端同步到本机');
+      return;
+    }
+    try {
+      final dir = await FilePicker.platform.getDirectoryPath(
+        dialogTitle: '选择保存位置',
+      );
+      if (dir == null) return;
+      final target = '$dir${Platform.pathSeparator}${att.originalName}';
+      final written = await ref
+          .read(orbitBridgeProvider)
+          .exportTaskAttachment(att.hash, target);
+      if (mounted) {
+        WaitToast.success(
+          '已保存「${att.originalName}」（${humanFileSize(written)}）',
+        );
+      }
+    } catch (_) {
+      if (mounted) WaitToast.destructive('保存失败');
+    }
+  }
+
   Future<void> _remove(TaskAttachmentView att) async {
     final confirmed = await showConfirmBottomSheet(
       context,
@@ -2539,8 +2649,8 @@ class _AttachmentsSectionState extends ConsumerState<_AttachmentsSection> {
       !cached
           ? OrbitIcons.cloudDownload
           : isImage
-              ? OrbitIcons.image
-              : OrbitIcons.fileText,
+          ? OrbitIcons.image
+          : OrbitIcons.fileText,
       size: AppDimens.iconSizeSm,
       color: colors.secondaryText,
     );
@@ -2579,81 +2689,90 @@ class _AttachmentsSectionState extends ConsumerState<_AttachmentsSection> {
                   SelectItem(value: 'file', label: '选择文件'),
                   SelectItem(value: 'camera', label: '拍照'),
                 ],
-                onSelect: (v) =>
-                    v == 'camera' ? _addCamera() : _addFile(),
+                onSelect: (v) => v == 'camera' ? _addCamera() : _addFile(),
               ),
             ),
       child: list == null
           ? const SizedBox(height: 16)
           : list.isEmpty
-              ? Text(
-                  '点 + 添加附件：文件 / 拍照（单任务 20 个，单文件 50MB）\n系统分享的文本会自动建任务（分享导入）',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: colors.secondaryText.withValues(alpha: 0.5),
+          ? Text(
+              '点 + 添加附件：文件 / 拍照（单任务 20 个，单文件 50MB）\n系统分享的文本会自动建任务（分享导入）',
+              style: TextStyle(
+                fontSize: 13,
+                color: colors.secondaryText.withValues(alpha: 0.5),
+              ),
+            )
+          : Column(
+              children: [
+                for (final att in list)
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: AppDimens.space8),
+                    padding: const EdgeInsets.all(AppDimens.space8 + 2),
+                    decoration: BoxDecoration(
+                      color: colors.surfaceSecondary,
+                      borderRadius: AppShapes.small,
+                    ),
+                    child: Row(
+                      children: [
+                        _leading(colors, att),
+                        const SizedBox(width: AppDimens.space8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                att.originalName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: colors.bodyText,
+                                ),
+                              ),
+                              Text(
+                                att.isLocalCached == 0
+                                    ? '待同步'
+                                    : humanFileSize(att.sizeBytes),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: colors.secondaryText,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => _open(att),
+                          child: const Icon(OrbitIcons.openExternal, size: 18),
+                        ),
+                        const SizedBox(width: AppDimens.space8),
+                        GestureDetector(
+                          onTap: att.isLocalCached == 0
+                              ? null
+                              : () => _saveAs(att),
+                          child: Icon(
+                            OrbitIcons.download,
+                            size: 18,
+                            color: att.isLocalCached == 0
+                                ? colors.secondaryText.withValues(alpha: 0.4)
+                                : colors.secondaryText,
+                          ),
+                        ),
+                        const SizedBox(width: AppDimens.space8),
+                        GestureDetector(
+                          onTap: () => _remove(att),
+                          child: Icon(
+                            OrbitIcons.delete,
+                            size: 18,
+                            color: colors.secondaryText,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                )
-              : Column(
-                  children: [
-                    for (final att in list)
-                      Container(
-                        width: double.infinity,
-                        margin: const EdgeInsets.only(bottom: AppDimens.space8),
-                        padding: const EdgeInsets.all(AppDimens.space8 + 2),
-                        decoration: BoxDecoration(
-                          color: colors.surfaceSecondary,
-                          borderRadius: AppShapes.small,
-                        ),
-                        child: Row(
-                          children: [
-                            _leading(colors, att),
-                            const SizedBox(width: AppDimens.space8),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    att.originalName,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: colors.bodyText,
-                                    ),
-                                  ),
-                                  Text(
-                                    att.isLocalCached == 0
-                                        ? '待同步'
-                                        : humanFileSize(att.sizeBytes),
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: colors.secondaryText,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            GestureDetector(
-                              onTap: () => _open(att),
-                              child: const Icon(
-                                OrbitIcons.openExternal,
-                                size: 18,
-                              ),
-                            ),
-                            const SizedBox(width: AppDimens.space8),
-                            GestureDetector(
-                              onTap: () => _remove(att),
-                              child: Icon(
-                                OrbitIcons.delete,
-                                size: 18,
-                                color: colors.secondaryText,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
+              ],
+            ),
     );
   }
 }
@@ -2705,8 +2824,7 @@ class _HistorySectionState extends ConsumerState<_HistorySection> {
                 children: [
                   for (final r in rows)
                     Padding(
-                      padding:
-                          const EdgeInsets.only(bottom: AppDimens.space8),
+                      padding: const EdgeInsets.only(bottom: AppDimens.space8),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -2744,14 +2862,16 @@ class _HistorySectionState extends ConsumerState<_HistorySection> {
                           TextButton(
                             onPressed: () => setState(() => _limit = _maxLimit),
                             style: TextButton.styleFrom(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
                               minimumSize: Size.zero,
-                              tapTargetSize:
-                                  MaterialTapTargetSize.shrinkWrap,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
-                            child: const Text('显示更多',
-                                style: TextStyle(fontSize: 12)),
+                            child: const Text(
+                              '显示更多',
+                              style: TextStyle(fontSize: 12),
+                            ),
                           ),
                       ],
                     ),

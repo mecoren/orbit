@@ -113,11 +113,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _loadBioState();
     _loadMasterAuthState();
     _conflictPending = _fetchConflictPending();
-    PackageInfo.fromPlatform().then((info) {
-      if (mounted) {
-        setState(() => _appVersion = '${info.version}+${info.buildNumber}');
-      }
-    }).catchError((_) {});
+    PackageInfo.fromPlatform()
+        .then((info) {
+          if (mounted) {
+            setState(() => _appVersion = '${info.version}+${info.buildNumber}');
+          }
+        })
+        .catchError((_) {});
   }
 
   /// 待处理冲突数查询（桥不可用时静默回落 0，不阻断设置页渲染）
@@ -176,7 +178,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           : await bridge.plaintextExportCsv(excludeDeleted: excludeDeleted);
 
       final docs = await getApplicationDocumentsDirectory();
-      final exportsDir = Directory('${docs.path}${Platform.pathSeparator}exports');
+      final exportsDir = Directory(
+        '${docs.path}${Platform.pathSeparator}exports',
+      );
       await exportsDir.create(recursive: true);
       final file = File(
         '${exportsDir.path}${Platform.pathSeparator}${result.suggestedFilename}',
@@ -211,20 +215,53 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
+  /// 立即清理过期回收站任务（#107）：等价于后台守护的一轮，不等 60s tick。
+  /// core 会跳过「删除尚未 push 到云端」的墓碑，返回 true 的 guarded 数要如实提示。
+  Future<void> _purgeExpiredTrash() async {
+    final ok = await showConfirmBottomSheet(
+      context,
+      title: '立即清理过期任务',
+      message:
+          '只物理删除已超过保留期的回收站任务；删除尚未同步到云端的会跳过。'
+          '保留期内的任务不会被提前清除。',
+      confirmLabel: '立即清理',
+      destructive: true,
+    );
+    if (!ok || !mounted) return;
+    try {
+      final s = await ref.read(orbitBridgeProvider).trashPurgeExpired();
+      ref.invalidate(trashMetaProvider);
+      if (!mounted) return;
+      final guardedHint = s.guarded > 0 ? '，${s.guarded} 条因未同步而保留' : '';
+      if (s.purged == 0) {
+        WaitToast.info('没有可清理的过期任务$guardedHint');
+      } else {
+        WaitToast.success('已清理 ${s.purged} 条过期任务$guardedHint');
+      }
+    } catch (_) {
+      WaitToast.destructive('清理失败');
+    }
+  }
+
   /// ICS 日历导出（#4）：VTODO 日历 → 应用文档目录 exports/ → toast 告知路径
   Future<void> _exportIcs() async {
     setState(() => _exporting = 'ics');
     try {
       final result = await ref.read(orbitBridgeProvider).icsExport();
       final docs = await getApplicationDocumentsDirectory();
-      final exportsDir = Directory('${docs.path}${Platform.pathSeparator}exports');
+      final exportsDir = Directory(
+        '${docs.path}${Platform.pathSeparator}exports',
+      );
       await exportsDir.create(recursive: true);
       final file = File(
         '${exportsDir.path}${Platform.pathSeparator}${result.suggestedFilename}',
       );
       await file.writeAsString(result.content, flush: true);
       final tasks = result.tableCounts
-          .firstWhere((c) => c.table == 'todo_tasks', orElse: () => IcsTableCount(table: '', count: 0))
+          .firstWhere(
+            (c) => c.table == 'todo_tasks',
+            orElse: () => IcsTableCount(table: '', count: 0),
+          )
           .count;
       WaitToast.success('已导出日历文件（任务 $tasks 条）到 ${file.path}');
     } catch (_) {
@@ -323,7 +360,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final confirmed = await showConfirmBottomSheet(
       context,
       title: '确认导入',
-      message: '将导入 ${preview?.stats.success ?? 0} 条任务'
+      message:
+          '将导入 ${preview?.stats.success ?? 0} 条任务'
           '（跳过 ${preview?.stats.skipped ?? 0} 行）。'
           '项目不存在会自动创建。确定继续？',
       confirmLabel: '导入',
@@ -401,8 +439,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (_syncing) return;
     setState(() => _syncing = true);
     try {
-      final result =
-          await ref.read(orbitBridgeProvider).cloudSyncNow(origin: 'manual');
+      final result = await ref
+          .read(orbitBridgeProvider)
+          .cloudSyncNow(origin: 'manual');
       ref.invalidate(syncConfigProvider);
       // 同步结果经返回值直达（ADR 0003）：拉取到数据时失效业务缓存，
       // 原行为由 BootGate 的 syncFinished 订阅承担，流移除后在此兜住
@@ -445,8 +484,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         msg.contains('wrong_password')
             ? '同步密码错误，请重新解锁'
             : msg.contains('CryptoLocked')
-                ? '同步密码未解锁，请先在云同步设置中解锁'
-                : '同步失败：${_shortErr(msg)}',
+            ? '同步密码未解锁，请先在云同步设置中解锁'
+            : '同步失败：${_shortErr(msg)}',
       );
     } finally {
       if (mounted) setState(() => _syncing = false);
@@ -457,7 +496,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   static String _shortErr(String raw) {
     final m = RegExp(r'^\[(\w+)\]\s*(.*)$').firstMatch(raw.trim());
     final body = (m?.group(2) ?? raw).trim();
-    return body.isEmpty ? '未知错误' : (body.length > 60 ? '${body.substring(0, 60)}…' : body);
+    return body.isEmpty
+        ? '未知错误'
+        : (body.length > 60 ? '${body.substring(0, 60)}…' : body);
   }
 
   /// 设置回收站保留档位（7/30/90/永久；本地偏好不同步）
@@ -539,7 +580,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   /// 切换节假日自动更新总开关：关闭后 Rust 调度器不再联网，仅保留日历页
   /// 「手动更新」与缓存页「按年补写」；三处记账同源 holidayMetaProvider
-  Future<void> _toggleHolidayAuto(bool enabled) async {    if (_holidayAutoBusy) return;
+  Future<void> _toggleHolidayAuto(bool enabled) async {
+    if (_holidayAutoBusy) return;
     setState(() => _holidayAutoBusy = true);
     final bridge = ref.read(orbitBridgeProvider);
     try {
@@ -625,9 +667,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     } catch (e) {
       final msg = e.toString();
       WaitToast.destructive(
-          msg.contains('wrong_password') || msg.contains('密码错误')
-              ? '当前主密码不正确'
-              : '修改失败：$_stripTag(msg)');
+        msg.contains('wrong_password') || msg.contains('密码错误')
+            ? '当前主密码不正确'
+            : '修改失败：$_stripTag(msg)',
+      );
     } finally {
       if (mounted) setState(() => _secBusy = false);
     }
@@ -642,7 +685,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final first = await showConfirmBottomSheet(
       context,
       title: '关闭加密？',
-      message: '将把本机数据库转为明文（不再需要主密码解锁），指纹解锁会一并关闭。'
+      message:
+          '将把本机数据库转为明文（不再需要主密码解锁），指纹解锁会一并关闭。'
           '云端已上传的数据仍由同步密码端到端加密保护。此操作不可撤销。',
       confirmLabel: '继续',
       destructive: true,
@@ -701,7 +745,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final values = await showPasswordSheet(
         context,
         title: '开启加密',
-        message: '设置主密码后，本机数据库将以 SQLCipher 加密；每次启动需输入'
+        message:
+            '设置主密码后，本机数据库将以 SQLCipher 加密；每次启动需输入'
             '主密码解锁（可另开指纹解锁）。',
         labels: const ['主密码', '确认主密码'],
         confirmLabel: '开始加密',
@@ -835,7 +880,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             child: ListView(
               controller: _scrollController,
               padding: EdgeInsets.only(
-                top: MediaQuery.of(context).padding.top +
+                top:
+                    MediaQuery.of(context).padding.top +
                     OrbitPageHeader.rowHeight +
                     AppDimens.space16,
                 left: AppDimens.space16,
@@ -880,7 +926,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         onTap: () => context.push('/settings/sync'),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
-                              vertical: AppDimens.space8),
+                            vertical: AppDimens.space8,
+                          ),
                           child: Row(
                             children: [
                               Text(
@@ -911,7 +958,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         },
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
-                              vertical: AppDimens.space8),
+                            vertical: AppDimens.space8,
+                          ),
                           child: Row(
                             children: [
                               Text(
@@ -930,11 +978,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                   if (n <= 0) return const SizedBox.shrink();
                                   return Container(
                                     padding: const EdgeInsets.symmetric(
-                                        horizontal: AppDimens.space6,
-                                        vertical: 1),
+                                      horizontal: AppDimens.space6,
+                                      vertical: 1,
+                                    ),
                                     decoration: BoxDecoration(
-                                      color: colors.warning
-                                          .withValues(alpha: 0.18),
+                                      color: colors.warning.withValues(
+                                        alpha: 0.18,
+                                      ),
                                       borderRadius: AppShapes.small,
                                     ),
                                     child: Text(
@@ -961,8 +1011,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       SizedBox(
                         width: double.infinity,
                         child: FilledButton.icon(
-                          onPressed:
-                              (config == null || _syncing) ? null : _syncNow,
+                          onPressed: (config == null || _syncing)
+                              ? null
+                              : _syncNow,
                           icon: _syncing
                               ? SizedBox(
                                   width: AppDimens.iconSizeSm,
@@ -972,8 +1023,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                     color: Colors.white.withValues(alpha: 0.9),
                                   ),
                                 )
-                              : const Icon(OrbitIcons.refresh,
-                                  size: AppDimens.iconSizeSm + 2),
+                              : const Icon(
+                                  OrbitIcons.refresh,
+                                  size: AppDimens.iconSizeSm + 2,
+                                ),
                           label: Text(_syncing ? '同步中…' : '立即同步'),
                         ),
                       ),
@@ -1008,18 +1061,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         onTap: _pickTrashRetention,
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
-                              vertical: AppDimens.space8),
+                            vertical: AppDimens.space8,
+                          ),
                           child: Row(
                             children: [
                               Text(
                                 '保留时间',
                                 style: TextStyle(
-                                    fontSize: 14, color: colors.bodyText),
+                                  fontSize: 14,
+                                  color: colors.bodyText,
+                                ),
                               ),
                               const Spacer(),
                               Text(
                                 _trashRetentionLabel(
-                                    ref.watch(trashMetaProvider).value?.retentionDays),
+                                  ref
+                                      .watch(trashMetaProvider)
+                                      .value
+                                      ?.retentionDays,
+                                ),
                                 style: TextStyle(
                                   fontSize: 14,
                                   color: OrbitAccents.themeAccent,
@@ -1040,18 +1100,48 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         onTap: () => context.go('/todo/trash'),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
-                              vertical: AppDimens.space8),
+                            vertical: AppDimens.space8,
+                          ),
                           child: Row(
                             children: [
                               Text(
                                 '查看回收站',
                                 style: TextStyle(
-                                    fontSize: 14, color: colors.bodyText),
+                                  fontSize: 14,
+                                  color: colors.bodyText,
+                                ),
                               ),
                               const Spacer(),
                               Icon(
                                 OrbitIcons.chevronRight,
                                 size: AppDimens.iconSizeMd,
+                                color: colors.secondaryText,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: AppDimens.space4),
+                      InkWell(
+                        borderRadius: AppShapes.medium,
+                        onTap: _purgeExpiredTrash,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: AppDimens.space8,
+                          ),
+                          child: Row(
+                            children: [
+                              Text(
+                                '立即清理过期',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: colors.bodyText,
+                                ),
+                              ),
+                              const Spacer(),
+                              Icon(
+                                OrbitIcons.refresh,
+                                size: AppDimens.iconSizeSm,
                                 color: colors.secondaryText,
                               ),
                             ],
@@ -1070,10 +1160,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
                 const SizedBox(height: AppDimens.space12),
                 // 三、安全卡：生物识别开关（无指纹硬件回退只读提示）
-                SectionCard(
-                  title: '安全',
-                  child: _buildSecurityCard(context),
-                ),
+                SectionCard(title: '安全', child: _buildSecurityCard(context)),
                 const SizedBox(height: AppDimens.space12),
                 // 组织卡：标签体系与任务模板的管理入口（此前只能新建，
                 // 改名/改色/删除与模板 CRUD 都没有 UI）
@@ -1115,6 +1202,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         colors,
                         label: '通知历史',
                         onTap: () => context.push('/settings/notifications'),
+                      ),
+                      _navRow(
+                        colors,
+                        label: '存储清理',
+                        onTap: () => context.push('/settings/storage'),
                       ),
                       _navRow(
                         colors,
@@ -1208,13 +1300,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         onTap: () => context.push('/settings/backup'),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
-                              vertical: AppDimens.space8),
+                            vertical: AppDimens.space8,
+                          ),
                           child: Row(
                             children: [
                               Text(
                                 '备份与恢复',
                                 style: TextStyle(
-                                    fontSize: 14, color: colors.bodyText),
+                                  fontSize: 14,
+                                  color: colors.bodyText,
+                                ),
                               ),
                               const Spacer(),
                               Icon(
@@ -1255,28 +1350,44 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         children: [
                           Expanded(
                             child: OutlinedButton.icon(
-                              onPressed: _exporting != null ? null : () => _exportData('json'),
+                              onPressed: _exporting != null
+                                  ? null
+                                  : () => _exportData('json'),
                               icon: _exporting == 'json'
                                   ? SizedBox(
                                       width: AppDimens.iconSizeSm,
                                       height: AppDimens.iconSizeSm,
-                                      child: CircularProgressIndicator(strokeWidth: 2, color: colors.secondaryText),
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: colors.secondaryText,
+                                      ),
                                     )
-                                  : const Icon(OrbitIcons.braces, size: AppDimens.iconSizeSm),
+                                  : const Icon(
+                                      OrbitIcons.braces,
+                                      size: AppDimens.iconSizeSm,
+                                    ),
                               label: const Text('导出 JSON'),
                             ),
                           ),
                           const SizedBox(width: AppDimens.space8),
                           Expanded(
                             child: OutlinedButton.icon(
-                              onPressed: _exporting != null ? null : () => _exportData('csv'),
+                              onPressed: _exporting != null
+                                  ? null
+                                  : () => _exportData('csv'),
                               icon: _exporting == 'csv'
                                   ? SizedBox(
                                       width: AppDimens.iconSizeSm,
                                       height: AppDimens.iconSizeSm,
-                                      child: CircularProgressIndicator(strokeWidth: 2, color: colors.secondaryText),
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: colors.secondaryText,
+                                      ),
                                     )
-                                  : const Icon(OrbitIcons.table, size: AppDimens.iconSizeSm),
+                                  : const Icon(
+                                      OrbitIcons.table,
+                                      size: AppDimens.iconSizeSm,
+                                    ),
                               label: const Text('导出 CSV'),
                             ),
                           ),
@@ -1286,7 +1397,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       SizedBox(
                         width: double.infinity,
                         child: OutlinedButton.icon(
-                          onPressed: _exporting != null ? null : () => _exportData('ics'),
+                          onPressed: _exporting != null
+                              ? null
+                              : () => _exportData('ics'),
                           icon: _exporting == 'ics'
                               ? SizedBox(
                                   width: AppDimens.iconSizeSm,
@@ -1296,8 +1409,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                     color: colors.secondaryText,
                                   ),
                                 )
-                              : const Icon(OrbitIcons.calendarDays,
-                                  size: AppDimens.iconSizeSm),
+                              : const Icon(
+                                  OrbitIcons.calendarDays,
+                                  size: AppDimens.iconSizeSm,
+                                ),
                           label: const Text('导出日历（ICS）'),
                         ),
                       ),
@@ -1316,12 +1431,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         '一键优化本地数据库：回收 WAL 日志与磁盘碎片、清理无引用'
                         '附件文件、更新查询统计（列表/搜索提速）。不改动任何'
                         '数据与同步状态，建议偶发卡顿时手动执行。',
-                        style: TextStyle(fontSize: 12, color: colors.secondaryText),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colors.secondaryText,
+                        ),
                       ),
                       const SizedBox(height: AppDimens.space12),
                       if (_maintenanceResult != null)
                         Padding(
-                          padding: const EdgeInsets.only(bottom: AppDimens.space12),
+                          padding: const EdgeInsets.only(
+                            bottom: AppDimens.space12,
+                          ),
                           child: Text(
                             '回收碎片页 ${_maintenanceResult!.pagesReclaimed} ·'
                             ' 附件清理 ${_maintenanceResult!.attachmentsCleaned} ·'
@@ -1346,8 +1466,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                     color: colors.secondaryText,
                                   ),
                                 )
-                              : const Icon(OrbitIcons.wrench,
-                                  size: AppDimens.iconSizeSm),
+                              : const Icon(
+                                  OrbitIcons.wrench,
+                                  size: AppDimens.iconSizeSm,
+                                ),
                           label: const Text('立即维护'),
                         ),
                       ),
@@ -1365,7 +1487,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         '从其他应用迁入任务：支持 Orbit 导出格式、Todoist 与'
                         ' TickTick 模板，以及 ICS 日历文件（只收 VTODO 待办）。'
                         '导入前先预览；项目不存在会自动创建。',
-                        style: TextStyle(fontSize: 12, color: colors.secondaryText),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colors.secondaryText,
+                        ),
                       ),
                       const SizedBox(height: AppDimens.space12),
                       // 预设档位选择
@@ -1380,10 +1505,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               onSelected: _importing != null
                                   ? null
                                   : (_) => setState(() {
-                                        _importPreset = entry.key;
-                                        _importPreview = null;
-                                        _importResult = null;
-                                      }),
+                                      _importPreset = entry.key;
+                                      _importPreview = null;
+                                      _importResult = null;
+                                    }),
                             ),
                         ],
                       ),
@@ -1392,9 +1517,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         children: [
                           Expanded(
                             child: OutlinedButton.icon(
-                              onPressed: _importing != null ? null : _pickImportFile,
-                              icon: const Icon(OrbitIcons.upload,
-                                  size: AppDimens.iconSizeSm),
+                              onPressed: _importing != null
+                                  ? null
+                                  : _pickImportFile,
+                              icon: const Icon(
+                                OrbitIcons.upload,
+                                size: AppDimens.iconSizeSm,
+                              ),
                               label: Text(
                                 _importFileName ?? '选择文件',
                                 overflow: TextOverflow.ellipsis,
@@ -1404,7 +1533,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           const SizedBox(width: AppDimens.space8),
                           Expanded(
                             child: OutlinedButton.icon(
-                              onPressed: _importContent == null || _importing != null
+                              onPressed:
+                                  _importContent == null || _importing != null
                                   ? null
                                   : _previewImport,
                               icon: _importing == 'preview'
@@ -1416,15 +1546,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                         color: colors.secondaryText,
                                       ),
                                     )
-                                  : const Icon(OrbitIcons.eye,
-                                      size: AppDimens.iconSizeSm),
+                                  : const Icon(
+                                      OrbitIcons.eye,
+                                      size: AppDimens.iconSizeSm,
+                                    ),
                               label: const Text('预览'),
                             ),
                           ),
                         ],
                       ),
                       // 执行按钮：预览有待导入行时出现
-                      if (_importPreview != null && _importPreview!.stats.success > 0) ...[
+                      if (_importPreview != null &&
+                          _importPreview!.stats.success > 0) ...[
                         const SizedBox(height: AppDimens.space8),
                         FilledButton.icon(
                           onPressed: _importing != null ? null : _executeImport,
@@ -1437,14 +1570,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                     color: Colors.white,
                                   ),
                                 )
-                              : const Icon(OrbitIcons.download,
-                                  size: AppDimens.iconSizeSm),
+                              : const Icon(
+                                  OrbitIcons.download,
+                                  size: AppDimens.iconSizeSm,
+                                ),
                           label: Text(
-                              '导入 ${_importPreview!.stats.success} 条任务'),
+                            '导入 ${_importPreview!.stats.success} 条任务',
+                          ),
                         ),
                       ],
                       // 导入进度：行级进度 + 取消（行边界生效）
-                      if (_importing == 'execute' && _importProgress != null) ...[
+                      if (_importing == 'execute' &&
+                          _importProgress != null) ...[
                         const SizedBox(height: AppDimens.space8),
                         Row(
                           children: [
@@ -1453,7 +1590,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 '正在导入 ${_importProgress!.processed}'
                                 '${_importProgress!.total != null ? " / ${_importProgress!.total}" : ""} 行',
                                 style: TextStyle(
-                                    fontSize: 12, color: colors.secondaryText),
+                                  fontSize: 12,
+                                  color: colors.secondaryText,
+                                ),
                               ),
                             ),
                             TextButton(
@@ -1469,8 +1608,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             minHeight: 6,
                             value: (_importProgress!.total ?? 0) > 0
                                 ? (_importProgress!.processed /
-                                        _importProgress!.total!)
-                                    .clamp(0.0, 1.0)
+                                          _importProgress!.total!)
+                                      .clamp(0.0, 1.0)
                                 : null,
                           ),
                         ),
@@ -1482,19 +1621,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           '待导入 ${_importPreview!.stats.success} 条 · '
                           '跳过 ${_importPreview!.stats.skipped} 行',
                           style: TextStyle(
-                              fontSize: 12, color: colors.secondaryText),
+                            fontSize: 12,
+                            color: colors.secondaryText,
+                          ),
                         ),
                         for (final row in _importPreview!.rows.take(5))
                           Padding(
-                            padding: const EdgeInsets.only(top: AppDimens.space4),
+                            padding: const EdgeInsets.only(
+                              top: AppDimens.space4,
+                            ),
                             child: Text(
                               row.skipReason != null
                                   ? '· ${row.title.isEmpty ? "（空行）" : row.title} — 跳过：${row.skipReason}'
                                   : '· ${row.title}'
-                                      '${row.projectTitle != null ? " → ${row.projectTitle}" : ""}'
-                                      '${row.done ? "（已完成）" : ""}',
+                                        '${row.projectTitle != null ? " → ${row.projectTitle}" : ""}'
+                                        '${row.done ? "（已完成）" : ""}',
                               style: TextStyle(
-                                  fontSize: 12, color: colors.secondaryText),
+                                fontSize: 12,
+                                color: colors.secondaryText,
+                              ),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
@@ -1506,7 +1651,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           '导入完成：成功 ${_importResult!.success} 条'
                           '${_importResult!.skipped > 0 ? " · 跳过 ${_importResult!.skipped} 行" : ""}'
                           '${_importResult!.failed > 0 ? " · 失败 ${_importResult!.failed} 条" : ""}',
-                          style: TextStyle(fontSize: 12, color: colors.secondaryText),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: colors.secondaryText,
+                          ),
                         ),
                       ],
                     ],
@@ -1520,14 +1668,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     borderRadius: AppShapes.medium,
                     onTap: () => context.push('/about'),
                     child: Padding(
-                      padding:
-                          const EdgeInsets.symmetric(vertical: AppDimens.space4),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: AppDimens.space4,
+                      ),
                       child: Row(
                         children: [
                           Text(
                             '版本',
                             style: TextStyle(
-                                fontSize: 14, color: colors.bodyText),
+                              fontSize: 14,
+                              color: colors.bodyText,
+                            ),
                           ),
                           const Spacer(),
                           Text(
@@ -1554,15 +1705,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             top: 0,
             left: 0,
             right: 0,
-            child: OrbitPageHeader(
-              title: '设置',
-              showBack: widget.showBack,
-            ),
+            child: OrbitPageHeader(title: '设置', showBack: widget.showBack),
           ),
         ],
       ),
     );
   }
+
   /// 小组件卡：快照立即刷新 + 添加磁贴（API 33+）引导
   Widget _buildWidgetCard(BuildContext context) {
     final colors = AppColors.ofContext(context);
@@ -1587,10 +1736,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           width: AppDimens.iconSizeSm,
                           height: AppDimens.iconSizeSm,
                           child: CircularProgressIndicator(
-                              strokeWidth: 2, color: colors.secondaryText),
+                            strokeWidth: 2,
+                            color: colors.secondaryText,
+                          ),
                         )
-                      : const Icon(OrbitIcons.layoutGrid,
-                          size: AppDimens.iconSizeSm),
+                      : const Icon(
+                          OrbitIcons.layoutGrid,
+                          size: AppDimens.iconSizeSm,
+                        ),
                   label: const Text('刷新小组件'),
                 ),
               ),
@@ -1598,8 +1751,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: _pinTile,
-                  icon: const Icon(OrbitIcons.grid,
-                      size: AppDimens.iconSizeSm),
+                  icon: const Icon(OrbitIcons.grid, size: AppDimens.iconSizeSm),
                   label: const Text('添加快捷磁贴'),
                 ),
               ),
@@ -1673,8 +1825,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           borderRadius: AppShapes.medium,
           onTap: prefs.enabled ? _pickDigestTime : null,
           child: ConstrainedBox(
-            constraints:
-                const BoxConstraints(minHeight: AppDimens.touchTarget),
+            constraints: const BoxConstraints(minHeight: AppDimens.touchTarget),
             child: Row(
               children: [
                 Text(
@@ -1710,7 +1861,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           summary == null
               ? '当前口径：统计中…'
               : '当前口径：今日截止 ${summary.dueToday} · 逾期 ${summary.overdue} · '
-                  '今日已完成 ${summary.doneToday}',
+                    '今日已完成 ${summary.doneToday}',
           style: TextStyle(fontSize: 12, color: colors.secondaryText),
         ),
         const SizedBox(height: AppDimens.space4),
@@ -1730,26 +1881,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     AppColorSet colors, {
     required String label,
     required VoidCallback onTap,
-  }) =>
-      InkWell(
-        borderRadius: AppShapes.medium,
-        onTap: onTap,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: AppDimens.touchTarget),
-          child: Row(
-            children: [
-              Text(label,
-                  style: TextStyle(fontSize: 14, color: colors.bodyText)),
-              const Spacer(),
-              Icon(
-                OrbitIcons.chevronRight,
-                size: AppDimens.iconSizeMd,
-                color: colors.secondaryText,
-              ),
-            ],
+  }) => InkWell(
+    borderRadius: AppShapes.medium,
+    onTap: onTap,
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: AppDimens.touchTarget),
+      child: Row(
+        children: [
+          Text(label, style: TextStyle(fontSize: 14, color: colors.bodyText)),
+          const Spacer(),
+          Icon(
+            OrbitIcons.chevronRight,
+            size: AppDimens.iconSizeMd,
+            color: colors.secondaryText,
           ),
-        ),
-      );
+        ],
+      ),
+    ),
+  );
 
   /// 安全卡内容：库加密态（明文/加密）+ 主密码操作 + 指纹解锁开关
   ///
@@ -1767,9 +1916,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         Row(
           children: [
             Icon(
-              encrypted == true
-                  ? OrbitIcons.lock
-                  : OrbitIcons.lockOpen,
+              encrypted == true ? OrbitIcons.lock : OrbitIcons.lockOpen,
               size: AppDimens.iconSizeMd,
               color: encrypted == true ? colors.success : colors.secondaryText,
             ),
@@ -1778,8 +1925,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               encrypted == null
                   ? '检测中…'
                   : encrypted
-                      ? '数据库已加密（SQLCipher）'
-                      : '数据库为明文',
+                  ? '数据库已加密（SQLCipher）'
+                  : '数据库为明文',
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
@@ -1804,11 +1951,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               padding: const EdgeInsets.symmetric(vertical: AppDimens.space8),
               child: Row(
                 children: [
-                  Text('修改主密码',
-                      style: TextStyle(fontSize: 14, color: colors.bodyText)),
+                  Text(
+                    '修改主密码',
+                    style: TextStyle(fontSize: 14, color: colors.bodyText),
+                  ),
                   const Spacer(),
-                  Icon(OrbitIcons.chevronRight,
-                      size: AppDimens.iconSizeMd, color: colors.secondaryText),
+                  Icon(
+                    OrbitIcons.chevronRight,
+                    size: AppDimens.iconSizeMd,
+                    color: colors.secondaryText,
+                  ),
                 ],
               ),
             ),
@@ -1824,13 +1976,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               padding: const EdgeInsets.symmetric(vertical: AppDimens.space8),
               child: Row(
                 children: [
-                  Text('清除主密码…',
-                      style: TextStyle(
-                          fontSize: 14, color: colors.destructive)),
+                  Text(
+                    '清除主密码…',
+                    style: TextStyle(fontSize: 14, color: colors.destructive),
+                  ),
                   const Spacer(),
-                  Icon(OrbitIcons.chevronRight,
-                      size: AppDimens.iconSizeMd,
-                      color: colors.secondaryText),
+                  Icon(
+                    OrbitIcons.chevronRight,
+                    size: AppDimens.iconSizeMd,
+                    color: colors.secondaryText,
+                  ),
                 ],
               ),
             ),
@@ -1854,7 +2009,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                   const Spacer(),
                   if (_secBusy)
-                    const SizedBox(
+                    SizedBox(
                       width: AppDimens.iconSizeSm,
                       height: AppDimens.iconSizeSm,
                       child: CircularProgressIndicator(
@@ -1863,9 +2018,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                     )
                   else
-                    Icon(OrbitIcons.chevronRight,
-                        size: AppDimens.iconSizeMd,
-                        color: colors.secondaryText),
+                    Icon(
+                      OrbitIcons.chevronRight,
+                      size: AppDimens.iconSizeMd,
+                      color: colors.secondaryText,
+                    ),
                 ],
               ),
             ),
@@ -1883,9 +2040,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               Switch(
                 value: _bioEnabled == true,
                 // 明文库无需解锁，指纹开关不可用（_masterAuthSet 探测中同样置灰）
-                onChanged: (_bioBusy ||
-                        _bioEnabled == null ||
-                        encrypted != true)
+                onChanged:
+                    (_bioBusy || _bioEnabled == null || encrypted != true)
                     ? null
                     : (v) => v ? _bioEnable() : _bioDisable(),
               ),
@@ -1896,8 +2052,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             _bioEnabled == true
                 ? '开启后可在解锁页用指纹代替主密码（密钥链存于系统安全存储，不离开本机）。'
                 : encrypted == true
-                    ? '用指纹代替主密码解锁加密库；密钥链存于系统安全存储，不参与云同步。'
-                    : '明文库无需解锁，指纹解锁不可用；开启加密后即可启用。',
+                ? '用指纹代替主密码解锁加密库；密钥链存于系统安全存储，不参与云同步。'
+                : '明文库无需解锁，指纹解锁不可用；开启加密后即可启用。',
             style: TextStyle(fontSize: 12, color: colors.secondaryText),
           ),
         ] else if (_bioAvailable == false)
@@ -1911,12 +2067,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 }
 
 /// 回收站保留档位文案（0 = 永久；缺省 30）
-String _trashRetentionLabel(int? days) {  if (days == null || days == 30) return '30 天';
+String _trashRetentionLabel(int? days) {
+  if (days == null || days == 30) return '30 天';
   return days == 0 ? '永久' : '$days 天';
 }
 
 /// 引擎摘要（脱敏不显示凭据）：webdav → endpoint host；s3 → bucket
-String engineSummary(SyncConfigView config) {  if (config.engine == 's3') {
+String engineSummary(SyncConfigView config) {
+  if (config.engine == 's3') {
     return 'S3 · ${config.bucket.isEmpty ? '-' : config.bucket}';
   }
   var host = '';

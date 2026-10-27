@@ -298,7 +298,11 @@ abstract class OrbitBridge {
   Future<TodoProject> todoProjectSetReviewInterval(int projectId, int? days);
 
   /// 暂缓项目回顾 days 天（不重置周期）
-  Future<TodoProject> todoProjectSnoozeReview(int projectId, int days, int nowMs);
+  Future<TodoProject> todoProjectSnoozeReview(
+    int projectId,
+    int days,
+    int nowMs,
+  );
 
   // ── 日排程（F3 阶段一只读预览） ──
 
@@ -323,7 +327,11 @@ abstract class OrbitBridge {
   ///
   /// `cursor` 为上一页返回值，首页传 null；`limit` 由 Rust 钳制到 1..=1000。
   /// 换排序档后沿用旧游标返回空页（UI 竞态自愈）。
-  Future<TodoTaskPage> todoTaskPage(ListFilter filter, ListCursor? cursor, int limit);
+  Future<TodoTaskPage> todoTaskPage(
+    ListFilter filter,
+    ListCursor? cursor,
+    int limit,
+  );
 
   /// 任务总览：总数（「已加载 X / 共 Y」）+ 按项目未完成计数（侧栏角标）
   Future<TodoTaskOverview> todoTaskOverview(ListFilter filter);
@@ -405,7 +413,8 @@ abstract class OrbitBridge {
 
   Future<List<TodoTaskRelation>> todoTaskRelationList(ListFilter filter);
   Future<TodoTaskRelation> todoTaskRelationCreate(
-      TodoTaskRelationCreateInput input);
+    TodoTaskRelationCreateInput input,
+  );
   Future<void> todoTaskRelationDelete(int id);
 
   // ── todo_reminders ──
@@ -453,8 +462,10 @@ abstract class OrbitBridge {
 
   /// 强制同步（进入/退出应用专用，对齐桌面 cloud_sync_force；
   /// 不检查自动开关/间隔，忙时最多等待 [waitForIdleMs] 毫秒）
-  Future<SyncResultJson> cloudSyncForce(
-      {String origin = 'manual', int waitForIdleMs = 3000});
+  Future<SyncResultJson> cloudSyncForce({
+    String origin = 'manual',
+    int waitForIdleMs = 3000,
+  });
 
   /// 桥接探活（对齐桌面 ping；验证 Dart → Rust → orbit_core 通路）
   Future<String> ping();
@@ -467,8 +478,10 @@ abstract class OrbitBridge {
 
   /// 增量同步历史（scope：all | incremental | push_only | pull_only；
   /// 只读聚合，设置页「同步历史」卡数据源）
-  Future<List<SyncHistoryRow>> cloudSyncHistory(
-      {String scope = 'all', int limit = 20});
+  Future<List<SyncHistoryRow>> cloudSyncHistory({
+    String scope = 'all',
+    int limit = 20,
+  });
 
   /// 本地同步账本（`sync_state.json`：桶指纹 + 水位线 + 设备/epoch；
   /// 只读诊断，设置页「同步账本」卡数据源；未配置云同步时不报错，返回空账本）
@@ -484,10 +497,14 @@ abstract class OrbitBridge {
   // ── 明文数据导出（07 报告 #15；PRIVACY.md §七口径）──
 
   /// 导出全部待办数据为结构化 JSON（默认排除墓碑行）
-  Future<PlaintextExportResult> plaintextExportJson({bool excludeDeleted = true});
+  Future<PlaintextExportResult> plaintextExportJson({
+    bool excludeDeleted = true,
+  });
 
   /// 导出任务主视图 CSV（UTF-8 with BOM；默认排除墓碑行）
-  Future<PlaintextExportResult> plaintextExportCsv({bool excludeDeleted = true});
+  Future<PlaintextExportResult> plaintextExportCsv({
+    bool excludeDeleted = true,
+  });
 
   // ── CSV 导入（迁移路径：orbit / todoist / ticktick）──
 
@@ -495,7 +512,12 @@ abstract class OrbitBridge {
   Future<ImportLimits> csvImportLimits();
 
   /// 预览导入（不写库）：解析 + 映射 + 统计
-  Future<CsvImportPreview> csvImportPreview(String content, String preset, int previewLimit);
+  Future<CsvImportPreview> csvImportPreview(
+    String content,
+    String preset,
+    int previewLimit,
+  );
+
   /// 执行导入（写库）：项目自动创建、逐行独立成败
   Future<CsvImportStats> csvImportExecute(String content, String preset);
 
@@ -515,14 +537,22 @@ abstract class OrbitBridge {
 
   /// 上传并挂载附件（内存已有字节的来源：拍照/分享；单任务 20 个/单文件 50MB）
   Future<TaskAttachmentView> taskAttachmentAdd(
-      int taskId, String fileName, String mimeType, List<int> data);
+    int taskId,
+    String fileName,
+    String mimeType,
+    List<int> data,
+  );
 
   /// 从本地文件路径挂载附件（文件选择器主路径）
   ///
   /// 不经 Dart 读整份字节：core 按 256KiB 块流式读盘并算 SHA-256，调用方峰值
   /// 与文件大小无关。`sourcePath` 为 file_picker 返回的临时路径。
   Future<TaskAttachmentView> taskAttachmentAddPath(
-      int taskId, String fileName, String mimeType, String sourcePath);
+    int taskId,
+    String fileName,
+    String mimeType,
+    String sourcePath,
+  );
 
   /// 任务附件列表（含 isLocalCached 状态）
   Future<List<TaskAttachmentView>> taskAttachmentsList(int taskId);
@@ -532,6 +562,17 @@ abstract class OrbitBridge {
 
   /// 卸下附件（软删关联，孤儿二进制由 GC 清）
   Future<void> taskAttachmentRemove(int linkId);
+
+  /// 本地未使用附件（无存活任务引用的账本行；存储清理页只读清单）
+  Future<List<UnusedAttachment>> unusedAttachmentsList();
+
+  /// 按 hash 批量删除本地未使用附件（文件 + 账本行，云端对象保留），返回清理数
+  Future<int> unusedAttachmentsDelete(List<String> hashes);
+
+  /// 流式导出附件到指定路径（另存/分享），返回写入字节数
+  ///
+  /// 不把整份内容带进 Dart 内存（core 按 256KiB 块复制），失败不留半截文件。
+  Future<int> exportTaskAttachment(String hash, String targetPath);
 
   // ── 云端孤儿附件清理（docs/15；需已配置云同步且密钥已解锁）──
 
@@ -578,12 +619,14 @@ abstract class OrbitBridge {
   Future<List<TodoSavedFilter>> savedFiltersList();
 
   /// 创建保存的筛选器（条件 JSON 白名单键校验在后端）
-  Future<TodoSavedFilter> savedFilterCreate(
-      String name, String conditions);
+  Future<TodoSavedFilter> savedFilterCreate(String name, String conditions);
 
   /// 更新保存的筛选器（可视化构建抽屉的「保存修改」路径）
   Future<TodoSavedFilter> savedFilterUpdate(
-      int id, String name, String conditions);
+    int id,
+    String name,
+    String conditions,
+  );
 
   /// 删除保存的筛选器（软删）
   Future<void> savedFilterDelete(int id);
@@ -592,7 +635,10 @@ abstract class OrbitBridge {
 
   /// 列出冲突记录（[resolution] 为 null 时返回全部；按时间倒序分页）
   Future<List<SyncConflict>> syncConflictList(
-      String? resolution, int limit, int offset);
+    String? resolution,
+    int limit,
+    int offset,
+  );
 
   /// 统计冲突记录数（传 'unresolved' 只要待处理）
   Future<int> syncConflictCount(String? resolution);
@@ -811,6 +857,14 @@ abstract class OrbitBridge {
 
   /// 清空回收站，返回删除的任务数
   Future<int> trashPurgeAll();
+
+  /// 立即执行一次 TTL 过期清理（等价于后台守护的一轮，不等 tick）
+  Future<TrashPurgeStats> trashPurgeExpired();
+
+  /// 检查最新版本（只在用户点击时调用；不轮询、不下载、不安装）
+  ///
+  /// 失败原样抛出，调用方降级为「打开发布页」。
+  Future<UpdateInfo> checkLatestRelease();
 
   /// 回收站元数据（保留档位 + 上次自动清理时间）
   Future<TrashMeta> trashMeta();

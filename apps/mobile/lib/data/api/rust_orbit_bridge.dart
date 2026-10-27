@@ -26,6 +26,7 @@ import '../../src/rust/api/biometric.dart' as gen_bio;
 import '../../src/rust/api/todo.dart' as gen_todo;
 import '../../src/rust/api/planner.dart' as gen_planner;
 import '../../src/rust/api/trash.dart' as gen_trash;
+import '../../src/rust/api/update.dart' as gen_update;
 import '../../src/rust/api/digest.dart' as gen_digest;
 import '../../src/rust/api/full_sync_backup.dart' as gen_backup;
 import '../../src/rust/api/notification_log.dart' as gen_notif;
@@ -75,12 +76,13 @@ class RustOrbitBridge implements OrbitBridge {
 
   @override
   Future<void> masterAuthChangePassword(
-          String oldPassword, String newPassword) async =>
-      gen_auth.masterAuthChangePassword(
-        baseDir: await _dir(),
-        oldPassword: oldPassword,
-        newPassword: newPassword,
-      );
+    String oldPassword,
+    String newPassword,
+  ) async => gen_auth.masterAuthChangePassword(
+    baseDir: await _dir(),
+    oldPassword: oldPassword,
+    newPassword: newPassword,
+  );
 
   @override
   Future<void> masterAuthClear() async =>
@@ -138,9 +140,9 @@ class RustOrbitBridge implements OrbitBridge {
 
   @override
   Future<List<TodoProject>> todoProjectList(ListFilter filter) async =>
-      (await gen_todo.todoProjectsList(filter: _genFilter(filter)))
-          .map(_mapProject)
-          .toList();
+      (await gen_todo.todoProjectsList(
+        filter: _genFilter(filter),
+      )).map(_mapProject).toList();
 
   @override
   Future<List<TodoProject>> todoProjectListArchived() async =>
@@ -152,39 +154,44 @@ class RustOrbitBridge implements OrbitBridge {
 
   @override
   Future<TodoProject> todoProjectCreate(TodoProjectCreateInput input) async =>
-      _mapProject(await gen_todo.todoProjectsCreate(
-        input: gen.TodoProjectCreateInput(
-          title: input.title,
-          description: input.description,
-          hexColor: input.hexColor,
-          sortOrder: input.sortOrder,
-          parentUuid: input.parentUuid,
+      _mapProject(
+        await gen_todo.todoProjectsCreate(
+          input: gen.TodoProjectCreateInput(
+            title: input.title,
+            description: input.description,
+            hexColor: input.hexColor,
+            sortOrder: input.sortOrder,
+            parentUuid: input.parentUuid,
+          ),
         ),
-      ));
+      );
 
   @override
   Future<TodoProject> todoProjectUpdate(int id, String patchJson) async =>
-      _mapProject(await gen_todo.todoProjectsUpdate(id: id, patchJson: patchJson));
+      _mapProject(
+        await gen_todo.todoProjectsUpdate(id: id, patchJson: patchJson),
+      );
 
   @override
-  Future<void> todoProjectDelete(int id) =>
-      gen_todo.todoProjectsDelete(id: id);
+  Future<void> todoProjectDelete(int id) => gen_todo.todoProjectsDelete(id: id);
 
   @override
-  Future<void> todoProjectUpdateSortOrder(int id, int sortOrder) =>
-      gen_todo.todoProjectsUpdateSortOrder(id: id, sortOrder: sortOrder.toDouble());
+  Future<void> todoProjectUpdateSortOrder(int id, int sortOrder) => gen_todo
+      .todoProjectsUpdateSortOrder(id: id, sortOrder: sortOrder.toDouble());
 
   // ── 项目回顾节奏（F1） ──
 
   @override
   Future<List<ProjectReviewStatus>> todoProjectsDueForReview(int nowMs) async =>
       (await gen_todo.todoProjectsDueForReview(nowMs: nowMs))
-          .map((s) => ProjectReviewStatus(
-                project: _mapProject(s.project),
-                dueDayIndex: s.dueDayIndex,
-                overdueDays: s.overdueDays,
-                openTaskCount: s.openTaskCount,
-              ))
+          .map(
+            (s) => ProjectReviewStatus(
+              project: _mapProject(s.project),
+              dueDayIndex: s.dueDayIndex,
+              overdueDays: s.overdueDays,
+              openTaskCount: s.openTaskCount,
+            ),
+          )
           .toList();
 
   @override
@@ -192,19 +199,28 @@ class RustOrbitBridge implements OrbitBridge {
       _mapProject(await gen_todo.todoProjectMarkReviewed(projectId: projectId));
 
   @override
-  Future<TodoProject> todoProjectSetReviewInterval(int projectId, int? days) async =>
-      _mapProject(await gen_todo.todoProjectSetReviewInterval(
-        projectId: projectId,
-        days: days,
-      ));
+  Future<TodoProject> todoProjectSetReviewInterval(
+    int projectId,
+    int? days,
+  ) async => _mapProject(
+    await gen_todo.todoProjectSetReviewInterval(
+      projectId: projectId,
+      days: days,
+    ),
+  );
 
   @override
-  Future<TodoProject> todoProjectSnoozeReview(int projectId, int days, int nowMs) async =>
-      _mapProject(await gen_todo.todoProjectSnoozeReview(
-        projectId: projectId,
-        days: days,
-        nowMs: nowMs,
-      ));
+  Future<TodoProject> todoProjectSnoozeReview(
+    int projectId,
+    int days,
+    int nowMs,
+  ) async => _mapProject(
+    await gen_todo.todoProjectSnoozeReview(
+      projectId: projectId,
+      days: days,
+      nowMs: nowMs,
+    ),
+  );
 
   // ── 日排程（F3 阶段一） ──
 
@@ -246,7 +262,10 @@ class RustOrbitBridge implements OrbitBridge {
   }
 
   @override
-  Future<ApplyResult> dayPlanApply(int dayStartMs, List<ApplySlotInput> slots) async {
+  Future<ApplyResult> dayPlanApply(
+    int dayStartMs,
+    List<ApplySlotInput> slots,
+  ) async {
     final r = await gen_planner.dayPlanApply(
       dayStartMs: dayStartMs,
       slots: [
@@ -308,9 +327,9 @@ class RustOrbitBridge implements OrbitBridge {
 
   @override
   Future<List<TodoTask>> todoTaskList(ListFilter filter) async =>
-      (await gen_todo.todoTasksList(filter: _genFilter(filter)))
-          .map(_mapTaskRow)
-          .toList();
+      (await gen_todo.todoTasksList(
+        filter: _genFilter(filter),
+      )).map(_mapTaskRow).toList();
 
   @override
   Future<TodoTaskPage> todoTaskPage(
@@ -353,10 +372,12 @@ class RustOrbitBridge implements OrbitBridge {
     return TodoTaskOverview(
       total: ov.total.toInt(),
       undoneByProject: ov.undoneByProject
-          .map((b) => TodoProjectUndone(
-                projectId: b.projectId?.toInt(),
-                count: b.count.toInt(),
-              ))
+          .map(
+            (b) => TodoProjectUndone(
+              projectId: b.projectId?.toInt(),
+              count: b.count.toInt(),
+            ),
+          )
           .toList(),
     );
   }
@@ -385,11 +406,13 @@ class RustOrbitBridge implements OrbitBridge {
     return TodoTaskBoardResult(
       total: board.total.toInt(),
       groups: board.groups
-          .map((g) => TodoTaskBoardGroup(
-                key: g.key,
-                total: g.total.toInt(),
-                items: g.items.map(_mapTaskRow).toList(),
-              ))
+          .map(
+            (g) => TodoTaskBoardGroup(
+              key: g.key,
+              total: g.total.toInt(),
+              items: g.items.map(_mapTaskRow).toList(),
+            ),
+          )
           .toList(),
     );
   }
@@ -399,32 +422,33 @@ class RustOrbitBridge implements OrbitBridge {
       _mapTask(await gen_todo.todoTasksGet(id: id));
 
   @override
-  Future<TodoTask> todoTaskCreate(TodoTaskCreateInput input) async =>
-      _mapTask(await gen_todo.todoTasksCreate(
-        input: gen.TodoTaskCreateInput(
-          title: input.title,
-          description: input.description,
-          projectId: input.projectId,
-          priority: input.priority,
-          status: input.status,
-          done: input.done,
-          doneAt: input.doneAt,
-          dueDate: input.dueDate,
-          startDate: input.startDate,
-          repeatAfter: input.repeatAfter,
-          repeatMode: input.repeatMode,
-          repeatWeekdays: input.repeatWeekdays,
-          repeatEndType: input.repeatEndType,
-          repeatEndParam: input.repeatEndParam,
-          repeatFromDone: input.repeatFromDone,
-          repeatMonthMode: input.repeatMonthMode,
-          repeatNthWeek: input.repeatNthWeek,
-          position: input.position?.toDouble(),
-          isFavorite: input.isFavorite,
-          myDayDate: input.myDayDate,
-          durationMinutes: input.durationMinutes,
-        ),
-      ));
+  Future<TodoTask> todoTaskCreate(TodoTaskCreateInput input) async => _mapTask(
+    await gen_todo.todoTasksCreate(
+      input: gen.TodoTaskCreateInput(
+        title: input.title,
+        description: input.description,
+        projectId: input.projectId,
+        priority: input.priority,
+        status: input.status,
+        done: input.done,
+        doneAt: input.doneAt,
+        dueDate: input.dueDate,
+        startDate: input.startDate,
+        repeatAfter: input.repeatAfter,
+        repeatMode: input.repeatMode,
+        repeatWeekdays: input.repeatWeekdays,
+        repeatEndType: input.repeatEndType,
+        repeatEndParam: input.repeatEndParam,
+        repeatFromDone: input.repeatFromDone,
+        repeatMonthMode: input.repeatMonthMode,
+        repeatNthWeek: input.repeatNthWeek,
+        position: input.position?.toDouble(),
+        isFavorite: input.isFavorite,
+        myDayDate: input.myDayDate,
+        durationMinutes: input.durationMinutes,
+      ),
+    ),
+  );
 
   @override
   Future<TodoTask> todoTaskUpdate(int id, String patchJson) async =>
@@ -529,24 +553,28 @@ class RustOrbitBridge implements OrbitBridge {
 
   @override
   Future<List<TodoSubtask>> todoSubtaskList(ListFilter filter) async =>
-      (await gen_todo.todoSubtasksList(filter: _genFilter(filter)))
-          .map(_mapSubtask)
-          .toList();
+      (await gen_todo.todoSubtasksList(
+        filter: _genFilter(filter),
+      )).map(_mapSubtask).toList();
 
   @override
   Future<TodoSubtask> todoSubtaskCreate(TodoSubtaskCreateInput input) async =>
-      _mapSubtask(await gen_todo.todoSubtasksCreate(
-        input: gen.TodoSubtaskCreateInput(
-          taskId: input.taskId,
-          title: input.title,
-          position: input.position?.toDouble(),
-          parentUuid: input.parentUuid,
+      _mapSubtask(
+        await gen_todo.todoSubtasksCreate(
+          input: gen.TodoSubtaskCreateInput(
+            taskId: input.taskId,
+            title: input.title,
+            position: input.position?.toDouble(),
+            parentUuid: input.parentUuid,
+          ),
         ),
-      ));
+      );
 
   @override
   Future<TodoSubtask> todoSubtaskUpdate(int id, String patchJson) async =>
-      _mapSubtask(await gen_todo.todoSubtasksUpdate(id: id, patchJson: patchJson));
+      _mapSubtask(
+        await gen_todo.todoSubtasksUpdate(id: id, patchJson: patchJson),
+      );
 
   @override
   Future<void> todoSubtaskDelete(int id) => gen_todo.todoSubtasksDelete(id: id);
@@ -563,9 +591,9 @@ class RustOrbitBridge implements OrbitBridge {
 
   @override
   Future<List<TodoLabel>> todoLabelList(ListFilter filter) async =>
-      (await gen_todo.todoLabelsList(filter: _genFilter(filter)))
-          .map(_mapLabel)
-          .toList();
+      (await gen_todo.todoLabelsList(
+        filter: _genFilter(filter),
+      )).map(_mapLabel).toList();
 
   @override
   Future<TodoLabel> todoLabelGet(int id) async =>
@@ -573,9 +601,14 @@ class RustOrbitBridge implements OrbitBridge {
 
   @override
   Future<TodoLabel> todoLabelCreate(TodoLabelCreateInput input) async =>
-      _mapLabel(await gen_todo.todoLabelsCreate(
-        input: gen.TodoLabelCreateInput(title: input.title, hexColor: input.hexColor),
-      ));
+      _mapLabel(
+        await gen_todo.todoLabelsCreate(
+          input: gen.TodoLabelCreateInput(
+            title: input.title,
+            hexColor: input.hexColor,
+          ),
+        ),
+      );
 
   @override
   Future<TodoLabel> todoLabelUpdate(int id, String patchJson) async =>
@@ -585,7 +618,9 @@ class RustOrbitBridge implements OrbitBridge {
   Future<void> todoLabelDelete(int id) => gen_todo.todoLabelsDelete(id: id);
 
   @override
-  Future<TaskLabelWithId> todoTaskLabelCreate(TodoTaskLabelCreateInput input) async {
+  Future<TaskLabelWithId> todoTaskLabelCreate(
+    TodoTaskLabelCreateInput input,
+  ) async {
     final link = await gen_todo.todoTaskLabelsCreate(
       input: gen.TodoTaskLabelCreateInput(
         taskId: input.taskId,
@@ -640,15 +675,20 @@ class RustOrbitBridge implements OrbitBridge {
 
   @override
   Future<List<TodoComment>> todoCommentList(ListFilter filter) async =>
-      (await gen_todo.todoCommentsList(filter: _genFilter(filter)))
-          .map(_mapComment)
-          .toList();
+      (await gen_todo.todoCommentsList(
+        filter: _genFilter(filter),
+      )).map(_mapComment).toList();
 
   @override
   Future<TodoComment> todoCommentCreate(TodoCommentCreateInput input) async =>
-      _mapComment(await gen_todo.todoCommentsCreate(
-        input: gen.TodoCommentCreateInput(taskId: input.taskId, content: input.content),
-      ));
+      _mapComment(
+        await gen_todo.todoCommentsCreate(
+          input: gen.TodoCommentCreateInput(
+            taskId: input.taskId,
+            content: input.content,
+          ),
+        ),
+      );
 
   @override
   Future<void> todoCommentDelete(int id) => gen_todo.todoCommentsDelete(id: id);
@@ -656,14 +696,16 @@ class RustOrbitBridge implements OrbitBridge {
   // ── todo_task_relations ──
 
   @override
-  Future<List<TodoTaskRelation>> todoTaskRelationList(ListFilter filter) async =>
-      (await gen_todo.todoTaskRelationsList(filter: _genFilter(filter)))
-          .map(_mapRelation)
-          .toList();
+  Future<List<TodoTaskRelation>> todoTaskRelationList(
+    ListFilter filter,
+  ) async => (await gen_todo.todoTaskRelationsList(
+    filter: _genFilter(filter),
+  )).map(_mapRelation).toList();
 
   @override
   Future<TodoTaskRelation> todoTaskRelationCreate(
-      TodoTaskRelationCreateInput input) async {
+    TodoTaskRelationCreateInput input,
+  ) async {
     final r = await gen_todo.todoTaskRelationsCreate(
       input: gen.TodoTaskRelationCreateInput(
         taskId: input.taskId,
@@ -693,58 +735,70 @@ class RustOrbitBridge implements OrbitBridge {
 
   @override
   Future<List<TodoReminder>> todoReminderList(ListFilter filter) async =>
-      (await gen_todo.todoRemindersList(filter: _genFilter(filter)))
-          .map(_mapReminder)
-          .toList();
+      (await gen_todo.todoRemindersList(
+        filter: _genFilter(filter),
+      )).map(_mapReminder).toList();
 
   @override
-  Future<TodoReminder> todoReminderCreate(TodoReminderCreateInput input) async =>
-      _mapReminder(await gen_todo.todoRemindersCreate(
-        input: gen.TodoReminderCreateInput(
-          taskId: input.taskId,
-          remindAt: input.remindAt,
-          isConstant: input.isConstant,
-        ),
-      ));
+  Future<TodoReminder> todoReminderCreate(
+    TodoReminderCreateInput input,
+  ) async => _mapReminder(
+    await gen_todo.todoRemindersCreate(
+      input: gen.TodoReminderCreateInput(
+        taskId: input.taskId,
+        remindAt: input.remindAt,
+        isConstant: input.isConstant,
+      ),
+    ),
+  );
 
   @override
-  Future<void> todoReminderDelete(int id) => gen_todo.todoRemindersDelete(id: id);
+  Future<void> todoReminderDelete(int id) =>
+      gen_todo.todoRemindersDelete(id: id);
 
   // ── 任务列表投影聚合（A4，只读）──
 
   @override
   Future<List<TaskLabelsProjection>> taskLabelsProjection() async =>
       (await gen_todo.taskLabelsProjection())
-          .map((g) => TaskLabelsProjection(
-                taskId: g.taskId,
-                labels: g.labels
-                    .map((l) => ProjectedTaskLabel(
-                          id: l.id,
-                          title: l.title,
-                          hexColor: l.hexColor,
-                        ))
-                    .toList(),
-              ))
+          .map(
+            (g) => TaskLabelsProjection(
+              taskId: g.taskId,
+              labels: g.labels
+                  .map(
+                    (l) => ProjectedTaskLabel(
+                      id: l.id,
+                      title: l.title,
+                      hexColor: l.hexColor,
+                    ),
+                  )
+                  .toList(),
+            ),
+          )
           .toList();
 
   @override
   Future<List<TaskRemindersProjection>> taskRemindersProjection() async =>
       (await gen_todo.taskRemindersProjection())
-          .map((g) => TaskRemindersProjection(
-                taskId: g.taskId,
-                reminders: g.reminders
-                    .map((r) => ProjectedReminder(id: r.id, remindAt: r.remindAt))
-                    .toList(),
-              ))
+          .map(
+            (g) => TaskRemindersProjection(
+              taskId: g.taskId,
+              reminders: g.reminders
+                  .map((r) => ProjectedReminder(id: r.id, remindAt: r.remindAt))
+                  .toList(),
+            ),
+          )
           .toList();
 
   @override
   Future<List<TaskDependencyFlags>> taskDependencyFlags() async =>
       (await gen_todo.taskDependencyFlags())
-          .map((f) => TaskDependencyFlags(
-                taskId: f.taskId,
-                relationCount: f.relationCount,
-              ))
+          .map(
+            (f) => TaskDependencyFlags(
+              taskId: f.taskId,
+              relationCount: f.relationCount,
+            ),
+          )
           .toList();
 
   @override
@@ -791,7 +845,9 @@ class RustOrbitBridge implements OrbitBridge {
 
   @override
   Future<SyncConfigView> syncConfigSave(Map<String, Object?> input) async {
-    final saved = await gen_sync.syncConfigSave(input: _toGenConfigInput(input));
+    final saved = await gen_sync.syncConfigSave(
+      input: _toGenConfigInput(input),
+    );
     return SyncConfigView(
       id: saved.id,
       engine: saved.engine,
@@ -825,24 +881,29 @@ class RustOrbitBridge implements OrbitBridge {
       );
 
   @override
-  Future<SyncResultJson> cloudSyncPullThenPush({String origin = 'manual'}) async =>
-      SyncResultJson.fromJson(
-        jsonDecode(await gen_sync.cloudSyncPullThenPush(origin: origin))
-            as Map<String, dynamic>,
-      );
+  Future<SyncResultJson> cloudSyncPullThenPush({
+    String origin = 'manual',
+  }) async => SyncResultJson.fromJson(
+    jsonDecode(await gen_sync.cloudSyncPullThenPush(origin: origin))
+        as Map<String, dynamic>,
+  );
 
   @override
   Future<bool> cloudSyncIsRunning() => gen_sync.cloudSyncIsRunning();
 
   @override
-  Future<SyncResultJson> cloudSyncForce(
-      {String origin = 'manual', int waitForIdleMs = 3000}) async =>
-      SyncResultJson.fromJson(
-        jsonDecode(await gen_sync.cloudSyncForce(
-          origin: origin,
-          waitForIdleMs: BigInt.from(waitForIdleMs),
-        )) as Map<String, dynamic>,
-      );
+  Future<SyncResultJson> cloudSyncForce({
+    String origin = 'manual',
+    int waitForIdleMs = 3000,
+  }) async => SyncResultJson.fromJson(
+    jsonDecode(
+          await gen_sync.cloudSyncForce(
+            origin: origin,
+            waitForIdleMs: BigInt.from(waitForIdleMs),
+          ),
+        )
+        as Map<String, dynamic>,
+  );
 
   @override
   Future<String> ping() => gen_auth.ping();
@@ -861,17 +922,19 @@ class RustOrbitBridge implements OrbitBridge {
   }) async {
     final rows = await gen_sync.cloudSyncHistory(scope: scope, limit: limit);
     return rows
-        .map((r) => SyncHistoryRow(
-              id: r.id.toInt(),
-              syncType: r.syncType,
-              status: r.status,
-              startedAt: r.startedAt.toInt(),
-              finishedAt: r.finishedAt?.toInt(),
-              pulledCount: r.pulledCount.toInt(),
-              pushedCount: r.pushedCount.toInt(),
-              conflictCount: r.conflictCount.toInt(),
-              errorMessage: r.errorMessage,
-            ))
+        .map(
+          (r) => SyncHistoryRow(
+            id: r.id.toInt(),
+            syncType: r.syncType,
+            status: r.status,
+            startedAt: r.startedAt.toInt(),
+            finishedAt: r.finishedAt?.toInt(),
+            pulledCount: r.pulledCount.toInt(),
+            pushedCount: r.pushedCount.toInt(),
+            conflictCount: r.conflictCount.toInt(),
+            errorMessage: r.errorMessage,
+          ),
+        )
         .toList();
   }
 
@@ -885,25 +948,29 @@ class RustOrbitBridge implements OrbitBridge {
   // ── 明文数据导出（07 报告 #15）──
 
   @override
-  Future<PlaintextExportResult> plaintextExportJson({bool excludeDeleted = true}) async {
-    final r = await gen_export.plaintextExportJson(excludeDeleted: excludeDeleted);
+  Future<PlaintextExportResult> plaintextExportJson({
+    bool excludeDeleted = true,
+  }) async {
+    final r = await gen_export.plaintextExportJson(
+      excludeDeleted: excludeDeleted,
+    );
     return PlaintextExportResult(
       content: r.content,
-      tableCounts: {
-        for (final e in r.tableCounts) e.table: e.count.toInt(),
-      },
+      tableCounts: {for (final e in r.tableCounts) e.table: e.count.toInt()},
       suggestedFilename: r.suggestedFilename,
     );
   }
 
   @override
-  Future<PlaintextExportResult> plaintextExportCsv({bool excludeDeleted = true}) async {
-    final r = await gen_export.plaintextExportCsv(excludeDeleted: excludeDeleted);
+  Future<PlaintextExportResult> plaintextExportCsv({
+    bool excludeDeleted = true,
+  }) async {
+    final r = await gen_export.plaintextExportCsv(
+      excludeDeleted: excludeDeleted,
+    );
     return PlaintextExportResult(
       content: r.content,
-      tableCounts: {
-        for (final e in r.tableCounts) e.table: e.count.toInt(),
-      },
+      tableCounts: {for (final e in r.tableCounts) e.table: e.count.toInt()},
       suggestedFilename: r.suggestedFilename,
     );
   }
@@ -951,7 +1018,10 @@ class RustOrbitBridge implements OrbitBridge {
 
   @override
   Future<CsvImportStats> csvImportExecute(String content, String preset) async {
-    final r = await gen_import.csvImportExecute(content: content, preset: preset);
+    final r = await gen_import.csvImportExecute(
+      content: content,
+      preset: preset,
+    );
     return _mapStats(r);
   }
 
@@ -984,17 +1054,21 @@ class RustOrbitBridge implements OrbitBridge {
       gen_import.csvImportJobDrop(jobId: jobId);
 
   CsvImportStats _mapStats(gen.CsvImportStatsView s) => CsvImportStats(
-        success: s.success.toInt(),
-        skipped: s.skipped.toInt(),
-        failed: s.failed.toInt(),
-        notes: s.notes,
-      );
+    success: s.success.toInt(),
+    skipped: s.skipped.toInt(),
+    failed: s.failed.toInt(),
+    notes: s.notes,
+  );
 
   // ── 任务附件（内容寻址）──
 
   @override
   Future<TaskAttachmentView> taskAttachmentAdd(
-      int taskId, String fileName, String mimeType, List<int> data) async {
+    int taskId,
+    String fileName,
+    String mimeType,
+    List<int> data,
+  ) async {
     final r = await gen_asset.taskAttachmentAdd(
       taskId: taskId,
       fileName: fileName,
@@ -1006,7 +1080,11 @@ class RustOrbitBridge implements OrbitBridge {
 
   @override
   Future<TaskAttachmentView> taskAttachmentAddPath(
-      int taskId, String fileName, String mimeType, String sourcePath) async {
+    int taskId,
+    String fileName,
+    String mimeType,
+    String sourcePath,
+  ) async {
     final r = await gen_asset.taskAttachmentAddPath(
       taskId: taskId,
       fileName: fileName,
@@ -1031,6 +1109,34 @@ class RustOrbitBridge implements OrbitBridge {
   @override
   Future<void> taskAttachmentRemove(int linkId) =>
       gen_asset.taskAttachmentRemove(linkId: linkId);
+
+  @override
+  Future<List<UnusedAttachment>> unusedAttachmentsList() async {
+    final rows = await gen_asset.attachmentsUnusedList();
+    return [
+      for (final r in rows)
+        UnusedAttachment(
+          hash: r.hash,
+          originalName: r.originalName,
+          mimeType: r.mimeType,
+          sizeBytes: r.sizeBytes.toInt(),
+          isUploaded: r.isUploaded,
+          isLocalCached: r.isLocalCached,
+          createdAt: r.createdAt.toInt(),
+        ),
+    ];
+  }
+
+  @override
+  Future<int> unusedAttachmentsDelete(List<String> hashes) async =>
+      (await gen_asset.attachmentsUnusedDelete(hashes: hashes)).toInt();
+
+  @override
+  Future<int> exportTaskAttachment(String hash, String targetPath) async =>
+      (await gen_asset.exportTaskAttachment(
+        hash: hash,
+        targetPath: targetPath,
+      )).toInt();
 
   // ── 云端孤儿附件清理（docs/15）──
 
@@ -1078,8 +1184,14 @@ class RustOrbitBridge implements OrbitBridge {
   // ── 任务活动日志（历史区块只读轨迹）──
 
   @override
-  Future<List<ActivityLogRow>> taskActivityList(int taskId, {int? limit}) async {
-    final rows = await gen_activity.taskActivityList(taskId: taskId, limit: limit);
+  Future<List<ActivityLogRow>> taskActivityList(
+    int taskId, {
+    int? limit,
+  }) async {
+    final rows = await gen_activity.taskActivityList(
+      taskId: taskId,
+      limit: limit,
+    );
     return rows.map(_mapActivityLog).toList();
   }
 
@@ -1115,17 +1227,22 @@ class RustOrbitBridge implements OrbitBridge {
   Future<List<TodoSavedFilter>> savedFiltersList() async {
     final rows = await gen_sf.savedFiltersList();
     return rows
-        .map((r) => TodoSavedFilter(
-              id: r.id.toInt(),
-              uuid: r.uuid,
-              name: r.name,
-              conditions: r.conditions,
-            ))
+        .map(
+          (r) => TodoSavedFilter(
+            id: r.id.toInt(),
+            uuid: r.uuid,
+            name: r.name,
+            conditions: r.conditions,
+          ),
+        )
         .toList();
   }
 
   @override
-  Future<TodoSavedFilter> savedFilterCreate(String name, String conditions) async {
+  Future<TodoSavedFilter> savedFilterCreate(
+    String name,
+    String conditions,
+  ) async {
     final r = await gen_sf.savedFilterCreate(
       input: gen.TodoSavedFilterCreateInput(
         name: name,
@@ -1143,7 +1260,10 @@ class RustOrbitBridge implements OrbitBridge {
 
   @override
   Future<TodoSavedFilter> savedFilterUpdate(
-      int id, String name, String conditions) async {
+    int id,
+    String name,
+    String conditions,
+  ) async {
     final r = await gen_sf.savedFilterUpdate(
       id: id,
       input: gen.TodoSavedFilterUpdateInput(
@@ -1161,14 +1281,16 @@ class RustOrbitBridge implements OrbitBridge {
   }
 
   @override
-  Future<void> savedFilterDelete(int id) =>
-      gen_sf.savedFilterDelete(id: id);
+  Future<void> savedFilterDelete(int id) => gen_sf.savedFilterDelete(id: id);
 
   // ── 冲突败方副本（03 文档 §八 遗留项）──
 
   @override
   Future<List<SyncConflict>> syncConflictList(
-      String? resolution, int limit, int offset) async {
+    String? resolution,
+    int limit,
+    int offset,
+  ) async {
     final rows = await gen_sc.syncConflictList(
       resolution: resolution,
       limit: limit,
@@ -1195,21 +1317,21 @@ class RustOrbitBridge implements OrbitBridge {
 
   /// FRB 生成类型 → 领域 DTO（PlatformInt64 逐个 toInt，见平台约定）
   SyncConflict _toSyncConflict(gen.SyncConflict c) => SyncConflict(
-        id: c.id.toInt(),
-        tableName: c.tableName,
-        recordUuid: c.recordUuid,
-        recordTitle: c.recordTitle,
-        decision: c.decision,
-        loserSide: c.loserSide,
-        winnerSide: c.winnerSide,
-        loserPayload: c.loserPayload,
-        winnerPayload: c.winnerPayload,
-        loserUpdatedAt: c.loserUpdatedAt.toInt(),
-        winnerUpdatedAt: c.winnerUpdatedAt.toInt(),
-        resolution: c.resolution,
-        createdAt: c.createdAt.toInt(),
-        resolvedAt: c.resolvedAt.toInt(),
-      );
+    id: c.id.toInt(),
+    tableName: c.tableName,
+    recordUuid: c.recordUuid,
+    recordTitle: c.recordTitle,
+    decision: c.decision,
+    loserSide: c.loserSide,
+    winnerSide: c.winnerSide,
+    loserPayload: c.loserPayload,
+    winnerPayload: c.winnerPayload,
+    loserUpdatedAt: c.loserUpdatedAt.toInt(),
+    winnerUpdatedAt: c.winnerUpdatedAt.toInt(),
+    resolution: c.resolution,
+    createdAt: c.createdAt.toInt(),
+    resolvedAt: c.resolvedAt.toInt(),
+  );
 
   // ── 任务模板（竞品矩阵高价值缺口）──
 
@@ -1217,12 +1339,14 @@ class RustOrbitBridge implements OrbitBridge {
   Future<List<TodoTemplate>> templatesList() async {
     final rows = await gen_tpl.templatesList();
     return rows
-        .map((r) => TodoTemplate(
-              id: r.id.toInt(),
-              uuid: r.uuid,
-              name: r.name,
-              payload: r.payload,
-            ))
+        .map(
+          (r) => TodoTemplate(
+            id: r.id.toInt(),
+            uuid: r.uuid,
+            name: r.name,
+            payload: r.payload,
+          ),
+        )
         .toList();
   }
 
@@ -1244,7 +1368,11 @@ class RustOrbitBridge implements OrbitBridge {
   }
 
   @override
-  Future<TodoTemplate> templateUpdate(int id, String name, String payload) async {
+  Future<TodoTemplate> templateUpdate(
+    int id,
+    String name,
+    String payload,
+  ) async {
     final r = await gen_tpl.templateUpdate(
       id: id,
       input: gen.TodoTemplateUpdateInput(
@@ -1262,8 +1390,7 @@ class RustOrbitBridge implements OrbitBridge {
   }
 
   @override
-  Future<void> templateDelete(int id) =>
-      gen_tpl.templateDelete(id: id);
+  Future<void> templateDelete(int id) => gen_tpl.templateDelete(id: id);
 
   // ── Android 桌面小组件（#3）──
 
@@ -1271,13 +1398,15 @@ class RustOrbitBridge implements OrbitBridge {
   Future<List<WidgetTodoItem>> widgetTodoQuery(int limit) async {
     final rows = await gen_widget.widgetTodoQuery(limit: limit);
     return rows
-        .map((r) => WidgetTodoItem(
-              id: r.id.toInt(),
-              uuid: r.uuid,
-              title: r.title,
-              priority: r.priority,
-              done: r.done,
-            ))
+        .map(
+          (r) => WidgetTodoItem(
+            id: r.id.toInt(),
+            uuid: r.uuid,
+            title: r.title,
+            priority: r.priority,
+            done: r.done,
+          ),
+        )
         .toList();
   }
 
@@ -1299,7 +1428,8 @@ class RustOrbitBridge implements OrbitBridge {
     );
   }
 
-  TaskAttachmentView _mapAttachment(gen.TaskAttachmentView r) => TaskAttachmentView(
+  TaskAttachmentView _mapAttachment(gen.TaskAttachmentView r) =>
+      TaskAttachmentView(
         linkId: r.linkId.toInt(),
         linkUuid: r.linkUuid,
         hash: r.hash,
@@ -1310,20 +1440,23 @@ class RustOrbitBridge implements OrbitBridge {
       );
 
   ActivityLogRow _mapActivityLog(gen.ActivityLogRow r) => ActivityLogRow(
-        id: r.id.toInt(),
-        taskId: r.taskId?.toInt(),
-        taskTitle: r.taskTitle,
-        action: r.action,
-        detail: r.detail,
-        createdAt: r.createdAt.toInt(),
-      );
+    id: r.id.toInt(),
+    taskId: r.taskId?.toInt(),
+    taskTitle: r.taskTitle,
+    action: r.action,
+    detail: r.detail,
+    createdAt: r.createdAt.toInt(),
+  );
 
   // ── 同步加密 ──
 
   @override
   Future<SyncCryptoStatus> syncCryptoStatus() async {
     final s = await gen_sync.syncCryptoStatus();
-    return SyncCryptoStatus(hasPassword: s.hasPassword, isUnlocked: s.isUnlocked);
+    return SyncCryptoStatus(
+      hasPassword: s.hasPassword,
+      isUnlocked: s.isUnlocked,
+    );
   }
 
   @override
@@ -1338,8 +1471,11 @@ class RustOrbitBridge implements OrbitBridge {
   Future<void> syncCryptoLock() => gen_sync.syncCryptoLock();
 
   @override
-  Future<String> syncCryptoImportBundle(SyncCryptoBundle bundle,
-      String password, {bool force = false}) {
+  Future<String> syncCryptoImportBundle(
+    SyncCryptoBundle bundle,
+    String password, {
+    bool force = false,
+  }) {
     // 桌面契约：bundle JSON + 密码；Rust 侧自行解析（见 sync.rs 注释）
     return gen_sync.syncCryptoImportBundle(
       bundleJson: jsonEncode(bundle.toJson()),
@@ -1367,11 +1503,12 @@ class RustOrbitBridge implements OrbitBridge {
 
   @override
   Future<void> syncCryptoChangePassword(
-          String oldPassword, String newPassword) =>
-      gen_sync.syncCryptoChangePassword(
-        oldPassword: oldPassword,
-        newPassword: newPassword,
-      );
+    String oldPassword,
+    String newPassword,
+  ) => gen_sync.syncCryptoChangePassword(
+    oldPassword: oldPassword,
+    newPassword: newPassword,
+  );
 
   @override
   Future<String> syncCryptoExportBundle() => gen_sync.syncCryptoExportBundle();
@@ -1381,13 +1518,14 @@ class RustOrbitBridge implements OrbitBridge {
       gen_sync.syncCryptoRestoreSession();
 
   @override
-  Future<void> syncCryptoForgetSession() =>
-      gen_sync.syncCryptoForgetSession();
+  Future<void> syncCryptoForgetSession() => gen_sync.syncCryptoForgetSession();
 
   // ── 全量备份与恢复（数据安全兜底）──
 
   @override
-  Future<BackupExportResult> fullBackupExport({bool uploadCloud = false}) async {
+  Future<BackupExportResult> fullBackupExport({
+    bool uploadCloud = false,
+  }) async {
     final r = await gen_backup.fullBackupExport(uploadCloud: uploadCloud);
     return BackupExportResult(
       filePath: r.filePath,
@@ -1447,12 +1585,14 @@ class RustOrbitBridge implements OrbitBridge {
   Future<List<BackupEntry>> fullBackupListLocal() async {
     final rows = await gen_backup.fullBackupListLocal();
     return rows
-        .map((e) => BackupEntry(
-              filename: e.filename,
-              filePath: e.filePath,
-              modifiedAt: e.modifiedAt.toInt(),
-              sizeBytes: e.sizeBytes.toInt(),
-            ))
+        .map(
+          (e) => BackupEntry(
+            filename: e.filename,
+            filePath: e.filePath,
+            modifiedAt: e.modifiedAt.toInt(),
+            sizeBytes: e.sizeBytes.toInt(),
+          ),
+        )
         .toList();
   }
 
@@ -1464,12 +1604,14 @@ class RustOrbitBridge implements OrbitBridge {
   Future<List<CloudBackupEntry>> fullBackupListCloud() async {
     final rows = await gen_backup.fullBackupListCloud();
     return rows
-        .map((e) => CloudBackupEntry(
-              name: e.name,
-              cloudPath: e.cloudPath,
-              sizeBytes: e.sizeBytes.toInt(),
-              modifiedAt: e.modifiedAt.toInt(),
-            ))
+        .map(
+          (e) => CloudBackupEntry(
+            name: e.name,
+            cloudPath: e.cloudPath,
+            sizeBytes: e.sizeBytes.toInt(),
+            modifiedAt: e.modifiedAt.toInt(),
+          ),
+        )
         .toList();
   }
 
@@ -1502,7 +1644,8 @@ class RustOrbitBridge implements OrbitBridge {
   @override
   Future<void> startBackupScheduler() => gen_backup.startBackupScheduler();
 
-  BackupManifest _mapManifest(gen_backup.BackupManifestView m) => BackupManifest(
+  BackupManifest _mapManifest(gen_backup.BackupManifestView m) =>
+      BackupManifest(
         formatVersion: m.formatVersion,
         createdAt: m.createdAt,
         createdAtTs: m.createdAtTs.toInt(),
@@ -1511,7 +1654,9 @@ class RustOrbitBridge implements OrbitBridge {
         deviceName: m.deviceName,
         schemaVersion: m.schemaVersion.toInt(),
         tableCounts: m.tableCounts
-            .map((c) => BackupTableCount(table: c.table, count: c.count.toInt()))
+            .map(
+              (c) => BackupTableCount(table: c.table, count: c.count.toInt()),
+            )
             .toList(),
       );
 
@@ -1525,42 +1670,44 @@ class RustOrbitBridge implements OrbitBridge {
       );
 
   BackupPreview _mapPreview(gen_backup.BackupPreviewView p) => BackupPreview(
-        manifest: _mapManifest(p.manifest),
-        sampleTasks: p.sampleTasks
-            .map((t) => BackupPreviewTask(
-                  title: t.title,
-                  status: t.status,
-                  done: t.done,
-                  dueDate: t.dueDate?.toInt(),
-                  priority: t.priority.toInt(),
-                  project: t.project,
-                  isDeleted: t.isDeleted,
-                ))
-            .toList(),
-        taskStats: BackupTaskStats(
-          total: p.taskStats.total.toInt(),
-          alive: p.taskStats.alive.toInt(),
-          done: p.taskStats.done.toInt(),
-          deleted: p.taskStats.deleted.toInt(),
-        ),
-        schemaMismatch: p.schemaMismatch,
-        currentSchemaVersion: p.currentSchemaVersion.toInt(),
-      );
+    manifest: _mapManifest(p.manifest),
+    sampleTasks: p.sampleTasks
+        .map(
+          (t) => BackupPreviewTask(
+            title: t.title,
+            status: t.status,
+            done: t.done,
+            dueDate: t.dueDate?.toInt(),
+            priority: t.priority.toInt(),
+            project: t.project,
+            isDeleted: t.isDeleted,
+          ),
+        )
+        .toList(),
+    taskStats: BackupTaskStats(
+      total: p.taskStats.total.toInt(),
+      alive: p.taskStats.alive.toInt(),
+      done: p.taskStats.done.toInt(),
+      deleted: p.taskStats.deleted.toInt(),
+    ),
+    schemaMismatch: p.schemaMismatch,
+    currentSchemaVersion: p.currentSchemaVersion.toInt(),
+  );
 
   BackupPrefs _mapPrefs(gen_backup.BackupPrefsView p) => BackupPrefs(
-        localPath: p.localPath,
-        keepLatest: p.keepLatest,
-        cloudBackupEnabled: p.cloudBackupEnabled,
-        localBackupEnabled: p.localBackupEnabled,
-        scheduleType: p.scheduleType,
-        scheduleTime: p.scheduleTime,
-        scheduleMinute: p.scheduleMinute,
-        scheduleWeekday: p.scheduleWeekday,
-        scheduleDayOfMonth: p.scheduleDayOfMonth,
-        scheduleMonth: p.scheduleMonth,
-        lastBackupAt: p.lastBackupAt.toInt(),
-        nextBackupAt: p.nextBackupAt.toInt(),
-      );
+    localPath: p.localPath,
+    keepLatest: p.keepLatest,
+    cloudBackupEnabled: p.cloudBackupEnabled,
+    localBackupEnabled: p.localBackupEnabled,
+    scheduleType: p.scheduleType,
+    scheduleTime: p.scheduleTime,
+    scheduleMinute: p.scheduleMinute,
+    scheduleWeekday: p.scheduleWeekday,
+    scheduleDayOfMonth: p.scheduleDayOfMonth,
+    scheduleMonth: p.scheduleMonth,
+    lastBackupAt: p.lastBackupAt.toInt(),
+    nextBackupAt: p.nextBackupAt.toInt(),
+  );
 
   gen_backup.BackupPrefsView _toGenPrefs(BackupPrefs p) =>
       gen_backup.BackupPrefsView(
@@ -1587,15 +1734,17 @@ class RustOrbitBridge implements OrbitBridge {
   }) async {
     final rows = await gen_notif.notificationLogList(kind: kind, limit: limit);
     return rows
-        .map((r) => NotificationLogRow(
-              id: r.id.toInt(),
-              kind: r.kind,
-              taskId: r.taskId?.toInt(),
-              taskTitle: r.taskTitle,
-              reminderId: r.reminderId?.toInt(),
-              payload: r.payload,
-              createdAt: r.createdAt.toInt(),
-            ))
+        .map(
+          (r) => NotificationLogRow(
+            id: r.id.toInt(),
+            kind: r.kind,
+            taskId: r.taskId?.toInt(),
+            taskTitle: r.taskTitle,
+            reminderId: r.reminderId?.toInt(),
+            payload: r.payload,
+            createdAt: r.createdAt.toInt(),
+          ),
+        )
         .toList();
   }
 
@@ -1643,7 +1792,8 @@ class RustOrbitBridge implements OrbitBridge {
     );
   }
 
-  DevSeedCounts _mapDevSeedCounts(gen_dev_seed.DevSeedCounts c) => DevSeedCounts(
+  DevSeedCounts _mapDevSeedCounts(gen_dev_seed.DevSeedCounts c) =>
+      DevSeedCounts(
         projects: c.projects.toInt(),
         labels: c.labels.toInt(),
         tasks: c.tasks.toInt(),
@@ -1660,12 +1810,14 @@ class RustOrbitBridge implements OrbitBridge {
   Future<List<HolidayInfo>> holidayList() async {
     final rows = await gen_holiday.holidayList();
     return rows
-        .map((h) => HolidayInfo(
-              date: h.date,
-              year: h.year,
-              isHoliday: h.isHoliday,
-              name: h.name,
-            ))
+        .map(
+          (h) => HolidayInfo(
+            date: h.date,
+            year: h.year,
+            isHoliday: h.isHoliday,
+            name: h.name,
+          ),
+        )
         .toList();
   }
 
@@ -1711,29 +1863,29 @@ class RustOrbitBridge implements OrbitBridge {
   @override
   Stream<HolidayProgress> get holidayProgress =>
       gen_holiday.subscribeHolidayProgress().map(
-            (p) => HolidayProgress(
-              phase: p.phase,
-              total: p.total,
-              year: p.year,
-              done: p.done,
-              yearOk: p.yearOk,
-              yearEmpty: p.yearEmpty,
-              okCount: p.okCount,
-              failed: p.failed,
-              cancelled: p.cancelled,
-              message: p.message,
-            ),
-          );
+        (p) => HolidayProgress(
+          phase: p.phase,
+          total: p.total,
+          year: p.year,
+          done: p.done,
+          yearOk: p.yearOk,
+          yearEmpty: p.yearEmpty,
+          okCount: p.okCount,
+          failed: p.failed,
+          cancelled: p.cancelled,
+          message: p.message,
+        ),
+      );
 
   @override
   Future<void> startHolidayScheduler() => gen_holiday.startHolidayScheduler();
 
   HolidayMeta _mapHolidayMeta(gen.HolidayMeta m) => HolidayMeta(
-        lastUpdateMs: m.lastUpdateMs,
-        lastAttemptMs: m.lastAttemptMs,
-        failureCount: m.failureCount,
-        autoEnabled: m.autoEnabled,
-      );
+    lastUpdateMs: m.lastUpdateMs,
+    lastAttemptMs: m.lastAttemptMs,
+    failureCount: m.failureCount,
+    autoEnabled: m.autoEnabled,
+  );
 
   // ── 回收站 ──
 
@@ -1746,12 +1898,32 @@ class RustOrbitBridge implements OrbitBridge {
       _mapTask(await gen_trash.trashTaskRestore(id: id));
 
   @override
-  Future<void> trashTaskPurge(int id) =>
-      gen_trash.trashTaskPurge(id: id);
+  Future<void> trashTaskPurge(int id) => gen_trash.trashTaskPurge(id: id);
 
   @override
   Future<int> trashPurgeAll() async =>
       (await gen_trash.trashPurgeAll()).toInt();
+
+  @override
+  Future<UpdateInfo> checkLatestRelease() async {
+    final info = await gen_update.checkLatestRelease();
+    return UpdateInfo(
+      version: info.version,
+      pubDate: info.pubDate,
+      notes: info.notes,
+      downloadUrl: info.downloadUrl,
+    );
+  }
+
+  @override
+  Future<TrashPurgeStats> trashPurgeExpired() async {
+    final s = await gen_trash.trashPurgeExpired();
+    return TrashPurgeStats(
+      purged: s.purged.toInt(),
+      guarded: s.guarded.toInt(),
+      ran: s.ran,
+    );
+  }
 
   @override
   Future<TrashMeta> trashMeta() async {
@@ -1767,8 +1939,7 @@ class RustOrbitBridge implements OrbitBridge {
       gen_trash.trashSetRetentionDays(days: days);
 
   @override
-  Future<void> startTrashScheduler() =>
-      gen_trash.startTrashScheduler();
+  Future<void> startTrashScheduler() => gen_trash.startTrashScheduler();
 
   // ── 每日摘要提醒（G3）──
 
@@ -1787,12 +1958,7 @@ class RustOrbitBridge implements OrbitBridge {
     required bool enabled,
     required int hour,
     required int minute,
-  }) =>
-      gen_digest.digestSetPrefs(
-        enabled: enabled,
-        hour: hour,
-        minute: minute,
-      );
+  }) => gen_digest.digestSetPrefs(enabled: enabled, hour: hour, minute: minute);
 
   @override
   Future<DigestSummary> digestSummary() async {
@@ -1834,23 +2000,29 @@ class RustOrbitBridge implements OrbitBridge {
         doneToday: a.streak.doneToday,
       ),
       byProject: a.byProject
-          .map((r) => StatsProjectRow(
-                projectId: r.projectId,
-                projectTitle: r.projectTitle,
-                projectHexColor: r.projectHexColor,
-                doneCount: r.doneCount,
-                pendingCount: r.pendingCount,
-              ))
+          .map(
+            (r) => StatsProjectRow(
+              projectId: r.projectId,
+              projectTitle: r.projectTitle,
+              projectHexColor: r.projectHexColor,
+              doneCount: r.doneCount,
+              pendingCount: r.pendingCount,
+            ),
+          )
           .toList(),
       byPriority: a.byPriority
-          .map((r) => StatsPriorityRow(
-                priority: r.priority,
-                doneCount: r.doneCount,
-                pendingCount: r.pendingCount,
-              ))
+          .map(
+            (r) => StatsPriorityRow(
+              priority: r.priority,
+              doneCount: r.doneCount,
+              pendingCount: r.pendingCount,
+            ),
+          )
           .toList(),
       byWeekday: a.byWeekday
-          .map((r) => StatsWeekdayRow(weekday: r.weekday, doneCount: r.doneCount))
+          .map(
+            (r) => StatsWeekdayRow(weekday: r.weekday, doneCount: r.doneCount),
+          )
           .toList(),
       // PlatformInt64 在 IO 后端为 int / Web 后端为 BigInt——逐个 toInt 归一
       availableYears: a.availableYears.map((e) => e.toInt()).toList(),
@@ -1866,13 +2038,15 @@ class RustOrbitBridge implements OrbitBridge {
       tasks: r.tasks.map(_mapTask).toList(),
       projects: r.projects.map(_mapProject).toList(),
       comments: r.comments
-          .map((c) => CommentSearchHit(
-                commentId: c.commentId,
-                taskId: c.taskId,
-                taskTitle: c.taskTitle,
-                content: c.content,
-                createdAt: c.createdAt,
-              ))
+          .map(
+            (c) => CommentSearchHit(
+              commentId: c.commentId,
+              taskId: c.taskId,
+              taskTitle: c.taskTitle,
+              content: c.content,
+              createdAt: c.createdAt,
+            ),
+          )
           .toList(),
     );
   }
@@ -1880,173 +2054,174 @@ class RustOrbitBridge implements OrbitBridge {
   // ── 事件流 ──
 
   @override
-  Stream<DbChangeEvent> get dbChanges =>
-      gen_events.subscribeDbChanges().map((e) => DbChangeEvent(
-            table: e.table,
-            op: e.op,
-            recordId: e.recordId,
-            recordUuid: e.recordUuid,
-            deviceId: e.deviceId,
-            timestamp: e.timestamp,
-          ));
+  Stream<DbChangeEvent> get dbChanges => gen_events.subscribeDbChanges().map(
+    (e) => DbChangeEvent(
+      table: e.table,
+      op: e.op,
+      recordId: e.recordId,
+      recordUuid: e.recordUuid,
+      deviceId: e.deviceId,
+      timestamp: e.timestamp,
+    ),
+  );
 
   @override
   Stream<ReminderDueEvent> get reminderDue =>
-      gen_events.startReminderPoller().map((r) => ReminderDueEvent(
-            id: r.id,
-            taskId: r.taskId,
-            title: r.title,
-            remindAt: r.remindAt,
-          ));
+      gen_events.startReminderPoller().map(
+        (r) => ReminderDueEvent(
+          id: r.id,
+          taskId: r.taskId,
+          title: r.title,
+          remindAt: r.remindAt,
+        ),
+      );
 
   // ── 映射助手 ──
 
   gen.ListFilter _genFilter(ListFilter f) => gen.ListFilter(
-        keyword: f.keyword,
-        page: f.page,
-        pageSize: f.pageSize,
-        done: f.done,
-        status: f.status,
-        priorityMin: f.priorityMin,
-        priorityEq: f.priorityEq,
-        projectId: f.projectId,
-        // FRB 的 i64 载体是 Int64List（`List<int>` 不能直接赋值）
-        projectIds:
-            f.projectIds == null ? null : Int64List.fromList(f.projectIds!),
-        favoriteOnly: f.favoriteOnly,
-        myDayToday: f.myDayToday,
-        ungrouped: f.ungrouped,
-        excludeDueBefore: f.excludeDueBefore,
-        hasDue: f.hasDue,
-        sortKey: f.sortKey,
-        sortDir: f.sortDir,
-        dueFrom: f.dueFrom,
-        dueTo: f.dueTo,
-        startFrom: f.startFrom,
-        startTo: f.startTo,
-        labelIds:
-            f.labelIds == null ? null : Int64List.fromList(f.labelIds!),
-        hasReminder: f.hasReminder,
-        hasAttachment: f.hasAttachment,
-        hasOpenSubtask: f.hasOpenSubtask,
-        createdFrom: f.createdFrom,
-        doneFrom: f.doneFrom,
-      );
+    keyword: f.keyword,
+    page: f.page,
+    pageSize: f.pageSize,
+    done: f.done,
+    status: f.status,
+    priorityMin: f.priorityMin,
+    priorityEq: f.priorityEq,
+    projectId: f.projectId,
+    // FRB 的 i64 载体是 Int64List（`List<int>` 不能直接赋值）
+    projectIds: f.projectIds == null ? null : Int64List.fromList(f.projectIds!),
+    favoriteOnly: f.favoriteOnly,
+    myDayToday: f.myDayToday,
+    ungrouped: f.ungrouped,
+    excludeDueBefore: f.excludeDueBefore,
+    hasDue: f.hasDue,
+    sortKey: f.sortKey,
+    sortDir: f.sortDir,
+    dueFrom: f.dueFrom,
+    dueTo: f.dueTo,
+    startFrom: f.startFrom,
+    startTo: f.startTo,
+    labelIds: f.labelIds == null ? null : Int64List.fromList(f.labelIds!),
+    hasReminder: f.hasReminder,
+    hasAttachment: f.hasAttachment,
+    hasOpenSubtask: f.hasOpenSubtask,
+    createdFrom: f.createdFrom,
+    doneFrom: f.doneFrom,
+  );
 
   static TodoProject _mapProject(gen.TodoProject p) => TodoProject(
-        id: p.id,
-        uuid: p.uuid,
-        title: p.title,
-        description: p.description,
-        hexColor: p.hexColor,
-        sortOrder: p.sortOrder,
-        parentUuid: p.parentUuid,
-        reviewIntervalDays: p.reviewIntervalDays,
-        reviewLastAt: p.reviewLastAt,
-        reviewSnoozeUntil: p.reviewSnoozeUntil,
-        isArchived: p.isArchived,
-        isDeleted: p.isDeleted,
-        createdAt: p.createdAt,
-        updatedAt: p.updatedAt,
-        deletedAt: p.deletedAt,
-        version: p.version,
-      );
+    id: p.id,
+    uuid: p.uuid,
+    title: p.title,
+    description: p.description,
+    hexColor: p.hexColor,
+    sortOrder: p.sortOrder,
+    parentUuid: p.parentUuid,
+    reviewIntervalDays: p.reviewIntervalDays,
+    reviewLastAt: p.reviewLastAt,
+    reviewSnoozeUntil: p.reviewSnoozeUntil,
+    isArchived: p.isArchived,
+    isDeleted: p.isDeleted,
+    createdAt: p.createdAt,
+    updatedAt: p.updatedAt,
+    deletedAt: p.deletedAt,
+    version: p.version,
+  );
 
   /// 列表通道瘦行 → App 模型（A2）：`gen.TodoTaskListItem` 只带 19 列，
   /// 被裁的 10 列由 [TodoTask.listRow] 统一回落默认值（消费边界见该方法注释）。
   static TodoTask _mapTaskRow(gen.TodoTaskListItem t) => TodoTask.listRow(
-        id: t.id,
-        title: t.title,
-        description: t.description,
-        projectId: t.projectId,
-        priority: t.priority,
-        status: t.status,
-        done: t.done,
-        doneAt: t.doneAt,
-        dueDate: t.dueDate,
-        startDate: t.startDate,
-        repeatMode: t.repeatMode,
-        percentDone: t.percentDone,
-        position: t.position,
-        isFavorite: t.isFavorite,
-        myDayDate: t.myDayDate,
-        durationMinutes: t.durationMinutes,
-        isDeleted: t.isDeleted,
-        createdAt: t.createdAt,
-        updatedAt: t.updatedAt,
-      );
+    id: t.id,
+    title: t.title,
+    description: t.description,
+    projectId: t.projectId,
+    priority: t.priority,
+    status: t.status,
+    done: t.done,
+    doneAt: t.doneAt,
+    dueDate: t.dueDate,
+    startDate: t.startDate,
+    repeatMode: t.repeatMode,
+    percentDone: t.percentDone,
+    position: t.position,
+    isFavorite: t.isFavorite,
+    myDayDate: t.myDayDate,
+    durationMinutes: t.durationMinutes,
+    isDeleted: t.isDeleted,
+    createdAt: t.createdAt,
+    updatedAt: t.updatedAt,
+  );
 
   static TodoTask _mapTask(gen.TodoTask t) => TodoTask(
-        id: t.id,
-        uuid: t.uuid,
-        title: t.title,
-        description: t.description,
-        projectId: t.projectId,
-        priority: t.priority,
-        status: t.status,
-        done: t.done,
-        doneAt: t.doneAt,
-        dueDate: t.dueDate,
-        startDate: t.startDate,
-        repeatAfter: t.repeatAfter,
-        repeatMode: t.repeatMode,
-        repeatWeekdays: t.repeatWeekdays,
-        repeatEndType: t.repeatEndType,
-        repeatEndParam: t.repeatEndParam,
-        repeatFromDone: t.repeatFromDone,
-        repeatMonthMode: t.repeatMonthMode,
-        repeatNthWeek: t.repeatNthWeek,
-        percentDone: t.percentDone,
-        position: t.position,
-        isFavorite: t.isFavorite,
-        myDayDate: t.myDayDate,
-        durationMinutes: t.durationMinutes,
-        isDeleted: t.isDeleted,
-        createdAt: t.createdAt,
-        updatedAt: t.updatedAt,
-        deletedAt: t.deletedAt,
-        version: t.version,
-      );
+    id: t.id,
+    uuid: t.uuid,
+    title: t.title,
+    description: t.description,
+    projectId: t.projectId,
+    priority: t.priority,
+    status: t.status,
+    done: t.done,
+    doneAt: t.doneAt,
+    dueDate: t.dueDate,
+    startDate: t.startDate,
+    repeatAfter: t.repeatAfter,
+    repeatMode: t.repeatMode,
+    repeatWeekdays: t.repeatWeekdays,
+    repeatEndType: t.repeatEndType,
+    repeatEndParam: t.repeatEndParam,
+    repeatFromDone: t.repeatFromDone,
+    repeatMonthMode: t.repeatMonthMode,
+    repeatNthWeek: t.repeatNthWeek,
+    percentDone: t.percentDone,
+    position: t.position,
+    isFavorite: t.isFavorite,
+    myDayDate: t.myDayDate,
+    durationMinutes: t.durationMinutes,
+    isDeleted: t.isDeleted,
+    createdAt: t.createdAt,
+    updatedAt: t.updatedAt,
+    deletedAt: t.deletedAt,
+    version: t.version,
+  );
 
   static TodoSubtask _mapSubtask(gen.TodoSubtask s) => TodoSubtask(
-        id: s.id,
-        uuid: s.uuid,
-        taskId: s.taskId,
-        title: s.title,
-        done: s.done,
-        doneAt: s.doneAt,
-        position: s.position,
-        parentUuid: s.parentUuid,
-        isDeleted: s.isDeleted,
-        createdAt: s.createdAt,
-        updatedAt: s.updatedAt,
-        deletedAt: s.deletedAt,
-        version: s.version,
-      );
+    id: s.id,
+    uuid: s.uuid,
+    taskId: s.taskId,
+    title: s.title,
+    done: s.done,
+    doneAt: s.doneAt,
+    position: s.position,
+    parentUuid: s.parentUuid,
+    isDeleted: s.isDeleted,
+    createdAt: s.createdAt,
+    updatedAt: s.updatedAt,
+    deletedAt: s.deletedAt,
+    version: s.version,
+  );
 
   static TodoLabel _mapLabel(gen.TodoLabel l) => TodoLabel(
-        id: l.id,
-        uuid: l.uuid,
-        title: l.title,
-        hexColor: l.hexColor,
-        isDeleted: l.isDeleted,
-        createdAt: l.createdAt,
-        updatedAt: l.updatedAt,
-        deletedAt: l.deletedAt,
-        version: l.version,
-      );
+    id: l.id,
+    uuid: l.uuid,
+    title: l.title,
+    hexColor: l.hexColor,
+    isDeleted: l.isDeleted,
+    createdAt: l.createdAt,
+    updatedAt: l.updatedAt,
+    deletedAt: l.deletedAt,
+    version: l.version,
+  );
 
   static TodoComment _mapComment(gen.TodoComment c) => TodoComment(
-        id: c.id,
-        uuid: c.uuid,
-        taskId: c.taskId,
-        content: c.content,
-        isDeleted: c.isDeleted,
-        createdAt: c.createdAt,
-        updatedAt: c.updatedAt,
-        deletedAt: c.deletedAt,
-        version: c.version,
-      );
+    id: c.id,
+    uuid: c.uuid,
+    taskId: c.taskId,
+    content: c.content,
+    isDeleted: c.isDeleted,
+    createdAt: c.createdAt,
+    updatedAt: c.updatedAt,
+    deletedAt: c.deletedAt,
+    version: c.version,
+  );
 
   static TodoTaskRelation _mapRelation(gen.TodoTaskRelation r) =>
       TodoTaskRelation(
@@ -2063,17 +2238,17 @@ class RustOrbitBridge implements OrbitBridge {
       );
 
   static TodoReminder _mapReminder(gen.TodoReminder r) => TodoReminder(
-        id: r.id,
-        uuid: r.uuid,
-        taskId: r.taskId,
-        remindAt: r.remindAt,
-        isConstant: r.isConstant,
-        isDeleted: r.isDeleted,
-        createdAt: r.createdAt,
-        updatedAt: r.updatedAt,
-        deletedAt: r.deletedAt,
-        version: r.version,
-      );
+    id: r.id,
+    uuid: r.uuid,
+    taskId: r.taskId,
+    remindAt: r.remindAt,
+    isConstant: r.isConstant,
+    isDeleted: r.isDeleted,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+    deletedAt: r.deletedAt,
+    version: r.version,
+  );
 
   gen_sync.SyncConfigInput _toGenConfigInput(Map<String, Object?> m) =>
       gen_sync.SyncConfigInput(

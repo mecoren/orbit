@@ -10,6 +10,7 @@ import '../../modules/settings/holiday_cache_page.dart';
 import '../../modules/settings/label_manager_page.dart';
 import '../../modules/settings/nav_modules_page.dart';
 import '../../modules/settings/diagnostics_page.dart';
+import '../../modules/settings/storage_cleanup_page.dart';
 import '../../modules/settings/test_data_page.dart';
 import '../../modules/settings/notification_history_page.dart';
 import '../../modules/settings/quick_actions_page.dart';
@@ -77,8 +78,10 @@ CustomTransitionPage<void> pageSlideFromRight(Widget child, {LocalKey? key}) =>
           reverseCurve: AppMotion.pageOutCubic,
         );
         return SlideTransition(
-          position: Tween(begin: const Offset(1, 0), end: Offset.zero)
-              .animate(curved),
+          position: Tween(
+            begin: const Offset(1, 0),
+            end: Offset.zero,
+          ).animate(curved),
           child: child,
         );
       },
@@ -90,10 +93,10 @@ NoTransitionPage<void> tabRoot(Widget child, {LocalKey? key}) =>
 
 /// 「今天」页签：今日截止视图（无返回键，页头带日期副标）
 SubListScreen _todayTab() => const SubListScreen(
-      query: TaskFilterInput(quickView: QuickViewKey.today),
-      showBack: false,
-      titleOverride: '今天',
-    );
+  query: TaskFilterInput(quickView: QuickViewKey.today),
+  showBack: false,
+  titleOverride: '今天',
+);
 
 final appRouter = GoRouter(
   navigatorKey: rootNavigatorKey,
@@ -108,114 +111,136 @@ final appRouter = GoRouter(
           HomeShell(navigationShell: navigationShell),
       branches: [
         // ── 今天 ──
-        StatefulShellBranch(routes: [
-          GoRoute(
-            path: '/today',
-            pageBuilder: (context, state) => tabRoot(_todayTab()),
-          ),
-        ]),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/today',
+              pageBuilder: (context, state) => tabRoot(_todayTab()),
+            ),
+          ],
+        ),
         // ── 清单（快捷视图 / 项目 / 未分组 + 页签栈内子页）──
-        StatefulShellBranch(routes: [
-          GoRoute(
-            path: '/todo',
-            pageBuilder: (context, state) =>
-                tabRoot(const SidebarScreen(), key: state.pageKey),
-          ),
-          GoRoute(
-            path: '/todo/tasks',
-            pageBuilder: (context, state) => pageSlideFromRight(
-              SubListScreen(query: SubListScreen.parseQuery(state)),
-              key: state.pageKey,
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/todo',
+              pageBuilder: (context, state) =>
+                  tabRoot(const SidebarScreen(), key: state.pageKey),
             ),
-          ),
-          // 项目（清单）编辑整页：静态段在前，且不落在 /todo/:id 动态段里
-          GoRoute(
-            path: '/todo/projects/:id/edit',
-            pageBuilder: (context, state) => pageSlideFromRight(
-              ProjectEditPage(
-                projectId: int.tryParse(state.pathParameters['id'] ?? ''),
+            GoRoute(
+              path: '/todo/tasks',
+              pageBuilder: (context, state) => pageSlideFromRight(
+                SubListScreen(query: SubListScreen.parseQuery(state)),
+                key: state.pageKey,
               ),
-              key: state.pageKey,
             ),
-          ),
-          GoRoute(
-            path: '/todo/saved-filters',
-            pageBuilder: (context, state) => pageSlideFromRight(
-              SavedFiltersScreen(
-                // 「存为视图」预填条件（列表面板传入；GoRouter extra 非持久
-                // 导航载荷，掉栈重建时丢弃即回到无预填常态）
-                initialConditions: state.extra is Map<String, dynamic>
-                    ? state.extra! as Map<String, dynamic>
-                    : null,
+            // 项目（清单）编辑整页：静态段在前，且不落在 /todo/:id 动态段里
+            GoRoute(
+              path: '/todo/projects/:id/edit',
+              pageBuilder: (context, state) => pageSlideFromRight(
+                ProjectEditPage(
+                  projectId: int.tryParse(state.pathParameters['id'] ?? ''),
+                ),
+                key: state.pageKey,
               ),
-              key: state.pageKey,
             ),
-          ),
-          // 回顾中心（F1 项目回顾节奏）：到期项目归集 + 逐项目三步向导
-          GoRoute(
-            path: '/todo/review-center',
-            pageBuilder: (context, state) => pageSlideFromRight(
-              const ReviewCenterPage(),
-              key: state.pageKey,
+            GoRoute(
+              path: '/todo/saved-filters',
+              pageBuilder: (context, state) => pageSlideFromRight(
+                SavedFiltersScreen(
+                  // 「存为视图」预填条件（列表面板传入；GoRouter extra 非持久
+                  // 导航载荷，掉栈重建时丢弃即回到无预填常态）
+                  initialConditions: state.extra is Map<String, dynamic>
+                      ? state.extra! as Map<String, dynamic>
+                      : null,
+                ),
+                key: state.pageKey,
+              ),
             ),
-          ),
-          // 收件箱分诊（F2）：未分组任务逐条定归属的一次一卡流程页
-          GoRoute(
-            path: '/todo/triage',
-            pageBuilder: (context, state) => pageSlideFromRight(
-              const TriagePage(),
-              key: state.pageKey,
+            // 回顾中心（F1 项目回顾节奏）：到期项目归集 + 逐项目三步向导
+            GoRoute(
+              path: '/todo/review-center',
+              pageBuilder: (context, state) => pageSlideFromRight(
+                const ReviewCenterPage(),
+                key: state.pageKey,
+              ),
             ),
-          ),
-        ]),
+            // 收件箱分诊（F2）：未分组任务逐条定归属的一次一卡流程页
+            GoRoute(
+              path: '/todo/triage',
+              pageBuilder: (context, state) =>
+                  pageSlideFromRight(const TriagePage(), key: state.pageKey),
+            ),
+          ],
+        ),
         // ── 日历 ──
-        StatefulShellBranch(routes: [
-          GoRoute(
-            path: '/todo/calendar',
-            pageBuilder: (context, state) =>
-                tabRoot(const CalendarScreen(), key: state.pageKey),
-          ),
-        ]),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/todo/calendar',
+              pageBuilder: (context, state) =>
+                  tabRoot(const CalendarScreen(), key: state.pageKey),
+            ),
+          ],
+        ),
         // ── 四象限 ──
-        StatefulShellBranch(routes: [
-          GoRoute(
-            path: '/todo/matrix',
-            pageBuilder: (context, state) =>
-                tabRoot(const MatrixScreen(), key: state.pageKey),
-          ),
-        ]),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/todo/matrix',
+              pageBuilder: (context, state) =>
+                  tabRoot(const MatrixScreen(), key: state.pageKey),
+            ),
+          ],
+        ),
         // ── 统计（默认在「更多」面板；配置进底栏即成页签）──
-        StatefulShellBranch(routes: [
-          GoRoute(
-            path: '/todo/stats',
-            pageBuilder: (context, state) => tabRoot(
-                const StatsScreen(showBack: false), key: state.pageKey),
-          ),
-        ]),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/todo/stats',
+              pageBuilder: (context, state) => tabRoot(
+                const StatsScreen(showBack: false),
+                key: state.pageKey,
+              ),
+            ),
+          ],
+        ),
         // ── 搜索 ──
-        StatefulShellBranch(routes: [
-          GoRoute(
-            path: '/todo/search',
-            pageBuilder: (context, state) => tabRoot(
-                const SearchScreen(showBack: false), key: state.pageKey),
-          ),
-        ]),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/todo/search',
+              pageBuilder: (context, state) => tabRoot(
+                const SearchScreen(showBack: false),
+                key: state.pageKey,
+              ),
+            ),
+          ],
+        ),
         // ── 回收站 ──
-        StatefulShellBranch(routes: [
-          GoRoute(
-            path: '/todo/trash',
-            pageBuilder: (context, state) => tabRoot(
-                const TrashScreen(showBack: false), key: state.pageKey),
-          ),
-        ]),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/todo/trash',
+              pageBuilder: (context, state) => tabRoot(
+                const TrashScreen(showBack: false),
+                key: state.pageKey,
+              ),
+            ),
+          ],
+        ),
         // ── 设置（子页 /settings/* 仍是根级推入：覆盖全屏、底栏隐藏）──
-        StatefulShellBranch(routes: [
-          GoRoute(
-            path: '/settings',
-            pageBuilder: (context, state) => tabRoot(
-                const SettingsScreen(showBack: false), key: state.pageKey),
-          ),
-        ]),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/settings',
+              pageBuilder: (context, state) => tabRoot(
+                const SettingsScreen(showBack: false),
+                key: state.pageKey,
+              ),
+            ),
+          ],
+        ),
       ],
     ),
     // 任务详情：根级全屏页（覆盖页签壳，底栏隐藏）；go_router 静态段优先于
@@ -223,61 +248,45 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/todo/:id',
       pageBuilder: (context, state) => pageSlideFromRight(
-        DetailScreen(
-          taskId: int.tryParse(state.pathParameters['id'] ?? ''),
-        ),
+        DetailScreen(taskId: int.tryParse(state.pathParameters['id'] ?? '')),
         key: state.pageKey,
       ),
     ),
     // 功能模块配置页：底部导航可配置（「更多」面板「编辑」入口；根级全屏推入）
     GoRoute(
       path: '/settings/nav-modules',
-      pageBuilder: (context, state) => pageSlideFromRight(
-        const NavModulesPage(),
-        key: state.pageKey,
-      ),
+      pageBuilder: (context, state) =>
+          pageSlideFromRight(const NavModulesPage(), key: state.pageKey),
     ),
     GoRoute(
       path: '/settings/sync',
-      pageBuilder: (context, state) => pageSlideFromRight(
-        const SyncSettingsPage(),
-        key: state.pageKey,
-      ),
+      pageBuilder: (context, state) =>
+          pageSlideFromRight(const SyncSettingsPage(), key: state.pageKey),
     ),
     GoRoute(
       path: '/settings/conflicts',
-      pageBuilder: (context, state) => pageSlideFromRight(
-        const SyncConflictsPage(),
-        key: state.pageKey,
-      ),
+      pageBuilder: (context, state) =>
+          pageSlideFromRight(const SyncConflictsPage(), key: state.pageKey),
     ),
     GoRoute(
       path: '/settings/backup',
-      pageBuilder: (context, state) => pageSlideFromRight(
-        const BackupPage(),
-        key: state.pageKey,
-      ),
+      pageBuilder: (context, state) =>
+          pageSlideFromRight(const BackupPage(), key: state.pageKey),
     ),
     GoRoute(
       path: '/settings/labels',
-      pageBuilder: (context, state) => pageSlideFromRight(
-        const LabelManagerPage(),
-        key: state.pageKey,
-      ),
+      pageBuilder: (context, state) =>
+          pageSlideFromRight(const LabelManagerPage(), key: state.pageKey),
     ),
     GoRoute(
       path: '/settings/templates',
-      pageBuilder: (context, state) => pageSlideFromRight(
-        const TemplateManagerPage(),
-        key: state.pageKey,
-      ),
+      pageBuilder: (context, state) =>
+          pageSlideFromRight(const TemplateManagerPage(), key: state.pageKey),
     ),
     GoRoute(
       path: '/settings/appearance',
-      pageBuilder: (context, state) => pageSlideFromRight(
-        const AppearancePage(),
-        key: state.pageKey,
-      ),
+      pageBuilder: (context, state) =>
+          pageSlideFromRight(const AppearancePage(), key: state.pageKey),
     ),
     GoRoute(
       path: '/settings/notifications',
@@ -288,32 +297,29 @@ final appRouter = GoRouter(
     ),
     GoRoute(
       path: '/settings/diagnostics',
-      pageBuilder: (context, state) => pageSlideFromRight(
-        const DiagnosticsPage(),
-        key: state.pageKey,
-      ),
+      pageBuilder: (context, state) =>
+          pageSlideFromRight(const DiagnosticsPage(), key: state.pageKey),
+    ),
+    GoRoute(
+      path: '/settings/storage',
+      pageBuilder: (context, state) =>
+          pageSlideFromRight(const StorageCleanupPage(), key: state.pageKey),
     ),
     // 测试数据（仅 debug 构建；入口在设置页按 kDebugMode 隐藏，页面内再自检一次）
     GoRoute(
       path: '/settings/test-data',
-      pageBuilder: (context, state) => pageSlideFromRight(
-        const TestDataPage(),
-        key: state.pageKey,
-      ),
+      pageBuilder: (context, state) =>
+          pageSlideFromRight(const TestDataPage(), key: state.pageKey),
     ),
     GoRoute(
       path: '/settings/holidays',
-      pageBuilder: (context, state) => pageSlideFromRight(
-        const HolidayCachePage(),
-        key: state.pageKey,
-      ),
+      pageBuilder: (context, state) =>
+          pageSlideFromRight(const HolidayCachePage(), key: state.pageKey),
     ),
     GoRoute(
       path: '/settings/quick-actions',
-      pageBuilder: (context, state) => pageSlideFromRight(
-        const QuickActionsPage(),
-        key: state.pageKey,
-      ),
+      pageBuilder: (context, state) =>
+          pageSlideFromRight(const QuickActionsPage(), key: state.pageKey),
     ),
     GoRoute(
       path: '/about',

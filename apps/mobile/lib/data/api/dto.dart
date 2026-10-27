@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 
 /// 数据传输对象（DTO）
 ///
@@ -133,66 +133,65 @@ class ListFilter {
     int? startTo,
     String? sortKey,
     String? sortDir,
-  }) =>
-      ListFilter(
-        keyword: keyword,
-        page: page ?? this.page,
-        pageSize: pageSize ?? this.pageSize,
-        done: clearDone ? null : (done ?? this.done),
-        status: status,
-        priorityMin: priorityMin,
-        priorityEq: priorityEq,
-        projectId: projectId,
-        projectIds: projectIds,
-        favoriteOnly: favoriteOnly,
-        myDayToday: myDayToday,
-        ungrouped: ungrouped,
-        excludeDueBefore: excludeDueBefore ?? this.excludeDueBefore,
-        hasDue: hasDue,
-        sortKey: sortKey ?? this.sortKey,
-        sortDir: sortDir ?? this.sortDir,
-        dueFrom: dueFrom ?? this.dueFrom,
-        dueTo: dueTo ?? this.dueTo,
-        startFrom: startFrom ?? this.startFrom,
-        startTo: startTo ?? this.startTo,
-        // 保存筛选器谓词没有「就地改」的场景，原样透传防丢键
-        labelIds: labelIds,
-        hasReminder: hasReminder,
-        hasAttachment: hasAttachment,
-        hasOpenSubtask: hasOpenSubtask,
-        createdFrom: createdFrom,
-        doneFrom: doneFrom,
-      );
+  }) => ListFilter(
+    keyword: keyword,
+    page: page ?? this.page,
+    pageSize: pageSize ?? this.pageSize,
+    done: clearDone ? null : (done ?? this.done),
+    status: status,
+    priorityMin: priorityMin,
+    priorityEq: priorityEq,
+    projectId: projectId,
+    projectIds: projectIds,
+    favoriteOnly: favoriteOnly,
+    myDayToday: myDayToday,
+    ungrouped: ungrouped,
+    excludeDueBefore: excludeDueBefore ?? this.excludeDueBefore,
+    hasDue: hasDue,
+    sortKey: sortKey ?? this.sortKey,
+    sortDir: sortDir ?? this.sortDir,
+    dueFrom: dueFrom ?? this.dueFrom,
+    dueTo: dueTo ?? this.dueTo,
+    startFrom: startFrom ?? this.startFrom,
+    startTo: startTo ?? this.startTo,
+    // 保存筛选器谓词没有「就地改」的场景，原样透传防丢键
+    labelIds: labelIds,
+    hasReminder: hasReminder,
+    hasAttachment: hasAttachment,
+    hasOpenSubtask: hasOpenSubtask,
+    createdFrom: createdFrom,
+    doneFrom: doneFrom,
+  );
 
   /// bridge 载荷（FRB/ipc 同名 snake_case）
   Map<String, dynamic> toJson() => {
-        'keyword': keyword,
-        'page': page,
-        'page_size': pageSize,
-        'done': done,
-        'status': status,
-        'priority_min': priorityMin,
-        'priority_eq': priorityEq,
-        'project_id': projectId,
-        'project_ids': projectIds,
-        'favorite_only': favoriteOnly,
-        'my_day_today': myDayToday,
-        'ungrouped': ungrouped,
-        'exclude_due_before': excludeDueBefore,
-        'has_due': hasDue,
-        'sort_key': sortKey,
-        'sort_dir': sortDir,
-        'due_from': dueFrom,
-        'due_to': dueTo,
-        'start_from': startFrom,
-        'start_to': startTo,
-        'label_ids': labelIds,
-        'has_reminder': hasReminder,
-        'has_attachment': hasAttachment,
-        'has_open_subtask': hasOpenSubtask,
-        'created_from': createdFrom,
-        'done_from': doneFrom,
-      };
+    'keyword': keyword,
+    'page': page,
+    'page_size': pageSize,
+    'done': done,
+    'status': status,
+    'priority_min': priorityMin,
+    'priority_eq': priorityEq,
+    'project_id': projectId,
+    'project_ids': projectIds,
+    'favorite_only': favoriteOnly,
+    'my_day_today': myDayToday,
+    'ungrouped': ungrouped,
+    'exclude_due_before': excludeDueBefore,
+    'has_due': hasDue,
+    'sort_key': sortKey,
+    'sort_dir': sortDir,
+    'due_from': dueFrom,
+    'due_to': dueTo,
+    'start_from': startFrom,
+    'start_to': startTo,
+    'label_ids': labelIds,
+    'has_reminder': hasReminder,
+    'has_attachment': hasAttachment,
+    'has_open_subtask': hasOpenSubtask,
+    'created_from': createdFrom,
+    'done_from': doneFrom,
+  };
 
   static bool _sameIds(List<int>? a, List<int>? b) {
     if (identical(a, b)) return true;
@@ -237,41 +236,43 @@ class ListFilter {
   // 20 个字段已超出 Object.hash 的位参上限，改 hashAll（保序、支持任意长度）
   @override
   int get hashCode => Object.hashAll([
-        keyword,
-        page,
-        pageSize,
-        done,
-        status,
-        priorityMin,
-        priorityEq,
-        projectId,
-        projectIds == null ? null : Object.hashAll(projectIds!),
-        favoriteOnly,
-        myDayToday,
-        ungrouped,
-        excludeDueBefore,
-        hasDue,
-        sortKey,
-        sortDir,
-        dueFrom,
-        dueTo,
-        startFrom,
-        startTo,
-        labelIds == null ? null : Object.hashAll(labelIds!),
-        hasReminder,
-        hasAttachment,
-        hasOpenSubtask,
-        createdFrom,
-        doneFrom,
-      ]);
+    keyword,
+    page,
+    pageSize,
+    done,
+    status,
+    priorityMin,
+    priorityEq,
+    projectId,
+    projectIds == null ? null : Object.hashAll(projectIds!),
+    favoriteOnly,
+    myDayToday,
+    ungrouped,
+    excludeDueBefore,
+    hasDue,
+    sortKey,
+    sortDir,
+    dueFrom,
+    dueTo,
+    startFrom,
+    startTo,
+    labelIds == null ? null : Object.hashAll(labelIds!),
+    hasReminder,
+    hasAttachment,
+    hasOpenSubtask,
+    createdFrom,
+    doneFrom,
+  ]);
 }
 
 /// 键集分页游标（镜像 Rust ListCursor）
 class ListCursor {
   final String sortKey;
   final String dir;
+
   /// 主排序键值（position/priority/createdAt/dueDate）；due 档 null = 无截止尾段
   final double? key;
+
   /// 次排序键（仅 priority 档：同优先级按 position 升序）
   final double? key2;
   final int id;
@@ -311,10 +312,7 @@ class TodoTaskOverview {
   final int total;
   final List<TodoProjectUndone> undoneByProject;
 
-  const TodoTaskOverview({
-    required this.total,
-    required this.undoneByProject,
-  });
+  const TodoTaskOverview({required this.total, required this.undoneByProject});
 }
 
 /// 看板/四象限分组维度（镜像 Rust `BoardGroupBy`）。
@@ -368,14 +366,19 @@ class TodoProject {
   final String? description;
   final String hexColor;
   final double sortOrder;
+
   /// M8 上级文件夹（父项目）的同步主键 uuid；null = 顶层
   final String? parentUuid;
+
   /// F1 回顾周期（天）；null/0 = 关闭（7=每周 14=每两周 30=每月）
   final int? reviewIntervalDays;
+
   /// 上次回顾时间（毫秒）；null = 从未回顾
   final int? reviewLastAt;
+
   /// 回顾暂缓截止（毫秒，本地零点口径）；null = 未暂缓
   final int? reviewSnoozeUntil;
+
   /// 项目归档标记：0 活跃 1 已归档（默认列表排除，侧栏归档区）
   final int isArchived;
   final int isDeleted;
@@ -404,32 +407,35 @@ class TodoProject {
   });
 
   factory TodoProject.fromJson(Map<String, dynamic> j) => TodoProject(
-        id: j['id'] as int,
-        uuid: j['uuid'] as String,
-        title: j['title'] as String,
-        description: j['description'] as String?,
-        hexColor: j['hex_color'] as String,
-        sortOrder: (j['sort_order'] as num).toDouble(),
-        parentUuid: normalizeParentUuid(j['parent_uuid'] as String?),
-        reviewIntervalDays: (j['review_interval_days'] as num?)?.toInt(),
-        reviewLastAt: (j['review_last_at'] as num?)?.toInt(),
-        reviewSnoozeUntil: (j['review_snooze_until'] as num?)?.toInt(),
-        isArchived: (j['is_archived'] as int?) ?? 0,
-        isDeleted: j['is_deleted'] as int,
-        createdAt: j['created_at'] as int,
-        updatedAt: j['updated_at'] as int,
-        deletedAt: j['deleted_at'] as int?,
-        version: j['version'] as int,
-      );
+    id: j['id'] as int,
+    uuid: j['uuid'] as String,
+    title: j['title'] as String,
+    description: j['description'] as String?,
+    hexColor: j['hex_color'] as String,
+    sortOrder: (j['sort_order'] as num).toDouble(),
+    parentUuid: normalizeParentUuid(j['parent_uuid'] as String?),
+    reviewIntervalDays: (j['review_interval_days'] as num?)?.toInt(),
+    reviewLastAt: (j['review_last_at'] as num?)?.toInt(),
+    reviewSnoozeUntil: (j['review_snooze_until'] as num?)?.toInt(),
+    isArchived: (j['is_archived'] as int?) ?? 0,
+    isDeleted: j['is_deleted'] as int,
+    createdAt: j['created_at'] as int,
+    updatedAt: j['updated_at'] as int,
+    deletedAt: j['deleted_at'] as int?,
+    version: j['version'] as int,
+  );
 }
 
 /// F1 回顾状态行（core project_review_api::ProjectReviewStatus 的 Dart 镜像）
 class ProjectReviewStatus {
   final TodoProject project;
+
   /// 到期日序号（days since epoch，本地时区日界）
   final int dueDayIndex;
+
   /// 已逾期天数（0 = 今天到期）
   final int overdueDays;
+
   /// 项目内未完成且未软删的任务数
   final int openTaskCount;
 
@@ -539,8 +545,10 @@ class ApplyResult {
 class DayPlan {
   final List<PlanSlot> slots;
   final List<UnscheduledTask> unscheduled;
+
   /// 今天剩余可排容量（分钟，已扣午休与已过时段）
   final int capacityMinutes;
+
   /// 候选任务总时长（分钟）
   final int loadMinutes;
   final bool overloaded;
@@ -568,6 +576,7 @@ class TodoProjectCreateInput {
   final String? description;
   final String? hexColor;
   final double? sortOrder;
+
   /// M8 上级文件夹 uuid；null / 空白串 = 顶层
   final String? parentUuid;
 
@@ -596,23 +605,31 @@ class TodoTask {
   final int? startDate;
   final int repeatAfter;
   final int repeatMode;
+
   /// #34 重复规则扩展：星期几位掩码 bit0=周一…bit6=周日（仅周档生效）
   final int repeatWeekdays;
+
   /// 结束条件 0=永不 1=按日期 2=按次数
   final int repeatEndType;
+
   /// 结束参数：日期型=结束日 ms / 次数型=剩余次数
   final int repeatEndParam;
+
   /// when done：0=锚定原 due 推进 1=按完成日推进
   final int repeatFromDone;
+
   /// 月重复模式（#72）：0=按日号 1=按第N个星期X（仅 MONTHLY 生效）
   final int repeatMonthMode;
+
   /// 月内第几个星期（#72）：1-5/6=末，0=未指定回落日号
   final int repeatNthWeek;
   final double percentDone;
   final double position;
   final int isFavorite;
+
   /// 我的一天：加入当天本地零点 ms；null = 不在任何一天的 My Day
   final int? myDayDate;
+
   /// 任务预计时长（分钟，M9 阶段一）；null = 未设置
   final int? durationMinutes;
   final int isDeleted;
@@ -661,70 +678,69 @@ class TodoTask {
     int? priority,
     int? dueDate,
     bool clearDueDate = false,
-  }) =>
-      TodoTask(
-        id: id,
-        uuid: uuid,
-        title: title,
-        description: description,
-        projectId: clearProjectId ? null : (projectId ?? this.projectId),
-        priority: priority ?? this.priority,
-        status: status,
-        done: done,
-        doneAt: doneAt,
-        dueDate: clearDueDate ? null : (dueDate ?? this.dueDate),
-        startDate: startDate,
-        repeatAfter: repeatAfter,
-        repeatMode: repeatMode,
-        repeatWeekdays: repeatWeekdays,
-        repeatEndType: repeatEndType,
-        repeatEndParam: repeatEndParam,
-        repeatFromDone: repeatFromDone,
-        repeatMonthMode: repeatMonthMode,
-        repeatNthWeek: repeatNthWeek,
-        percentDone: percentDone,
-        position: position,
-        isFavorite: isFavorite,
-        myDayDate: myDayDate,
-        durationMinutes: durationMinutes,
-        isDeleted: isDeleted,
-        createdAt: createdAt,
-        updatedAt: updatedAt,
-        deletedAt: deletedAt,
-        version: version,
-      );
+  }) => TodoTask(
+    id: id,
+    uuid: uuid,
+    title: title,
+    description: description,
+    projectId: clearProjectId ? null : (projectId ?? this.projectId),
+    priority: priority ?? this.priority,
+    status: status,
+    done: done,
+    doneAt: doneAt,
+    dueDate: clearDueDate ? null : (dueDate ?? this.dueDate),
+    startDate: startDate,
+    repeatAfter: repeatAfter,
+    repeatMode: repeatMode,
+    repeatWeekdays: repeatWeekdays,
+    repeatEndType: repeatEndType,
+    repeatEndParam: repeatEndParam,
+    repeatFromDone: repeatFromDone,
+    repeatMonthMode: repeatMonthMode,
+    repeatNthWeek: repeatNthWeek,
+    percentDone: percentDone,
+    position: position,
+    isFavorite: isFavorite,
+    myDayDate: myDayDate,
+    durationMinutes: durationMinutes,
+    isDeleted: isDeleted,
+    createdAt: createdAt,
+    updatedAt: updatedAt,
+    deletedAt: deletedAt,
+    version: version,
+  );
 
   factory TodoTask.fromJson(Map<String, dynamic> j) => TodoTask(
-        id: j['id'] as int,
-        uuid: j['uuid'] as String,
-        title: j['title'] as String,
-        description: j['description'] as String?,
-        projectId: j['project_id'] as int?,
-        priority: j['priority'] as int,
-        status: j['status'] as String,
-        done: j['done'] as int,
-        doneAt: j['done_at'] as int?,
-        dueDate: j['due_date'] as int?,
-        startDate: j['start_date'] as int?,
-        repeatAfter: j['repeat_after'] as int,
-        repeatMode: j['repeat_mode'] as int,
-        repeatWeekdays: (j['repeat_weekdays'] as int?) ?? 0,
-        repeatEndType: (j['repeat_end_type'] as int?) ?? 0,
-        repeatEndParam: (j['repeat_end_param'] as int?) ?? 0,
-        repeatFromDone: (j['repeat_from_done'] as int?) ?? 0,
-        repeatMonthMode: (j['repeat_month_mode'] as int?) ?? 0,
-        repeatNthWeek: (j['repeat_nth_week'] as int?) ?? 0,
-        percentDone: (j['percent_done'] as num).toDouble(),
-        position: (j['position'] as num).toDouble(),
-        isFavorite: j['is_favorite'] as int,
-        myDayDate: j['my_day_date'] as int?,
-        durationMinutes: j['duration_minutes'] as int?,
-        isDeleted: j['is_deleted'] as int,
-        createdAt: j['created_at'] as int,
-        updatedAt: j['updated_at'] as int,
-        deletedAt: j['deleted_at'] as int?,
-        version: j['version'] as int,
-      );
+    id: j['id'] as int,
+    uuid: j['uuid'] as String,
+    title: j['title'] as String,
+    description: j['description'] as String?,
+    projectId: j['project_id'] as int?,
+    priority: j['priority'] as int,
+    status: j['status'] as String,
+    done: j['done'] as int,
+    doneAt: j['done_at'] as int?,
+    dueDate: j['due_date'] as int?,
+    startDate: j['start_date'] as int?,
+    repeatAfter: j['repeat_after'] as int,
+    repeatMode: j['repeat_mode'] as int,
+    repeatWeekdays: (j['repeat_weekdays'] as int?) ?? 0,
+    repeatEndType: (j['repeat_end_type'] as int?) ?? 0,
+    repeatEndParam: (j['repeat_end_param'] as int?) ?? 0,
+    repeatFromDone: (j['repeat_from_done'] as int?) ?? 0,
+    repeatMonthMode: (j['repeat_month_mode'] as int?) ?? 0,
+    repeatNthWeek: (j['repeat_nth_week'] as int?) ?? 0,
+    percentDone: (j['percent_done'] as num).toDouble(),
+    position: (j['position'] as num).toDouble(),
+    isFavorite: j['is_favorite'] as int,
+    myDayDate: j['my_day_date'] as int?,
+    durationMinutes: j['duration_minutes'] as int?,
+    isDeleted: j['is_deleted'] as int,
+    createdAt: j['created_at'] as int,
+    updatedAt: j['updated_at'] as int,
+    deletedAt: j['deleted_at'] as int?,
+    version: j['version'] as int,
+  );
 
   /// 列表通道瘦行构造（内存治理 A2）：core 的 `TodoTaskListItem` 不含 10 列
   /// （uuid / repeat_after / 六个更细的 repeat_* / deleted_at / version），
@@ -753,40 +769,40 @@ class TodoTask {
     required this.isDeleted,
     required this.createdAt,
     required this.updatedAt,
-  })  : uuid = '',
-        repeatAfter = 0,
-        repeatWeekdays = 0,
-        repeatEndType = 0,
-        repeatEndParam = 0,
-        repeatFromDone = 0,
-        repeatMonthMode = 0,
-        repeatNthWeek = 0,
-        deletedAt = null,
-        version = 0;
+  }) : uuid = '',
+       repeatAfter = 0,
+       repeatWeekdays = 0,
+       repeatEndType = 0,
+       repeatEndParam = 0,
+       repeatFromDone = 0,
+       repeatMonthMode = 0,
+       repeatNthWeek = 0,
+       deletedAt = null,
+       version = 0;
 
   /// 列表通道 JSON → App 模型（mock 桥用；真桥走 `_mapTaskRow` 直映 FRB DTO）。
   /// 读的键与 `TodoTaskListItem` 一致，被裁 10 列**不读**（回落默认值）。
   factory TodoTask.fromListJson(Map<String, dynamic> j) => TodoTask.listRow(
-        id: j['id'] as int,
-        title: j['title'] as String,
-        description: j['description'] as String?,
-        projectId: j['project_id'] as int?,
-        priority: j['priority'] as int,
-        status: j['status'] as String,
-        done: j['done'] as int,
-        doneAt: j['done_at'] as int?,
-        dueDate: j['due_date'] as int?,
-        startDate: j['start_date'] as int?,
-        repeatMode: j['repeat_mode'] as int,
-        percentDone: (j['percent_done'] as num).toDouble(),
-        position: (j['position'] as num).toDouble(),
-        isFavorite: j['is_favorite'] as int,
-        myDayDate: j['my_day_date'] as int?,
-        durationMinutes: j['duration_minutes'] as int?,
-        isDeleted: j['is_deleted'] as int,
-        createdAt: j['created_at'] as int,
-        updatedAt: j['updated_at'] as int,
-      );
+    id: j['id'] as int,
+    title: j['title'] as String,
+    description: j['description'] as String?,
+    projectId: j['project_id'] as int?,
+    priority: j['priority'] as int,
+    status: j['status'] as String,
+    done: j['done'] as int,
+    doneAt: j['done_at'] as int?,
+    dueDate: j['due_date'] as int?,
+    startDate: j['start_date'] as int?,
+    repeatMode: j['repeat_mode'] as int,
+    percentDone: (j['percent_done'] as num).toDouble(),
+    position: (j['position'] as num).toDouble(),
+    isFavorite: j['is_favorite'] as int,
+    myDayDate: j['my_day_date'] as int?,
+    durationMinutes: j['duration_minutes'] as int?,
+    isDeleted: j['is_deleted'] as int,
+    createdAt: j['created_at'] as int,
+    updatedAt: j['updated_at'] as int,
+  );
 
   /// 任务是否已完成（done=1）
   bool get isDone => done == 1;
@@ -799,7 +815,11 @@ class TodoTask {
     final raw = myDayDate;
     if (raw == null) return false;
     final today = DateTime.now();
-    final zero = DateTime(today.year, today.month, today.day).millisecondsSinceEpoch;
+    final zero = DateTime(
+      today.year,
+      today.month,
+      today.day,
+    ).millisecondsSinceEpoch;
     return raw == zero;
   }
 }
@@ -825,6 +845,7 @@ class TodoTaskCreateInput {
   final double? position;
   final int? isFavorite;
   final int? myDayDate;
+
   /// 预计时长（分钟）；null = 不设置
   final int? durationMinutes;
 
@@ -873,6 +894,7 @@ class TodoSubtask {
   final int done;
   final int? doneAt;
   final double position;
+
   /// 上级子任务（父）uuid；null = 顶层（M10 多层嵌套，同任务内）
   final String? parentUuid;
   final int isDeleted;
@@ -898,20 +920,20 @@ class TodoSubtask {
   });
 
   factory TodoSubtask.fromJson(Map<String, dynamic> j) => TodoSubtask(
-        id: j['id'] as int,
-        uuid: j['uuid'] as String,
-        taskId: j['task_id'] as int,
-        title: j['title'] as String,
-        done: j['done'] as int,
-        doneAt: j['done_at'] as int?,
-        position: (j['position'] as num).toDouble(),
-        parentUuid: j['parent_uuid'] as String?,
-        isDeleted: j['is_deleted'] as int,
-        createdAt: j['created_at'] as int,
-        updatedAt: j['updated_at'] as int,
-        deletedAt: j['deleted_at'] as int?,
-        version: j['version'] as int,
-      );
+    id: j['id'] as int,
+    uuid: j['uuid'] as String,
+    taskId: j['task_id'] as int,
+    title: j['title'] as String,
+    done: j['done'] as int,
+    doneAt: j['done_at'] as int?,
+    position: (j['position'] as num).toDouble(),
+    parentUuid: j['parent_uuid'] as String?,
+    isDeleted: j['is_deleted'] as int,
+    createdAt: j['created_at'] as int,
+    updatedAt: j['updated_at'] as int,
+    deletedAt: j['deleted_at'] as int?,
+    version: j['version'] as int,
+  );
 
   bool get isDone => done == 1;
 }
@@ -920,6 +942,7 @@ class TodoSubtaskCreateInput {
   final int taskId;
   final String title;
   final double? position;
+
   /// 挂到哪个子任务下（父的 uuid）；null = 顶层。须与 taskId 同任务
   final String? parentUuid;
 
@@ -957,16 +980,16 @@ class TodoLabel {
   });
 
   factory TodoLabel.fromJson(Map<String, dynamic> j) => TodoLabel(
-        id: j['id'] as int,
-        uuid: j['uuid'] as String,
-        title: j['title'] as String,
-        hexColor: j['hex_color'] as String,
-        isDeleted: j['is_deleted'] as int,
-        createdAt: j['created_at'] as int,
-        updatedAt: j['updated_at'] as int,
-        deletedAt: j['deleted_at'] as int?,
-        version: j['version'] as int,
-      );
+    id: j['id'] as int,
+    uuid: j['uuid'] as String,
+    title: j['title'] as String,
+    hexColor: j['hex_color'] as String,
+    isDeleted: j['is_deleted'] as int,
+    createdAt: j['created_at'] as int,
+    updatedAt: j['updated_at'] as int,
+    deletedAt: j['deleted_at'] as int?,
+    version: j['version'] as int,
+  );
 }
 
 class TodoLabelCreateInput {
@@ -993,19 +1016,18 @@ class TaskLabelWithId extends TodoLabel {
     required this.taskLabelId,
   });
 
-  factory TaskLabelWithId.fromJson(Map<String, dynamic> j) =>
-      TaskLabelWithId(
-        id: j['id'] as int,
-        uuid: j['uuid'] as String,
-        title: j['title'] as String,
-        hexColor: j['hex_color'] as String,
-        isDeleted: j['is_deleted'] as int,
-        createdAt: j['created_at'] as int,
-        updatedAt: j['updated_at'] as int,
-        deletedAt: j['deleted_at'] as int?,
-        version: j['version'] as int,
-        taskLabelId: j['task_label_id'] as int,
-      );
+  factory TaskLabelWithId.fromJson(Map<String, dynamic> j) => TaskLabelWithId(
+    id: j['id'] as int,
+    uuid: j['uuid'] as String,
+    title: j['title'] as String,
+    hexColor: j['hex_color'] as String,
+    isDeleted: j['is_deleted'] as int,
+    createdAt: j['created_at'] as int,
+    updatedAt: j['updated_at'] as int,
+    deletedAt: j['deleted_at'] as int?,
+    version: j['version'] as int,
+    taskLabelId: j['task_label_id'] as int,
+  );
 }
 
 // ---------- todo_task_labels ----------
@@ -1043,16 +1065,16 @@ class TodoComment {
   });
 
   factory TodoComment.fromJson(Map<String, dynamic> j) => TodoComment(
-        id: j['id'] as int,
-        uuid: j['uuid'] as String,
-        taskId: j['task_id'] as int,
-        content: j['content'] as String,
-        isDeleted: j['is_deleted'] as int,
-        createdAt: j['created_at'] as int,
-        updatedAt: j['updated_at'] as int,
-        deletedAt: j['deleted_at'] as int?,
-        version: j['version'] as int,
-      );
+    id: j['id'] as int,
+    uuid: j['uuid'] as String,
+    taskId: j['task_id'] as int,
+    content: j['content'] as String,
+    isDeleted: j['is_deleted'] as int,
+    createdAt: j['created_at'] as int,
+    updatedAt: j['updated_at'] as int,
+    deletedAt: j['deleted_at'] as int?,
+    version: j['version'] as int,
+  );
 }
 
 class TodoCommentCreateInput {
@@ -1089,19 +1111,18 @@ class TodoTaskRelation {
     required this.version,
   });
 
-  factory TodoTaskRelation.fromJson(Map<String, dynamic> j) =>
-      TodoTaskRelation(
-        id: j['id'] as int,
-        uuid: j['uuid'] as String,
-        taskId: j['task_id'] as int,
-        otherTaskId: j['other_task_id'] as int,
-        relationType: j['relation_type'] as String,
-        isDeleted: j['is_deleted'] as int,
-        createdAt: j['created_at'] as int,
-        updatedAt: j['updated_at'] as int,
-        deletedAt: j['deleted_at'] as int?,
-        version: j['version'] as int,
-      );
+  factory TodoTaskRelation.fromJson(Map<String, dynamic> j) => TodoTaskRelation(
+    id: j['id'] as int,
+    uuid: j['uuid'] as String,
+    taskId: j['task_id'] as int,
+    otherTaskId: j['other_task_id'] as int,
+    relationType: j['relation_type'] as String,
+    isDeleted: j['is_deleted'] as int,
+    createdAt: j['created_at'] as int,
+    updatedAt: j['updated_at'] as int,
+    deletedAt: j['deleted_at'] as int?,
+    version: j['version'] as int,
+  );
 }
 
 class TodoTaskRelationCreateInput {
@@ -1155,33 +1176,33 @@ class TodoReminder {
   bool get constant => isConstant == 1;
 
   factory TodoReminder.fromJson(Map<String, dynamic> j) => TodoReminder(
-        id: j['id'] as int,
-        uuid: j['uuid'] as String,
-        taskId: j['task_id'] as int,
-        remindAt: j['remind_at'] as int,
-        isConstant: (j['is_constant'] as int?) ?? 0,
-        isDeleted: j['is_deleted'] as int,
-        createdAt: j['created_at'] as int,
-        updatedAt: j['updated_at'] as int,
-        deletedAt: j['deleted_at'] as int?,
-        version: j['version'] as int,
-        reminderTitle: j['reminder_title'] as String?,
-      );
+    id: j['id'] as int,
+    uuid: j['uuid'] as String,
+    taskId: j['task_id'] as int,
+    remindAt: j['remind_at'] as int,
+    isConstant: (j['is_constant'] as int?) ?? 0,
+    isDeleted: j['is_deleted'] as int,
+    createdAt: j['created_at'] as int,
+    updatedAt: j['updated_at'] as int,
+    deletedAt: j['deleted_at'] as int?,
+    version: j['version'] as int,
+    reminderTitle: j['reminder_title'] as String?,
+  );
 
   /// 携带任务标题的副本（join 后填充用）
   TodoReminder withTitle(String? title) => TodoReminder(
-        id: id,
-        uuid: uuid,
-        taskId: taskId,
-        remindAt: remindAt,
-        isConstant: isConstant,
-        isDeleted: isDeleted,
-        createdAt: createdAt,
-        updatedAt: updatedAt,
-        deletedAt: deletedAt,
-        version: version,
-        reminderTitle: title,
-      );
+    id: id,
+    uuid: uuid,
+    taskId: taskId,
+    remindAt: remindAt,
+    isConstant: isConstant,
+    isDeleted: isDeleted,
+    createdAt: createdAt,
+    updatedAt: updatedAt,
+    deletedAt: deletedAt,
+    version: version,
+    reminderTitle: title,
+  );
 }
 
 class TodoReminderCreateInput {
@@ -1243,10 +1264,8 @@ class ProjectedReminder {
 
   const ProjectedReminder({required this.id, required this.remindAt});
 
-  factory ProjectedReminder.fromJson(Map<String, dynamic> j) => ProjectedReminder(
-        id: j['id'] as int,
-        remindAt: j['remind_at'] as int,
-      );
+  factory ProjectedReminder.fromJson(Map<String, dynamic> j) =>
+      ProjectedReminder(id: j['id'] as int, remindAt: j['remind_at'] as int);
 }
 
 /// 单任务的提醒分组（组内按 remind_at 升序）
@@ -1254,7 +1273,10 @@ class TaskRemindersProjection {
   final int taskId;
   final List<ProjectedReminder> reminders;
 
-  const TaskRemindersProjection({required this.taskId, required this.reminders});
+  const TaskRemindersProjection({
+    required this.taskId,
+    required this.reminders,
+  });
 
   factory TaskRemindersProjection.fromJson(Map<String, dynamic> j) =>
       TaskRemindersProjection(
@@ -1272,7 +1294,10 @@ class TaskDependencyFlags {
   /// 出边存活行总数（> 0 即「有关联」）
   final int relationCount;
 
-  const TaskDependencyFlags({required this.taskId, required this.relationCount});
+  const TaskDependencyFlags({
+    required this.taskId,
+    required this.relationCount,
+  });
 
   factory TaskDependencyFlags.fromJson(Map<String, dynamic> j) =>
       TaskDependencyFlags(
@@ -1350,51 +1375,51 @@ class TodoTaskDetail extends TodoTask {
   });
 
   factory TodoTaskDetail.fromJson(Map<String, dynamic> j) => TodoTaskDetail(
-        id: j['id'] as int,
-        uuid: j['uuid'] as String,
-        title: j['title'] as String,
-        description: j['description'] as String?,
-        projectId: j['project_id'] as int?,
-        priority: j['priority'] as int,
-        status: j['status'] as String,
-        done: j['done'] as int,
-        doneAt: j['done_at'] as int?,
-        dueDate: j['due_date'] as int?,
-        startDate: j['start_date'] as int?,
-        repeatAfter: j['repeat_after'] as int,
-        repeatMode: j['repeat_mode'] as int,
-        repeatWeekdays: (j['repeat_weekdays'] as int?) ?? 0,
-        repeatEndType: (j['repeat_end_type'] as int?) ?? 0,
-        repeatEndParam: (j['repeat_end_param'] as int?) ?? 0,
-        repeatFromDone: (j['repeat_from_done'] as int?) ?? 0,
-        repeatMonthMode: (j['repeat_month_mode'] as int?) ?? 0,
-        repeatNthWeek: (j['repeat_nth_week'] as int?) ?? 0,
-        percentDone: (j['percent_done'] as num).toDouble(),
-        position: (j['position'] as num).toDouble(),
-        isFavorite: j['is_favorite'] as int,
-        myDayDate: j['my_day_date'] as int?,
-        durationMinutes: j['duration_minutes'] as int?,
-        isDeleted: j['is_deleted'] as int,
-        createdAt: j['created_at'] as int,
-        updatedAt: j['updated_at'] as int,
-        deletedAt: j['deleted_at'] as int?,
-        version: j['version'] as int,
-        subtasks: (j['subtasks'] as List)
-            .map((e) => TodoSubtask.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        labels: (j['labels'] as List)
-            .map((e) => TaskLabelWithId.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        comments: (j['comments'] as List)
-            .map((e) => TodoComment.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        relations: (j['relations'] as List)
-            .map((e) => TodoTaskRelation.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        reminders: (j['reminders'] as List)
-            .map((e) => TodoReminder.fromJson(e as Map<String, dynamic>))
-            .toList(),
-      );
+    id: j['id'] as int,
+    uuid: j['uuid'] as String,
+    title: j['title'] as String,
+    description: j['description'] as String?,
+    projectId: j['project_id'] as int?,
+    priority: j['priority'] as int,
+    status: j['status'] as String,
+    done: j['done'] as int,
+    doneAt: j['done_at'] as int?,
+    dueDate: j['due_date'] as int?,
+    startDate: j['start_date'] as int?,
+    repeatAfter: j['repeat_after'] as int,
+    repeatMode: j['repeat_mode'] as int,
+    repeatWeekdays: (j['repeat_weekdays'] as int?) ?? 0,
+    repeatEndType: (j['repeat_end_type'] as int?) ?? 0,
+    repeatEndParam: (j['repeat_end_param'] as int?) ?? 0,
+    repeatFromDone: (j['repeat_from_done'] as int?) ?? 0,
+    repeatMonthMode: (j['repeat_month_mode'] as int?) ?? 0,
+    repeatNthWeek: (j['repeat_nth_week'] as int?) ?? 0,
+    percentDone: (j['percent_done'] as num).toDouble(),
+    position: (j['position'] as num).toDouble(),
+    isFavorite: j['is_favorite'] as int,
+    myDayDate: j['my_day_date'] as int?,
+    durationMinutes: j['duration_minutes'] as int?,
+    isDeleted: j['is_deleted'] as int,
+    createdAt: j['created_at'] as int,
+    updatedAt: j['updated_at'] as int,
+    deletedAt: j['deleted_at'] as int?,
+    version: j['version'] as int,
+    subtasks: (j['subtasks'] as List)
+        .map((e) => TodoSubtask.fromJson(e as Map<String, dynamic>))
+        .toList(),
+    labels: (j['labels'] as List)
+        .map((e) => TaskLabelWithId.fromJson(e as Map<String, dynamic>))
+        .toList(),
+    comments: (j['comments'] as List)
+        .map((e) => TodoComment.fromJson(e as Map<String, dynamic>))
+        .toList(),
+    relations: (j['relations'] as List)
+        .map((e) => TodoTaskRelation.fromJson(e as Map<String, dynamic>))
+        .toList(),
+    reminders: (j['reminders'] as List)
+        .map((e) => TodoReminder.fromJson(e as Map<String, dynamic>))
+        .toList(),
+  );
 }
 
 // ---------- 同步域 ----------
@@ -1405,11 +1430,10 @@ class SyncCryptoStatus {
 
   const SyncCryptoStatus({required this.hasPassword, required this.isUnlocked});
 
-  factory SyncCryptoStatus.fromJson(Map<String, dynamic> j) =>
-      SyncCryptoStatus(
-        hasPassword: j['has_password'] as bool,
-        isUnlocked: j['is_unlocked'] as bool,
-      );
+  factory SyncCryptoStatus.fromJson(Map<String, dynamic> j) => SyncCryptoStatus(
+    hasPassword: j['has_password'] as bool,
+    isUnlocked: j['is_unlocked'] as bool,
+  );
 }
 
 /// crypto bundle（SyncCryptoMeta，全 Base64 字段）
@@ -1427,19 +1451,18 @@ class SyncCryptoBundle {
   });
 
   Map<String, dynamic> toJson() => {
-        'salt': salt,
-        'encrypted_data_key': encryptedDataKey,
-        'data_key_nonce': dataKeyNonce,
-        'iterations': iterations,
-      };
+    'salt': salt,
+    'encrypted_data_key': encryptedDataKey,
+    'data_key_nonce': dataKeyNonce,
+    'iterations': iterations,
+  };
 
-  factory SyncCryptoBundle.fromJson(Map<String, dynamic> j) =>
-      SyncCryptoBundle(
-        salt: j['salt'] as String,
-        encryptedDataKey: j['encrypted_data_key'] as String,
-        dataKeyNonce: j['data_key_nonce'] as String,
-        iterations: j['iterations'] as int,
-      );
+  factory SyncCryptoBundle.fromJson(Map<String, dynamic> j) => SyncCryptoBundle(
+    salt: j['salt'] as String,
+    encryptedDataKey: j['encrypted_data_key'] as String,
+    dataKeyNonce: j['data_key_nonce'] as String,
+    iterations: j['iterations'] as int,
+  );
 }
 
 typedef SyncEngineKind = String; // "webdav" | "s3"
@@ -1458,6 +1481,7 @@ class SyncConfigView {
   final bool syncOnChange;
   final bool skipTlsVerify;
   final int timeoutSeconds;
+
   /// F80：仅提示已设置（令牌本身打码不下发）
   final bool sessionTokenSet;
   final int? lastSyncedAt;
@@ -1481,22 +1505,22 @@ class SyncConfigView {
   });
 
   factory SyncConfigView.fromJson(Map<String, dynamic> j) => SyncConfigView(
-        id: j['id'] as int,
-        engine: j['engine'] as String,
-        endpoint: j['endpoint'] as String,
-        bucket: j['bucket'] as String,
-        region: j['region'] as String,
-        username: j['username'] as String,
-        passwordSet: j['password_set'] as bool,
-        basePath: j['base_path'] as String,
-        intervalMinutes: j['interval_minutes'] as int,
-        autoSyncEnabled: j['auto_sync_enabled'] as bool,
-        syncOnChange: j['sync_on_change'] as bool,
-        skipTlsVerify: j['skip_tls_verify'] as bool,
-        timeoutSeconds: j['timeout_seconds'] as int,
-        sessionTokenSet: (j['session_token_set'] as bool?) ?? false,
-        lastSyncedAt: j['last_synced_at'] as int?,
-      );
+    id: j['id'] as int,
+    engine: j['engine'] as String,
+    endpoint: j['endpoint'] as String,
+    bucket: j['bucket'] as String,
+    region: j['region'] as String,
+    username: j['username'] as String,
+    passwordSet: j['password_set'] as bool,
+    basePath: j['base_path'] as String,
+    intervalMinutes: j['interval_minutes'] as int,
+    autoSyncEnabled: j['auto_sync_enabled'] as bool,
+    syncOnChange: j['sync_on_change'] as bool,
+    skipTlsVerify: j['skip_tls_verify'] as bool,
+    timeoutSeconds: j['timeout_seconds'] as int,
+    sessionTokenSet: (j['session_token_set'] as bool?) ?? false,
+    lastSyncedAt: j['last_synced_at'] as int?,
+  );
 }
 
 /// 云同步执行结果（Rust result_to_json 序列化）
@@ -1530,19 +1554,17 @@ class SyncResultJson {
   });
 
   factory SyncResultJson.fromJson(Map<String, dynamic> j) => SyncResultJson(
-        pushedModules: j['pushed_modules'] as int,
-        pulledModules: j['pulled_modules'] as int,
-        uploadedAttachments: j['uploaded_attachments'] as int,
-        downloadedAttachments: j['downloaded_attachments'] as int,
-        durationMs: j['duration_ms'] as int,
-        skipped: j['skipped'] as bool,
-        errors: (j['errors'] as List).cast<String>(),
-        conflicts: (j['conflicts'] as num?)?.toInt() ?? 0,
-        changedTables:
-            (j['changed_tables'] as List?)?.cast<String>() ?? const [],
-      );
+    pushedModules: j['pushed_modules'] as int,
+    pulledModules: j['pulled_modules'] as int,
+    uploadedAttachments: j['uploaded_attachments'] as int,
+    downloadedAttachments: j['downloaded_attachments'] as int,
+    durationMs: j['duration_ms'] as int,
+    skipped: j['skipped'] as bool,
+    errors: (j['errors'] as List).cast<String>(),
+    conflicts: (j['conflicts'] as num?)?.toInt() ?? 0,
+    changedTables: (j['changed_tables'] as List?)?.cast<String>() ?? const [],
+  );
 }
-
 
 // ---------- 节假日（cfg_holidays 缓存；用户需求：日历视图联网更新节假日） ----------
 
@@ -1672,9 +1694,46 @@ class TrashMeta {
   /// 上次 TTL 自动清理时间（ms；0 = 从未执行）
   final int lastPurgeMs;
 
-  const TrashMeta({
-    required this.retentionDays,
-    required this.lastPurgeMs,
+  const TrashMeta({required this.retentionDays, required this.lastPurgeMs});
+}
+
+/// 最新版本清单（#107 检查更新；FRB update.rs 镜像）
+class UpdateInfo {
+  /// 清单版本号（不带 `v` 前缀）
+  final String version;
+
+  /// 发布日期（ISO 8601）
+  final String? pubDate;
+
+  /// 更新说明（Markdown 原文）
+  final String? notes;
+
+  /// 发布页地址（检查失败/需要手动下载时的兜底）
+  final String downloadUrl;
+
+  const UpdateInfo({
+    required this.version,
+    required this.pubDate,
+    required this.notes,
+    required this.downloadUrl,
+  });
+}
+
+/// TTL 清理统计（回收站「立即清理」；FRB trash.rs 镜像）
+class TrashPurgeStats {
+  /// 物理删除的墓碑行数
+  final int purged;
+
+  /// 因同步守卫跳过的行数（删除尚未 push 到云端，清了有复活风险）
+  final int guarded;
+
+  /// 本次是否实际执行了清理
+  final bool ran;
+
+  const TrashPurgeStats({
+    required this.purged,
+    required this.guarded,
+    required this.ran,
   });
 }
 
@@ -1696,8 +1755,11 @@ class DigestPrefs {
   });
 
   /// 默认值（与 Rust digest_api 一致：关闭 + 08:00）
-  static const DigestPrefs fallback =
-      DigestPrefs(enabled: false, hour: 8, minute: 0);
+  static const DigestPrefs fallback = DigestPrefs(
+    enabled: false,
+    hour: 8,
+    minute: 0,
+  );
 
   /// "HH:mm"（补零；供 TimeOfDay / 展示复用）
   String get label =>
@@ -1885,6 +1947,34 @@ class TaskAttachmentView {
   });
 }
 
+/// 本地未使用附件行（存储清理页；FRB asset.rs 镜像）
+///
+/// 「未使用」= 无任何存活任务引用的本地账本行——通常是卸下附件后
+/// 还没来得及被 GC 回收的二进制。
+class UnusedAttachment {
+  final String hash;
+  final String originalName;
+  final String mimeType;
+  final int sizeBytes;
+
+  /// 0 = 尚未上传云端（删除后其他设备无法找回）
+  final int isUploaded;
+
+  /// 0 = 本机无文件（只剩账本行，无需清理磁盘）
+  final int isLocalCached;
+  final int createdAt;
+
+  const UnusedAttachment({
+    required this.hash,
+    required this.originalName,
+    required this.mimeType,
+    required this.sizeBytes,
+    required this.isUploaded,
+    required this.isLocalCached,
+    required this.createdAt,
+  });
+}
+
 /// 云端孤儿附件行（docs/15；云端清理清单）
 ///
 /// 与 [TaskAttachmentView] 的区别：这是**云端对象**，不是任务挂载行——
@@ -1924,15 +2014,16 @@ class CloudUnusedAttachmentView {
   int get displayBytes => cipherBytes > 0 ? cipherBytes : sizeBytes;
 
   /// 清单显示名：账本无原始文件名时用 hash 前 12 位
-  String get label =>
-      originalName.trim().isNotEmpty ? originalName : '${hash.substring(0, 12)}…';
+  String get label => originalName.trim().isNotEmpty
+      ? originalName
+      : '${hash.substring(0, 12)}…';
 
   /// 云端形态文案（删除覆盖两种布局，不能让用户以为只删一份）
   String get kindLabel => switch (kind) {
-        'chunked' => '分片',
-        'both' => '整包+分片',
-        _ => '整包',
-      };
+    'chunked' => '分片',
+    'both' => '整包+分片',
+    _ => '整包',
+  };
 }
 
 /// 云端孤儿扫描结果
@@ -1983,6 +2074,7 @@ class TodoSavedFilter {
   final int id;
   final String uuid;
   final String name;
+
   /// 条件 JSON：{status?, priority_min?, project_ids?, label_ids?, due_within_days?, due_overdue?, favorite_only?}
   final String conditions;
 
@@ -1999,6 +2091,7 @@ class TodoTemplate {
   final int id;
   final String uuid;
   final String name;
+
   /// 模板内容 JSON：{title?, notes?, priority?, due_offset_days?, subtasks?}——套用时按存在键预填
   final String payload;
 
@@ -2116,13 +2209,13 @@ class ActivityLogRow {
   });
 
   factory ActivityLogRow.fromJson(Map<String, dynamic> j) => ActivityLogRow(
-        id: j['id'] as int,
-        taskId: j['task_id'] as int?,
-        taskTitle: j['task_title'] as String,
-        action: j['action'] as String,
-        detail: j['detail'] as String,
-        createdAt: j['created_at'] as int,
-      );
+    id: j['id'] as int,
+    taskId: j['task_id'] as int?,
+    taskTitle: j['task_title'] as String,
+    action: j['action'] as String,
+    detail: j['detail'] as String,
+    createdAt: j['created_at'] as int,
+  );
 }
 
 // =============================================================================
@@ -2160,8 +2253,7 @@ class BackupManifest {
   });
 
   /// 表记录数合计（清单摘要行展示）
-  int get totalRecords =>
-      tableCounts.fold(0, (sum, e) => sum + e.count);
+  int get totalRecords => tableCounts.fold(0, (sum, e) => sum + e.count);
 }
 
 /// 全量备份导出结果（本地文件 + 可选云端副本，两者失败互不阻塞）
@@ -2351,21 +2443,20 @@ class BackupPrefs {
     int? scheduleMonth,
     int? lastBackupAt,
     int? nextBackupAt,
-  }) =>
-      BackupPrefs(
-        localPath: localPath,
-        keepLatest: keepLatest ?? this.keepLatest,
-        cloudBackupEnabled: cloudBackupEnabled ?? this.cloudBackupEnabled,
-        localBackupEnabled: localBackupEnabled ?? this.localBackupEnabled,
-        scheduleType: scheduleType ?? this.scheduleType,
-        scheduleTime: scheduleTime ?? this.scheduleTime,
-        scheduleMinute: scheduleMinute ?? this.scheduleMinute,
-        scheduleWeekday: scheduleWeekday ?? this.scheduleWeekday,
-        scheduleDayOfMonth: scheduleDayOfMonth ?? this.scheduleDayOfMonth,
-        scheduleMonth: scheduleMonth ?? this.scheduleMonth,
-        lastBackupAt: lastBackupAt ?? this.lastBackupAt,
-        nextBackupAt: nextBackupAt ?? this.nextBackupAt,
-      );
+  }) => BackupPrefs(
+    localPath: localPath,
+    keepLatest: keepLatest ?? this.keepLatest,
+    cloudBackupEnabled: cloudBackupEnabled ?? this.cloudBackupEnabled,
+    localBackupEnabled: localBackupEnabled ?? this.localBackupEnabled,
+    scheduleType: scheduleType ?? this.scheduleType,
+    scheduleTime: scheduleTime ?? this.scheduleTime,
+    scheduleMinute: scheduleMinute ?? this.scheduleMinute,
+    scheduleWeekday: scheduleWeekday ?? this.scheduleWeekday,
+    scheduleDayOfMonth: scheduleDayOfMonth ?? this.scheduleDayOfMonth,
+    scheduleMonth: scheduleMonth ?? this.scheduleMonth,
+    lastBackupAt: lastBackupAt ?? this.lastBackupAt,
+    nextBackupAt: nextBackupAt ?? this.nextBackupAt,
+  );
 }
 
 /// 当前设备信息（导出预览展示）
@@ -2469,14 +2560,14 @@ class SyncStateView {
   });
 
   factory SyncStateView.fromJson(Map<String, dynamic> j) => SyncStateView(
-        lastSyncedAt: (j['last_synced_at'] as num?)?.toInt() ?? 0,
-        lastSyncedClockMs: (j['last_synced_clock_ms'] as num?)?.toInt() ?? 0,
-        lastPushedClockMs: (j['last_pushed_clock_ms'] as num?)?.toInt() ?? 0,
-        deviceId: j['device_id'] as String? ?? '',
-        manifestEpoch: (j['manifest_epoch'] as num?)?.toInt() ?? 0,
-        remoteTables: _stringMapOf(j['remote_tables']),
-        remoteTombstones: _stringMapOf(j['remote_tombstones']),
-      );
+    lastSyncedAt: (j['last_synced_at'] as num?)?.toInt() ?? 0,
+    lastSyncedClockMs: (j['last_synced_clock_ms'] as num?)?.toInt() ?? 0,
+    lastPushedClockMs: (j['last_pushed_clock_ms'] as num?)?.toInt() ?? 0,
+    deviceId: j['device_id'] as String? ?? '',
+    manifestEpoch: (j['manifest_epoch'] as num?)?.toInt() ?? 0,
+    remoteTables: _stringMapOf(j['remote_tables']),
+    remoteTombstones: _stringMapOf(j['remote_tombstones']),
+  );
 
   /// 桶索引快照（嵌套对象，值都是指纹字符串）；缺字段/形状异常回落空表
   static Map<String, Map<String, String>> _stringMapOf(Object? raw) {
@@ -2484,9 +2575,7 @@ class SyncStateView {
     final out = <String, Map<String, String>>{};
     raw.forEach((k, v) {
       if (v is! Map) return;
-      out['$k'] = {
-        for (final e in v.entries) '${e.key}': '${e.value}',
-      };
+      out['$k'] = {for (final e in v.entries) '${e.key}': '${e.value}'};
     });
     return out;
   }
@@ -2505,9 +2594,9 @@ class TableRowCount {
 
   /// 列表通道 JSON → App 模型（mock 桥用；真桥走 `_mapDiagnostics` 直映 FRB DTO）
   factory TableRowCount.fromJson(Map<String, dynamic> j) => TableRowCount(
-        table: j['table'] as String,
-        rows: (j['rows'] as num).toInt(),
-      );
+    table: j['table'] as String,
+    rows: (j['rows'] as num).toInt(),
+  );
 }
 
 /// 应用内诊断快照（镜像 core `diagnostics_api::DiagnosticsSnapshot`）

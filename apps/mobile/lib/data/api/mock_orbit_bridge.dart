@@ -28,11 +28,9 @@ class MockOrbitBridge implements OrbitBridge {
   }
 
   void _emit(String table) {
-    _dbChangesCtrl.add(DbChangeEvent(
-      table: table,
-      op: 'write',
-      timestamp: store.now(),
-    ));
+    _dbChangesCtrl.add(
+      DbChangeEvent(table: table, op: 'write', timestamp: store.now()),
+    );
   }
 
   Never _notFound(String what) => throw Exception('$what not found');
@@ -84,7 +82,11 @@ class MockOrbitBridge implements OrbitBridge {
     final idb = _taskNum(b, 'id').toInt();
     switch (key) {
       case 'manual':
-        final byPos = _cmpNum(_taskNum(a, 'position'), _taskNum(b, 'position'), false);
+        final byPos = _cmpNum(
+          _taskNum(a, 'position'),
+          _taskNum(b, 'position'),
+          false,
+        );
         return byPos != 0 ? byPos : ida.compareTo(idb);
       case 'due':
         final ad = a['due_date'] as num?;
@@ -94,9 +96,17 @@ class MockOrbitBridge implements OrbitBridge {
         final byDue = _cmpNum(ad!, bd!, desc);
         return byDue != 0 ? byDue : _cmpNum(ida, idb, desc);
       case 'priority':
-        final byPri = _cmpNum(_taskNum(a, 'priority'), _taskNum(b, 'priority'), desc);
+        final byPri = _cmpNum(
+          _taskNum(a, 'priority'),
+          _taskNum(b, 'priority'),
+          desc,
+        );
         if (byPri != 0) return byPri;
-        final byPos = _cmpNum(_taskNum(a, 'position'), _taskNum(b, 'position'), false);
+        final byPos = _cmpNum(
+          _taskNum(a, 'position'),
+          _taskNum(b, 'position'),
+          false,
+        );
         return byPos != 0 ? byPos : ida.compareTo(idb);
       case 'done_at':
         // 完成时刻倒序（Logbook）；done_at 缺失的脏行恒沉底（方向无关）
@@ -107,7 +117,11 @@ class MockOrbitBridge implements OrbitBridge {
         final byDone = _cmpNum(ad!, bd!, desc);
         return byDone != 0 ? byDone : _cmpNum(ida, idb, desc);
       default: // created
-        final byCreated = _cmpNum(_taskNum(a, 'created_at'), _taskNum(b, 'created_at'), desc);
+        final byCreated = _cmpNum(
+          _taskNum(a, 'created_at'),
+          _taskNum(b, 'created_at'),
+          desc,
+        );
         return byCreated != 0 ? byCreated : _cmpNum(ida, idb, desc);
     }
   }
@@ -158,12 +172,12 @@ class MockOrbitBridge implements OrbitBridge {
     final value = key == 'manual'
         ? _taskNum(t, 'position').toDouble()
         : key == 'due'
-            ? (t['due_date'] as num?)?.toDouble()
-            : key == 'done_at'
-                ? (t['done_at'] as num?)?.toDouble()
-                : key == 'priority'
-                    ? _taskNum(t, 'priority').toDouble()
-                    : _taskNum(t, 'created_at').toDouble();
+        ? (t['due_date'] as num?)?.toDouble()
+        : key == 'done_at'
+        ? (t['done_at'] as num?)?.toDouble()
+        : key == 'priority'
+        ? _taskNum(t, 'priority').toDouble()
+        : _taskNum(t, 'created_at').toDouble();
     return ListCursor(
       sortKey: key,
       dir: dir,
@@ -182,9 +196,11 @@ class MockOrbitBridge implements OrbitBridge {
     final kw = f.keyword?.trim().toLowerCase();
     if (kw != null && kw.isNotEmpty) {
       rows = rows
-          .where((t) =>
-              (t['title'] as String? ?? '').toLowerCase().contains(kw) ||
-              (t['description'] as String? ?? '').toLowerCase().contains(kw))
+          .where(
+            (t) =>
+                (t['title'] as String? ?? '').toLowerCase().contains(kw) ||
+                (t['description'] as String? ?? '').toLowerCase().contains(kw),
+          )
           .toList();
     }
     if (f.done != null) {
@@ -199,15 +215,18 @@ class MockOrbitBridge implements OrbitBridge {
           .toList();
     }
     if (f.priorityEq != null) {
-      rows =
-          rows.where((t) => _taskNum(t, 'priority') == f.priorityEq).toList();
+      rows = rows
+          .where((t) => _taskNum(t, 'priority') == f.priorityEq)
+          .toList();
     }
     final ids = f.projectIds;
     if (ids != null) {
       if (ids.isEmpty) return const [];
       final set = ids.toSet();
       rows = rows
-          .where((t) => t['project_id'] != null && set.contains(t['project_id']))
+          .where(
+            (t) => t['project_id'] != null && set.contains(t['project_id']),
+          )
           .toList();
     } else if (f.projectId != null) {
       rows = rows.where((t) => t['project_id'] == f.projectId).toList();
@@ -278,9 +297,11 @@ class MockOrbitBridge implements OrbitBridge {
           if (r['is_deleted'] == 0) _taskNum(r, 'task_id').toInt(),
       };
       rows = rows
-          .where((t) =>
-              withReminder.contains(_taskNum(t, 'id').toInt()) ==
-              f.hasReminder)
+          .where(
+            (t) =>
+                withReminder.contains(_taskNum(t, 'id').toInt()) ==
+                f.hasReminder,
+          )
           .toList();
     }
     if (f.hasAttachment != null) {
@@ -289,9 +310,11 @@ class MockOrbitBridge implements OrbitBridge {
           if (a['is_deleted'] == 0) _taskNum(a, 'task_id').toInt(),
       };
       rows = rows
-          .where((t) =>
-              withAttachment.contains(_taskNum(t, 'id').toInt()) ==
-              f.hasAttachment)
+          .where(
+            (t) =>
+                withAttachment.contains(_taskNum(t, 'id').toInt()) ==
+                f.hasAttachment,
+          )
           .toList();
     }
     if (f.hasOpenSubtask != null) {
@@ -301,8 +324,11 @@ class MockOrbitBridge implements OrbitBridge {
             _taskNum(s, 'task_id').toInt(),
       };
       rows = rows
-          .where((t) =>
-              withOpen.contains(_taskNum(t, 'id').toInt()) == f.hasOpenSubtask)
+          .where(
+            (t) =>
+                withOpen.contains(_taskNum(t, 'id').toInt()) ==
+                f.hasOpenSubtask,
+          )
           .toList();
     }
     // 创建 / 完成时间下界（done_from 隐含只看已完成）
@@ -329,50 +355,51 @@ class MockOrbitBridge implements OrbitBridge {
 
   @override
   Future<String> masterAuthInit(String password) => _delay(() {
-        if (password.isEmpty) throw Exception('[invalid_input] 密码不能为空');
-        store.masterAuthSet = true;
-        return 'a' * 64;
-      });
+    if (password.isEmpty) throw Exception('[invalid_input] 密码不能为空');
+    store.masterAuthSet = true;
+    return 'a' * 64;
+  });
 
   @override
   Future<String> masterAuthUnlock(String password) => _delay(() {
-        if (!store.masterAuthSet) throw Exception('[not_initialized] 未设置主密码');
-        return 'a' * 64;
-      });
+    if (!store.masterAuthSet) throw Exception('[not_initialized] 未设置主密码');
+    return 'a' * 64;
+  });
 
   @override
   Future<bool> masterAuthVerify(String password) async => true;
 
   @override
   Future<void> masterAuthChangePassword(
-          String oldPassword, String newPassword) =>
-      _delay(() {
-        if (!store.masterAuthSet) {
-          throw Exception('[not_initialized] 未设置主密码');
-        }
-        if (newPassword.isEmpty) {
-          throw Exception('[invalid_input] 新密码不能为空');
-        }
-      });
+    String oldPassword,
+    String newPassword,
+  ) => _delay(() {
+    if (!store.masterAuthSet) {
+      throw Exception('[not_initialized] 未设置主密码');
+    }
+    if (newPassword.isEmpty) {
+      throw Exception('[invalid_input] 新密码不能为空');
+    }
+  });
 
   @override
   Future<void> masterAuthClear() => _delay(() {
-        store.masterAuthSet = false;
-      });
+    store.masterAuthSet = false;
+  });
 
   @override
   Future<void> dbMigrateToPlaintext() => _delay(() {
-        // mock：迁移为无副作用的内存标记（真实实现会清空桥状态并要求重开连接池）
-        store.dbReady = true;
-      });
+    // mock：迁移为无副作用的内存标记（真实实现会清空桥状态并要求重开连接池）
+    store.dbReady = true;
+  });
 
   @override
   Future<void> dbMigrateToEncrypted(String dbKeyHex) => _delay(() {
-        if (dbKeyHex.isEmpty) {
-          throw Exception('[invalid_input] DB Key 不能为空');
-        }
-        store.dbReady = true;
-      });
+    if (dbKeyHex.isEmpty) {
+      throw Exception('[invalid_input] DB Key 不能为空');
+    }
+    store.dbReady = true;
+  });
 
   // ── 生物识别解锁（mock：密钥链编排在内存，闭环可跑通）──
 
@@ -385,38 +412,38 @@ class MockOrbitBridge implements OrbitBridge {
 
   @override
   Future<BiometricSecretBundle> biometricSetup(String dbKeyHex) => _delay(() {
-        if (dbKeyHex.length != 64) {
-          throw Exception('[invalid_input] DB Key hex 长度非法');
-        }
-        return _bioBundle = BiometricSecretBundle(
-          encryptedDbKeyBio: 'mock:${dbKeyHex.hashCode}',
-          biometricKey: 'mock-biometric-key',
-          nonce: 'mock-nonce',
-        );
-      });
+    if (dbKeyHex.length != 64) {
+      throw Exception('[invalid_input] DB Key hex 长度非法');
+    }
+    return _bioBundle = BiometricSecretBundle(
+      encryptedDbKeyBio: 'mock:${dbKeyHex.hashCode}',
+      biometricKey: 'mock-biometric-key',
+      nonce: 'mock-nonce',
+    );
+  });
 
   @override
   Future<String> biometricUnlock(BiometricSecretBundle bundle) => _delay(() {
-        if (!store.masterAuthSet) {
-          throw Exception('[not_initialized] 未设置主密码');
-        }
-        final saved = _bioBundle;
-        if (saved == null ||
-            saved.encryptedDbKeyBio != bundle.encryptedDbKeyBio ||
-            saved.biometricKey != bundle.biometricKey ||
-            saved.nonce != bundle.nonce) {
-          throw Exception('[biometric_failed] 生物识别解锁失败（密钥数据可能已损坏）');
-        }
-        return 'a' * 64;
-      });
+    if (!store.masterAuthSet) {
+      throw Exception('[not_initialized] 未设置主密码');
+    }
+    final saved = _bioBundle;
+    if (saved == null ||
+        saved.encryptedDbKeyBio != bundle.encryptedDbKeyBio ||
+        saved.biometricKey != bundle.biometricKey ||
+        saved.nonce != bundle.nonce) {
+      throw Exception('[biometric_failed] 生物识别解锁失败（密钥数据可能已损坏）');
+    }
+    return 'a' * 64;
+  });
 
   @override
   Future<void> biometricDisable(String password) => _delay(() {
-        if (password.isEmpty) {
-          throw Exception('[wrong_password] 主密码错误');
-        }
-        _bioBundle = null;
-      });
+    if (password.isEmpty) {
+      throw Exception('[wrong_password] 主密码错误');
+    }
+    _bioBundle = null;
+  });
 
   // ── DB 生命周期 ──
 
@@ -436,28 +463,35 @@ class MockOrbitBridge implements OrbitBridge {
 
   @override
   Future<List<TodoProject>> todoProjectList(ListFilter filter) => _delay(() {
-        // 默认排除已归档（对齐 Rust list_todo_projects 的 is_archived=0 谓词）
-        final list = store.projects.values
+    // 默认排除已归档（对齐 Rust list_todo_projects 的 is_archived=0 谓词）
+    final list =
+        store.projects.values
             .where((p) => p['is_deleted'] == 0 && (p['is_archived'] ?? 0) == 0)
             .toList()
-          ..sort((a, b) =>
-              (a['sort_order'] as int).compareTo(b['sort_order'] as int));
-        return list.map(TodoProject.fromJson).toList();
-      });
+          ..sort(
+            (a, b) =>
+                (a['sort_order'] as int).compareTo(b['sort_order'] as int),
+          );
+    return list.map(TodoProject.fromJson).toList();
+  });
 
   @override
   Future<List<TodoProject>> todoProjectListArchived() => _delay(() {
-        final list = store.projects.values
-            .where((p) =>
-                p['is_deleted'] == 0 && (p['is_archived'] ?? 0) == 1)
+    final list =
+        store.projects.values
+            .where((p) => p['is_deleted'] == 0 && (p['is_archived'] ?? 0) == 1)
             .toList()
-          ..sort((a, b) => (b['updated_at'] as int).compareTo(a['updated_at'] as int));
-        return list.map(TodoProject.fromJson).toList();
-      });
+          ..sort(
+            (a, b) =>
+                (b['updated_at'] as int).compareTo(a['updated_at'] as int),
+          );
+    return list.map(TodoProject.fromJson).toList();
+  });
 
   @override
-  Future<TodoProject> todoProjectGet(int id) =>
-      _delay(() => TodoProject.fromJson(store.projects[id] ?? _notFound('project $id')));
+  Future<TodoProject> todoProjectGet(int id) => _delay(
+    () => TodoProject.fromJson(store.projects[id] ?? _notFound('project $id')),
+  );
 
   @override
   Future<TodoProject> todoProjectCreate(TodoProjectCreateInput input) =>
@@ -484,28 +518,27 @@ class MockOrbitBridge implements OrbitBridge {
 
   @override
   Future<TodoProject> todoProjectUpdate(int id, String patchJson) => _delay(() {
-        final p = store.projects[id] ?? _notFound('project $id');
-        store.mergePatch(p, patchJson);
-        // M8：合并后统一归一化（缺键 = 不改，因 mergePatch 按 patch 语义写入；
-        // 写了 null / 空白串 = 移到顶层）。Dart 无 undefined 概念，不存在桌面 mock
-        // 那种「未提供字段被覆盖成 undefined」的 JSON 边界问题。
-        p['parent_uuid'] = normalizeParentUuid(p['parent_uuid'] as String?);
-        _emit('todo_projects');
-        return TodoProject.fromJson(p);
-      });
+    final p = store.projects[id] ?? _notFound('project $id');
+    store.mergePatch(p, patchJson);
+    // M8：合并后统一归一化（缺键 = 不改，因 mergePatch 按 patch 语义写入；
+    // 写了 null / 空白串 = 移到顶层）。Dart 无 undefined 概念，不存在桌面 mock
+    // 那种「未提供字段被覆盖成 undefined」的 JSON 边界问题。
+    p['parent_uuid'] = normalizeParentUuid(p['parent_uuid'] as String?);
+    _emit('todo_projects');
+    return TodoProject.fromJson(p);
+  });
 
   @override
   Future<void> todoProjectDelete(int id) => _delay(() {
-        store.projects.remove(id);
-        _emit('todo_projects');
-      });
+    store.projects.remove(id);
+    _emit('todo_projects');
+  });
 
   @override
-  Future<void> todoProjectUpdateSortOrder(int id, int sortOrder) =>
-      _delay(() {
-        final p = store.projects[id];
-        if (p != null) p['sort_order'] = sortOrder;
-      });
+  Future<void> todoProjectUpdateSortOrder(int id, int sortOrder) => _delay(() {
+    final p = store.projects[id];
+    if (p != null) p['sort_order'] = sortOrder;
+  });
 
   /// 排程偏好（F3 阶段三；mock 会话内存态，真桥落 cfg_kv。
   /// 公开字段：测试同步断言用——测试体 await 桥方法会撞假时钟死锁）
@@ -539,21 +572,24 @@ class MockOrbitBridge implements OrbitBridge {
           if (interval == null || interval <= 0) continue;
           final lastAt = p['review_last_at'] as int?;
           // 从未回顾 = 立即到期；到期 = 上次回顾日 + 周期；暂缓只往后推（取 max）
-          final base =
-              lastAt == null ? today : _localDayIndex(lastAt) + interval;
+          final base = lastAt == null
+              ? today
+              : _localDayIndex(lastAt) + interval;
           final snoozeUntil = p['review_snooze_until'] as int?;
           final dueIndex = snoozeUntil == null
               ? base
               : base > _localDayIndex(snoozeUntil)
-                  ? base
-                  : _localDayIndex(snoozeUntil);
+              ? base
+              : _localDayIndex(snoozeUntil);
           if (dueIndex > today) continue;
-          due.add(ProjectReviewStatus(
-            project: TodoProject.fromJson(p),
-            dueDayIndex: dueIndex,
-            overdueDays: today - dueIndex,
-            openTaskCount: counts[p['id'] as int] ?? 0,
-          ));
+          due.add(
+            ProjectReviewStatus(
+              project: TodoProject.fromJson(p),
+              dueDayIndex: dueIndex,
+              overdueDays: today - dueIndex,
+              openTaskCount: counts[p['id'] as int] ?? 0,
+            ),
+          );
         }
         due.sort((a, b) {
           final byOverdue = b.overdueDays.compareTo(a.overdueDays);
@@ -565,12 +601,12 @@ class MockOrbitBridge implements OrbitBridge {
 
   @override
   Future<TodoProject> todoProjectMarkReviewed(int projectId) => _delay(() {
-        final p = store.projects[projectId] ?? _notFound('project $projectId');
-        p['review_last_at'] = store.now();
-        p['review_snooze_until'] = null;
-        _emit('todo_projects');
-        return TodoProject.fromJson(p);
-      });
+    final p = store.projects[projectId] ?? _notFound('project $projectId');
+    p['review_last_at'] = store.now();
+    p['review_snooze_until'] = null;
+    _emit('todo_projects');
+    return TodoProject.fromJson(p);
+  });
 
   @override
   Future<TodoProject> todoProjectSetReviewInterval(int projectId, int? days) =>
@@ -592,303 +628,310 @@ class MockOrbitBridge implements OrbitBridge {
 
   @override
   Future<TodoProject> todoProjectSnoozeReview(
-          int projectId, int days, int nowMs) =>
-      _delay(() {
-        final p = store.projects[projectId] ?? _notFound('project $projectId');
-        if (days <= 0) {
-          throw Exception('暂缓天数必须为正整数');
-        }
-        // 暂缓截止 = 今天零点 + N 天（core local_day_start 同口径）
-        final n = DateTime.fromMillisecondsSinceEpoch(nowMs);
-        final dayStart =
-            DateTime(n.year, n.month, n.day).millisecondsSinceEpoch;
-        p['review_snooze_until'] =
-            dayStart + days * Duration.millisecondsPerDay;
-        _emit('todo_projects');
-        return TodoProject.fromJson(p);
-      });
+    int projectId,
+    int days,
+    int nowMs,
+  ) => _delay(() {
+    final p = store.projects[projectId] ?? _notFound('project $projectId');
+    if (days <= 0) {
+      throw Exception('暂缓天数必须为正整数');
+    }
+    // 暂缓截止 = 今天零点 + N 天（core local_day_start 同口径）
+    final n = DateTime.fromMillisecondsSinceEpoch(nowMs);
+    final dayStart = DateTime(n.year, n.month, n.day).millisecondsSinceEpoch;
+    p['review_snooze_until'] = dayStart + days * Duration.millisecondsPerDay;
+    _emit('todo_projects');
+    return TodoProject.fromJson(p);
+  });
 
   // ── 日排程（F3 阶段一；口径镜像 core day_planner_api） ──
 
   @override
-  Future<DayPlan> dayPlanPreview(DayPlanPrefs prefs, int nowMs) =>
-      _delay(() {
-        final n = DateTime.fromMillisecondsSinceEpoch(nowMs);
-        final dayStart =
-            DateTime(n.year, n.month, n.day).millisecondsSinceEpoch;
-        final dayEnd = dayStart + Duration.millisecondsPerDay;
-        final nowMinute =
-            ((nowMs - dayStart) / Duration.millisecondsPerMinute).floor();
-        final gran = prefs.granularityMinutes < 1
-            ? 1
-            : prefs.granularityMinutes;
-        int durOf(Map<String, dynamic> t) {
-          final d = t['duration_minutes'] as int?;
-          return (d != null && d > 0) ? d : prefs.defaultTaskMinutes;
-        }
+  Future<DayPlan> dayPlanPreview(DayPlanPrefs prefs, int nowMs) => _delay(() {
+    final n = DateTime.fromMillisecondsSinceEpoch(nowMs);
+    final dayStart = DateTime(n.year, n.month, n.day).millisecondsSinceEpoch;
+    final dayEnd = dayStart + Duration.millisecondsPerDay;
+    final nowMinute = ((nowMs - dayStart) / Duration.millisecondsPerMinute)
+        .floor();
+    final gran = prefs.granularityMinutes < 1 ? 1 : prefs.granularityMinutes;
+    int durOf(Map<String, dynamic> t) {
+      final d = t['duration_minutes'] as int?;
+      return (d != null && d > 0) ? d : prefs.defaultTaskMinutes;
+    }
 
-        // 候选四类谓词（core plan_day 同款）
-        final cands = <Map<String, Object?>>[];
-        for (final t in store.tasks.values) {
-          if (t['is_deleted'] != 0 || t['done'] != 0) continue;
-          final due = t['due_date'] as int?;
-          final myDay = t['my_day_date'] as int?;
-          final dueInToday = due != null && due >= dayStart && due < dayEnd;
-          final overdue = due != null && due < dayStart;
-          final myDayToday = myDay != null && myDay >= dayStart && myDay < dayEnd;
-          final undatedWithDuration = due == null && t['duration_minutes'] != null;
-          if (overdue && !prefs.includeOverdue) continue;
-          if (dueInToday || overdue || myDayToday || undatedWithDuration) {
-            cands.add({
-              't': t,
-              'dueMin': due == null
-                  ? null
-                  : ((due - dayStart) ~/ Duration.millisecondsPerMinute),
-              'myDay': myDayToday,
-            });
-          }
-        }
-        int bucketOf(Map<String, Object?> c) {
-          final dueMin = c['dueMin'] as int?;
-          if (dueMin == null) return (c['myDay'] as bool) ? 3 : 4;
-          if (dueMin < 0) return 0;
-          if (dueMin > 0 && dueMin < 1440) return 1;
-          return 2;
-        }
-
-        cands.sort((a, b) {
-          final ba = bucketOf(a);
-          final bb = bucketOf(b);
-          if (ba != bb) return ba - bb;
-          if (ba == 0 || ba == 1) {
-            final da = a['dueMin'] as int?;
-            final db2 = b['dueMin'] as int?;
-            if (da == null || db2 == null) return 0;
-            return da.compareTo(db2);
-          }
-          final pa = (a['t'] as Map<String, dynamic>)['priority'] as int;
-          final pb = (b['t'] as Map<String, dynamic>)['priority'] as int;
-          return pb - pa;
+    // 候选四类谓词（core plan_day 同款）
+    final cands = <Map<String, Object?>>[];
+    for (final t in store.tasks.values) {
+      if (t['is_deleted'] != 0 || t['done'] != 0) continue;
+      final due = t['due_date'] as int?;
+      final myDay = t['my_day_date'] as int?;
+      final dueInToday = due != null && due >= dayStart && due < dayEnd;
+      final overdue = due != null && due < dayStart;
+      final myDayToday = myDay != null && myDay >= dayStart && myDay < dayEnd;
+      final undatedWithDuration = due == null && t['duration_minutes'] != null;
+      if (overdue && !prefs.includeOverdue) continue;
+      if (dueInToday || overdue || myDayToday || undatedWithDuration) {
+        cands.add({
+          't': t,
+          'dueMin': due == null
+              ? null
+              : ((due - dayStart) ~/ Duration.millisecondsPerMinute),
+          'myDay': myDayToday,
         });
+      }
+    }
+    int bucketOf(Map<String, Object?> c) {
+      final dueMin = c['dueMin'] as int?;
+      if (dueMin == null) return (c['myDay'] as bool) ? 3 : 4;
+      if (dueMin < 0) return 0;
+      if (dueMin > 0 && dueMin < 1440) return 1;
+      return 2;
+    }
 
-        // 段：工作窗挖午休
-        final lunchActive = prefs.lunchStartMinute > prefs.workStartMinute &&
-            prefs.lunchEndMinute < prefs.workEndMinute;
-        final segments = lunchActive
-            ? [
-                [prefs.workStartMinute, prefs.lunchStartMinute],
-                [prefs.lunchEndMinute, prefs.workEndMinute],
-              ]
-            : [
-                [prefs.workStartMinute, prefs.workEndMinute],
-              ];
-        final capacity = lunchActive
-            ? (prefs.lunchStartMinute -
-                    (prefs.workStartMinute > nowMinute
-                        ? prefs.workStartMinute
-                        : nowMinute))
-                .clamp(0, 1 << 30) +
-                (prefs.workEndMinute -
-                    (prefs.lunchEndMinute > nowMinute
-                        ? prefs.lunchEndMinute
-                        : nowMinute))
-                .clamp(0, 1 << 30)
-            : (prefs.workEndMinute -
-                    (prefs.workStartMinute > nowMinute
-                        ? prefs.workStartMinute
-                        : nowMinute))
-                .clamp(0, 1 << 30);
+    cands.sort((a, b) {
+      final ba = bucketOf(a);
+      final bb = bucketOf(b);
+      if (ba != bb) return ba - bb;
+      if (ba == 0 || ba == 1) {
+        final da = a['dueMin'] as int?;
+        final db2 = b['dueMin'] as int?;
+        if (da == null || db2 == null) return 0;
+        return da.compareTo(db2);
+      }
+      final pa = (a['t'] as Map<String, dynamic>)['priority'] as int;
+      final pb = (b['t'] as Map<String, dynamic>)['priority'] as int;
+      return pb - pa;
+    });
 
-        var cursor = nowMinute;
-        int? prevEnd;
-        final slots = <PlanSlot>[];
-        final unscheduled = <UnscheduledTask>[];
-        String hhmm(int minute) =>
-            '${(minute ~/ 60).toString().padLeft(2, '0')}:${(minute % 60).toString().padLeft(2, '0')}';
-        for (final c in cands) {
-          final t = c['t'] as Map<String, dynamic>;
-          final duration = durOf(t);
-          final dueMin = c['dueMin'] as int?;
-          final deadline =
-              (dueMin != null && dueMin > 0 && dueMin < 1440) ? dueMin : null;
-          List<int>? placed;
-          for (final seg in segments) {
-            final segStart =
-                seg[0] > cursor ? seg[0] : cursor;
-            final start = segStart + (gran - segStart % gran) % gran;
-            final end = start + duration;
-            if (start >= seg[1] || end > seg[1]) continue;
-            if (deadline != null && end > deadline) continue;
-            placed = [start, end];
-            break;
-          }
-          if (placed != null) {
-            final start = placed[0];
-            final end = placed[1];
-            final bucket = bucketOf(c);
-            final reason = bucket == 0
-                ? '已逾期'
-                : deadline != null
-                    ? '截止 ${hhmm(deadline)}'
-                    : t['priority'] >= 4
-                        ? '紧急优先'
-                        : t['priority'] == 3
-                            ? '高优先级'
-                            : bucket == 3
-                                ? '我的一天'
-                                : (prevEnd != null && start > prevEnd)
-                                    ? '填充空档'
-                                    : '顺序安排';
-            prevEnd = end;
-            cursor = end;
-            slots.add(PlanSlot(
-              taskId: t['id'] as int,
-              title: t['title'] as String,
-              startMs: dayStart + start * Duration.millisecondsPerMinute,
-              endMs: dayStart + end * Duration.millisecondsPerMinute,
-              durationMinutes: duration,
-              reason: reason,
-            ));
-          } else {
-            final reason = nowMinute >= prefs.workEndMinute
-                ? '已过工作时间'
-                : deadline != null
-                    ? '晚于截止 ${hhmm(deadline)}'
-                    : '今日时段已满';
-            unscheduled.add(UnscheduledTask(
-              taskId: t['id'] as int,
-              title: t['title'] as String,
-              reason: reason,
-            ));
-          }
-        }
-        final load =
-            cands.fold<int>(0, (sum, c) => sum + durOf(c['t'] as Map<String, dynamic>));
-        return DayPlan(
-          slots: slots,
-          unscheduled: unscheduled,
-          capacityMinutes: capacity,
-          loadMinutes: load,
-          overloaded: load > capacity,
-          dayStartMs: dayStart,
+    // 段：工作窗挖午休
+    final lunchActive =
+        prefs.lunchStartMinute > prefs.workStartMinute &&
+        prefs.lunchEndMinute < prefs.workEndMinute;
+    final segments = lunchActive
+        ? [
+            [prefs.workStartMinute, prefs.lunchStartMinute],
+            [prefs.lunchEndMinute, prefs.workEndMinute],
+          ]
+        : [
+            [prefs.workStartMinute, prefs.workEndMinute],
+          ];
+    final capacity = lunchActive
+        ? (prefs.lunchStartMinute -
+                      (prefs.workStartMinute > nowMinute
+                          ? prefs.workStartMinute
+                          : nowMinute))
+                  .clamp(0, 1 << 30) +
+              (prefs.workEndMinute -
+                      (prefs.lunchEndMinute > nowMinute
+                          ? prefs.lunchEndMinute
+                          : nowMinute))
+                  .clamp(0, 1 << 30)
+        : (prefs.workEndMinute -
+                  (prefs.workStartMinute > nowMinute
+                      ? prefs.workStartMinute
+                      : nowMinute))
+              .clamp(0, 1 << 30);
+
+    var cursor = nowMinute;
+    int? prevEnd;
+    final slots = <PlanSlot>[];
+    final unscheduled = <UnscheduledTask>[];
+    String hhmm(int minute) =>
+        '${(minute ~/ 60).toString().padLeft(2, '0')}:${(minute % 60).toString().padLeft(2, '0')}';
+    for (final c in cands) {
+      final t = c['t'] as Map<String, dynamic>;
+      final duration = durOf(t);
+      final dueMin = c['dueMin'] as int?;
+      final deadline = (dueMin != null && dueMin > 0 && dueMin < 1440)
+          ? dueMin
+          : null;
+      List<int>? placed;
+      for (final seg in segments) {
+        final segStart = seg[0] > cursor ? seg[0] : cursor;
+        final start = segStart + (gran - segStart % gran) % gran;
+        final end = start + duration;
+        if (start >= seg[1] || end > seg[1]) continue;
+        if (deadline != null && end > deadline) continue;
+        placed = [start, end];
+        break;
+      }
+      if (placed != null) {
+        final start = placed[0];
+        final end = placed[1];
+        final bucket = bucketOf(c);
+        final reason = bucket == 0
+            ? '已逾期'
+            : deadline != null
+            ? '截止 ${hhmm(deadline)}'
+            : t['priority'] >= 4
+            ? '紧急优先'
+            : t['priority'] == 3
+            ? '高优先级'
+            : bucket == 3
+            ? '我的一天'
+            : (prevEnd != null && start > prevEnd)
+            ? '填充空档'
+            : '顺序安排';
+        prevEnd = end;
+        cursor = end;
+        slots.add(
+          PlanSlot(
+            taskId: t['id'] as int,
+            title: t['title'] as String,
+            startMs: dayStart + start * Duration.millisecondsPerMinute,
+            endMs: dayStart + end * Duration.millisecondsPerMinute,
+            durationMinutes: duration,
+            reason: reason,
+          ),
         );
-      });
+      } else {
+        final reason = nowMinute >= prefs.workEndMinute
+            ? '已过工作时间'
+            : deadline != null
+            ? '晚于截止 ${hhmm(deadline)}'
+            : '今日时段已满';
+        unscheduled.add(
+          UnscheduledTask(
+            taskId: t['id'] as int,
+            title: t['title'] as String,
+            reason: reason,
+          ),
+        );
+      }
+    }
+    final load = cands.fold<int>(
+      0,
+      (sum, c) => sum + durOf(c['t'] as Map<String, dynamic>),
+    );
+    return DayPlan(
+      slots: slots,
+      unscheduled: unscheduled,
+      capacityMinutes: capacity,
+      loadMinutes: load,
+      overloaded: load > capacity,
+      dayStartMs: dayStart,
+    );
+  });
 
   @override
-  Future<ApplyResult> dayPlanApply(int dayStartMs, List<ApplySlotInput> slots) =>
-      _delay(() {
-        final applied = <AppliedRow>[];
-        for (final s in slots) {
-          final t = store.tasks[s.taskId];
-          if (t == null) {
-            throw Exception('task ${s.taskId} 不存在');
-          }
-          applied.add(AppliedRow(
-            taskId: s.taskId,
-            prevStartDate: t['start_date'] as int?,
-            prevMyDayDate: t['my_day_date'] as int?,
-          ));
-          t['my_day_date'] = dayStartMs;
-          t['start_date'] = s.startMs;
-          t['updated_at'] = store.now();
-          t['version'] = ((t['version'] as int?) ?? 1) + 1;
-        }
-        _emit('todo_tasks');
-        return ApplyResult(applied: applied);
-      });
+  Future<ApplyResult> dayPlanApply(
+    int dayStartMs,
+    List<ApplySlotInput> slots,
+  ) => _delay(() {
+    final applied = <AppliedRow>[];
+    for (final s in slots) {
+      final t = store.tasks[s.taskId];
+      if (t == null) {
+        throw Exception('task ${s.taskId} 不存在');
+      }
+      applied.add(
+        AppliedRow(
+          taskId: s.taskId,
+          prevStartDate: t['start_date'] as int?,
+          prevMyDayDate: t['my_day_date'] as int?,
+        ),
+      );
+      t['my_day_date'] = dayStartMs;
+      t['start_date'] = s.startMs;
+      t['updated_at'] = store.now();
+      t['version'] = ((t['version'] as int?) ?? 1) + 1;
+    }
+    _emit('todo_tasks');
+    return ApplyResult(applied: applied);
+  });
 
   @override
   Future<DayPlanPrefs> dayPlanPrefsGet() => _delay(() => dayPlanPrefs);
 
   @override
-  Future<DayPlanPrefs> dayPlanPrefsSet(DayPlanPrefs prefs) =>
-      _delay(() {
-        dayPlanPrefs = prefs;
-        return prefs;
-      });
+  Future<DayPlanPrefs> dayPlanPrefsSet(DayPlanPrefs prefs) => _delay(() {
+    dayPlanPrefs = prefs;
+    return prefs;
+  });
 
   // ── todo_tasks ──
 
   @override
   Future<List<TodoTask>> todoTaskList(ListFilter filter) => _delay(() {
-        final list = store.tasks.values
-            .where((t) => t['is_deleted'] == 0)
-            .toList()
-          // 排序按 num 比较：position 是 REAL（core 复制任务写 `+ 1.0`），
-          // 写死 as int 会在复制后的列表读回时炸 double 转换
-          ..sort((a, b) =>
-              (a['position'] as num).compareTo(b['position'] as num));
-        // 瘦行 DTO（批2 + 内存治理 A2 对齐 core TodoTaskListItem）：10 个零消费列
-        // 整体不在行里；keyword 空时 description 的值再以 null 占位（万级列表实测
-        // 占 IPC 体积 47%），keyword 非空保留原文（服务端 LIKE 已按 title+description
-        // 过滤，表单/详情走单行全列通道）
-        final keyword = filter.keyword?.trim();
-        final pruneDescription = keyword == null || keyword.isEmpty;
-        return list
-            .map((t) => _listRow(t, pruneDescription))
-            .map(TodoTask.fromListJson)
-            .toList();
-      });
+    final list = store.tasks.values.where((t) => t['is_deleted'] == 0).toList()
+      // 排序按 num 比较：position 是 REAL（core 复制任务写 `+ 1.0`），
+      // 写死 as int 会在复制后的列表读回时炸 double 转换
+      ..sort((a, b) => (a['position'] as num).compareTo(b['position'] as num));
+    // 瘦行 DTO（批2 + 内存治理 A2 对齐 core TodoTaskListItem）：10 个零消费列
+    // 整体不在行里；keyword 空时 description 的值再以 null 占位（万级列表实测
+    // 占 IPC 体积 47%），keyword 非空保留原文（服务端 LIKE 已按 title+description
+    // 过滤，表单/详情走单行全列通道）
+    final keyword = filter.keyword?.trim();
+    final pruneDescription = keyword == null || keyword.isEmpty;
+    return list
+        .map((t) => _listRow(t, pruneDescription))
+        .map(TodoTask.fromListJson)
+        .toList();
+  });
 
   @override
   Future<TodoTaskPage> todoTaskPage(
     ListFilter filter,
     ListCursor? cursor,
     int limit,
-  ) =>
-      _delay(() {
-        final key = filter.sortKey ?? 'manual';
-        if (!const ['manual', 'due', 'priority', 'created', 'done_at']
-            .contains(key)) {
-          throw ArgumentError('未知或不可分页的排序键: $key');
-        }
-        final desc = key == 'manual' ? false : _taskSortDesc(key, filter.sortDir);
-        final dir = desc ? 'desc' : 'asc';
-        // 换档即作废：旧游标返回空页（UI 快速切档的竞态自愈）
-        if (cursor != null && (cursor.sortKey != key || cursor.dir != dir)) {
-          return const TodoTaskPage(items: [], nextCursor: null, hasMore: false);
-        }
-        final size = limit.clamp(1, 1000);
-        final sorted = _taskRows(filter)
-          ..sort((a, b) => _compareTasks(a, b, key, desc));
-        final rest = cursor == null
-            ? sorted
-            : sorted.where((t) => _isAfterCursor(t, key, desc, cursor)).toList();
-        final page = rest.take(size).toList();
-        final hasMore = rest.length > size;
-        final prune = filter.keyword?.trim().isEmpty ?? true;
-        return TodoTaskPage(
-          items: page
-              .map((t) => TodoTask.fromListJson(_listRow(t, prune)))
-              .toList(),
-          nextCursor: hasMore && page.isNotEmpty
-              ? _cursorOf(page.last, key, dir)
-              : null,
-          hasMore: hasMore,
-        );
-      });
+  ) => _delay(() {
+    final key = filter.sortKey ?? 'manual';
+    if (!const [
+      'manual',
+      'due',
+      'priority',
+      'created',
+      'done_at',
+    ].contains(key)) {
+      throw ArgumentError('未知或不可分页的排序键: $key');
+    }
+    final desc = key == 'manual' ? false : _taskSortDesc(key, filter.sortDir);
+    final dir = desc ? 'desc' : 'asc';
+    // 换档即作废：旧游标返回空页（UI 快速切档的竞态自愈）
+    if (cursor != null && (cursor.sortKey != key || cursor.dir != dir)) {
+      return const TodoTaskPage(items: [], nextCursor: null, hasMore: false);
+    }
+    final size = limit.clamp(1, 1000);
+    final sorted = _taskRows(filter)
+      ..sort((a, b) => _compareTasks(a, b, key, desc));
+    final rest = cursor == null
+        ? sorted
+        : sorted.where((t) => _isAfterCursor(t, key, desc, cursor)).toList();
+    final page = rest.take(size).toList();
+    final hasMore = rest.length > size;
+    final prune = filter.keyword?.trim().isEmpty ?? true;
+    return TodoTaskPage(
+      items: page
+          .map((t) => TodoTask.fromListJson(_listRow(t, prune)))
+          .toList(),
+      nextCursor: hasMore && page.isNotEmpty
+          ? _cursorOf(page.last, key, dir)
+          : null,
+      hasMore: hasMore,
+    );
+  });
 
   @override
   Future<TodoTaskOverview> todoTaskOverview(ListFilter filter) => _delay(() {
-        final total = _taskRows(filter).length;
-        final archived = store.projects.values
-            .where((p) => p['is_archived'] == 1 && p['is_deleted'] == 0)
-            .map((p) => p['id'])
-            .toSet();
-        final buckets = <int?, int>{};
-        for (final t in store.tasks.values) {
-          if (t['is_deleted'] != 0 || t['done'] == 1) continue;
-          final pid = t['project_id'] as int?;
-          if (pid != null && archived.contains(pid)) continue;
-          buckets[pid] = (buckets[pid] ?? 0) + 1;
-        }
-        return TodoTaskOverview(
-          total: total,
-          undoneByProject: buckets.entries
-              .map((e) => TodoProjectUndone(projectId: e.key, count: e.value))
-              .toList(),
-        );
-      });
+    final total = _taskRows(filter).length;
+    final archived = store.projects.values
+        .where((p) => p['is_archived'] == 1 && p['is_deleted'] == 0)
+        .map((p) => p['id'])
+        .toSet();
+    final buckets = <int?, int>{};
+    for (final t in store.tasks.values) {
+      if (t['is_deleted'] != 0 || t['done'] == 1) continue;
+      final pid = t['project_id'] as int?;
+      if (pid != null && archived.contains(pid)) continue;
+      buckets[pid] = (buckets[pid] ?? 0) + 1;
+    }
+    return TodoTaskOverview(
+      total: total,
+      undoneByProject: buckets.entries
+          .map((e) => TodoProjectUndone(projectId: e.key, count: e.value))
+          .toList(),
+    );
+  });
 
   /// 看板/四象限窗口（与 core `task_board` 同口径）：
   /// 组键逐字一致，`quadrant` 追加 done=0（不覆盖调用方 done 谓词）。
@@ -899,38 +942,37 @@ class MockOrbitBridge implements OrbitBridge {
     int limitPerGroup,
     int dayStart,
     int dayEnd,
-  ) =>
-      _delay(() {
-        var rows = _taskRows(filter);
-        if (groupBy == TodoBoardGroupBy.quadrant) {
-          rows = rows.where((t) => t['done'] != 1).toList();
-        }
-        final key = filter.sortKey ?? 'manual';
-        final desc = _taskSortDesc(key, filter.sortDir);
-        rows.sort((a, b) => _compareTasks(a, b, key, desc));
-        final grouped = <String, List<Map<String, dynamic>>>{};
-        for (final t in rows) {
-          final k = _boardKey(groupBy, t, dayStart, dayEnd);
-          (grouped[k] ??= []).add(t);
-        }
-        final keys = grouped.keys.toList()..sort();
-        final prune = filter.keyword?.trim().isEmpty ?? true;
-        final limit = limitPerGroup.clamp(1, 200);
-        return TodoTaskBoardResult(
-          total: rows.length,
-          groups: [
-            for (final k in keys)
-              TodoTaskBoardGroup(
-                key: k,
-                total: grouped[k]!.length,
-                items: grouped[k]!
-                    .take(limit)
-                    .map((t) => TodoTask.fromListJson(_listRow(t, prune)))
-                    .toList(),
-              ),
-          ],
-        );
-      });
+  ) => _delay(() {
+    var rows = _taskRows(filter);
+    if (groupBy == TodoBoardGroupBy.quadrant) {
+      rows = rows.where((t) => t['done'] != 1).toList();
+    }
+    final key = filter.sortKey ?? 'manual';
+    final desc = _taskSortDesc(key, filter.sortDir);
+    rows.sort((a, b) => _compareTasks(a, b, key, desc));
+    final grouped = <String, List<Map<String, dynamic>>>{};
+    for (final t in rows) {
+      final k = _boardKey(groupBy, t, dayStart, dayEnd);
+      (grouped[k] ??= []).add(t);
+    }
+    final keys = grouped.keys.toList()..sort();
+    final prune = filter.keyword?.trim().isEmpty ?? true;
+    final limit = limitPerGroup.clamp(1, 200);
+    return TodoTaskBoardResult(
+      total: rows.length,
+      groups: [
+        for (final k in keys)
+          TodoTaskBoardGroup(
+            key: k,
+            total: grouped[k]!.length,
+            items: grouped[k]!
+                .take(limit)
+                .map((t) => TodoTask.fromListJson(_listRow(t, prune)))
+                .toList(),
+          ),
+      ],
+    );
+  });
 
   /// 看板组键（与 core `board_group_expr` 逐字一致）
   static String _boardKey(
@@ -973,185 +1015,118 @@ class MockOrbitBridge implements OrbitBridge {
 
   @override
   Future<TodoTask> todoTaskCreate(TodoTaskCreateInput input) => _delay(() {
-        final t = {
-          ...store.newEntity('t'),
-          'title': input.title,
-          'description': input.description,
-          'project_id': input.projectId,
-          'priority': input.priority ?? 0,
-          'status': input.status ?? 'pending',
-          'done': input.done ?? 0,
-          'done_at': input.doneAt,
-          'due_date': input.dueDate,
-          'start_date': input.startDate,
-          'repeat_after': input.repeatAfter ?? 1,
-          'repeat_mode': input.repeatMode ?? 0,
-          'repeat_weekdays': input.repeatWeekdays ?? 0,
-          'repeat_end_type': input.repeatEndType ?? 0,
-          'repeat_end_param': input.repeatEndParam ?? 0,
-          'repeat_from_done': input.repeatFromDone ?? 0,
-          'repeat_month_mode': input.repeatMonthMode ?? 0,
-          'repeat_nth_week': input.repeatNthWeek ?? 0,
-          'percent_done': 0,
-          'position': input.position ??
-              store.tasks.values
-                  .where((e) => e['project_id'] == input.projectId)
-                  .length,
-          'is_favorite': input.isFavorite ?? 0,
-          'my_day_date': input.myDayDate,
-          'duration_minutes': input.durationMinutes,
-          'is_deleted': 0,
-          'created_at': store.now(),
-          'updated_at': store.now(),
-          'deleted_at': null,
-          'version': 1,
-        };
-        store.tasks[t['id'] as int] = t;
-        _emit('todo_tasks');
-        return TodoTask.fromJson(t);
-      });
+    final t = {
+      ...store.newEntity('t'),
+      'title': input.title,
+      'description': input.description,
+      'project_id': input.projectId,
+      'priority': input.priority ?? 0,
+      'status': input.status ?? 'pending',
+      'done': input.done ?? 0,
+      'done_at': input.doneAt,
+      'due_date': input.dueDate,
+      'start_date': input.startDate,
+      'repeat_after': input.repeatAfter ?? 1,
+      'repeat_mode': input.repeatMode ?? 0,
+      'repeat_weekdays': input.repeatWeekdays ?? 0,
+      'repeat_end_type': input.repeatEndType ?? 0,
+      'repeat_end_param': input.repeatEndParam ?? 0,
+      'repeat_from_done': input.repeatFromDone ?? 0,
+      'repeat_month_mode': input.repeatMonthMode ?? 0,
+      'repeat_nth_week': input.repeatNthWeek ?? 0,
+      'percent_done': 0,
+      'position':
+          input.position ??
+          store.tasks.values
+              .where((e) => e['project_id'] == input.projectId)
+              .length,
+      'is_favorite': input.isFavorite ?? 0,
+      'my_day_date': input.myDayDate,
+      'duration_minutes': input.durationMinutes,
+      'is_deleted': 0,
+      'created_at': store.now(),
+      'updated_at': store.now(),
+      'deleted_at': null,
+      'version': 1,
+    };
+    store.tasks[t['id'] as int] = t;
+    _emit('todo_tasks');
+    return TodoTask.fromJson(t);
+  });
 
   @override
   Future<TodoTask> todoTaskUpdate(int id, String patchJson) => _delay(() {
-        final t = store.tasks[id] ?? _notFound('task $id');
-        store.mergePatch(t, patchJson);
-        _emit('todo_tasks');
-        return TodoTask.fromJson(t);
-      });
-
+    final t = store.tasks[id] ?? _notFound('task $id');
+    store.mergePatch(t, patchJson);
+    _emit('todo_tasks');
+    return TodoTask.fromJson(t);
+  });
 
   @override
   Future<CompleteTaskResult> todoTaskComplete(int id) => _delay(() {
-        // 对齐 Rust complete_todo_task：普通任务标记完成；重复任务
-        // （repeat_mode>0 且有 due_date）克隆下一实例（due 按天/周步进、
-        // 子任务复制标题、不复制提醒）再标记本实例；已完成任务幂等跳过
-        final t = store.tasks[id] ?? _notFound('task $id');
-        if (t['is_deleted'] == 1) _notFound('task $id 已在回收站');
-        final now = store.now();
-        final repeatMode = (t['repeat_mode'] as int?) ?? 0;
-        final due = t['due_date'] as int?;
-        final done = (t['done'] as int?) ?? 0;
-        // #34 结束条件：次数型 param<=1 → 序列终结，不再克隆（对齐 Rust）
-        final endType = (t['repeat_end_type'] as int?) ?? 0;
-        final endParam = (t['repeat_end_param'] as int?) ?? 0;
-        final endTerminated = endType == 2 && endParam <= 1;
-        Map<String, Object?>? spawnedNext;
-        if (done == 0 && repeatMode > 0 && due != null && !endTerminated) {
-          final after = ((t['repeat_after'] as int?) ?? 1).clamp(1, 1000);
-          final stepMs = switch (repeatMode) {
-            1 => 86400000 * after,
-            2 => 7 * 86400000 * after,
-            3 => 30 * 86400000 * after, // 月近似（mock 无日历语义）
-            4 => 365 * 86400000 * after, // 年近似
-            _ => null,
-          };
-          if (stepMs != null) {
-            final fromDone = (t['repeat_from_done'] as int?) ?? 0;
-            final int nextDue;
-            if (fromDone == 1) {
-              // when done：完成日锚定 + 一个完整步长（不吃快进）
-              nextDue = now + stepMs;
-            } else {
-              // 默认：锚定原 due 快进到 now 之后最近的序列点
-              var candidate = due + stepMs;
-              var guard = 0;
-              while (candidate <= now && guard++ < 5000) {
-                candidate += stepMs;
-              }
-              nextDue = candidate;
-            }
-            final next = {
-              ...store.newEntity('t'),
-              'title': t['title'],
-              'description': t['description'],
-              'project_id': t['project_id'],
-              'priority': t['priority'],
-              'status': 'pending',
-              'done': 0,
-              'done_at': null,
-              'due_date': nextDue,
-              'start_date': t['start_date'] != null
-                  ? (t['start_date'] as int) + (nextDue - due)
-                  : null,
-              'repeat_after': t['repeat_after'],
-              'repeat_mode': repeatMode,
-              'repeat_weekdays': t['repeat_weekdays'],
-              'repeat_end_type': t['repeat_end_type'],
-              'repeat_end_param': t['repeat_end_type'] == 2
-                  ? ((t['repeat_end_param'] as int?) ?? 0) - 1
-                  : t['repeat_end_param'],
-              'repeat_from_done': t['repeat_from_done'],
-              'repeat_month_mode': t['repeat_month_mode'],
-              'repeat_nth_week': t['repeat_nth_week'],
-              'percent_done': 0,
-              'position': 100000,
-              'is_favorite': t['is_favorite'],
-              'my_day_date': null,
-              'duration_minutes': t['duration_minutes'],
-              'is_deleted': 0,
-              'created_at': now,
-              'updated_at': now,
-              'deleted_at': null,
-              'version': 1,
-            };
-            store.tasks[next['id'] as int] = next;
-            spawnedNext = next;
-            for (final s in store.subtasksOf(id)) {
-              final clone = {
-                ...store.newEntity('s'),
-                'task_id': next['id'],
-                'title': s['title'],
-                'done': 0,
-                'done_at': null,
-                'position': s['position'],
-                'is_deleted': 0,
-                'created_at': now,
-                'updated_at': now,
-                'deleted_at': null,
-                'version': 1,
-              };
-              store.subtasks[clone['id'] as int] = clone;
-            }
-            _emit('todo_subtasks');
+    // 对齐 Rust complete_todo_task：普通任务标记完成；重复任务
+    // （repeat_mode>0 且有 due_date）克隆下一实例（due 按天/周步进、
+    // 子任务复制标题、不复制提醒）再标记本实例；已完成任务幂等跳过
+    final t = store.tasks[id] ?? _notFound('task $id');
+    if (t['is_deleted'] == 1) _notFound('task $id 已在回收站');
+    final now = store.now();
+    final repeatMode = (t['repeat_mode'] as int?) ?? 0;
+    final due = t['due_date'] as int?;
+    final done = (t['done'] as int?) ?? 0;
+    // #34 结束条件：次数型 param<=1 → 序列终结，不再克隆（对齐 Rust）
+    final endType = (t['repeat_end_type'] as int?) ?? 0;
+    final endParam = (t['repeat_end_param'] as int?) ?? 0;
+    final endTerminated = endType == 2 && endParam <= 1;
+    Map<String, Object?>? spawnedNext;
+    if (done == 0 && repeatMode > 0 && due != null && !endTerminated) {
+      final after = ((t['repeat_after'] as int?) ?? 1).clamp(1, 1000);
+      final stepMs = switch (repeatMode) {
+        1 => 86400000 * after,
+        2 => 7 * 86400000 * after,
+        3 => 30 * 86400000 * after, // 月近似（mock 无日历语义）
+        4 => 365 * 86400000 * after, // 年近似
+        _ => null,
+      };
+      if (stepMs != null) {
+        final fromDone = (t['repeat_from_done'] as int?) ?? 0;
+        final int nextDue;
+        if (fromDone == 1) {
+          // when done：完成日锚定 + 一个完整步长（不吃快进）
+          nextDue = now + stepMs;
+        } else {
+          // 默认：锚定原 due 快进到 now 之后最近的序列点
+          var candidate = due + stepMs;
+          var guard = 0;
+          while (candidate <= now && guard++ < 5000) {
+            candidate += stepMs;
           }
+          nextDue = candidate;
         }
-        t['done'] = 1;
-        t['done_at'] = now;
-        t['status'] = 'done';
-        t['updated_at'] = now;
-        t['version'] = ((t['version'] as int?) ?? 1) + 1;
-        _emit('todo_tasks');
-        return CompleteTaskResult(
-          task: TodoTask.fromJson(t),
-          nextInstance: spawnedNext == null ? null : TodoTask.fromJson(spawnedNext),
-        );
-      });
-
-  @override
-  Future<TodoTask> todoTaskDuplicate(int id) => _delay(() {
-        final t = store.tasks[id] ?? _notFound('task $id');
-        final now = store.now();
-        final copy = {
+        final next = {
           ...store.newEntity('t'),
-          'title': '${t['title']}（副本）',
+          'title': t['title'],
           'description': t['description'],
           'project_id': t['project_id'],
           'priority': t['priority'],
           'status': 'pending',
           'done': 0,
           'done_at': null,
-          'due_date': t['due_date'],
-          'start_date': t['start_date'],
+          'due_date': nextDue,
+          'start_date': t['start_date'] != null
+              ? (t['start_date'] as int) + (nextDue - due)
+              : null,
           'repeat_after': t['repeat_after'],
-          'repeat_mode': t['repeat_mode'],
+          'repeat_mode': repeatMode,
           'repeat_weekdays': t['repeat_weekdays'],
           'repeat_end_type': t['repeat_end_type'],
-          'repeat_end_param': t['repeat_end_param'],
+          'repeat_end_param': t['repeat_end_type'] == 2
+              ? ((t['repeat_end_param'] as int?) ?? 0) - 1
+              : t['repeat_end_param'],
           'repeat_from_done': t['repeat_from_done'],
           'repeat_month_mode': t['repeat_month_mode'],
           'repeat_nth_week': t['repeat_nth_week'],
           'percent_done': 0,
-          'position': (t['position'] as num) + 1.0,
+          'position': 100000,
           'is_favorite': t['is_favorite'],
           'my_day_date': null,
           'duration_minutes': t['duration_minutes'],
@@ -1161,12 +1136,12 @@ class MockOrbitBridge implements OrbitBridge {
           'deleted_at': null,
           'version': 1,
         };
-        store.tasks[copy['id'] as int] = copy;
-        // 子任务复制标题（完成态重置）
+        store.tasks[next['id'] as int] = next;
+        spawnedNext = next;
         for (final s in store.subtasksOf(id)) {
-          store.subtasks[store.id] = {
+          final clone = {
             ...store.newEntity('s'),
-            'task_id': copy['id'],
+            'task_id': next['id'],
             'title': s['title'],
             'done': 0,
             'done_at': null,
@@ -1177,124 +1152,192 @@ class MockOrbitBridge implements OrbitBridge {
             'deleted_at': null,
             'version': 1,
           };
+          store.subtasks[clone['id'] as int] = clone;
         }
-        _emit('todo_tasks');
-        return TodoTask.fromJson(copy);
-      });
+        _emit('todo_subtasks');
+      }
+    }
+    t['done'] = 1;
+    t['done_at'] = now;
+    t['status'] = 'done';
+    t['updated_at'] = now;
+    t['version'] = ((t['version'] as int?) ?? 1) + 1;
+    _emit('todo_tasks');
+    return CompleteTaskResult(
+      task: TodoTask.fromJson(t),
+      nextInstance: spawnedNext == null ? null : TodoTask.fromJson(spawnedNext),
+    );
+  });
 
-@override
+  @override
+  Future<TodoTask> todoTaskDuplicate(int id) => _delay(() {
+    final t = store.tasks[id] ?? _notFound('task $id');
+    final now = store.now();
+    final copy = {
+      ...store.newEntity('t'),
+      'title': '${t['title']}（副本）',
+      'description': t['description'],
+      'project_id': t['project_id'],
+      'priority': t['priority'],
+      'status': 'pending',
+      'done': 0,
+      'done_at': null,
+      'due_date': t['due_date'],
+      'start_date': t['start_date'],
+      'repeat_after': t['repeat_after'],
+      'repeat_mode': t['repeat_mode'],
+      'repeat_weekdays': t['repeat_weekdays'],
+      'repeat_end_type': t['repeat_end_type'],
+      'repeat_end_param': t['repeat_end_param'],
+      'repeat_from_done': t['repeat_from_done'],
+      'repeat_month_mode': t['repeat_month_mode'],
+      'repeat_nth_week': t['repeat_nth_week'],
+      'percent_done': 0,
+      'position': (t['position'] as num) + 1.0,
+      'is_favorite': t['is_favorite'],
+      'my_day_date': null,
+      'duration_minutes': t['duration_minutes'],
+      'is_deleted': 0,
+      'created_at': now,
+      'updated_at': now,
+      'deleted_at': null,
+      'version': 1,
+    };
+    store.tasks[copy['id'] as int] = copy;
+    // 子任务复制标题（完成态重置）
+    for (final s in store.subtasksOf(id)) {
+      store.subtasks[store.id] = {
+        ...store.newEntity('s'),
+        'task_id': copy['id'],
+        'title': s['title'],
+        'done': 0,
+        'done_at': null,
+        'position': s['position'],
+        'is_deleted': 0,
+        'created_at': now,
+        'updated_at': now,
+        'deleted_at': null,
+        'version': 1,
+      };
+    }
+    _emit('todo_tasks');
+    return TodoTask.fromJson(copy);
+  });
+
+  @override
   Future<void> todoTaskDelete(int id) => _delay(() {
-        // 对齐 Rust 软删语义：墓碑行留在库中（回收站可见），不物理删除
-        final t = store.tasks[id] ?? _notFound('task $id');
-        final now = store.now();
-        t['is_deleted'] = 1;
-        t['deleted_at'] = now;
-        t['updated_at'] = now;
-        t['version'] = (t['version'] as int) + 1;
-        _emit('todo_tasks');
-      });
+    // 对齐 Rust 软删语义：墓碑行留在库中（回收站可见），不物理删除
+    final t = store.tasks[id] ?? _notFound('task $id');
+    final now = store.now();
+    t['is_deleted'] = 1;
+    t['deleted_at'] = now;
+    t['updated_at'] = now;
+    t['version'] = (t['version'] as int) + 1;
+    _emit('todo_tasks');
+  });
 
   @override
   Future<void> todoTaskUpdatePosition(int id, int position) => _delay(() {
-        final t = store.tasks[id];
-        if (t != null) t['position'] = position;
-      });
+    final t = store.tasks[id];
+    if (t != null) t['position'] = position;
+  });
 
   @override
   Future<void> todoTaskRecalcPercent(int taskId) => _delay(() {
-        store.recalcPercent(taskId);
-      });
+    store.recalcPercent(taskId);
+  });
 
   @override
   Future<TodoProject?> todoProjectGetByUuid(String uuid) => _delay(() {
-        for (final p in store.projects.values) {
-          if (p['uuid'] == uuid) return TodoProject.fromJson(p);
-        }
-        return null;
-      });
+    for (final p in store.projects.values) {
+      if (p['uuid'] == uuid) return TodoProject.fromJson(p);
+    }
+    return null;
+  });
 
   @override
   Future<TodoTask?> todoTaskGetByUuid(String uuid) => _delay(() {
-        for (final t in store.tasks.values) {
-          if (t['uuid'] == uuid) return TodoTask.fromJson(t);
-        }
-        return null;
-      });
+    for (final t in store.tasks.values) {
+      if (t['uuid'] == uuid) return TodoTask.fromJson(t);
+    }
+    return null;
+  });
 
   @override
   Future<int> businessCount(String table) => _delay(() {
-        switch (table) {
-          case 'todo_projects':
-            return store.projects.values.where((e) => e['is_deleted'] == 0).length;
-          case 'todo_tasks':
-            return store.tasks.values.where((e) => e['is_deleted'] == 0).length;
-          case 'todo_subtasks':
-            return store.subtasks.values.where((e) => e['is_deleted'] == 0).length;
-          case 'todo_labels':
-            return store.labels.length;
-          default:
-            return 0;
-        }
-      });
+    switch (table) {
+      case 'todo_projects':
+        return store.projects.values.where((e) => e['is_deleted'] == 0).length;
+      case 'todo_tasks':
+        return store.tasks.values.where((e) => e['is_deleted'] == 0).length;
+      case 'todo_subtasks':
+        return store.subtasks.values.where((e) => e['is_deleted'] == 0).length;
+      case 'todo_labels':
+        return store.labels.length;
+      default:
+        return 0;
+    }
+  });
 
   @override
   Future<TodoTaskDetail> todoTaskGetDetail(int id) => _delay(() {
-        final m = store.tasks[id] ?? _notFound('task $id');
-        final base = TodoTask.fromJson(m);
-        final labelMap = store.taskLabels[id] ?? const <int, int>{};
-        return TodoTaskDetail(
-          id: base.id,
-          uuid: base.uuid,
-          title: base.title,
-          description: base.description,
-          projectId: base.projectId,
-          priority: base.priority,
-          status: base.status,
-          done: base.done,
-          doneAt: base.doneAt,
-          dueDate: base.dueDate,
-          startDate: base.startDate,
-          repeatAfter: base.repeatAfter,
-          repeatMode: base.repeatMode,
-          repeatWeekdays: base.repeatWeekdays,
-          repeatEndType: base.repeatEndType,
-          repeatEndParam: base.repeatEndParam,
-          repeatFromDone: base.repeatFromDone,
-          repeatMonthMode: base.repeatMonthMode,
-          repeatNthWeek: base.repeatNthWeek,
-          percentDone: base.percentDone,
-          position: base.position,
-          isFavorite: base.isFavorite,
-          myDayDate: base.myDayDate,
-          durationMinutes: base.durationMinutes,
-          isDeleted: base.isDeleted,
-          createdAt: base.createdAt,
-          updatedAt: base.updatedAt,
-          deletedAt: base.deletedAt,
-          version: base.version,
-          subtasks:
-              store.subtasksOf(id).map(TodoSubtask.fromJson).toList(),
-          labels: [
-            for (final lid in labelMap.keys)
-              _labelWithLink(lid, labelMap[lid]!),
-          ],
-          comments: [
-            for (final c in store.comments.values.where(
-                (c) => c['task_id'] == id && c['is_deleted'] == 0))
-              TodoComment.fromJson(c),
-          ],
-          relations: [
-            for (final r in store.relations.values.where(
-                (r) => r['task_id'] == id && r['is_deleted'] == 0))
-              TodoTaskRelation.fromJson(r),
-          ],
-          reminders: [
-            for (final r in store.reminders.values.where(
-                (r) => r['task_id'] == id && r['is_deleted'] == 0))
-              TodoReminder.fromJson(r),
-          ],
-        );
-      });
+    final m = store.tasks[id] ?? _notFound('task $id');
+    final base = TodoTask.fromJson(m);
+    final labelMap = store.taskLabels[id] ?? const <int, int>{};
+    return TodoTaskDetail(
+      id: base.id,
+      uuid: base.uuid,
+      title: base.title,
+      description: base.description,
+      projectId: base.projectId,
+      priority: base.priority,
+      status: base.status,
+      done: base.done,
+      doneAt: base.doneAt,
+      dueDate: base.dueDate,
+      startDate: base.startDate,
+      repeatAfter: base.repeatAfter,
+      repeatMode: base.repeatMode,
+      repeatWeekdays: base.repeatWeekdays,
+      repeatEndType: base.repeatEndType,
+      repeatEndParam: base.repeatEndParam,
+      repeatFromDone: base.repeatFromDone,
+      repeatMonthMode: base.repeatMonthMode,
+      repeatNthWeek: base.repeatNthWeek,
+      percentDone: base.percentDone,
+      position: base.position,
+      isFavorite: base.isFavorite,
+      myDayDate: base.myDayDate,
+      durationMinutes: base.durationMinutes,
+      isDeleted: base.isDeleted,
+      createdAt: base.createdAt,
+      updatedAt: base.updatedAt,
+      deletedAt: base.deletedAt,
+      version: base.version,
+      subtasks: store.subtasksOf(id).map(TodoSubtask.fromJson).toList(),
+      labels: [
+        for (final lid in labelMap.keys) _labelWithLink(lid, labelMap[lid]!),
+      ],
+      comments: [
+        for (final c in store.comments.values.where(
+          (c) => c['task_id'] == id && c['is_deleted'] == 0,
+        ))
+          TodoComment.fromJson(c),
+      ],
+      relations: [
+        for (final r in store.relations.values.where(
+          (r) => r['task_id'] == id && r['is_deleted'] == 0,
+        ))
+          TodoTaskRelation.fromJson(r),
+      ],
+      reminders: [
+        for (final r in store.reminders.values.where(
+          (r) => r['task_id'] == id && r['is_deleted'] == 0,
+        ))
+          TodoReminder.fromJson(r),
+      ],
+    );
+  });
 
   TaskLabelWithId _labelWithLink(int labelId, int linkId) {
     final l = store.labels[labelId]!;
@@ -1315,11 +1358,12 @@ class MockOrbitBridge implements OrbitBridge {
   // ── todo_subtasks ──
 
   @override
-  Future<List<TodoSubtask>> todoSubtaskList(ListFilter filter) =>
-      _delay(() => store.subtasks.values
-          .where((s) => s['is_deleted'] == 0)
-          .map(TodoSubtask.fromJson)
-          .toList());
+  Future<List<TodoSubtask>> todoSubtaskList(ListFilter filter) => _delay(
+    () => store.subtasks.values
+        .where((s) => s['is_deleted'] == 0)
+        .map(TodoSubtask.fromJson)
+        .toList(),
+  );
 
   @override
   Future<TodoSubtask> todoSubtaskCreate(TodoSubtaskCreateInput input) =>
@@ -1330,8 +1374,9 @@ class MockOrbitBridge implements OrbitBridge {
           'title': input.title,
           'done': 0,
           'done_at': null,
-          'position':
-              store.subtasks.values.where((e) => e['task_id'] == input.taskId).length,
+          'position': store.subtasks.values
+              .where((e) => e['task_id'] == input.taskId)
+              .length,
           'parent_uuid': input.parentUuid, // M10：null = 顶层
           'is_deleted': 0,
           'created_at': store.now(),
@@ -1347,164 +1392,169 @@ class MockOrbitBridge implements OrbitBridge {
 
   @override
   Future<TodoSubtask> todoSubtaskUpdate(int id, String patchJson) => _delay(() {
-        final s = store.subtasks[id] ?? _notFound('subtask $id');
-        store.mergePatch(s, patchJson);
-        store.recalcPercent(s['task_id'] as int);
-        _emit('todo_subtasks');
-        return TodoSubtask.fromJson(s);
-      });
+    final s = store.subtasks[id] ?? _notFound('subtask $id');
+    store.mergePatch(s, patchJson);
+    store.recalcPercent(s['task_id'] as int);
+    _emit('todo_subtasks');
+    return TodoSubtask.fromJson(s);
+  });
 
   @override
   Future<void> todoSubtaskDelete(int id) => _delay(() {
-        final s = store.subtasks[id] ?? _notFound('subtask $id');
-        final now = store.now();
-        // M10：整棵子树软删（对齐 Rust delete_todo_subtask 的 BFS 口径——
-        // 只删目标行会把子孙留成孤儿，双端树构建会把它们回落顶层）
-        final stack = <String?>[s['uuid'] as String];
-        while (stack.isNotEmpty) {
-          final parentUuid = stack.removeLast();
-          for (final row in store.subtasks.values) {
-            if (row['is_deleted'] == 0 && row['parent_uuid'] == parentUuid) {
-              row['is_deleted'] = 1;
-              row['deleted_at'] = now;
-              row['updated_at'] = now;
-              stack.add(row['uuid'] as String);
-            }
-          }
+    final s = store.subtasks[id] ?? _notFound('subtask $id');
+    final now = store.now();
+    // M10：整棵子树软删（对齐 Rust delete_todo_subtask 的 BFS 口径——
+    // 只删目标行会把子孙留成孤儿，双端树构建会把它们回落顶层）
+    final stack = <String?>[s['uuid'] as String];
+    while (stack.isNotEmpty) {
+      final parentUuid = stack.removeLast();
+      for (final row in store.subtasks.values) {
+        if (row['is_deleted'] == 0 && row['parent_uuid'] == parentUuid) {
+          row['is_deleted'] = 1;
+          row['deleted_at'] = now;
+          row['updated_at'] = now;
+          stack.add(row['uuid'] as String);
         }
-        s['is_deleted'] = 1;
-        s['deleted_at'] = now;
-        s['updated_at'] = now;
-        store.recalcPercent(s['task_id'] as int);
-        _emit('todo_subtasks');
-      });
+      }
+    }
+    s['is_deleted'] = 1;
+    s['deleted_at'] = now;
+    s['updated_at'] = now;
+    store.recalcPercent(s['task_id'] as int);
+    _emit('todo_subtasks');
+  });
 
   @override
   Future<void> todoSubtaskToggleDone(int subtaskId, bool done) => _delay(() {
-        final s = store.subtasks[subtaskId] ?? _notFound('subtask $subtaskId');
-        s['done'] = done ? 1 : 0;
-        s['done_at'] = done ? store.now() : null;
-        store.recalcPercent(s['task_id'] as int);
-        _emit('todo_subtasks');
-      });
+    final s = store.subtasks[subtaskId] ?? _notFound('subtask $subtaskId');
+    s['done'] = done ? 1 : 0;
+    s['done_at'] = done ? store.now() : null;
+    store.recalcPercent(s['task_id'] as int);
+    _emit('todo_subtasks');
+  });
 
   @override
   Future<TodoTask> todoSubtaskPromote(int subtaskId) => _delay(() {
-        // 对齐 Rust promote_todo_subtask：软删行 + 承接父任务 project/
-        // priority/due 建尾位新任务 + percent 重算
-        final s = store.subtasks[subtaskId] ?? _notFound('subtask $subtaskId');
-        final parent = store.tasks[s['task_id'] as int] ??
-            _notFound('task ${s['task_id']}');
-        final now = store.now();
-        s['is_deleted'] = 1;
-        s['deleted_at'] = now;
-        s['updated_at'] = now;
-        final sibling = store.tasks.values.where((t) =>
-            t['is_deleted'] == 0 &&
-            (t['project_id'] as int?) == (parent['project_id'] as int?));
-        final maxPos = sibling.fold<double>(
-            -1.0, (m, t) => (t['position'] as num?) != null
-                ? ((t['position'] as num).toDouble() > m
-                    ? (t['position'] as num).toDouble()
-                    : m)
-                : m);
-        final t = {
-          ...store.newEntity('t'),
-          'title': s['title'],
-          'description': null,
-          'project_id': parent['project_id'],
-          'priority': parent['priority'],
-          'status': s['done'] == 1 ? 'done' : 'pending',
-          'done': s['done'],
-          'done_at': s['done_at'],
-          'due_date': parent['due_date'],
-          'start_date': parent['start_date'],
-          'repeat_after': 0,
-          'repeat_mode': 0,
-          'repeat_weekdays': 0,
-          'repeat_end_type': 0,
-          'repeat_end_param': 0,
-          'repeat_from_done': 0,
-          'repeat_month_mode': 0,
-          'repeat_nth_week': 0,
-          'percent_done': 0,
-          'position': maxPos + 1,
-          'is_favorite': 0,
-          'my_day_date': null,
-          'duration_minutes': null,
-          'is_deleted': 0,
-          'created_at': now,
-          'updated_at': now,
-          'deleted_at': null,
-          'version': 1,
-        };
-        store.tasks[t['id'] as int] = t;
-        // M10：子孙整棵随迁（task_id 改挂新任务；直接子女 parent_uuid 置
-        // null 提顶层——源行已软删，深层父链接保持 uuid 不变）
-        final carryStack = <String?>[s['uuid'] as String];
-        while (carryStack.isNotEmpty) {
-          final parentUuid = carryStack.removeLast();
-          for (final row in store.subtasks.values) {
-            if (row['is_deleted'] == 0 && row['parent_uuid'] == parentUuid) {
-              row['task_id'] = t['id'];
-              row['parent_uuid'] =
-                  parentUuid == s['uuid'] ? null : row['parent_uuid'];
-              row['updated_at'] = now;
-              carryStack.add(row['uuid'] as String);
-            }
-          }
+    // 对齐 Rust promote_todo_subtask：软删行 + 承接父任务 project/
+    // priority/due 建尾位新任务 + percent 重算
+    final s = store.subtasks[subtaskId] ?? _notFound('subtask $subtaskId');
+    final parent =
+        store.tasks[s['task_id'] as int] ?? _notFound('task ${s['task_id']}');
+    final now = store.now();
+    s['is_deleted'] = 1;
+    s['deleted_at'] = now;
+    s['updated_at'] = now;
+    final sibling = store.tasks.values.where(
+      (t) =>
+          t['is_deleted'] == 0 &&
+          (t['project_id'] as int?) == (parent['project_id'] as int?),
+    );
+    final maxPos = sibling.fold<double>(
+      -1.0,
+      (m, t) => (t['position'] as num?) != null
+          ? ((t['position'] as num).toDouble() > m
+                ? (t['position'] as num).toDouble()
+                : m)
+          : m,
+    );
+    final t = {
+      ...store.newEntity('t'),
+      'title': s['title'],
+      'description': null,
+      'project_id': parent['project_id'],
+      'priority': parent['priority'],
+      'status': s['done'] == 1 ? 'done' : 'pending',
+      'done': s['done'],
+      'done_at': s['done_at'],
+      'due_date': parent['due_date'],
+      'start_date': parent['start_date'],
+      'repeat_after': 0,
+      'repeat_mode': 0,
+      'repeat_weekdays': 0,
+      'repeat_end_type': 0,
+      'repeat_end_param': 0,
+      'repeat_from_done': 0,
+      'repeat_month_mode': 0,
+      'repeat_nth_week': 0,
+      'percent_done': 0,
+      'position': maxPos + 1,
+      'is_favorite': 0,
+      'my_day_date': null,
+      'duration_minutes': null,
+      'is_deleted': 0,
+      'created_at': now,
+      'updated_at': now,
+      'deleted_at': null,
+      'version': 1,
+    };
+    store.tasks[t['id'] as int] = t;
+    // M10：子孙整棵随迁（task_id 改挂新任务；直接子女 parent_uuid 置
+    // null 提顶层——源行已软删，深层父链接保持 uuid 不变）
+    final carryStack = <String?>[s['uuid'] as String];
+    while (carryStack.isNotEmpty) {
+      final parentUuid = carryStack.removeLast();
+      for (final row in store.subtasks.values) {
+        if (row['is_deleted'] == 0 && row['parent_uuid'] == parentUuid) {
+          row['task_id'] = t['id'];
+          row['parent_uuid'] = parentUuid == s['uuid']
+              ? null
+              : row['parent_uuid'];
+          row['updated_at'] = now;
+          carryStack.add(row['uuid'] as String);
         }
-        store.recalcPercent(parent['id'] as int);
-        store.recalcPercent(t['id'] as int);
-        _emit('todo_subtasks');
-        _emit('todo_tasks');
-        return TodoTask.fromJson(t);
-      });
+      }
+    }
+    store.recalcPercent(parent['id'] as int);
+    store.recalcPercent(t['id'] as int);
+    _emit('todo_subtasks');
+    _emit('todo_tasks');
+    return TodoTask.fromJson(t);
+  });
 
   // ── todo_labels / task_labels ──
 
   @override
-  Future<List<TodoLabel>> todoLabelList(ListFilter filter) => _delay(
-      () => store.labels.values.map(TodoLabel.fromJson).toList());
+  Future<List<TodoLabel>> todoLabelList(ListFilter filter) =>
+      _delay(() => store.labels.values.map(TodoLabel.fromJson).toList());
 
   @override
-  Future<TodoLabel> todoLabelGet(int id) =>
-      _delay(() => TodoLabel.fromJson(store.labels[id] ?? _notFound('label $id')));
+  Future<TodoLabel> todoLabelGet(int id) => _delay(
+    () => TodoLabel.fromJson(store.labels[id] ?? _notFound('label $id')),
+  );
 
   @override
   Future<TodoLabel> todoLabelCreate(TodoLabelCreateInput input) => _delay(() {
-        final l = {
-          ...store.newEntity('l'),
-          'title': input.title,
-          'hex_color': input.hexColor ?? '#4E8CFF',
-          'is_deleted': 0,
-          'created_at': store.now(),
-          'updated_at': store.now(),
-          'deleted_at': null,
-          'version': 1,
-        };
-        store.labels[l['id'] as int] = l;
-        _emit('todo_labels');
-        return TodoLabel.fromJson(l);
-      });
+    final l = {
+      ...store.newEntity('l'),
+      'title': input.title,
+      'hex_color': input.hexColor ?? '#4E8CFF',
+      'is_deleted': 0,
+      'created_at': store.now(),
+      'updated_at': store.now(),
+      'deleted_at': null,
+      'version': 1,
+    };
+    store.labels[l['id'] as int] = l;
+    _emit('todo_labels');
+    return TodoLabel.fromJson(l);
+  });
 
   @override
   Future<TodoLabel> todoLabelUpdate(int id, String patchJson) => _delay(() {
-        final l = store.labels[id] ?? _notFound('label $id');
-        store.mergePatch(l, patchJson);
-        _emit('todo_labels');
-        return TodoLabel.fromJson(l);
-      });
+    final l = store.labels[id] ?? _notFound('label $id');
+    store.mergePatch(l, patchJson);
+    _emit('todo_labels');
+    return TodoLabel.fromJson(l);
+  });
 
   @override
   Future<void> todoLabelDelete(int id) => _delay(() {
-        store.labels.remove(id);
-        _emit('todo_labels');
-      });
+    store.labels.remove(id);
+    _emit('todo_labels');
+  });
 
   @override
-  Future<TaskLabelWithId> todoTaskLabelCreate(
-          TodoTaskLabelCreateInput input) =>
+  Future<TaskLabelWithId> todoTaskLabelCreate(TodoTaskLabelCreateInput input) =>
       _delay(() {
         if (!store.labels.containsKey(input.labelId)) {
           _notFound('label ${input.labelId}');
@@ -1517,21 +1567,21 @@ class MockOrbitBridge implements OrbitBridge {
 
   @override
   Future<TaskLabelWithId> todoTaskLabelGet(int id) => _delay(() {
-        for (final entry in store.taskLabels.entries) {
-          for (final link in entry.value.entries) {
-            if (link.value == id) return _labelWithLink(link.key, id);
-          }
-        }
-        _notFound('task_label $id');
-      });
+    for (final entry in store.taskLabels.entries) {
+      for (final link in entry.value.entries) {
+        if (link.value == id) return _labelWithLink(link.key, id);
+      }
+    }
+    _notFound('task_label $id');
+  });
 
   @override
   Future<void> todoTaskLabelDelete(int taskLabelId) => _delay(() {
-        for (final links in store.taskLabels.values) {
-          links.removeWhere((_, v) => v == taskLabelId);
-        }
-        _emit('todo_task_labels');
-      });
+    for (final links in store.taskLabels.values) {
+      links.removeWhere((_, v) => v == taskLabelId);
+    }
+    _emit('todo_task_labels');
+  });
 
   // ── comments ──
 
@@ -1560,48 +1610,49 @@ class MockOrbitBridge implements OrbitBridge {
 
   @override
   Future<void> todoCommentDelete(int id) => _delay(() {
-        store.comments.remove(id);
-        _emit('todo_comments');
-      });
+    store.comments.remove(id);
+    _emit('todo_comments');
+  });
 
   // ── relations ──
 
   @override
   Future<List<TodoTaskRelation>> todoTaskRelationList(ListFilter filter) =>
-      _delay(() =>
-          store.relations.values.map(TodoTaskRelation.fromJson).toList());
+      _delay(
+        () => store.relations.values.map(TodoTaskRelation.fromJson).toList(),
+      );
 
   @override
   Future<TodoTaskRelation> todoTaskRelationCreate(
-          TodoTaskRelationCreateInput input) =>
-      _delay(() {
-        final r = {
-          ...store.newEntity('r'),
-          'task_id': input.taskId,
-          'other_task_id': input.otherTaskId,
-          'relation_type': input.relationType,
-          'is_deleted': 0,
-          'created_at': store.now(),
-          'updated_at': store.now(),
-          'deleted_at': null,
-          'version': 1,
-        };
-        store.relations[r['id'] as int] = r;
-        _emit('todo_task_relations');
-        return TodoTaskRelation.fromJson(r);
-      });
+    TodoTaskRelationCreateInput input,
+  ) => _delay(() {
+    final r = {
+      ...store.newEntity('r'),
+      'task_id': input.taskId,
+      'other_task_id': input.otherTaskId,
+      'relation_type': input.relationType,
+      'is_deleted': 0,
+      'created_at': store.now(),
+      'updated_at': store.now(),
+      'deleted_at': null,
+      'version': 1,
+    };
+    store.relations[r['id'] as int] = r;
+    _emit('todo_task_relations');
+    return TodoTaskRelation.fromJson(r);
+  });
 
   @override
   Future<void> todoTaskRelationDelete(int id) => _delay(() {
-        store.relations.remove(id);
-        _emit('todo_task_relations');
-      });
+    store.relations.remove(id);
+    _emit('todo_task_relations');
+  });
 
   // ── reminders ──
 
   @override
-  Future<List<TodoReminder>> todoReminderList(ListFilter filter) => _delay(
-      () => store.reminders.values.map(TodoReminder.fromJson).toList());
+  Future<List<TodoReminder>> todoReminderList(ListFilter filter) =>
+      _delay(() => store.reminders.values.map(TodoReminder.fromJson).toList());
 
   @override
   Future<TodoReminder> todoReminderCreate(TodoReminderCreateInput input) =>
@@ -1624,81 +1675,97 @@ class MockOrbitBridge implements OrbitBridge {
 
   @override
   Future<void> todoReminderDelete(int id) => _delay(() {
-        store.reminders.remove(id);
-        _emit('todo_reminders');
-      });
+    store.reminders.remove(id);
+    _emit('todo_reminders');
+  });
 
   // ── 任务列表投影聚合（A4，只读：从内存库同口径推导，不 emit 事件）──
 
   @override
   Future<List<TaskLabelsProjection>> taskLabelsProjection() => _delay(() {
-        final groups = <int, List<ProjectedTaskLabel>>{};
-        final taskIds = store.taskLabels.keys.toList()..sort();
-        for (final taskId in taskIds) {
-          final labelIds = store.taskLabels[taskId]!.keys.toList()..sort();
-          for (final labelId in labelIds) {
-            final l = store.labels[labelId];
-            if (l == null || (l['is_deleted'] as int) != 0) continue;
-            (groups[taskId] ??= []).add(ProjectedTaskLabel(
-              id: l['id'] as int,
-              title: l['title'] as String,
-              hexColor: l['hex_color'] as String,
-            ));
-          }
-          if (groups[taskId]?.isEmpty ?? false) groups.remove(taskId);
-        }
-        return groups.entries
-            .map((e) => TaskLabelsProjection(taskId: e.key, labels: e.value))
-            .toList();
-      });
+    final groups = <int, List<ProjectedTaskLabel>>{};
+    final taskIds = store.taskLabels.keys.toList()..sort();
+    for (final taskId in taskIds) {
+      final labelIds = store.taskLabels[taskId]!.keys.toList()..sort();
+      for (final labelId in labelIds) {
+        final l = store.labels[labelId];
+        if (l == null || (l['is_deleted'] as int) != 0) continue;
+        (groups[taskId] ??= []).add(
+          ProjectedTaskLabel(
+            id: l['id'] as int,
+            title: l['title'] as String,
+            hexColor: l['hex_color'] as String,
+          ),
+        );
+      }
+      if (groups[taskId]?.isEmpty ?? false) groups.remove(taskId);
+    }
+    return groups.entries
+        .map((e) => TaskLabelsProjection(taskId: e.key, labels: e.value))
+        .toList();
+  });
 
   @override
   Future<List<TaskRemindersProjection>> taskRemindersProjection() => _delay(() {
-        final groups = <int, List<ProjectedReminder>>{};
-        final rows = store.reminders.values
+    final groups = <int, List<ProjectedReminder>>{};
+    final rows =
+        store.reminders.values
             .where((r) => (r['is_deleted'] as int) == 0)
             .toList()
           ..sort((a, b) {
             final t = (a['task_id'] as int).compareTo(b['task_id'] as int);
-            return t != 0 ? t : (a['remind_at'] as int).compareTo(b['remind_at'] as int);
+            return t != 0
+                ? t
+                : (a['remind_at'] as int).compareTo(b['remind_at'] as int);
           });
-        for (final r in rows) {
-          (groups[r['task_id'] as int] ??= []).add(ProjectedReminder(
-            id: r['id'] as int,
-            remindAt: r['remind_at'] as int,
-          ));
-        }
-        return groups.entries
-            .map((e) => TaskRemindersProjection(taskId: e.key, reminders: e.value))
-            .toList();
-      });
+    for (final r in rows) {
+      (groups[r['task_id'] as int] ??= []).add(
+        ProjectedReminder(id: r['id'] as int, remindAt: r['remind_at'] as int),
+      );
+    }
+    return groups.entries
+        .map((e) => TaskRemindersProjection(taskId: e.key, reminders: e.value))
+        .toList();
+  });
 
   @override
   Future<List<TaskDependencyFlags>> taskDependencyFlags() => _delay(() {
-        final counts = <int, int>{};
-        for (final r in store.relations.values) {
-          if ((r['is_deleted'] as int) != 0) continue;
-          final taskId = r['task_id'] as int;
-          counts[taskId] = (counts[taskId] ?? 0) + 1;
-        }
-        final ids = counts.keys.toList()..sort();
-        return ids
-            .map((taskId) =>
-                TaskDependencyFlags(taskId: taskId, relationCount: counts[taskId]!))
-            .toList();
-      });
+    final counts = <int, int>{};
+    for (final r in store.relations.values) {
+      if ((r['is_deleted'] as int) != 0) continue;
+      final taskId = r['task_id'] as int;
+      counts[taskId] = (counts[taskId] ?? 0) + 1;
+    }
+    final ids = counts.keys.toList()..sort();
+    return ids
+        .map(
+          (taskId) => TaskDependencyFlags(
+            taskId: taskId,
+            relationCount: counts[taskId]!,
+          ),
+        )
+        .toList();
+  });
 
   // ── 任务附件（内容寻址；与桌面 ipc-mock 同构语义）──
 
   @override
   Future<TaskAttachmentView> taskAttachmentAdd(
-      int taskId, String fileName, String mimeType, List<int> data) {
+    int taskId,
+    String fileName,
+    String mimeType,
+    List<int> data,
+  ) {
     return _delay(() => _addAttachment(taskId, fileName, mimeType, data));
   }
 
   @override
   Future<TaskAttachmentView> taskAttachmentAddPath(
-      int taskId, String fileName, String mimeType, String sourcePath) {
+    int taskId,
+    String fileName,
+    String mimeType,
+    String sourcePath,
+  ) {
     return _delay(() {
       final file = File(sourcePath);
       if (!file.existsSync()) throw Exception('读取附件源文件失败');
@@ -1707,7 +1774,11 @@ class MockOrbitBridge implements OrbitBridge {
   }
 
   TaskAttachmentView _addAttachment(
-      int taskId, String fileName, String mimeType, List<int> data) {
+    int taskId,
+    String fileName,
+    String mimeType,
+    List<int> data,
+  ) {
     if (data.isEmpty) throw Exception('附件内容为空');
     if (data.length > 50 * 1024 * 1024) throw Exception('附件超过单文件上限 50MB');
     final task = store.tasks[taskId];
@@ -1742,37 +1813,38 @@ class MockOrbitBridge implements OrbitBridge {
 
   @override
   Future<List<TaskDescriptionFlag>> taskDescriptionFlags() => _delay(() {
-        final rows = store.tasks.values
+    final rows =
+        store.tasks.values
             .where((t) => (t['is_deleted'] as int) == 0)
-            .where((t) =>
-                t['description'] != null &&
-                (t['description'] as String).isNotEmpty)
+            .where(
+              (t) =>
+                  t['description'] != null &&
+                  (t['description'] as String).isNotEmpty,
+            )
             .map((t) => TaskDescriptionFlag(taskId: t['id'] as int))
             .toList()
           ..sort((a, b) => a.taskId.compareTo(b.taskId));
-        return rows;
-      });
+    return rows;
+  });
 
   @override
   Future<List<TaskExistenceFlag>> taskAttachmentFlags() => _delay(() {
-        // mock 附件挂载即记、卸载即删（无软删态），与 core 存活链行同义
-        final ids = <int>{
-          for (final a in store.attachments.values) a['task_id'] as int,
-        }.toList()
-          ..sort();
-        return [for (final id in ids) TaskExistenceFlag(taskId: id)];
-      });
+    // mock 附件挂载即记、卸载即删（无软删态），与 core 存活链行同义
+    final ids = <int>{
+      for (final a in store.attachments.values) a['task_id'] as int,
+    }.toList()..sort();
+    return [for (final id in ids) TaskExistenceFlag(taskId: id)];
+  });
 
   @override
   Future<List<TaskExistenceFlag>> taskOpenSubtaskFlags() => _delay(() {
-        final ids = <int>{
-          for (final s in store.subtasks.values)
-            if ((s['is_deleted'] as int) == 0 && (s['done'] as int) == 0)
-              s['task_id'] as int,
-        }.toList()
-          ..sort();
-        return [for (final id in ids) TaskExistenceFlag(taskId: id)];
-      });
+    final ids = <int>{
+      for (final s in store.subtasks.values)
+        if ((s['is_deleted'] as int) == 0 && (s['done'] as int) == 0)
+          s['task_id'] as int,
+    }.toList()..sort();
+    return [for (final id in ids) TaskExistenceFlag(taskId: id)];
+  });
 
   @override
   Future<List<TaskAttachmentView>> taskAttachmentsList(int taskId) {
@@ -1806,6 +1878,19 @@ class MockOrbitBridge implements OrbitBridge {
     });
   }
 
+  /// mock 卸载附件即物理删除（无独立账本），孤儿恒为空。
+  /// 真实扫描口径（无存活引用 + 本地文件存在）在 core `list_unused_attachments`。
+  @override
+  Future<List<UnusedAttachment>> unusedAttachmentsList() =>
+      _delay(() => const <UnusedAttachment>[]);
+
+  @override
+  Future<int> unusedAttachmentsDelete(List<String> hashes) => _delay(() => 0);
+
+  @override
+  Future<int> exportTaskAttachment(String hash, String targetPath) =>
+      _delay(() => 0);
+
   // ── 云端孤儿附件清理（docs/15）──
   //
   // mock 没有云端后端：内存里的附件都有任务挂载行，云端对象集 = 引用集，
@@ -1814,41 +1899,43 @@ class MockOrbitBridge implements OrbitBridge {
 
   @override
   Future<CloudUnusedScanResult> cloudUnusedAttachmentsScan() => _delay(
-        () => const CloudUnusedScanResult(
-          items: [],
-          epoch: 0,
-          minAgeSecs: 30 * 24 * 3600,
-        ),
-      );
+    () => const CloudUnusedScanResult(
+      items: [],
+      epoch: 0,
+      minAgeSecs: 30 * 24 * 3600,
+    ),
+  );
 
   @override
   Future<CloudUnusedDeleteResult> cloudUnusedAttachmentsDelete({
     required List<String> hashes,
     required int expectedEpoch,
-  }) =>
-      _delay(
-        () => const CloudUnusedDeleteResult(
-          deletedAssets: 0,
-          deletedObjects: 0,
-          skippedReferenced: 0,
-          localRowsCleaned: 0,
-          staleManifest: false,
-          errors: [],
-        ),
-      );
+  }) => _delay(
+    () => const CloudUnusedDeleteResult(
+      deletedAssets: 0,
+      deletedObjects: 0,
+      skippedReferenced: 0,
+      localRowsCleaned: 0,
+      staleManifest: false,
+      errors: [],
+    ),
+  );
 
   // ── 任务活动日志（历史区块；排序/截断口径同桌面 ipc-mock task_activity_list）──
 
   @override
   Future<List<ActivityLogRow>> taskActivityList(int taskId, {int? limit}) {
     return _delay(() {
-      final rows = store.activityLog.values
-          .where((a) => a['task_id'] == taskId)
-          .map(ActivityLogRow.fromJson)
-          .toList()
-        ..sort((a, b) => a.createdAt != b.createdAt
-            ? b.createdAt.compareTo(a.createdAt)
-            : b.id.compareTo(a.id));
+      final rows =
+          store.activityLog.values
+              .where((a) => a['task_id'] == taskId)
+              .map(ActivityLogRow.fromJson)
+              .toList()
+            ..sort(
+              (a, b) => a.createdAt != b.createdAt
+                  ? b.createdAt.compareTo(a.createdAt)
+                  : b.id.compareTo(a.id),
+            );
       return rows.take(limit ?? 30).toList();
     });
   }
@@ -1857,27 +1944,31 @@ class MockOrbitBridge implements OrbitBridge {
 
   @override
   Future<DbMaintenanceResult> dbMaintenance() {
-    return _delay(() => const DbMaintenanceResult(
-          walBytesAfterCheckpoint: 0,
-          attachmentsCleaned: 0,
-          logRowsPruned: 0,
-          freelistBefore: 0,
-          freelistAfter: 0,
-          pagesReclaimed: 0,
-        ));
+    return _delay(
+      () => const DbMaintenanceResult(
+        walBytesAfterCheckpoint: 0,
+        attachmentsCleaned: 0,
+        logRowsPruned: 0,
+        freelistBefore: 0,
+        freelistAfter: 0,
+        pagesReclaimed: 0,
+      ),
+    );
   }
 
   @override
   Future<DbMaintenanceResult> dbMaintenanceRoutine() {
     // 轻维护不做 VACUUM：pages_reclaimed 恒为 0（与真实现同语义）
-    return _delay(() => const DbMaintenanceResult(
-          walBytesAfterCheckpoint: 0,
-          attachmentsCleaned: 0,
-          logRowsPruned: 0,
-          freelistBefore: 0,
-          freelistAfter: 0,
-          pagesReclaimed: 0,
-        ));
+    return _delay(
+      () => const DbMaintenanceResult(
+        walBytesAfterCheckpoint: 0,
+        attachmentsCleaned: 0,
+        logRowsPruned: 0,
+        freelistBefore: 0,
+        freelistAfter: 0,
+        pagesReclaimed: 0,
+      ),
+    );
   }
 
   // ── 保存的筛选器（#35；与桌面 ipc-mock 同构语义）──
@@ -1904,7 +1995,10 @@ class MockOrbitBridge implements OrbitBridge {
 
   @override
   Future<TodoSavedFilter> savedFilterUpdate(
-      int id, String name, String conditions) {
+    int id,
+    String name,
+    String conditions,
+  ) {
     return _delay(() {
       if (name.trim().isEmpty) throw Exception('筛选器名称不能为空');
       final index = store.savedFilters.indexWhere((f) => f.id == id);
@@ -1932,33 +2026,39 @@ class MockOrbitBridge implements OrbitBridge {
 
   @override
   Future<List<SyncConflict>> syncConflictList(
-      String? resolution, int limit, int offset) {
+    String? resolution,
+    int limit,
+    int offset,
+  ) {
     return _delay(() {
-      final rows = store.conflicts
-          .where((c) => resolution == null || c['resolution'] == resolution)
-          .toList()
-        ..sort((a, b) =>
-            (b['created_at'] as int).compareTo(a['created_at'] as int));
-      return rows
-          .skip(offset)
-          .take(limit)
-          .map(_toSyncConflict)
-          .toList();
+      final rows =
+          store.conflicts
+              .where((c) => resolution == null || c['resolution'] == resolution)
+              .toList()
+            ..sort(
+              (a, b) =>
+                  (b['created_at'] as int).compareTo(a['created_at'] as int),
+            );
+      return rows.skip(offset).take(limit).map(_toSyncConflict).toList();
     });
   }
 
   @override
   Future<int> syncConflictCount(String? resolution) {
-    return _delay(() => store.conflicts
-        .where((c) => resolution == null || c['resolution'] == resolution)
-        .length);
+    return _delay(
+      () => store.conflicts
+          .where((c) => resolution == null || c['resolution'] == resolution)
+          .length,
+    );
   }
 
   @override
   Future<int> syncConflictRestore(int id) {
     return _delay(() {
-      final row = store.conflicts.firstWhere((c) => c['id'] == id,
-          orElse: () => throw Exception('冲突记录 $id 不存在'));
+      final row = store.conflicts.firstWhere(
+        (c) => c['id'] == id,
+        orElse: () => throw Exception('冲突记录 $id 不存在'),
+      );
       row['resolution'] = 'restored';
       row['resolved_at'] = store.now();
       return row['id'] as int;
@@ -1968,8 +2068,10 @@ class MockOrbitBridge implements OrbitBridge {
   @override
   Future<void> syncConflictDismiss(int id) {
     return _delay(() {
-      final row = store.conflicts.firstWhere((c) => c['id'] == id,
-          orElse: () => throw Exception('冲突记录 $id 不存在'));
+      final row = store.conflicts.firstWhere(
+        (c) => c['id'] == id,
+        orElse: () => throw Exception('冲突记录 $id 不存在'),
+      );
       row['resolution'] = 'dismissed';
       row['resolved_at'] = store.now();
     });
@@ -1989,21 +2091,21 @@ class MockOrbitBridge implements OrbitBridge {
   }
 
   SyncConflict _toSyncConflict(Map<String, dynamic> c) => SyncConflict(
-        id: c['id'] as int,
-        tableName: c['table_name'] as String,
-        recordUuid: c['record_uuid'] as String,
-        recordTitle: c['record_title'] as String,
-        decision: c['decision'] as String,
-        loserSide: c['loser_side'] as String,
-        winnerSide: c['winner_side'] as String,
-        loserPayload: c['loser_payload'] as String,
-        winnerPayload: c['winner_payload'] as String,
-        loserUpdatedAt: c['loser_updated_at'] as int,
-        winnerUpdatedAt: c['winner_updated_at'] as int,
-        resolution: c['resolution'] as String,
-        createdAt: c['created_at'] as int,
-        resolvedAt: c['resolved_at'] as int,
-      );
+    id: c['id'] as int,
+    tableName: c['table_name'] as String,
+    recordUuid: c['record_uuid'] as String,
+    recordTitle: c['record_title'] as String,
+    decision: c['decision'] as String,
+    loserSide: c['loser_side'] as String,
+    winnerSide: c['winner_side'] as String,
+    loserPayload: c['loser_payload'] as String,
+    winnerPayload: c['winner_payload'] as String,
+    loserUpdatedAt: c['loser_updated_at'] as int,
+    winnerUpdatedAt: c['winner_updated_at'] as int,
+    resolution: c['resolution'] as String,
+    createdAt: c['created_at'] as int,
+    resolvedAt: c['resolved_at'] as int,
+  );
 
   // ── 任务模板（与 Rust template_api 同构最小语义）──
 
@@ -2084,14 +2186,16 @@ class MockOrbitBridge implements OrbitBridge {
 
   @override
   Future<List<WidgetTodoItem>> widgetTodoQuery(int limit) => _delay(() {
-        final endOfToday =
-            DateTime.now().millisecondsSinceEpoch + 24 * 3600 * 1000;
-        final rows = store.tasks.values
-            .where((t) =>
-                t['is_deleted'] == 0 &&
-                t['done'] == 0 &&
-                t['due_date'] != null &&
-                (t['due_date'] as int) < endOfToday)
+    final endOfToday = DateTime.now().millisecondsSinceEpoch + 24 * 3600 * 1000;
+    final rows =
+        store.tasks.values
+            .where(
+              (t) =>
+                  t['is_deleted'] == 0 &&
+                  t['done'] == 0 &&
+                  t['due_date'] != null &&
+                  (t['due_date'] as int) < endOfToday,
+            )
             .toList()
           ..sort((a, b) {
             final p = (b['priority'] as int).compareTo(a['priority'] as int);
@@ -2099,49 +2203,51 @@ class MockOrbitBridge implements OrbitBridge {
                 ? p
                 : (a['due_date'] as int).compareTo(b['due_date'] as int);
           });
-        return rows.take(limit).map((t) {
-          final id = t['id'] as int;
-          return WidgetTodoItem(
-            id: id,
-            uuid: (t['uuid'] as String?) ?? 'w-$id',
-            title: t['title'] as String,
-            priority: t['priority'] as int,
-            done: t['done'] as int,
-          );
-        }).toList();
-      });
+    return rows.take(limit).map((t) {
+      final id = t['id'] as int;
+      return WidgetTodoItem(
+        id: id,
+        uuid: (t['uuid'] as String?) ?? 'w-$id',
+        title: t['title'] as String,
+        priority: t['priority'] as int,
+        done: t['done'] as int,
+      );
+    }).toList();
+  });
 
   @override
   Future<void> widgetTodoToggle(int id, int done) => _delay(() {
-        final t = store.tasks[id];
-        if (t == null) throw Exception('[not_found] task $id not found');
-        t['done'] = done;
-        t['done_at'] = done == 1 ? store.now() : null;
-        t['status'] = done == 1 ? 'done' : 'pending';
-        _emit('todo_tasks');
-      });
+    final t = store.tasks[id];
+    if (t == null) throw Exception('[not_found] task $id not found');
+    t['done'] = done;
+    t['done_at'] = done == 1 ? store.now() : null;
+    t['status'] = done == 1 ? 'done' : 'pending';
+    _emit('todo_tasks');
+  });
 
   // ── ICS 日历导出（#4；与 Rust export_ics 同构最小语义）──
 
   @override
   Future<IcsExportView> icsExport() => _delay(() {
-        final tasks = store.tasks.values
-            .where((t) => t['is_deleted'] == 0)
-            .toList();
-        final content = StringBuffer()
-          ..write('BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Orbit//TODO ICS Export//CN\r\n');
-        for (final t in tasks) {
-          content.write('BEGIN:VTODO\r\nUID:${t['uuid']}@orbit\r\nSUMMARY:${t['title']}\r\nEND:VTODO\r\n');
-        }
-        content.write('END:VCALENDAR\r\n');
-        return IcsExportView(
-          content: content.toString(),
-          tableCounts: [
-            IcsTableCount(table: 'todo_tasks', count: tasks.length),
-          ],
-          suggestedFilename: 'orbit_mock.ics',
-        );
-      });
+    final tasks = store.tasks.values
+        .where((t) => t['is_deleted'] == 0)
+        .toList();
+    final content = StringBuffer()
+      ..write(
+        'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Orbit//TODO ICS Export//CN\r\n',
+      );
+    for (final t in tasks) {
+      content.write(
+        'BEGIN:VTODO\r\nUID:${t['uuid']}@orbit\r\nSUMMARY:${t['title']}\r\nEND:VTODO\r\n',
+      );
+    }
+    content.write('END:VCALENDAR\r\n');
+    return IcsExportView(
+      content: content.toString(),
+      tableCounts: [IcsTableCount(table: 'todo_tasks', count: tasks.length)],
+      suggestedFilename: 'orbit_mock.ics',
+    );
+  });
 
   TaskAttachmentView _mapMockAttachment(Map<String, dynamic> a) =>
       TaskAttachmentView(
@@ -2158,124 +2264,131 @@ class MockOrbitBridge implements OrbitBridge {
 
   @override
   Future<SyncConfigView?> syncConfigGet() => _delay(() {
-        if (!store.syncConfigured) return null;
-        return SyncConfigView(
-          id: 1,
-          engine: 'webdav',
-          endpoint: 'https://dav.example.com',
-          bucket: '',
-          region: '',
-          username: 'demo',
-          passwordSet: true,
-          basePath: '/orbit/',
-          intervalMinutes: 30,
-          autoSyncEnabled: false,
-          syncOnChange: false,
-          skipTlsVerify: false,
-          timeoutSeconds: 30,
-          sessionTokenSet: false,
-          lastSyncedAt: store.now() - 3600000,
-        );
-      });
+    if (!store.syncConfigured) return null;
+    return SyncConfigView(
+      id: 1,
+      engine: 'webdav',
+      endpoint: 'https://dav.example.com',
+      bucket: '',
+      region: '',
+      username: 'demo',
+      passwordSet: true,
+      basePath: '/orbit/',
+      intervalMinutes: 30,
+      autoSyncEnabled: false,
+      syncOnChange: false,
+      skipTlsVerify: false,
+      timeoutSeconds: 30,
+      sessionTokenSet: false,
+      lastSyncedAt: store.now() - 3600000,
+    );
+  });
 
   @override
-  Future<SyncConfigView> syncConfigSave(Map<String, Object?> input) =>
-      _delay(() {
-        store.syncConfigured = true;
-        // 凭据回填源（syncTestConnection 留空字段时借用，对齐 Rust 侧语义）
-        store.lastSyncEngine = (input['engine'] as String?) ?? 'webdav';
-        store.lastSyncUsername = (input['username'] as String?) ?? '';
-        store.lastSyncPassword = (input['password'] as String?) ?? '';
-        // F80：令牌留空沿用已存
-        final token = (input['session_token'] as String?) ?? '';
-        if (token.isNotEmpty) store.lastSyncSessionToken = token;
-        return SyncConfigView(
-          id: 1,
-          engine: (input['engine'] as String?) ?? 'webdav',
-          endpoint: (input['endpoint'] as String?) ?? '',
-          bucket: (input['bucket'] as String?) ?? '',
-          region: (input['region'] as String?) ?? '',
-          username: (input['username'] as String?) ?? '',
-          passwordSet: true,
-          basePath: (input['base_path'] as String?) ?? '',
-          intervalMinutes: (input['interval_minutes'] as int?) ?? 0,
-          autoSyncEnabled: (input['auto_sync_enabled'] as bool?) ?? false,
-          syncOnChange: (input['sync_on_change'] as bool?) ?? false,
-          skipTlsVerify: (input['skip_tls_verify'] as bool?) ?? false,
-          timeoutSeconds: (input['timeout_seconds'] as int?) ?? 30,
-          // F80：与 Rust 侧同口径——令牌留空沿用已存（mock 记忆最后一次保存值）
-          sessionTokenSet:
-              ((input['session_token'] as String?) ?? store.lastSyncSessionToken)
-                  .isNotEmpty,
-          lastSyncedAt: null,
-        );
-      });
+  Future<SyncConfigView> syncConfigSave(Map<String, Object?> input) => _delay(
+    () {
+      store.syncConfigured = true;
+      // 凭据回填源（syncTestConnection 留空字段时借用，对齐 Rust 侧语义）
+      store.lastSyncEngine = (input['engine'] as String?) ?? 'webdav';
+      store.lastSyncUsername = (input['username'] as String?) ?? '';
+      store.lastSyncPassword = (input['password'] as String?) ?? '';
+      // F80：令牌留空沿用已存
+      final token = (input['session_token'] as String?) ?? '';
+      if (token.isNotEmpty) store.lastSyncSessionToken = token;
+      return SyncConfigView(
+        id: 1,
+        engine: (input['engine'] as String?) ?? 'webdav',
+        endpoint: (input['endpoint'] as String?) ?? '',
+        bucket: (input['bucket'] as String?) ?? '',
+        region: (input['region'] as String?) ?? '',
+        username: (input['username'] as String?) ?? '',
+        passwordSet: true,
+        basePath: (input['base_path'] as String?) ?? '',
+        intervalMinutes: (input['interval_minutes'] as int?) ?? 0,
+        autoSyncEnabled: (input['auto_sync_enabled'] as bool?) ?? false,
+        syncOnChange: (input['sync_on_change'] as bool?) ?? false,
+        skipTlsVerify: (input['skip_tls_verify'] as bool?) ?? false,
+        timeoutSeconds: (input['timeout_seconds'] as int?) ?? 30,
+        // F80：与 Rust 侧同口径——令牌留空沿用已存（mock 记忆最后一次保存值）
+        sessionTokenSet:
+            ((input['session_token'] as String?) ?? store.lastSyncSessionToken)
+                .isNotEmpty,
+        lastSyncedAt: null,
+      );
+    },
+  );
 
   @override
-  Future<SyncResultJson> cloudSyncNow({String origin = 'manual'}) =>
-      _delay(() {
-        // F77：mock 与 core 同口径填 changedTables / conflicts——
-        // 缺省会让调用方走 pulledModules 保守全量回退，测试测不到精确失效链
-        final result = SyncResultJson(
-          pushedModules: 2,
-          pulledModules: 1,
-          uploadedAttachments: 0,
-          downloadedAttachments: 0,
-          durationMs: 850,
-          skipped: false,
-          errors: [],
-          conflicts: 0,
-          changedTables: const ['todo_tasks'],
-        );
-        return result;
-      });
+  Future<SyncResultJson> cloudSyncNow({String origin = 'manual'}) => _delay(() {
+    // F77：mock 与 core 同口径填 changedTables / conflicts——
+    // 缺省会让调用方走 pulledModules 保守全量回退，测试测不到精确失效链
+    final result = SyncResultJson(
+      pushedModules: 2,
+      pulledModules: 1,
+      uploadedAttachments: 0,
+      downloadedAttachments: 0,
+      durationMs: 850,
+      skipped: false,
+      errors: [],
+      conflicts: 0,
+      changedTables: const ['todo_tasks'],
+    );
+    return result;
+  });
 
   @override
   Future<SyncResultJson> cloudSyncPushOnly({String origin = 'manual'}) =>
-      _delay(() => const SyncResultJson(
-            pushedModules: 2,
-            pulledModules: 0,
-            uploadedAttachments: 0,
-            downloadedAttachments: 0,
-            durationMs: 420,
-            skipped: false,
-            errors: [],
-            conflicts: 0,
-            // 纯推送不产生 pull 写入：changedTables 与 core 同口径保持空
-            changedTables: [],
-          ));
+      _delay(
+        () => const SyncResultJson(
+          pushedModules: 2,
+          pulledModules: 0,
+          uploadedAttachments: 0,
+          downloadedAttachments: 0,
+          durationMs: 420,
+          skipped: false,
+          errors: [],
+          conflicts: 0,
+          // 纯推送不产生 pull 写入：changedTables 与 core 同口径保持空
+          changedTables: [],
+        ),
+      );
 
   @override
   Future<SyncResultJson> cloudSyncPullThenPush({String origin = 'manual'}) =>
-      _delay(() => const SyncResultJson(
-            pushedModules: 1,
-            pulledModules: 2,
-            uploadedAttachments: 0,
-            downloadedAttachments: 0,
-            durationMs: 910,
-            skipped: false,
-            errors: [],
-            conflicts: 0,
-            changedTables: ['todo_tasks'],
-          ));
+      _delay(
+        () => const SyncResultJson(
+          pushedModules: 1,
+          pulledModules: 2,
+          uploadedAttachments: 0,
+          downloadedAttachments: 0,
+          durationMs: 910,
+          skipped: false,
+          errors: [],
+          conflicts: 0,
+          changedTables: ['todo_tasks'],
+        ),
+      );
 
   @override
   Future<bool> cloudSyncIsRunning() async => false;
 
   @override
-  Future<SyncResultJson> cloudSyncForce(
-          {String origin = 'manual', int waitForIdleMs = 3000}) =>
-      _delay(() => const SyncResultJson(
-            pushedModules: 1,
-            pulledModules: 2,
-            uploadedAttachments: 0,
-            downloadedAttachments: 0,
-            durationMs: 910,
-            skipped: false,
-            errors: [],
-            conflicts: 0,
-            changedTables: ['todo_tasks'],
-          ));
+  Future<SyncResultJson> cloudSyncForce({
+    String origin = 'manual',
+    int waitForIdleMs = 3000,
+  }) => _delay(
+    () => const SyncResultJson(
+      pushedModules: 1,
+      pulledModules: 2,
+      uploadedAttachments: 0,
+      downloadedAttachments: 0,
+      durationMs: 910,
+      skipped: false,
+      errors: [],
+      conflicts: 0,
+      changedTables: ['todo_tasks'],
+    ),
+  );
 
   @override
   Future<String> ping() async => 'pong from orbit_core bridge';
@@ -2288,8 +2401,9 @@ class MockOrbitBridge implements OrbitBridge {
       h1 = (h1 ^ c) * 16777619 & 0xffffffff;
       h2 = (h2 + c) * 31 & 0xffffffff;
     }
-    final hex = (h1.toRadixString(16).padLeft(8, '0') +
-            h2.toRadixString(16).padLeft(8, '0'));
+    final hex =
+        (h1.toRadixString(16).padLeft(8, '0') +
+        h2.toRadixString(16).padLeft(8, '0'));
     return (hex * 4).substring(0, 64);
   }
 
@@ -2301,76 +2415,80 @@ class MockOrbitBridge implements OrbitBridge {
   Future<List<SyncHistoryRow>> cloudSyncHistory({
     String scope = 'all',
     int limit = 20,
-  }) =>
-      _delay(() {
-        // F77：scope 语义与 core `incremental_history` 同口径——'all' 是
-        // 「三种增量同步类型的并集」，不是「不过滤」（否则全量备份等其他
-        // sync_type 行会混进历史卡，两端口径漂移）。sync_type 真值见
-        // core engine.rs：incremental / push_only / pull_only。
-        const incrementalTypes = ['incremental', 'push_only', 'pull_only'];
-        final wanted = switch (scope) {
-          'incremental' => ['incremental'],
-          'push_only' => ['push_only'],
-          'pull_only' => ['pull_only'],
-          _ => incrementalTypes,
-        };
-        final rows = store.syncHistory
-            .where((r) => wanted.contains(r.syncType))
-            .toList()
+  }) => _delay(() {
+    // F77：scope 语义与 core `incremental_history` 同口径——'all' 是
+    // 「三种增量同步类型的并集」，不是「不过滤」（否则全量备份等其他
+    // sync_type 行会混进历史卡，两端口径漂移）。sync_type 真值见
+    // core engine.rs：incremental / push_only / pull_only。
+    const incrementalTypes = ['incremental', 'push_only', 'pull_only'];
+    final wanted = switch (scope) {
+      'incremental' => ['incremental'],
+      'push_only' => ['push_only'],
+      'pull_only' => ['pull_only'],
+      _ => incrementalTypes,
+    };
+    final rows =
+        store.syncHistory.where((r) => wanted.contains(r.syncType)).toList()
           ..sort((a, b) => b.startedAt.compareTo(a.startedAt));
-        return rows.take(limit).toList();
-      });
+    return rows.take(limit).toList();
+  });
 
   @override
   Future<int> syncTestConnection(Map<String, Object?> input) => _delay(() {
-        // 对齐 Rust [config] 前置校验：引擎 / 服务器地址 / 凭据
-        final engine = (input['engine'] as String?) ?? '';
-        if (engine != 'webdav' && engine != 's3') {
-          throw Exception('[config] 不支持的引擎类型，仅支持 webdav/s3');
-        }
-        if (((input['endpoint'] as String?) ?? '').trim().isEmpty) {
-          throw Exception('[config] 服务器地址不能为空');
-        }
-        var username = (input['username'] as String?) ?? '';
-        var password = (input['password'] as String?) ?? '';
-        // 留空字段从已存配置回填（同协议才借用，同 Rust 侧语义）
-        if (store.syncConfigured &&
-            (username.isEmpty || password.isEmpty) &&
-            store.lastSyncEngine == engine) {
-          if (username.isEmpty) username = store.lastSyncUsername;
-          if (password.isEmpty) password = store.lastSyncPassword;
-        }
-        if (username.isEmpty || password.isEmpty) {
-          throw Exception('[config] 请填写用户名与密码');
-        }
-        return 3; // 模拟根目录条目数
-      });
+    // 对齐 Rust [config] 前置校验：引擎 / 服务器地址 / 凭据
+    final engine = (input['engine'] as String?) ?? '';
+    if (engine != 'webdav' && engine != 's3') {
+      throw Exception('[config] 不支持的引擎类型，仅支持 webdav/s3');
+    }
+    if (((input['endpoint'] as String?) ?? '').trim().isEmpty) {
+      throw Exception('[config] 服务器地址不能为空');
+    }
+    var username = (input['username'] as String?) ?? '';
+    var password = (input['password'] as String?) ?? '';
+    // 留空字段从已存配置回填（同协议才借用，同 Rust 侧语义）
+    if (store.syncConfigured &&
+        (username.isEmpty || password.isEmpty) &&
+        store.lastSyncEngine == engine) {
+      if (username.isEmpty) username = store.lastSyncUsername;
+      if (password.isEmpty) password = store.lastSyncPassword;
+    }
+    if (username.isEmpty || password.isEmpty) {
+      throw Exception('[config] 请填写用户名与密码');
+    }
+    return 3; // 模拟根目录条目数
+  });
 
   @override
   Future<void> syncDisconnect() => _delay(() {
-        store.syncConfigured = false;
-        store.lastSyncEngine = null;
-        store.lastSyncUsername = '';
-        store.lastSyncPassword = '';
-      });
+    store.syncConfigured = false;
+    store.lastSyncEngine = null;
+    store.lastSyncUsername = '';
+    store.lastSyncPassword = '';
+  });
 
   // ── 明文数据导出（07 报告 #15）──
 
   @override
-  Future<PlaintextExportResult> plaintextExportJson({bool excludeDeleted = true}) =>
-      _delay(() => PlaintextExportResult(
-            content: '{"format":"orbit.plaintext-export","version":1,"mock":true}',
-            tableCounts: {'todo_tasks': store.tasks.length},
-            suggestedFilename: 'orbit-export-mock.json',
-          ));
+  Future<PlaintextExportResult> plaintextExportJson({
+    bool excludeDeleted = true,
+  }) => _delay(
+    () => PlaintextExportResult(
+      content: '{"format":"orbit.plaintext-export","version":1,"mock":true}',
+      tableCounts: {'todo_tasks': store.tasks.length},
+      suggestedFilename: 'orbit-export-mock.json',
+    ),
+  );
 
   @override
-  Future<PlaintextExportResult> plaintextExportCsv({bool excludeDeleted = true}) =>
-      _delay(() => PlaintextExportResult(
-            content: '\u{feff}id,title\n1,mock-task',
-            tableCounts: {'todo_tasks': store.tasks.length},
-            suggestedFilename: 'orbit-export-mock.csv',
-          ));
+  Future<PlaintextExportResult> plaintextExportCsv({
+    bool excludeDeleted = true,
+  }) => _delay(
+    () => PlaintextExportResult(
+      content: '\u{feff}id,title\n1,mock-task',
+      tableCounts: {'todo_tasks': store.tasks.length},
+      suggestedFilename: 'orbit-export-mock.csv',
+    ),
+  );
 
   // ── CSV 导入（lite 解析；与桌面 ipc-mock 同构语义）──
 
@@ -2385,7 +2503,10 @@ class MockOrbitBridge implements OrbitBridge {
 
   @override
   Future<CsvImportPreview> csvImportPreview(
-      String content, String preset, int previewLimit) {
+    String content,
+    String preset,
+    int previewLimit,
+  ) {
     return _delay(() {
       final mapped = _importRowsLite(content, preset);
       return CsvImportPreview(
@@ -2448,7 +2569,11 @@ class MockOrbitBridge implements OrbitBridge {
       }
       _emit('todo_tasks');
       return CsvImportStats(
-          success: success, skipped: skipped, failed: 0, notes: notes);
+        success: success,
+        skipped: skipped,
+        failed: 0,
+        notes: notes,
+      );
     });
   }
 
@@ -2474,8 +2599,9 @@ class MockOrbitBridge implements OrbitBridge {
           continue;
         }
         final now = store.now();
-        final projectId =
-            m.projectTitle != null ? _ensureMockProject(m.projectTitle!) : null;
+        final projectId = m.projectTitle != null
+            ? _ensureMockProject(m.projectTitle!)
+            : null;
         final t = {
           ...store.newEntity('t'),
           'title': m.title,
@@ -2511,7 +2637,11 @@ class MockOrbitBridge implements OrbitBridge {
         finished: true,
         cancelled: false,
         stats: CsvImportStats(
-            success: success, skipped: skipped, failed: 0, notes: notes),
+          success: success,
+          skipped: skipped,
+          failed: 0,
+          notes: notes,
+        ),
         error: null,
       );
       return jobId;
@@ -2571,7 +2701,9 @@ class MockOrbitBridge implements OrbitBridge {
   /// 导入行映射（与真桥同口径）：`ics` 档走 VTODO 解析，其余走 CSV 表头映射。
   /// 键集合与 orbit-core `CsvImportPreset::from_key` 一致。
   static List<CsvImportPreviewRow> _importRowsLite(
-      String content, String preset) {
+    String content,
+    String preset,
+  ) {
     if (preset == 'ics') return _mapIcsRowsLite(content);
     final rows = _parseCsvLite(content);
     if (rows.isEmpty) return const [];
@@ -2616,23 +2748,26 @@ class MockOrbitBridge implements OrbitBridge {
 
   /// 单个 VTODO 块 → 预览行（字段缺失给默认值，不抛异常）
   static CsvImportPreviewRow _finishIcsBlock(
-      Map<String, String> props, int blockNo) {
+    Map<String, String> props,
+    int blockNo,
+  ) {
     CsvImportPreviewRow skip(String reason) => CsvImportPreviewRow(
-          sourceLine: blockNo,
-          projectTitle: null,
-          title: '',
-          priority: null,
-          done: false,
-          dueDate: null,
-          skipReason: reason,
-        );
+      sourceLine: blockNo,
+      projectTitle: null,
+      title: '',
+      priority: null,
+      done: false,
+      dueDate: null,
+      skipReason: reason,
+    );
     final summary = props['SUMMARY'];
     if (summary == null) return skip('VTODO 无 SUMMARY');
     final title = _unescapeIcsText(summary).trim();
     if (title.isEmpty) return skip('标题为空');
     final categories = props['CATEGORIES'];
-    final projectTitle =
-        categories == null ? null : _unescapeIcsText(categories).trim();
+    final projectTitle = categories == null
+        ? null
+        : _unescapeIcsText(categories).trim();
     return CsvImportPreviewRow(
       sourceLine: blockNo,
       projectTitle: (projectTitle == null || projectTitle.isEmpty)
@@ -2649,10 +2784,11 @@ class MockOrbitBridge implements OrbitBridge {
   /// RFC 5545 行展开：CRLF（容忍裸 LF/CR）后紧跟空格/TAB 的续行拼回上一行
   static List<String> _unfoldIcs(String content) {
     final out = <String>[];
-    for (final raw in content
-        .replaceAll('\r\n', '\n')
-        .replaceAll('\r', '\n')
-        .split('\n')) {
+    for (final raw
+        in content
+            .replaceAll('\r\n', '\n')
+            .replaceAll('\r', '\n')
+            .split('\n')) {
       if (raw.isEmpty) continue;
       final first = raw[0];
       if ((first == ' ' || first == '\t') && out.isNotEmpty) {
@@ -2724,9 +2860,9 @@ class MockOrbitBridge implements OrbitBridge {
   static int? _parseIcsDatetime(String? value) {
     final v = value?.trim();
     if (v == null || v.isEmpty) return null;
-    final m =
-        RegExp(r'^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2}))?(Z)?$')
-            .firstMatch(v);
+    final m = RegExp(
+      r'^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2}))?(Z)?$',
+    ).firstMatch(v);
     if (m == null) return null;
     final dt = m.group(7) == 'Z'
         ? DateTime.utc(
@@ -2781,7 +2917,10 @@ class MockOrbitBridge implements OrbitBridge {
 
   /// 三档预设轻量映射（与桌面 ipc-mock 同构）
   static CsvImportPreviewRow _mapImportRowLite(
-      String preset, List<String> header, List<String> row) {
+    String preset,
+    List<String> header,
+    List<String> row,
+  ) {
     final lower = header.map((h) => h.trim().toLowerCase()).toList();
     String? cell(String name) {
       final i = lower.indexOf(name);
@@ -2800,7 +2939,12 @@ class MockOrbitBridge implements OrbitBridge {
       if (type != null && type.toLowerCase() != 'task') skip = true;
       title = cell('content');
       projectTitle = cell('list name');
-      priority = const {'p1': 4, 'p2': 3, 'p3': 2, 'p4': 1}[cell('priority')?.toLowerCase()];
+      priority = const {
+        'p1': 4,
+        'p2': 3,
+        'p3': 2,
+        'p4': 1,
+      }[cell('priority')?.toLowerCase()];
     } else if (preset == 'ticktick') {
       title = cell('summary');
       projectTitle = cell('list name');
@@ -2808,7 +2952,13 @@ class MockOrbitBridge implements OrbitBridge {
     } else {
       title = cell('title');
       projectTitle = cell('project');
-      priority = const {'低': 1, '中': 2, '高': 3, '紧急': 4, '立即处理': 5}[cell('priority') ?? ''];
+      priority = const {
+        '低': 1,
+        '中': 2,
+        '高': 3,
+        '紧急': 4,
+        '立即处理': 5,
+      }[cell('priority') ?? ''];
     }
     final done = (cell('completed date') ?? cell('completed time')) != null;
     return CsvImportPreviewRow(
@@ -2825,8 +2975,12 @@ class MockOrbitBridge implements OrbitBridge {
   // ── 同步加密 ──
 
   @override
-  Future<SyncCryptoStatus> syncCryptoStatus() => _delay(() => SyncCryptoStatus(
-      hasPassword: store.syncPasswordSet, isUnlocked: store.syncUnlocked));
+  Future<SyncCryptoStatus> syncCryptoStatus() => _delay(
+    () => SyncCryptoStatus(
+      hasPassword: store.syncPasswordSet,
+      isUnlocked: store.syncUnlocked,
+    ),
+  );
 
   @override
   Future<void> syncCryptoInit(String password, {bool remember = false}) =>
@@ -2841,8 +2995,8 @@ class MockOrbitBridge implements OrbitBridge {
 
   @override
   Future<void> syncCryptoLock() => _delay(() {
-        store.syncUnlocked = false;
-      });
+    store.syncUnlocked = false;
+  });
 
   @override
   Future<void> syncCryptoUnlock(String password, {bool remember = false}) =>
@@ -2857,9 +3011,11 @@ class MockOrbitBridge implements OrbitBridge {
       });
 
   @override
-  Future<String> syncCryptoImportBundle(SyncCryptoBundle bundle,
-          String password, {bool force = false}) =>
-      _delay(() => throw Exception('[not_unlocked] Mock 未实现'));
+  Future<String> syncCryptoImportBundle(
+    SyncCryptoBundle bundle,
+    String password, {
+    bool force = false,
+  }) => _delay(() => throw Exception('[not_unlocked] Mock 未实现'));
 
   @override
   Future<String?> syncCryptoMetaVersion() =>
@@ -2867,100 +3023,98 @@ class MockOrbitBridge implements OrbitBridge {
 
   @override
   Future<void> syncCryptoUpgradeV2(String password) => _delay(() {
-        if (!store.syncPasswordSet) {
-          throw Exception('[not_initialized] 未设置同步密码');
-        }
-        if (password != store.syncPassword) {
-          throw Exception('[wrong_password] 同步密码错误');
-        }
-        // 升级即换钥（同密码确定性派生 + 云端全量重传）；mock 只落版本标记
-        store.syncKeyVersion = 'v2';
-      });
+    if (!store.syncPasswordSet) {
+      throw Exception('[not_initialized] 未设置同步密码');
+    }
+    if (password != store.syncPassword) {
+      throw Exception('[wrong_password] 同步密码错误');
+    }
+    // 升级即换钥（同密码确定性派生 + 云端全量重传）；mock 只落版本标记
+    store.syncKeyVersion = 'v2';
+  });
 
   @override
   Future<SyncStateView> cloudSyncGetState() => _delay(() {
-        // 账本由历史末次完成时间派生：无历史＝从未同步（水位线 0、无桶快照），
-        // 与真桥「首轮全量前」同形；有历史即给一份可渲染的桶指纹样本
-        final stamps = [
-          for (final r in store.syncHistory) r.finishedAt ?? r.startedAt,
-        ];
-        final last = stamps.isEmpty
-            ? 0
-            : stamps.reduce((a, b) => a > b ? a : b);
-        return SyncStateView(
-          lastSyncedAt: last,
-          lastSyncedClockMs: last,
-          lastPushedClockMs: last,
-          deviceId: 'mock-device-0001',
-          manifestEpoch: last == 0 ? 0 : 7,
-          remoteTables: last == 0
-              ? const {}
-              : const {
-                  'todos': {'0': 'a1b2c3d4e5f60718'},
-                  'projects': {'0': '0011223344556677'},
-                },
-          remoteTombstones: const {},
-        );
-      });
+    // 账本由历史末次完成时间派生：无历史＝从未同步（水位线 0、无桶快照），
+    // 与真桥「首轮全量前」同形；有历史即给一份可渲染的桶指纹样本
+    final stamps = [
+      for (final r in store.syncHistory) r.finishedAt ?? r.startedAt,
+    ];
+    final last = stamps.isEmpty ? 0 : stamps.reduce((a, b) => a > b ? a : b);
+    return SyncStateView(
+      lastSyncedAt: last,
+      lastSyncedClockMs: last,
+      lastPushedClockMs: last,
+      deviceId: 'mock-device-0001',
+      manifestEpoch: last == 0 ? 0 : 7,
+      remoteTables: last == 0
+          ? const {}
+          : const {
+              'todos': {'0': 'a1b2c3d4e5f60718'},
+              'projects': {'0': '0011223344556677'},
+            },
+      remoteTombstones: const {},
+    );
+  });
 
   @override
   Future<String> cloudSyncRekey() => _delay(() {
-        if (!store.syncPasswordSet) {
-          throw Exception('[not_initialized] 未设置同步密码');
-        }
-        if (!store.syncUnlocked) {
-          throw Exception('[not_unlocked] 同步加密未解锁，请先输入同步密码');
-        }
-        // 真桥返回 cloud_sync_api::result_to_json 的 JSON 串（非 SyncResultJson 对象）
-        return jsonEncode(const <String, Object?>{
-          'pushed_modules': 3,
-          'pulled_modules': 0,
-          'uploaded_attachments': 1,
-          'downloaded_attachments': 0,
-          'duration_ms': 1200,
-          'skipped': false,
-          'errors': <String>[],
-          'changed_tables': <String>[],
-        });
-      });
+    if (!store.syncPasswordSet) {
+      throw Exception('[not_initialized] 未设置同步密码');
+    }
+    if (!store.syncUnlocked) {
+      throw Exception('[not_unlocked] 同步加密未解锁，请先输入同步密码');
+    }
+    // 真桥返回 cloud_sync_api::result_to_json 的 JSON 串（非 SyncResultJson 对象）
+    return jsonEncode(const <String, Object?>{
+      'pushed_modules': 3,
+      'pulled_modules': 0,
+      'uploaded_attachments': 1,
+      'downloaded_attachments': 0,
+      'duration_ms': 1200,
+      'skipped': false,
+      'errors': <String>[],
+      'changed_tables': <String>[],
+    });
+  });
 
   @override
   Future<void> syncCryptoChangePassword(
-          String oldPassword, String newPassword) =>
-      _delay(() {
-        if (!store.syncPasswordSet) {
-          throw Exception('[not_initialized] 未设置同步密码');
-        }
-        if (oldPassword != store.syncPassword) {
-          throw Exception('[wrong_password] 同步密码错误');
-        }
-        if (newPassword.length < 6) {
-          throw Exception('[invalid_input] 同步密码至少 6 位');
-        }
-        store.syncPassword = newPassword;
-      });
+    String oldPassword,
+    String newPassword,
+  ) => _delay(() {
+    if (!store.syncPasswordSet) {
+      throw Exception('[not_initialized] 未设置同步密码');
+    }
+    if (oldPassword != store.syncPassword) {
+      throw Exception('[wrong_password] 同步密码错误');
+    }
+    if (newPassword.length < 6) {
+      throw Exception('[invalid_input] 同步密码至少 6 位');
+    }
+    store.syncPassword = newPassword;
+  });
 
   @override
   Future<String> syncCryptoExportBundle() => _delay(() {
-        if (!store.syncPasswordSet) {
-          throw Exception('[not_initialized] 未设置同步密码');
-        }
-        return jsonEncode({
-          'version': 'v2',
-          'salt': 'mock-salt',
-          'wrapped_data_key': 'mock-wrapped-key',
-          'nonce': 'mock-nonce',
-        });
-      });
+    if (!store.syncPasswordSet) {
+      throw Exception('[not_initialized] 未设置同步密码');
+    }
+    return jsonEncode({
+      'version': 'v2',
+      'salt': 'mock-salt',
+      'wrapped_data_key': 'mock-wrapped-key',
+      'nonce': 'mock-nonce',
+    });
+  });
 
   @override
-  Future<bool> syncCryptoRestoreSession() =>
-      _delay(() => store.syncUnlocked);
+  Future<bool> syncCryptoRestoreSession() => _delay(() => store.syncUnlocked);
 
   @override
   Future<void> syncCryptoForgetSession() => _delay(() {
-        store.syncUnlocked = false;
-      });
+    store.syncUnlocked = false;
+  });
 
   // ── 全量备份与恢复（内存假实现；口径对齐 Rust full_sync_backup.rs）──
 
@@ -3008,43 +3162,41 @@ class MockOrbitBridge implements OrbitBridge {
   Future<BackupImportResult> fullBackupImport(
     List<int> bytes, {
     bool ignoreSchemaMismatch = false,
-  }) =>
-      _delay(() {
-        if (!store.syncUnlocked) {
-          throw Exception('[not_unlocked] 同步加密未解锁，请先输入同步密码');
-        }
-        if (bytes.isEmpty) throw Exception('[backup] 备份内容为空');
-        _emit('*');
-        return BackupImportResult(
-          successCount: store.tasks.length,
-          errorCount: 0,
-          errors: const [],
-          manifest: store.buildManifest(),
-          needsRestart: false,
-        );
-      });
+  }) => _delay(() {
+    if (!store.syncUnlocked) {
+      throw Exception('[not_unlocked] 同步加密未解锁，请先输入同步密码');
+    }
+    if (bytes.isEmpty) throw Exception('[backup] 备份内容为空');
+    _emit('*');
+    return BackupImportResult(
+      successCount: store.tasks.length,
+      errorCount: 0,
+      errors: const [],
+      manifest: store.buildManifest(),
+      needsRestart: false,
+    );
+  });
 
   @override
   Future<BackupImportResult> fullBackupRestoreCloud(
     String cloudPath, {
     bool ignoreSchemaMismatch = false,
-  }) =>
-      _delay(() {
-        if (!store.syncConfigured) {
-          throw Exception('[config] 尚未配置云同步，无法读取云端备份');
-        }
-        if (!store.syncUnlocked) {
-          throw Exception('[not_unlocked] 同步加密未解锁，请先输入同步密码');
-        }
-        _emit('*');
-        return BackupImportResult(
-          successCount: store.tasks.length,
-          errorCount: 0,
-          errors: const [],
-          manifest: store.buildManifest(),
-          needsRestart: false,
-        );
-      });
+  }) => _delay(() {
+    if (!store.syncConfigured) {
+      throw Exception('[config] 尚未配置云同步，无法读取云端备份');
+    }
+    if (!store.syncUnlocked) {
+      throw Exception('[not_unlocked] 同步加密未解锁，请先输入同步密码');
+    }
+    _emit('*');
+    return BackupImportResult(
+      successCount: store.tasks.length,
+      errorCount: 0,
+      errors: const [],
+      manifest: store.buildManifest(),
+      needsRestart: false,
+    );
+  });
 
   @override
   Future<List<BackupEntry>> fullBackupListLocal() =>
@@ -3052,24 +3204,24 @@ class MockOrbitBridge implements OrbitBridge {
 
   @override
   Future<void> fullBackupDeleteLocal(String filePath) => _delay(() {
-        store.localBackups.removeWhere((b) => b.filePath == filePath);
-      });
+    store.localBackups.removeWhere((b) => b.filePath == filePath);
+  });
 
   @override
   Future<List<CloudBackupEntry>> fullBackupListCloud() => _delay(() {
-        if (!store.syncConfigured) {
-          throw Exception('[config] 尚未配置云同步，无法列出云端备份');
-        }
-        return List<CloudBackupEntry>.from(store.cloudBackups);
-      });
+    if (!store.syncConfigured) {
+      throw Exception('[config] 尚未配置云同步，无法列出云端备份');
+    }
+    return List<CloudBackupEntry>.from(store.cloudBackups);
+  });
 
   @override
   Future<BackupPreview> fullBackupPeekLocal(List<int> bytes) => _delay(() {
-        if (!store.syncUnlocked) {
-          throw Exception('[not_unlocked] 同步加密未解锁，请先输入同步密码');
-        }
-        return _mockPreview();
-      });
+    if (!store.syncUnlocked) {
+      throw Exception('[not_unlocked] 同步加密未解锁，请先输入同步密码');
+    }
+    return _mockPreview();
+  });
 
   // ── 按路径过桥（M1）：mock 只校验路径存在与解锁态，不做真解析 ──
 
@@ -3077,46 +3229,45 @@ class MockOrbitBridge implements OrbitBridge {
   Future<BackupImportResult> fullBackupImportPath(
     String filePath, {
     bool ignoreSchemaMismatch = false,
-  }) =>
-      _delay(() {
-        if (!store.syncUnlocked) {
-          throw Exception('[not_unlocked] 同步加密未解锁，请先输入同步密码');
-        }
-        // 与字节版同口径：空路径视为无效输入（真实桥由 core 报 IO 错误）
-        if (filePath.trim().isEmpty) {
-          throw Exception('[backup] 备份路径为空');
-        }
-        _emit('*');
-        return BackupImportResult(
-          successCount: store.tasks.length,
-          errorCount: 0,
-          errors: const [],
-          manifest: store.buildManifest(),
-          needsRestart: false,
-        );
-      });
+  }) => _delay(() {
+    if (!store.syncUnlocked) {
+      throw Exception('[not_unlocked] 同步加密未解锁，请先输入同步密码');
+    }
+    // 与字节版同口径：空路径视为无效输入（真实桥由 core 报 IO 错误）
+    if (filePath.trim().isEmpty) {
+      throw Exception('[backup] 备份路径为空');
+    }
+    _emit('*');
+    return BackupImportResult(
+      successCount: store.tasks.length,
+      errorCount: 0,
+      errors: const [],
+      manifest: store.buildManifest(),
+      needsRestart: false,
+    );
+  });
 
   @override
   Future<BackupPreview> fullBackupPeekPath(String filePath) => _delay(() {
-        if (!store.syncUnlocked) {
-          throw Exception('[not_unlocked] 同步加密未解锁，请先输入同步密码');
-        }
-        if (filePath.trim().isEmpty) {
-          throw Exception('[backup] 备份路径为空');
-        }
-        return _mockPreview();
-      });
+    if (!store.syncUnlocked) {
+      throw Exception('[not_unlocked] 同步加密未解锁，请先输入同步密码');
+    }
+    if (filePath.trim().isEmpty) {
+      throw Exception('[backup] 备份路径为空');
+    }
+    return _mockPreview();
+  });
 
   @override
   Future<BackupPreview> fullBackupPeekCloud(String cloudPath) => _delay(() {
-        if (!store.syncConfigured) {
-          throw Exception('[config] 尚未配置云同步，无法读取云端备份');
-        }
-        if (!store.syncUnlocked) {
-          throw Exception('[not_unlocked] 同步加密未解锁，请先输入同步密码');
-        }
-        return _mockPreview();
-      });
+    if (!store.syncConfigured) {
+      throw Exception('[config] 尚未配置云同步，无法读取云端备份');
+    }
+    if (!store.syncUnlocked) {
+      throw Exception('[not_unlocked] 同步加密未解锁，请先输入同步密码');
+    }
+    return _mockPreview();
+  });
 
   /// 恢复预览（按当前内存库抽样前 10 条未删任务）
   BackupPreview _mockPreview() {
@@ -3160,9 +3311,9 @@ class MockOrbitBridge implements OrbitBridge {
 
   @override
   Future<BackupPrefs> backupPrefsSave(BackupPrefs prefs) => _delay(() {
-        store.backupPrefs = prefs;
-        return prefs;
-      });
+    store.backupPrefs = prefs;
+    return prefs;
+  });
 
   @override
   Future<void> startBackupScheduler() async {}
@@ -3173,52 +3324,54 @@ class MockOrbitBridge implements OrbitBridge {
   Future<List<NotificationLogRow>> notificationLogList({
     String? kind,
     int? limit,
-  }) =>
-      _delay(() {
-        final rows = store.notificationLog
+  }) => _delay(() {
+    final rows =
+        store.notificationLog
             .where((n) => kind == null || n['kind'] == kind)
             .toList()
-          ..sort((a, b) =>
-              (b['created_at'] as int).compareTo(a['created_at'] as int));
-        final n = (limit ?? 50).clamp(1, 200);
-        return rows.take(n).map(_toNotificationRow).toList();
-      });
+          ..sort(
+            (a, b) =>
+                (b['created_at'] as int).compareTo(a['created_at'] as int),
+          );
+    final n = (limit ?? 50).clamp(1, 200);
+    return rows.take(n).map(_toNotificationRow).toList();
+  });
 
   @override
   Future<int> notificationLogClear() => _delay(() {
-        final count = store.notificationLog.length;
-        store.notificationLog.clear();
-        return count;
-      });
+    final count = store.notificationLog.length;
+    store.notificationLog.clear();
+    return count;
+  });
 
   // ── 应用内诊断（只读读数；与 Rust diagnostics_api 同口径）──
 
   /// mock 只有内存库：行数真算，库体积/附件缓存给固定假值（断言只对行数下）
   @override
   Future<DiagnosticsSnapshot> diagnosticsSnapshot() => _delay(() {
-        final tables = <String, Iterable<Map<String, dynamic>>>{
-          'todo_projects': store.projects.values,
-          'todo_tasks': store.tasks.values,
-          'todo_subtasks': store.subtasks.values,
-          'todo_labels': store.labels.values,
-          'todo_comments': store.comments.values,
-          'todo_reminders': store.reminders.values,
-        };
-        int live(Iterable<Map<String, dynamic>> rows) =>
-            rows.where((r) => r['is_deleted'] != 1).length;
-        int dead(Iterable<Map<String, dynamic>> rows) =>
-            rows.where((r) => r['is_deleted'] == 1).length;
-        return DiagnosticsSnapshot(
-          dbSizeBytes: 1024 * 1024,
-          tableRows: [
-            for (final e in tables.entries)
-              TableRowCount(table: e.key, rows: live(e.value)),
-          ],
-          tombstoneRows: tables.values.fold(0, (n, rows) => n + dead(rows)),
-          attachmentCacheBytes: 2048,
-          attachmentCacheFiles: 1,
-        );
-      });
+    final tables = <String, Iterable<Map<String, dynamic>>>{
+      'todo_projects': store.projects.values,
+      'todo_tasks': store.tasks.values,
+      'todo_subtasks': store.subtasks.values,
+      'todo_labels': store.labels.values,
+      'todo_comments': store.comments.values,
+      'todo_reminders': store.reminders.values,
+    };
+    int live(Iterable<Map<String, dynamic>> rows) =>
+        rows.where((r) => r['is_deleted'] != 1).length;
+    int dead(Iterable<Map<String, dynamic>> rows) =>
+        rows.where((r) => r['is_deleted'] == 1).length;
+    return DiagnosticsSnapshot(
+      dbSizeBytes: 1024 * 1024,
+      tableRows: [
+        for (final e in tables.entries)
+          TableRowCount(table: e.key, rows: live(e.value)),
+      ],
+      tombstoneRows: tables.values.fold(0, (n, rows) => n + dead(rows)),
+      attachmentCacheBytes: 2048,
+      attachmentCacheFiles: 1,
+    );
+  });
 
   // ── 测试数据（仅 debug 入口展示；mock 在内存库按 core 比例铺样本）──
 
@@ -3230,45 +3383,48 @@ class MockOrbitBridge implements OrbitBridge {
 
   @override
   Future<DevSeedResult> devSeedDemoData(DevSeedPlan plan) => _delay(() {
-        final watch = Stopwatch()..start();
-        final cleared = _clearSeedRows();
-        final created = _insertSeedRows(plan.tasks.clamp(1, 20000));
-        _emitSeedChanges();
-        return DevSeedResult(
-          created: created,
-          cleared: cleared,
-          elapsedMs: watch.elapsedMilliseconds,
-        );
-      });
+    final watch = Stopwatch()..start();
+    final cleared = _clearSeedRows();
+    final created = _insertSeedRows(plan.tasks.clamp(1, 20000));
+    _emitSeedChanges();
+    return DevSeedResult(
+      created: created,
+      cleared: cleared,
+      elapsedMs: watch.elapsedMilliseconds,
+    );
+  });
 
   @override
   Future<DevSeedClearResult> devSeedClear() => _delay(() {
-        final watch = Stopwatch()..start();
-        final removed = _clearSeedRows();
-        _emitSeedChanges();
-        return DevSeedClearResult(
-          removed: removed,
-          elapsedMs: watch.elapsedMilliseconds,
-        );
-      });
+    final watch = Stopwatch()..start();
+    final removed = _clearSeedRows();
+    _emitSeedChanges();
+    return DevSeedClearResult(
+      removed: removed,
+      elapsedMs: watch.elapsedMilliseconds,
+    );
+  });
 
   /// 按 core 的派生比例铺样本（项目/标签固定，子表按任务序号取模）
   DevSeedCounts _insertSeedRows(int taskCount) {
     final now = store.now();
     final local = DateTime.fromMillisecondsSinceEpoch(now);
-    final today =
-        DateTime(local.year, local.month, local.day).millisecondsSinceEpoch;
+    final today = DateTime(
+      local.year,
+      local.month,
+      local.day,
+    ).millisecondsSinceEpoch;
     const day = 86400000;
 
     Map<String, dynamic> row(String tag) => {
-          'id': store.id,
-          'uuid': '$_seedUuidPrefix$tag',
-          'is_deleted': 0,
-          'created_at': now,
-          'updated_at': now,
-          'deleted_at': null,
-          'version': 1,
-        };
+      'id': store.id,
+      'uuid': '$_seedUuidPrefix$tag',
+      'is_deleted': 0,
+      'created_at': now,
+      'updated_at': now,
+      'deleted_at': null,
+      'version': 1,
+    };
 
     final projectIds = <int>[];
     for (var i = 0; i < 2; i++) {
@@ -3491,22 +3647,26 @@ class MockOrbitBridge implements OrbitBridge {
 
   static const _mockHolidays = [
     HolidayInfo(date: '2026-01-01', year: 2026, isHoliday: true, name: '元旦'),
-    HolidayInfo(date: '2026-01-04', year: 2026, isHoliday: false, name: '元旦后补班'),
+    HolidayInfo(
+      date: '2026-01-04',
+      year: 2026,
+      isHoliday: false,
+      name: '元旦后补班',
+    ),
     HolidayInfo(date: '2026-02-17', year: 2026, isHoliday: true, name: '初一'),
   ];
 
-  final _holidayProgressCtrl =
-      StreamController<HolidayProgress>.broadcast();
+  final _holidayProgressCtrl = StreamController<HolidayProgress>.broadcast();
 
   /// 范围补写会话标志（`cancelHolidayFetch` 置 false，循环下一轮感知退出）
   bool _holidayRangeActive = false;
 
   HolidayMeta get _mockHolidayMeta => HolidayMeta(
-        lastUpdateMs: store.holidayLastUpdateMs,
-        lastAttemptMs: store.holidayLastAttemptMs,
-        failureCount: store.holidayFailureCount,
-        autoEnabled: store.holidayAutoEnabled,
-      );
+    lastUpdateMs: store.holidayLastUpdateMs,
+    lastAttemptMs: store.holidayLastAttemptMs,
+    failureCount: store.holidayFailureCount,
+    autoEnabled: store.holidayAutoEnabled,
+  );
 
   @override
   Future<List<HolidayInfo>> holidayList() async => _mockHolidays;
@@ -3517,44 +3677,46 @@ class MockOrbitBridge implements OrbitBridge {
 
   @override
   Future<HolidayMeta> holidayUpdate() => _delay(() {
-        final now = store.now();
-        store.holidayLastUpdateMs = now;
-        store.holidayLastAttemptMs = now;
-        store.holidayFailureCount = 0;
-        return _mockHolidayMeta;
-      });
+    final now = store.now();
+    store.holidayLastUpdateMs = now;
+    store.holidayLastAttemptMs = now;
+    store.holidayFailureCount = 0;
+    return _mockHolidayMeta;
+  });
 
   /// 按年补写：Mock 只认识 2026（预置表年份），其余年份一律「线上无数据」；
   /// 记账语义对齐 core——历史年份只写 last_attempt，不动 last_update；
   /// `holidayFailedYears` 内的年份模拟拉取失败（抛错，与 core 的 Err 同路径）
   @override
   Future<HolidayYearOutcome> holidayFetchYear(int year) => _delay(() {
-        if (store.holidayFailedYears.contains(year)) {
-          throw Exception('[holiday] $year 年拉取失败');
-        }
-        final rowCount = store.holidayEmptyYears.contains(year)
-            ? 0
-            : _mockHolidays.where((h) => h.year == year).length;
-        store.holidayLastAttemptMs = store.now();
-        return HolidayYearOutcome(meta: _mockHolidayMeta, rowCount: rowCount);
-      });
+    if (store.holidayFailedYears.contains(year)) {
+      throw Exception('[holiday] $year 年拉取失败');
+    }
+    final rowCount = store.holidayEmptyYears.contains(year)
+        ? 0
+        : _mockHolidays.where((h) => h.year == year).length;
+    store.holidayLastAttemptMs = store.now();
+    return HolidayYearOutcome(meta: _mockHolidayMeta, rowCount: rowCount);
+  });
 
   @override
   Future<HolidayRangeSummary> holidayFetchRange(int start, int end) async {
     final years = [for (var y = start; y <= end; y++) y];
     _holidayRangeActive = true;
-    _holidayProgressCtrl.add(HolidayProgress(
-      phase: 'starting',
-      total: years.length,
-      year: 0,
-      done: 0,
-      yearOk: false,
-      yearEmpty: false,
-      okCount: 0,
-      failed: 0,
-      cancelled: false,
-      message: '',
-    ));
+    _holidayProgressCtrl.add(
+      HolidayProgress(
+        phase: 'starting',
+        total: years.length,
+        year: 0,
+        done: 0,
+        yearOk: false,
+        yearEmpty: false,
+        okCount: 0,
+        failed: 0,
+        cancelled: false,
+        message: '',
+      ),
+    );
     var ok = 0;
     var failed = 0;
     var empty = 0;
@@ -3567,7 +3729,8 @@ class MockOrbitBridge implements OrbitBridge {
       }
       final year = years[i];
       final isFailed = store.holidayFailedYears.contains(year);
-      final isYearEmpty = !isFailed &&
+      final isYearEmpty =
+          !isFailed &&
           (store.holidayEmptyYears.contains(year) ||
               _mockHolidays.every((h) => h.year != year));
       if (isFailed) {
@@ -3577,35 +3740,39 @@ class MockOrbitBridge implements OrbitBridge {
       } else {
         ok++;
       }
-      _holidayProgressCtrl.add(HolidayProgress(
-        phase: 'year',
-        total: years.length,
-        year: year,
-        done: i + 1,
-        yearOk: !isFailed,
-        yearEmpty: isYearEmpty,
-        okCount: 0,
-        failed: 0,
-        cancelled: false,
-        message: '',
-      ));
+      _holidayProgressCtrl.add(
+        HolidayProgress(
+          phase: 'year',
+          total: years.length,
+          year: year,
+          done: i + 1,
+          yearOk: !isFailed,
+          yearEmpty: isYearEmpty,
+          okCount: 0,
+          failed: 0,
+          cancelled: false,
+          message: '',
+        ),
+      );
     }
     _holidayRangeActive = false;
     store.holidayLastAttemptMs = store.now();
     // 整次操作记账一次（core 口径：有失败 +1，全成功清零）
     store.holidayFailureCount = failed > 0 ? store.holidayFailureCount + 1 : 0;
-    _holidayProgressCtrl.add(HolidayProgress(
-      phase: 'done',
-      total: years.length,
-      year: 0,
-      done: years.length,
-      yearOk: false,
-      yearEmpty: false,
-      okCount: ok,
-      failed: failed,
-      cancelled: cancelled,
-      message: '',
-    ));
+    _holidayProgressCtrl.add(
+      HolidayProgress(
+        phase: 'done',
+        total: years.length,
+        year: 0,
+        done: years.length,
+        yearOk: false,
+        yearEmpty: false,
+        okCount: ok,
+        failed: failed,
+        cancelled: cancelled,
+        message: '',
+      ),
+    );
     return HolidayRangeSummary(
       ok: ok,
       failed: failed,
@@ -3637,10 +3804,13 @@ class MockOrbitBridge implements OrbitBridge {
   /// Mock 保留档位（内存态；跨端不持久，测试够用）
   int _trashRetentionDays = 30;
 
-  List<Map<String, dynamic>> get _trashed => store.tasks.values
-      .where((t) => t['is_deleted'] == 1 && t['deleted_at'] != null)
-      .toList()
-    ..sort((a, b) => (b['deleted_at'] as int).compareTo(a['deleted_at'] as int));
+  List<Map<String, dynamic>> get _trashed =>
+      store.tasks.values
+          .where((t) => t['is_deleted'] == 1 && t['deleted_at'] != null)
+          .toList()
+        ..sort(
+          (a, b) => (b['deleted_at'] as int).compareTo(a['deleted_at'] as int),
+        );
 
   @override
   Future<List<TodoTask>> trashTasksList() =>
@@ -3648,50 +3818,76 @@ class MockOrbitBridge implements OrbitBridge {
 
   @override
   Future<TodoTask> trashTaskRestore(int id) => _delay(() {
-        final t = store.tasks[id];
-        if (t == null || t['is_deleted'] != 1) {
-          throw Exception('task $id 不在回收站');
-        }
-        final now = store.now();
-        t['is_deleted'] = 0;
-        t['deleted_at'] = null;
-        t['updated_at'] = now;
-        t['version'] = (t['version'] as int) + 1;
-        // 对齐 Rust：原项目已删则落未分组
-        final pid = t['project_id'] as int?;
-        if (pid != null &&
-            !(store.projects[pid]?['is_deleted'] == 0)) {
-          t['project_id'] = null;
-        }
-        _emit('todo_tasks');
-        return TodoTask.fromJson(t);
-      });
+    final t = store.tasks[id];
+    if (t == null || t['is_deleted'] != 1) {
+      throw Exception('task $id 不在回收站');
+    }
+    final now = store.now();
+    t['is_deleted'] = 0;
+    t['deleted_at'] = null;
+    t['updated_at'] = now;
+    t['version'] = (t['version'] as int) + 1;
+    // 对齐 Rust：原项目已删则落未分组
+    final pid = t['project_id'] as int?;
+    if (pid != null && !(store.projects[pid]?['is_deleted'] == 0)) {
+      t['project_id'] = null;
+    }
+    _emit('todo_tasks');
+    return TodoTask.fromJson(t);
+  });
 
   @override
   Future<void> trashTaskPurge(int id) => _delay(() {
-        final t = store.tasks[id];
-        if (t == null || t['is_deleted'] != 1) {
-          throw Exception('task $id 不在回收站');
-        }
-        store.tasks.remove(id);
-        _emit('todo_tasks');
-      });
+    final t = store.tasks[id];
+    if (t == null || t['is_deleted'] != 1) {
+      throw Exception('task $id 不在回收站');
+    }
+    store.tasks.remove(id);
+    _emit('todo_tasks');
+  });
 
   @override
   Future<int> trashPurgeAll() => _delay(() {
-        final trashed = _trashed;
-        for (final t in trashed) {
-          store.tasks.remove(t['id'] as int);
-        }
-        _emit('todo_tasks');
-        return trashed.length;
-      });
+    final trashed = _trashed;
+    for (final t in trashed) {
+      store.tasks.remove(t['id'] as int);
+    }
+    _emit('todo_tasks');
+    return trashed.length;
+  });
 
   @override
-  Future<TrashMeta> trashMeta() async => TrashMeta(
-        retentionDays: _trashRetentionDays,
-        lastPurgeMs: 0,
-      );
+  Future<UpdateInfo> checkLatestRelease() => _delay(
+    () => const UpdateInfo(
+      // mock 固定返回「无新版本」，避免测试/纯 UI 开发时弹无关弹层
+      version: '0.0.0',
+      pubDate: null,
+      notes: null,
+      downloadUrl: 'https://github.com/mecoren/orbit/releases/latest',
+    ),
+  );
+
+  @override
+  Future<TrashPurgeStats> trashPurgeExpired() => _delay(() {
+    // 与 core 同口径：永久保留档不清理；只删已过保留期的墓碑
+    if (_trashRetentionDays == 0) {
+      return const TrashPurgeStats(purged: 0, guarded: 0, ran: true);
+    }
+    final cutoff =
+        DateTime.now().millisecondsSinceEpoch - _trashRetentionDays * 86400000;
+    final expired = _trashed
+        .where((t) => ((t['deleted_at'] as int?) ?? 0) <= cutoff)
+        .toList();
+    for (final t in expired) {
+      store.tasks.remove(t['id'] as int);
+    }
+    if (expired.isNotEmpty) _emit('todo_tasks');
+    return TrashPurgeStats(purged: expired.length, guarded: 0, ran: true);
+  });
+
+  @override
+  Future<TrashMeta> trashMeta() async =>
+      TrashMeta(retentionDays: _trashRetentionDays, lastPurgeMs: 0);
 
   @override
   Future<void> trashSetRetentionDays(int days) async {
@@ -3726,8 +3922,11 @@ class MockOrbitBridge implements OrbitBridge {
   @override
   Future<DigestSummary> digestSummary() async {
     final dayStart = DateTime.now();
-    final start = DateTime(dayStart.year, dayStart.month, dayStart.day)
-        .millisecondsSinceEpoch;
+    final start = DateTime(
+      dayStart.year,
+      dayStart.month,
+      dayStart.day,
+    ).millisecondsSinceEpoch;
     final end = start + 86400000;
     var dueToday = 0;
     var overdue = 0;
@@ -3770,212 +3969,240 @@ class MockOrbitBridge implements OrbitBridge {
 
   @override
   Future<StatsAggregate> statsAggregate({int? year}) => _delay(() {
-        final selectedYear = year ?? DateTime.now().year;
-        final live = store.tasks.values
-            .where((t) => t['is_deleted'] == 0)
-            .toList(growable: false);
-        final doneTasks = live
-            .where((t) => t['done'] == 1 && t['done_at'] != null)
-            .toList(growable: false);
+    final selectedYear = year ?? DateTime.now().year;
+    final live = store.tasks.values
+        .where((t) => t['is_deleted'] == 0)
+        .toList(growable: false);
+    final doneTasks = live
+        .where((t) => t['done'] == 1 && t['done_at'] != null)
+        .toList(growable: false);
 
-        String dayKey(int ms) {
-          final d = DateTime.fromMillisecondsSinceEpoch(ms);
-          return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-        }
+    String dayKey(int ms) {
+      final d = DateTime.fromMillisecondsSinceEpoch(ms);
+      return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+    }
 
-        int idxOf(String key) =>
-            DateTime.parse(key).millisecondsSinceEpoch ~/ 86400000;
+    int idxOf(String key) =>
+        DateTime.parse(key).millisecondsSinceEpoch ~/ 86400000;
 
-        final today = DateTime.now();
-        final todayKey =
-            '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
-        final tIdx = idxOf(todayKey);
-        // 年份窗口：当前年 = 滚动 365 天（今天往前 364 天到今天）；历史年 = 1/1 ~ 12/31
-        final DateTime from;
-        final DateTime to;
-        if (selectedYear == today.year) {
-          final t0 = today.copyWith(
-              hour: 0, minute: 0, second: 0, millisecond: 0, microsecond: 0);
-          from = t0.subtract(const Duration(days: 364));
-          to = t0;
-        } else {
-          from = DateTime(selectedYear, 1, 1);
-          to = DateTime(selectedYear, 12, 31);
-        }
-        final startMs = from.millisecondsSinceEpoch;
-        final endMs = to.millisecondsSinceEpoch + 86400000 - 1;
+    final today = DateTime.now();
+    final todayKey =
+        '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+    final tIdx = idxOf(todayKey);
+    // 年份窗口：当前年 = 滚动 365 天（今天往前 364 天到今天）；历史年 = 1/1 ~ 12/31
+    final DateTime from;
+    final DateTime to;
+    if (selectedYear == today.year) {
+      final t0 = today.copyWith(
+        hour: 0,
+        minute: 0,
+        second: 0,
+        millisecond: 0,
+        microsecond: 0,
+      );
+      from = t0.subtract(const Duration(days: 364));
+      to = t0;
+    } else {
+      from = DateTime(selectedYear, 1, 1);
+      to = DateTime(selectedYear, 12, 31);
+    }
+    final startMs = from.millisecondsSinceEpoch;
+    final endMs = to.millisecondsSinceEpoch + 86400000 - 1;
 
-        final byDay = <String, int>{};
-        for (final t in doneTasks) {
-          final doneAt = t['done_at'] as int;
-          if (doneAt >= startMs && doneAt <= endMs) {
-            final k = dayKey(doneAt);
-            byDay[k] = (byDay[k] ?? 0) + 1;
-          }
-        }
-        final cells = <StatsHeatmapCell>[];
-        for (var ms = startMs; ms <= endMs; ms += 86400000) {
-          final k = dayKey(ms);
-          cells.add(StatsHeatmapCell(date: k, count: byDay[k] ?? 0));
-        }
+    final byDay = <String, int>{};
+    for (final t in doneTasks) {
+      final doneAt = t['done_at'] as int;
+      if (doneAt >= startMs && doneAt <= endMs) {
+        final k = dayKey(doneAt);
+        byDay[k] = (byDay[k] ?? 0) + 1;
+      }
+    }
+    final cells = <StatsHeatmapCell>[];
+    for (var ms = startMs; ms <= endMs; ms += 86400000) {
+      final k = dayKey(ms);
+      cells.add(StatsHeatmapCell(date: k, count: byDay[k] ?? 0));
+    }
 
-        // 可选年份：全部完成记录的年份（不看窗口）；无完成记录回退 [当前年]
-        final availableYears = <int>{
-          for (final t in doneTasks)
-            DateTime.fromMillisecondsSinceEpoch(t['done_at'] as int).year,
-          if (doneTasks.isEmpty) today.year,
-        }.toList()
-          ..sort();
+    // 可选年份：全部完成记录的年份（不看窗口）；无完成记录回退 [当前年]
+    final availableYears = <int>{
+      for (final t in doneTasks)
+        DateTime.fromMillisecondsSinceEpoch(t['done_at'] as int).year,
+      if (doneTasks.isEmpty) today.year,
+    }.toList()..sort();
 
-        // streak（断档规则对齐 core compute_streak）
-        final doneIdx = byDay.keys.map(idxOf).toSet();
-        final doneToday = doneIdx.contains(tIdx);
-        var anchor = doneToday ? tIdx : tIdx - 1;
-        var current = 0;
-        while (doneIdx.contains(anchor)) {
-          current++;
-          anchor--;
-        }
-        var best = 0;
-        var run = 0;
-        int? prev;
-        for (final i in doneIdx.toList()..sort()) {
-          run = prev == i - 1 ? run + 1 : 1;
-          if (run > best) best = run;
-          prev = i;
-        }
+    // streak（断档规则对齐 core compute_streak）
+    final doneIdx = byDay.keys.map(idxOf).toSet();
+    final doneToday = doneIdx.contains(tIdx);
+    var anchor = doneToday ? tIdx : tIdx - 1;
+    var current = 0;
+    while (doneIdx.contains(anchor)) {
+      current++;
+      anchor--;
+    }
+    var best = 0;
+    var run = 0;
+    int? prev;
+    for (final i in doneIdx.toList()..sort()) {
+      run = prev == i - 1 ? run + 1 : 1;
+      if (run > best) best = run;
+      prev = i;
+    }
 
-        int inLast(int n) {
-          final cutoff = tIdx - (n - 1);
-          return doneTasks
-              .where((t) => idxOf(dayKey(t['done_at'] as int)) >= cutoff)
-              .length;
-        }
+    int inLast(int n) {
+      final cutoff = tIdx - (n - 1);
+      return doneTasks
+          .where((t) => idxOf(dayKey(t['done_at'] as int)) >= cutoff)
+          .length;
+    }
 
-        final byProjectMap = <Object, StatsProjectRow>{};
-        for (final t in live) {
-          final key = t['project_id'] ?? 'none';
-          final existing = byProjectMap[key];
-          final pid = t['project_id'] as int?;
-          final project = pid != null ? store.projects[pid] : null;
-          final title =
-              project != null ? (project['title'] as String? ?? '未知项目') : null;
-          final row = existing ??
-              StatsProjectRow(
-                projectId: pid,
-                projectTitle: title,
-                projectHexColor: project?['hex_color'] as String?,
-                doneCount: 0,
-                pendingCount: 0,
-              );
-          byProjectMap[key] = StatsProjectRow(
-            projectId: row.projectId,
-            projectTitle: row.projectTitle,
-            projectHexColor: row.projectHexColor,
-            doneCount: row.doneCount + (t['done'] == 1 ? 1 : 0),
-            pendingCount: row.pendingCount + (t['done'] == 1 ? 0 : 1),
+    final byProjectMap = <Object, StatsProjectRow>{};
+    for (final t in live) {
+      final key = t['project_id'] ?? 'none';
+      final existing = byProjectMap[key];
+      final pid = t['project_id'] as int?;
+      final project = pid != null ? store.projects[pid] : null;
+      final title = project != null
+          ? (project['title'] as String? ?? '未知项目')
+          : null;
+      final row =
+          existing ??
+          StatsProjectRow(
+            projectId: pid,
+            projectTitle: title,
+            projectHexColor: project?['hex_color'] as String?,
+            doneCount: 0,
+            pendingCount: 0,
           );
-        }
+      byProjectMap[key] = StatsProjectRow(
+        projectId: row.projectId,
+        projectTitle: row.projectTitle,
+        projectHexColor: row.projectHexColor,
+        doneCount: row.doneCount + (t['done'] == 1 ? 1 : 0),
+        pendingCount: row.pendingCount + (t['done'] == 1 ? 0 : 1),
+      );
+    }
 
-        final byPriorityMap = <int, StatsPriorityRow>{};
-        for (final t in live) {
-          final p = t['priority'] as int;
-          final row = byPriorityMap[p] ?? StatsPriorityRow(priority: p, doneCount: 0, pendingCount: 0);
-          byPriorityMap[p] = StatsPriorityRow(
-            priority: p,
-            doneCount: row.doneCount + (t['done'] == 1 ? 1 : 0),
-            pendingCount: row.pendingCount + (t['done'] == 1 ? 0 : 1),
-          );
-        }
+    final byPriorityMap = <int, StatsPriorityRow>{};
+    for (final t in live) {
+      final p = t['priority'] as int;
+      final row =
+          byPriorityMap[p] ??
+          StatsPriorityRow(priority: p, doneCount: 0, pendingCount: 0);
+      byPriorityMap[p] = StatsPriorityRow(
+        priority: p,
+        doneCount: row.doneCount + (t['done'] == 1 ? 1 : 0),
+        pendingCount: row.pendingCount + (t['done'] == 1 ? 0 : 1),
+      );
+    }
 
-        final byWeekday = List.filled(7, 0, growable: false);
-        for (final t in doneTasks) {
-          // 周一=0 基（对齐 Rust num_days_from_monday）
-          byWeekday[(DateTime.fromMillisecondsSinceEpoch(t['done_at'] as int)
-                      .weekday -
-                  1)]++;
-        }
+    final byWeekday = List.filled(7, 0, growable: false);
+    for (final t in doneTasks) {
+      // 周一=0 基（对齐 Rust num_days_from_monday）
+      byWeekday[(DateTime.fromMillisecondsSinceEpoch(
+            t['done_at'] as int,
+          ).weekday -
+          1)]++;
+    }
 
-        return StatsAggregate(
-          overview: StatsOverview(
-            total: live.length,
-            pending: live.where((t) => t['done'] == 0).length,
-            done: doneTasks.length,
-            doneLast7d: inLast(7),
-            doneLast30d: inLast(30),
-          ),
-          heatmap: StatsHeatmap(
-            year: selectedYear,
-            startDate: cells.first.date,
-            endDate: cells.last.date,
-            cells: cells,
-          ),
-          streak: StatsStreak(
-            current: current,
-            best: best,
-            doneToday: doneToday,
-          ),
-          byProject: byProjectMap.values.toList()
-            ..sort((a, b) => b.doneCount.compareTo(a.doneCount)),
-          byPriority: byPriorityMap.values.toList()
-            ..sort((a, b) => a.priority.compareTo(b.priority)),
-          byWeekday: [
-            for (var i = 0; i < 7; i++)
-              StatsWeekdayRow(weekday: i, doneCount: byWeekday[i]),
-          ],
-          availableYears: availableYears,
-        );
-      });
+    return StatsAggregate(
+      overview: StatsOverview(
+        total: live.length,
+        pending: live.where((t) => t['done'] == 0).length,
+        done: doneTasks.length,
+        doneLast7d: inLast(7),
+        doneLast30d: inLast(30),
+      ),
+      heatmap: StatsHeatmap(
+        year: selectedYear,
+        startDate: cells.first.date,
+        endDate: cells.last.date,
+        cells: cells,
+      ),
+      streak: StatsStreak(current: current, best: best, doneToday: doneToday),
+      byProject: byProjectMap.values.toList()
+        ..sort((a, b) => b.doneCount.compareTo(a.doneCount)),
+      byPriority: byPriorityMap.values.toList()
+        ..sort((a, b) => a.priority.compareTo(b.priority)),
+      byWeekday: [
+        for (var i = 0; i < 7; i++)
+          StatsWeekdayRow(weekday: i, doneCount: byWeekday[i]),
+      ],
+      availableYears: availableYears,
+    );
+  });
 
   // ── 全局搜索（backlog #26；口径对齐 business_api::search_all：三路 LIKE、软删过滤）──
 
   @override
-  Future<GlobalSearchResult> globalSearch(String keyword, {int? limit}) =>
-      _delay(() {
-        final kw = keyword.trim();
-        final n = (limit ?? 20) <= 0 ? 20 : (limit ?? 20);
-        if (kw.isEmpty) {
-          return const GlobalSearchResult(tasks: [], projects: [], comments: []);
-        }
-        final pattern = kw.toLowerCase();
+  Future<GlobalSearchResult> globalSearch(
+    String keyword, {
+    int? limit,
+  }) => _delay(() {
+    final kw = keyword.trim();
+    final n = (limit ?? 20) <= 0 ? 20 : (limit ?? 20);
+    if (kw.isEmpty) {
+      return const GlobalSearchResult(tasks: [], projects: [], comments: []);
+    }
+    final pattern = kw.toLowerCase();
 
-        bool hit(Map<String, dynamic> row, List<String> fields) => fields
-            .any((f) => (row[f] as String?)?.toLowerCase().contains(pattern) ?? false);
+    bool hit(Map<String, dynamic> row, List<String> fields) => fields.any(
+      (f) => (row[f] as String?)?.toLowerCase().contains(pattern) ?? false,
+    );
 
-        final tasks = store.tasks.values
-            .where((t) => t['is_deleted'] == 0 && hit(t, ['title', 'description']))
+    final tasks =
+        store.tasks.values
+            .where(
+              (t) => t['is_deleted'] == 0 && hit(t, ['title', 'description']),
+            )
             .toList()
-          ..sort((a, b) => (b['updated_at'] as int).compareTo(a['updated_at'] as int));
-        final projects = store.projects.values
-            .where((p) => p['is_deleted'] == 0 && hit(p, ['title', 'description']))
+          ..sort(
+            (a, b) =>
+                (b['updated_at'] as int).compareTo(a['updated_at'] as int),
+          );
+    final projects =
+        store.projects.values
+            .where(
+              (p) => p['is_deleted'] == 0 && hit(p, ['title', 'description']),
+            )
             .toList()
-          ..sort((a, b) => ((a['sort_order'] as int).compareTo(b['sort_order'] as int)));
-        final comments = store.comments.values
-            .where((c) =>
-                c['is_deleted'] == 0 &&
-                (c['content'] as String? ?? '').toLowerCase().contains(pattern))
+          ..sort(
+            (a, b) =>
+                ((a['sort_order'] as int).compareTo(b['sort_order'] as int)),
+          );
+    final comments =
+        store.comments.values
+            .where(
+              (c) =>
+                  c['is_deleted'] == 0 &&
+                  (c['content'] as String? ?? '').toLowerCase().contains(
+                    pattern,
+                  ),
+            )
             .toList()
-          ..sort((a, b) => (b['created_at'] as int).compareTo(a['created_at'] as int));
+          ..sort(
+            (a, b) =>
+                (b['created_at'] as int).compareTo(a['created_at'] as int),
+          );
 
-        return GlobalSearchResult(
-          tasks: tasks.take(n).map(TodoTask.fromJson).toList(),
-          projects: projects.take(n).map(TodoProject.fromJson).toList(),
-          comments: comments
-              .take(n)
-              .map((c) {
-                final task = store.tasks[c['task_id'] as int];
-                return CommentSearchHit(
-                  commentId: c['id'] as int,
-                  taskId: c['task_id'] as int,
-                  taskTitle: (task?['title'] as String?) ?? '',
-                  content: c['content'] as String? ?? '',
-                  createdAt: c['created_at'] as int,
-                );
-              })
-              .where((c) => c.taskTitle.isNotEmpty)
-              .toList(),
-        );
-      });
+    return GlobalSearchResult(
+      tasks: tasks.take(n).map(TodoTask.fromJson).toList(),
+      projects: projects.take(n).map(TodoProject.fromJson).toList(),
+      comments: comments
+          .take(n)
+          .map((c) {
+            final task = store.tasks[c['task_id'] as int];
+            return CommentSearchHit(
+              commentId: c['id'] as int,
+              taskId: c['task_id'] as int,
+              taskTitle: (task?['title'] as String?) ?? '',
+              content: c['content'] as String? ?? '',
+              createdAt: c['created_at'] as int,
+            );
+          })
+          .where((c) => c.taskTitle.isNotEmpty)
+          .toList(),
+    );
+  });
 
   // ── 事件流 ──
 
