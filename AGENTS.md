@@ -107,6 +107,10 @@ cargo test -p orbit-core --test sync_fault_matrix   # CI 同名步骤（零外�
 # 注：本机若常驻 HTTP_PROXY/HTTPS_PROXY，reqwest 会按代理约定发 absolute-form 请求行；夹具已按
 # RFC 7230 §5.3.2 归一为路径。日后若再见到「服务端对象键/请求行里出现完整 URL」的断言失败，
 # 先查代理环境变量，不要改断言、也不要给生产 HttpClient 加 no_proxy（会剥夺用户的公司代理能力）。
+# 注：若大批用例同时死在 `tempfile`/`write_atomic`/`backup_*` 且报
+# PermissionDenied（形如 %TEMP%\.tmpXXXX 拒绝访问），是本机 %TEMP% 对测试子进程
+# 拒写（PowerShell 自己能写、cargo 子进程不能），不是代码回归：把 TEMP/TMP 指到
+# 仓库内目录复跑即可（`$env:TEMP="$PWD\target\tmp"; $env:TMP=$env:TEMP`）。
 cd apps/desktop/src-tauri && cargo check   # 桌面壳单独检查（嵌套 workspace）
 # 桌面壳**不是 rustfmt-clean**（HEAD 即有数个文件不合规）：在该目录跑裸
 # `cargo fmt` 会顺手重排 9+ 个他人文件产生噪音 diff；只格式化自己改的那个文件用
