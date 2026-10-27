@@ -109,8 +109,9 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
           _autoEnabled = c.autoSyncEnabled;
           _onChange = c.syncOnChange;
           _skipTls = c.skipTlsVerify;
-          _timeoutController.text =
-              c.timeoutSeconds <= 0 ? '30' : '${c.timeoutSeconds}';
+          _timeoutController.text = c.timeoutSeconds <= 0
+              ? '30'
+              : '${c.timeoutSeconds}';
         } else {
           _engine = 'webdav';
           _endpointController.clear();
@@ -139,30 +140,31 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
 
   /// 保存载荷（snake_case 键，同桌面 buildInput 语义：密码留空沿用已存凭据）
   Map<String, Object?> _buildInput() => {
-        'engine': _engine,
-        'endpoint': _endpointController.text.trim(),
-        'bucket': _engine == 's3' ? _bucketController.text.trim() : '',
-        'region': _engine == 's3' ? _regionController.text.trim() : '',
-        'username': _usernameController.text,
-        'password': _passwordController.text,
-        'base_path': _basePathController.text.trim().isEmpty
-            ? 'orbit'
-            : _basePathController.text.trim(),
-        'interval_minutes': _autoEnabled ? _intervalMin : 0,
-        'auto_sync_enabled': _autoEnabled,
-        'sync_on_change': _onChange,
-        'skip_tls_verify': _skipTls,
-        'timeout_seconds': int.tryParse(_timeoutController.text) ?? 30,
-        // F80：留空沿用已存令牌（与密码同语义）
-        'session_token': _engine == 's3' ? _sessionTokenController.text : '',
-      };
+    'engine': _engine,
+    'endpoint': _endpointController.text.trim(),
+    'bucket': _engine == 's3' ? _bucketController.text.trim() : '',
+    'region': _engine == 's3' ? _regionController.text.trim() : '',
+    'username': _usernameController.text,
+    'password': _passwordController.text,
+    'base_path': _basePathController.text.trim().isEmpty
+        ? 'orbit'
+        : _basePathController.text.trim(),
+    'interval_minutes': _autoEnabled ? _intervalMin : 0,
+    'auto_sync_enabled': _autoEnabled,
+    'sync_on_change': _onChange,
+    'skip_tls_verify': _skipTls,
+    'timeout_seconds': int.tryParse(_timeoutController.text) ?? 30,
+    // F80：留空沿用已存令牌（与密码同语义）
+    'session_token': _engine == 's3' ? _sessionTokenController.text : '',
+  };
 
   Future<void> _testConnection() async {
     if (_testing) return;
     setState(() => _testing = true);
     try {
-      final n =
-          await ref.read(orbitBridgeProvider).syncTestConnection(_buildInput());
+      final n = await ref
+          .read(orbitBridgeProvider)
+          .syncTestConnection(_buildInput());
       WaitToast.success('连接成功（根目录 $n 个条目）');
     } catch (e) {
       WaitToast.destructive('连接失败：${_errMsg(e)}');
@@ -212,7 +214,8 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
             child: ListView(
               controller: _scrollController,
               padding: EdgeInsets.only(
-                top: MediaQuery.of(context).padding.top +
+                top:
+                    MediaQuery.of(context).padding.top +
                     OrbitPageHeader.rowHeight +
                     AppDimens.space16,
                 left: AppDimens.space16,
@@ -222,9 +225,11 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
               children: [
                 SectionCard(
                   title: '云同步连接',
-                  subtitle: _config == null ? null : '已配置 · ${_engineLabel(_engine)}',
+                  subtitle: _config == null
+                      ? null
+                      : '已配置 · ${_engineLabel(_engine)}',
                   child: _loading
-                      ? const Padding(
+                      ? Padding(
                           padding: EdgeInsets.all(AppDimens.space16),
                           child: Center(
                             child: SizedBox(
@@ -254,17 +259,14 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
             top: 0,
             left: 0,
             right: 0,
-            child: OrbitPageHeader(
-              title: '云同步配置',
-            ),
+            child: OrbitPageHeader(title: '云同步配置'),
           ),
         ],
       ),
     );
   }
 
-  String _engineLabel(String engine) =>
-      engine == 's3' ? 'S3' : 'WebDAV';
+  String _engineLabel(String engine) => engine == 's3' ? 'S3' : 'WebDAV';
 
   /// 定时同步间隔档位（桌面同款五档；存量配置的非档位值按分钟/小时回显）
   static const _intervalChoices = <int, String>{
@@ -281,31 +283,31 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
 
   /// 引擎选择抽屉（两档）
   Future<void> _pickEngine() => showSelectBottomSheet<String>(
-        context,
-        title: '同步引擎',
-        items: const [
-          SelectItem(value: 'webdav', label: 'WebDAV'),
-          SelectItem(value: 's3', label: 'S3 兼容存储'),
-        ],
-        current: _engine,
-        onSelect: (v) {
-          if (mounted) setState(() => _engine = v);
-        },
-      );
+    context,
+    title: '同步引擎',
+    items: const [
+      SelectItem(value: 'webdav', label: 'WebDAV'),
+      SelectItem(value: 's3', label: 'S3 兼容存储'),
+    ],
+    current: _engine,
+    onSelect: (v) {
+      if (mounted) setState(() => _engine = v);
+    },
+  );
 
   /// 定时同步间隔抽屉（开关关闭时行不可点）
   Future<void> _pickInterval() => showSelectBottomSheet<int>(
-        context,
-        title: '定时同步间隔',
-        items: [
-          for (final e in _intervalChoices.entries)
-            SelectItem(value: e.key, label: e.value),
-        ],
-        current: _intervalMin,
-        onSelect: (v) {
-          if (mounted) setState(() => _intervalMin = v);
-        },
-      );
+    context,
+    title: '定时同步间隔',
+    items: [
+      for (final e in _intervalChoices.entries)
+        SelectItem(value: e.key, label: e.value),
+    ],
+    current: _intervalMin,
+    onSelect: (v) {
+      if (mounted) setState(() => _intervalMin = v);
+    },
+  );
 
   /// 表单选择行：只读展示当前值 + 尾箭头，点行唤起底部抽屉
   /// （选择类交互统一底部抽屉，AGENTS.md 移动端约定；装饰沿用表单
@@ -317,34 +319,32 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
     required String value,
     required VoidCallback? onTap,
     double fontSize = 15,
-  }) =>
-      InputDecorator(
-        decoration: InputDecoration(labelText: label),
-        child: InkWell(
-          onTap: onTap,
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: fontSize,
-                    color:
-                        onTap == null ? colors.secondaryText : colors.bodyText,
-                  ),
-                ),
+  }) => InputDecorator(
+    decoration: InputDecoration(labelText: label),
+    child: InkWell(
+      onTap: onTap,
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: fontSize,
+                color: onTap == null ? colors.secondaryText : colors.bodyText,
               ),
-              Icon(
-                OrbitIcons.chevronRight,
-                size: AppDimens.iconSizeSm + 2,
-                color: colors.secondaryText,
-              ),
-            ],
+            ),
           ),
-        ),
-      );
+          Icon(
+            OrbitIcons.chevronRight,
+            size: AppDimens.iconSizeSm + 2,
+            color: colors.secondaryText,
+          ),
+        ],
+      ),
+    ),
+  );
 
   Widget _connectionForm(AppColorSet colors) {
     final isS3 = _engine == 's3';
@@ -367,7 +367,9 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
           style: TextStyle(fontSize: 15, color: colors.bodyText),
           decoration: InputDecoration(
             labelText: isS3 ? 'Endpoint' : '服务器地址',
-            hintText: isS3 ? 'https://s3.example.com' : 'https://dav.example.com/dav',
+            hintText: isS3
+                ? 'https://s3.example.com'
+                : 'https://dav.example.com/dav',
           ),
           onChanged: (_) => setState(() {}),
         ),
@@ -392,8 +394,7 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
         TextFormField(
           controller: _usernameController,
           style: TextStyle(fontSize: 15, color: colors.bodyText),
-          decoration:
-              InputDecoration(labelText: isS3 ? 'Access Key' : '用户名'),
+          decoration: InputDecoration(labelText: isS3 ? 'Access Key' : '用户名'),
         ),
         const SizedBox(height: AppDimens.space12),
         TextFormField(
@@ -463,8 +464,8 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
           description: !_onChange
               ? '仅按定时或手动同步'
               : _autoEnabled
-                  ? '编辑后约 5 秒自动推送（需已解锁同步密码）'
-                  : '编辑后约 5 秒自动推送（需开启上方「定时同步」总开关）',
+              ? '编辑后约 5 秒自动推送（需已解锁同步密码）'
+              : '编辑后约 5 秒自动推送（需开启上方「定时同步」总开关）',
         ),
         const SizedBox(height: AppDimens.space12),
         Row(
@@ -503,15 +504,13 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
             if (_config != null)
               TextButton(
                 onPressed: _busy ? null : () => _confirmDisconnect(context),
-                child: Text(
-                  '断开',
-                  style: TextStyle(color: colors.destructive),
-                ),
+                child: Text('断开', style: TextStyle(color: colors.destructive)),
               ),
             const SizedBox(width: AppDimens.space8),
             OutlinedButton(
-              onPressed:
-                  (_testing || _busy || endpointEmpty) ? null : _testConnection,
+              onPressed: (_testing || _busy || endpointEmpty)
+                  ? null
+                  : _testConnection,
               child: _testing
                   ? const SizedBox(
                       width: AppDimens.iconSizeSm,
@@ -655,10 +654,10 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
 
   /// 密钥方案版本展示文案
   String get _metaVersionLabel => switch (_metaVersion) {
-        'v1' => 'v1（旧版随机密钥）',
-        'v2' => 'v2（同密码跨设备同 Key）',
-        _ => '未知',
-      };
+    'v1' => 'v1（旧版随机密钥）',
+    'v2' => 'v2（同密码跨设备同 Key）',
+    _ => '未知',
+  };
 
   String _errMsg(Object e) => e
       .toString()
@@ -710,7 +709,8 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
       await _refresh();
     } catch (e) {
       WaitToast.destructive(
-          e.toString().contains('wrong_password') ? '同步密码错误' : _errMsg(e));
+        e.toString().contains('wrong_password') ? '同步密码错误' : _errMsg(e),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -746,7 +746,8 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
       final values = await showPasswordSheet(
         context,
         title: '修改同步密码',
-        message: 'v2 密钥方案下改密等于更换密钥，会把云端数据全量重传一次；'
+        message:
+            'v2 密钥方案下改密等于更换密钥，会把云端数据全量重传一次；'
             '其他设备在此期间请勿同步。',
         labels: const ['当前同步密码', '新同步密码', '确认新密码'],
         confirmLabel: '确认修改',
@@ -803,7 +804,8 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
     final ok = await showConfirmBottomSheet(
       context,
       title: '清除本机同步密码缓存？',
-      message: '仅清除本机内存中的会话密码与已解锁状态，云端数据与密钥不受影响；'
+      message:
+          '仅清除本机内存中的会话密码与已解锁状态，云端数据与密钥不受影响；'
           '下次同步前需要重新输入同步密码。',
       confirmLabel: '清除',
     );
@@ -825,7 +827,8 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
       final values = await showPasswordSheet(
         context,
         title: '升级密钥方案到 v2',
-        message: '升级后同一同步密码在任何设备都派生同一把密钥，不再需要密钥包分发，'
+        message:
+            '升级后同一同步密码在任何设备都派生同一把密钥，不再需要密钥包分发，'
             '可彻底避免「密钥不一致」。升级会立即用新密钥全量重传云端数据，'
             '期间请勿在其他设备同步。此操作不可撤销。',
         labels: const ['当前同步密码'],
@@ -851,7 +854,8 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
     final ok = await showConfirmBottomSheet(
       context,
       title: '以本机为准重置云端',
-      message: '将用当前设备的数据密钥重加密并覆盖云端全部数据：仅存于云端的记录与附件'
+      message:
+          '将用当前设备的数据密钥重加密并覆盖云端全部数据：仅存于云端的记录与附件'
           '会永久丢失，其他设备需输入本机当前同步密码后重新同步。'
           '此操作不可撤销，请确认云端数据已无需保留。',
       confirmLabel: '确认重置云端',
@@ -862,8 +866,9 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
     try {
       // 真桥返回 result_to_json 的 JSON 串（非对象），与桌面同源结构
       final raw = await ref.read(orbitBridgeProvider).cloudSyncRekey();
-      final result =
-          SyncResultJson.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+      final result = SyncResultJson.fromJson(
+        jsonDecode(raw) as Map<String, dynamic>,
+      );
       WaitToast.success(
         '云端已重置：${result.pushedModules} 个模块、'
         '${result.uploadedAttachments} 个附件已用本机密钥重传',
@@ -933,8 +938,10 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
     return SectionCard(
       title: '同步密码（端到端加密）',
       child: status == null
-          ? Text('加载中…',
-              style: TextStyle(fontSize: 12, color: colors.secondaryText))
+          ? Text(
+              '加载中…',
+              style: TextStyle(fontSize: 12, color: colors.secondaryText),
+            )
           : Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -964,9 +971,7 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
                   Row(
                     children: [
                       Icon(
-                        status.isUnlocked
-                            ? OrbitIcons.shield
-                            : OrbitIcons.lock,
+                        status.isUnlocked ? OrbitIcons.shield : OrbitIcons.lock,
                         size: AppDimens.iconSizeMd,
                         color: status.isUnlocked
                             ? colors.success
@@ -1193,7 +1198,7 @@ class _SyncHistoryCardState extends ConsumerState<_SyncHistoryCard> {
           ),
           const SizedBox(height: AppDimens.space8),
           if (_loading)
-            const Padding(
+            Padding(
               padding: EdgeInsets.all(AppDimens.space16),
               child: Center(
                 child: SizedBox(
@@ -1374,7 +1379,7 @@ class _SyncLedgerCardState extends ConsumerState<_SyncLedgerCard> {
         child: const Text('刷新'),
       ),
       child: _loading && state == null
-          ? const Padding(
+          ? Padding(
               padding: EdgeInsets.all(AppDimens.space16),
               child: Center(
                 child: SizedBox(
@@ -1388,59 +1393,73 @@ class _SyncLedgerCardState extends ConsumerState<_SyncLedgerCard> {
               ),
             )
           : state == null
-              ? Text(
-                  '读取失败：${_errMsg(_error!)}',
-                  style: TextStyle(fontSize: 12, color: colors.destructive),
-                )
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _row(colors, '上次同步', formatLastSynced(state.lastSyncedAt)),
-                    _row(colors, '推送水位线',
-                        formatLedgerClockMs(state.lastPushedClockMs)),
-                    _row(colors, '拉取水位线',
-                        formatLedgerClockMs(state.lastSyncedClockMs)),
-                    _row(colors, '远端清单',
-                        state.manifestEpoch > 0 ? 'epoch ${state.manifestEpoch}' : '未建立'),
-                    _row(colors, '本机设备',
-                        state.deviceId.isEmpty ? '—' : state.deviceId),
-                    const SizedBox(height: AppDimens.space12),
-                    _buckets(colors, '远端数据桶', state.remoteTables),
-                    const SizedBox(height: AppDimens.space12),
-                    _buckets(colors, '远端墓碑桶', state.remoteTombstones),
-                    const SizedBox(height: AppDimens.space8),
-                    Text(
-                      '指纹 = 桶内数据（按 uuid 排序、排除时间戳与自增 id）的 sha256 前 8 位；'
-                      '两台设备同一桶指纹相同即该桶内容一致。',
-                      style: TextStyle(fontSize: 11, color: colors.secondaryText),
-                    ),
-                  ],
+          ? Text(
+              '读取失败：${_errMsg(_error!)}',
+              style: TextStyle(fontSize: 12, color: colors.destructive),
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _row(colors, '上次同步', formatLastSynced(state.lastSyncedAt)),
+                _row(
+                  colors,
+                  '推送水位线',
+                  formatLedgerClockMs(state.lastPushedClockMs),
                 ),
+                _row(
+                  colors,
+                  '拉取水位线',
+                  formatLedgerClockMs(state.lastSyncedClockMs),
+                ),
+                _row(
+                  colors,
+                  '远端清单',
+                  state.manifestEpoch > 0
+                      ? 'epoch ${state.manifestEpoch}'
+                      : '未建立',
+                ),
+                _row(
+                  colors,
+                  '本机设备',
+                  state.deviceId.isEmpty ? '—' : state.deviceId,
+                ),
+                const SizedBox(height: AppDimens.space12),
+                _buckets(colors, '远端数据桶', state.remoteTables),
+                const SizedBox(height: AppDimens.space12),
+                _buckets(colors, '远端墓碑桶', state.remoteTombstones),
+                const SizedBox(height: AppDimens.space8),
+                Text(
+                  '指纹 = 桶内数据（按 uuid 排序、排除时间戳与自增 id）的 sha256 前 8 位；'
+                  '两台设备同一桶指纹相同即该桶内容一致。',
+                  style: TextStyle(fontSize: 11, color: colors.secondaryText),
+                ),
+              ],
+            ),
     );
   }
 
   /// 键值行：定宽标签 + 可换行取值（设备 ID 等长串折行不撑破卡片）
   Widget _row(AppColorSet colors, String label, String value) => Padding(
-        padding: const EdgeInsets.only(bottom: AppDimens.space6),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: 76,
-              child: Text(
-                label,
-                style: TextStyle(fontSize: 12, color: colors.secondaryText),
-              ),
-            ),
-            Expanded(
-              child: Text(
-                value,
-                style: TextStyle(fontSize: 12, color: colors.bodyText),
-              ),
-            ),
-          ],
+    padding: const EdgeInsets.only(bottom: AppDimens.space6),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 76,
+          child: Text(
+            label,
+            style: TextStyle(fontSize: 12, color: colors.secondaryText),
+          ),
         ),
-      );
+        Expanded(
+          child: Text(
+            value,
+            style: TextStyle(fontSize: 12, color: colors.bodyText),
+          ),
+        ),
+      ],
+    ),
+  );
 
   /// 一张桶指纹表（表名 + 桶数 + 各桶「键:指纹前 8 位」）
   Widget _buckets(
@@ -1516,8 +1535,9 @@ class _CloudCleanupCardState extends ConsumerState<_CloudCleanupCard> {
   Future<void> _scan() async {
     setState(() => _scanning = true);
     try {
-      final result =
-          await ref.read(orbitBridgeProvider).cloudUnusedAttachmentsScan();
+      final result = await ref
+          .read(orbitBridgeProvider)
+          .cloudUnusedAttachmentsScan();
       if (!mounted) return;
       if (result.items.isEmpty) {
         WaitToast.success('没有可清理的云端附件');
@@ -1585,22 +1605,24 @@ class _CloudCleanupCardState extends ConsumerState<_CloudCleanupCard> {
                         onPressed: busy
                             ? null
                             : () => setSheetState(() {
-                                  if (allSelected) {
-                                    selected.clear();
-                                  } else {
-                                    selected
-                                      ..clear()
-                                      ..addAll(result.items.map((i) => i.hash));
-                                  }
-                                }),
+                                if (allSelected) {
+                                  selected.clear();
+                                } else {
+                                  selected
+                                    ..clear()
+                                    ..addAll(result.items.map((i) => i.hash));
+                                }
+                              }),
                         child: Text(allSelected ? '取消全选' : '全选'),
                       ),
                       const Spacer(),
                       Text(
                         '已选 ${selected.length} / 共 ${result.items.length} 项 · '
                         '${humanFileSize(bytes)}',
-                        style:
-                            TextStyle(fontSize: 12, color: colors.secondaryText),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colors.secondaryText,
+                        ),
                       ),
                     ],
                   ),
@@ -1621,12 +1643,12 @@ class _CloudCleanupCardState extends ConsumerState<_CloudCleanupCard> {
                             onToggle: busy
                                 ? () {}
                                 : () => setSheetState(() {
-                                      if (checked) {
-                                        selected.remove(item.hash);
-                                      } else {
-                                        selected.add(item.hash);
-                                      }
-                                    }),
+                                    if (checked) {
+                                      selected.remove(item.hash);
+                                    } else {
+                                      selected.add(item.hash);
+                                    }
+                                  }),
                           ),
                           title: Text(
                             item.label,
@@ -1654,8 +1676,9 @@ class _CloudCleanupCardState extends ConsumerState<_CloudCleanupCard> {
                   Row(
                     children: [
                       OutlinedButton(
-                        onPressed:
-                            busy ? null : () => Navigator.pop(sheetContext),
+                        onPressed: busy
+                            ? null
+                            : () => Navigator.pop(sheetContext),
                         child: const Text('取消'),
                       ),
                       const SizedBox(width: AppDimens.space12),
@@ -1675,8 +1698,7 @@ class _CloudCleanupCardState extends ConsumerState<_CloudCleanupCard> {
                                     if (!sheetContext.mounted) return;
                                     Navigator.pop(sheetContext);
                                     if (r.staleManifest) {
-                                      WaitToast.success(
-                                          '云端刚有新的同步活动，已重新扫描');
+                                      WaitToast.success('云端刚有新的同步活动，已重新扫描');
                                       await _scan();
                                       return;
                                     }
@@ -1684,10 +1706,12 @@ class _CloudCleanupCardState extends ConsumerState<_CloudCleanupCard> {
                                       WaitToast.success('没有可清理的云端附件');
                                     } else if (r.errors.isNotEmpty) {
                                       WaitToast.destructive(
-                                          '已清理 ${r.deletedAssets} 个（部分失败：${r.errors.first}）');
+                                        '已清理 ${r.deletedAssets} 个（部分失败：${r.errors.first}）',
+                                      );
                                     } else {
                                       WaitToast.success(
-                                          '已清理 ${r.deletedAssets} 个云端附件（${r.deletedObjects} 个对象）');
+                                        '已清理 ${r.deletedAssets} 个云端附件（${r.deletedObjects} 个对象）',
+                                      );
                                     }
                                   } catch (e) {
                                     setSheetState(() => busy = false);

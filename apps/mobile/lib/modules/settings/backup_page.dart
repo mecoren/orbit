@@ -169,10 +169,8 @@ class _BackupPageState extends ConsumerState<BackupPage> {
       await _confirmAndRestore(
         preview: preview,
         sourceLabel: file!.name,
-        run: (force) => bridge.fullBackupImportPath(
-          path,
-          ignoreSchemaMismatch: force,
-        ),
+        run: (force) =>
+            bridge.fullBackupImportPath(path, ignoreSchemaMismatch: force),
       );
     } catch (e) {
       if (!mounted) return;
@@ -196,7 +194,8 @@ class _BackupPageState extends ConsumerState<BackupPage> {
         for (final e in _cloud)
           SelectItem(
             value: e.cloudPath,
-            label: '${e.name} · ${humanFileSize(e.sizeBytes)} · '
+            label:
+                '${e.name} · ${humanFileSize(e.sizeBytes)} · '
                 '${formatDateTime(e.modifiedAt)}',
           ),
       ],
@@ -244,7 +243,8 @@ class _BackupPageState extends ConsumerState<BackupPage> {
       final forced = await showConfirmBottomSheet(
         context,
         title: '版本不一致',
-        message: '备份的数据结构版本为 ${preview.manifest.schemaVersion}，'
+        message:
+            '备份的数据结构版本为 ${preview.manifest.schemaVersion}，'
             '本机为 ${preview.currentSchemaVersion}。'
             '强行恢复可能丢失本机新增字段的数据，且不可撤销。',
         confirmLabel: '仍然恢复',
@@ -257,8 +257,10 @@ class _BackupPageState extends ConsumerState<BackupPage> {
     try {
       final r = await run(preview.schemaMismatch);
       if (!mounted) return;
-      WaitToast.success('已恢复 ${r.successCount} 条记录'
-          '${r.errorCount > 0 ? '，${r.errorCount} 条失败' : ''}');
+      WaitToast.success(
+        '已恢复 ${r.successCount} 条记录'
+        '${r.errorCount > 0 ? '，${r.errorCount} 条失败' : ''}',
+      );
       if (r.needsRestart) {
         WaitToast.warning('建议重启应用以完成数据迁移');
       }
@@ -356,10 +358,12 @@ class _BackupPageState extends ConsumerState<BackupPage> {
             for (var m = 0; m < 60; m += 15)
               SelectItem(value: m, label: '${m.toString().padLeft(2, '0')} 分'),
           ],
-          onSelect: (m) => _savePrefs(_prefs.copyWith(
-            scheduleTime:
-                '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}',
-          )),
+          onSelect: (m) => _savePrefs(
+            _prefs.copyWith(
+              scheduleTime:
+                  '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}',
+            ),
+          ),
         );
       },
     );
@@ -421,7 +425,8 @@ class _BackupPageState extends ConsumerState<BackupPage> {
             child: ListView(
               controller: _scrollController,
               padding: EdgeInsets.only(
-                top: MediaQuery.of(context).padding.top +
+                top:
+                    MediaQuery.of(context).padding.top +
                     OrbitPageHeader.rowHeight +
                     AppDimens.space16,
                 left: AppDimens.space16,
@@ -443,9 +448,7 @@ class _BackupPageState extends ConsumerState<BackupPage> {
             top: 0,
             left: 0,
             right: 0,
-            child: OrbitPageHeader(
-              title: '备份与恢复',
-            ),
+            child: OrbitPageHeader(title: '备份与恢复'),
           ),
         ],
       ),
@@ -466,9 +469,7 @@ class _BackupPageState extends ConsumerState<BackupPage> {
           ),
           const SizedBox(height: AppDimens.space8),
           Text(
-            last == 0
-                ? '尚未生成过备份'
-                : '上次备份：${formatDateTime(last * 1000)}',
+            last == 0 ? '尚未生成过备份' : '上次备份：${formatDateTime(last * 1000)}',
             style: TextStyle(fontSize: 12, color: colors.secondaryText),
           ),
           // 本机设备标识：与恢复预览里的「来源设备」同值，便于确认备份来自哪台设备
@@ -490,8 +491,10 @@ class _BackupPageState extends ConsumerState<BackupPage> {
                   onPressed: busy ? null : () => _export(uploadCloud: false),
                   icon: _busy == 'export'
                       ? const _MiniSpinner()
-                      : const Icon(OrbitIcons.download,
-                          size: AppDimens.iconSizeSm + 2),
+                      : const Icon(
+                          OrbitIcons.download,
+                          size: AppDimens.iconSizeSm + 2,
+                        ),
                   label: const Text('导出本地备份'),
                 ),
               ),
@@ -501,8 +504,10 @@ class _BackupPageState extends ConsumerState<BackupPage> {
                   onPressed: busy ? null : () => _export(uploadCloud: true),
                   icon: _busy == 'exportCloud'
                       ? const _MiniSpinner()
-                      : const Icon(OrbitIcons.cloudSync,
-                          size: AppDimens.iconSizeSm + 2),
+                      : const Icon(
+                          OrbitIcons.cloudSync,
+                          size: AppDimens.iconSizeSm + 2,
+                        ),
                   label: const Text('备份到云端'),
                 ),
               ),
@@ -557,8 +562,8 @@ class _BackupPageState extends ConsumerState<BackupPage> {
   }
 
   Widget _autoBackupCard(AppColorSet colors) {
-    final showTime = _prefs.scheduleType != 'off' &&
-        _prefs.scheduleType != 'hourly';
+    final showTime =
+        _prefs.scheduleType != 'off' && _prefs.scheduleType != 'hourly';
     return SectionCard(
       title: '自动备份',
       child: Column(
@@ -628,7 +633,8 @@ class _BackupPageState extends ConsumerState<BackupPage> {
             colors,
             label: '写入本机备份目录',
             value: _prefs.localBackupEnabled,
-            onChanged: (v) => _savePrefs(_prefs.copyWith(localBackupEnabled: v)),
+            onChanged: (v) =>
+                _savePrefs(_prefs.copyWith(localBackupEnabled: v)),
           ),
           _switchRow(
             colors,
@@ -665,19 +671,16 @@ class _BackupPageState extends ConsumerState<BackupPage> {
               child: Center(child: _MiniSpinner()),
             )
           : _local.isEmpty
-              ? Padding(
-                  padding: const EdgeInsets.all(AppDimens.space16),
-                  child: Center(
-                    child: Text(
-                      '本机还没有备份文件。',
-                      style:
-                          TextStyle(fontSize: 12, color: colors.secondaryText),
-                    ),
-                  ),
-                )
-              : Column(
-                  children: [for (final e in _local) _localRow(colors, e)],
+          ? Padding(
+              padding: const EdgeInsets.all(AppDimens.space16),
+              child: Center(
+                child: Text(
+                  '本机还没有备份文件。',
+                  style: TextStyle(fontSize: 12, color: colors.secondaryText),
                 ),
+              ),
+            )
+          : Column(children: [for (final e in _local) _localRow(colors, e)]),
     );
   }
 
@@ -688,33 +691,36 @@ class _BackupPageState extends ConsumerState<BackupPage> {
         fillColor: colors.surfaceSecondary,
         padding: const EdgeInsets.all(AppDimens.space12),
         child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  e.filename,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 13, color: colors.bodyText),
-                ),
-                const SizedBox(height: AppDimens.space2),
-                Text(
-                  '${humanFileSize(e.sizeBytes)} · '
-                  '${formatDateTime(e.modifiedAt * 1000)}',
-                  style: TextStyle(fontSize: 11, color: colors.secondaryText),
-                ),
-              ],
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    e.filename,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 13, color: colors.bodyText),
+                  ),
+                  const SizedBox(height: AppDimens.space2),
+                  Text(
+                    '${humanFileSize(e.sizeBytes)} · '
+                    '${formatDateTime(e.modifiedAt * 1000)}',
+                    style: TextStyle(fontSize: 11, color: colors.secondaryText),
+                  ),
+                ],
+              ),
             ),
-          ),
-          IconButton(
-            onPressed: _busy != null ? null : () => _deleteLocal(e),
-            icon: Icon(OrbitIcons.delete,
-                size: AppDimens.iconSizeMd, color: colors.destructive),
-            tooltip: '删除',
-          ),
-        ],
+            IconButton(
+              onPressed: _busy != null ? null : () => _deleteLocal(e),
+              icon: Icon(
+                OrbitIcons.delete,
+                size: AppDimens.iconSizeMd,
+                color: colors.destructive,
+              ),
+              tooltip: '删除',
+            ),
+          ],
         ),
       ),
     );
@@ -736,11 +742,14 @@ class _BackupPageState extends ConsumerState<BackupPage> {
         child: Row(
           children: [
             if (icon != null) ...[
-              Icon(icon, size: AppDimens.iconSizeSm + 2, color: colors.bodyText),
+              Icon(
+                icon,
+                size: AppDimens.iconSizeSm + 2,
+                color: colors.bodyText,
+              ),
               const SizedBox(width: AppDimens.space12),
             ],
-            Text(label,
-                style: TextStyle(fontSize: 14, color: colors.bodyText)),
+            Text(label, style: TextStyle(fontSize: 14, color: colors.bodyText)),
             const Spacer(),
             if (trailing != null)
               trailing
@@ -748,7 +757,10 @@ class _BackupPageState extends ConsumerState<BackupPage> {
               if (value != null)
                 Text(
                   value,
-                  style: TextStyle(fontSize: 14, color: OrbitAccents.themeAccent),
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: OrbitAccents.themeAccent,
+                  ),
                 ),
               Icon(
                 OrbitIcons.chevronRight,
@@ -773,8 +785,10 @@ class _BackupPageState extends ConsumerState<BackupPage> {
       child: Row(
         children: [
           Expanded(
-            child: Text(label,
-                style: TextStyle(fontSize: 14, color: colors.bodyText)),
+            child: Text(
+              label,
+              style: TextStyle(fontSize: 14, color: colors.bodyText),
+            ),
           ),
           Switch.adaptive(
             value: value,
@@ -803,8 +817,10 @@ class _PreviewBody extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text('来源：$sourceLabel',
-            style: TextStyle(fontSize: 13, color: colors.bodyText)),
+        Text(
+          '来源：$sourceLabel',
+          style: TextStyle(fontSize: 13, color: colors.bodyText),
+        ),
         const SizedBox(height: AppDimens.space4),
         Text(
           '备份时间：${formatDateTime(m.createdAtTs * 1000)}\n'
@@ -815,8 +831,10 @@ class _PreviewBody extends StatelessWidget {
         ),
         if (preview.sampleTasks.isNotEmpty) ...[
           const SizedBox(height: AppDimens.space8),
-          Text('抽样任务',
-              style: TextStyle(fontSize: 12, color: colors.secondaryText)),
+          Text(
+            '抽样任务',
+            style: TextStyle(fontSize: 12, color: colors.secondaryText),
+          ),
           const SizedBox(height: AppDimens.space4),
           for (final t in preview.sampleTasks)
             Padding(
@@ -845,12 +863,12 @@ class _MiniSpinner extends StatelessWidget {
   const _MiniSpinner();
 
   @override
-  Widget build(BuildContext context) => const SizedBox(
-        width: AppDimens.iconSizeSm,
-        height: AppDimens.iconSizeSm,
-        child: CircularProgressIndicator(
-          strokeWidth: 2,
-          color: OrbitAccents.themeAccent,
-        ),
-      );
+  Widget build(BuildContext context) => SizedBox(
+    width: AppDimens.iconSizeSm,
+    height: AppDimens.iconSizeSm,
+    child: CircularProgressIndicator(
+      strokeWidth: 2,
+      color: OrbitAccents.themeAccent,
+    ),
+  );
 }

@@ -89,7 +89,8 @@ class _SyncConflictsPageState extends ConsumerState<SyncConflictsPage> {
     final confirmed = await showConfirmBottomSheet(
       context,
       title: '恢复为败方版本？',
-      message: '将把「${row.recordTitle.isEmpty ? row.recordUuid : row.recordTitle}」'
+      message:
+          '将把「${row.recordTitle.isEmpty ? row.recordUuid : row.recordTitle}」'
           '的内容回放为被覆盖的那一版，并作为一次新的本端修改参与同步。'
           '当前内容会被覆盖，且不会另存副本。',
       confirmLabel: '确认恢复',
@@ -124,7 +125,8 @@ class _SyncConflictsPageState extends ConsumerState<SyncConflictsPage> {
     final confirmed = await showConfirmBottomSheet(
       context,
       title: '清空冲突记录？',
-      message: '将删除全部 ${_rows.length} 条本地冲突记录，此操作不可撤销。'
+      message:
+          '将删除全部 ${_rows.length} 条本地冲突记录，此操作不可撤销。'
           '记录仅存于本机，不影响任务数据与云同步。',
       confirmLabel: '清空',
       destructive: true,
@@ -154,7 +156,8 @@ class _SyncConflictsPageState extends ConsumerState<SyncConflictsPage> {
             child: ListView(
               controller: _scrollController,
               padding: EdgeInsets.only(
-                top: MediaQuery.of(context).padding.top +
+                top:
+                    MediaQuery.of(context).padding.top +
                     OrbitPageHeader.rowHeight +
                     AppDimens.space16,
                 left: AppDimens.space16,
@@ -171,8 +174,10 @@ class _SyncConflictsPageState extends ConsumerState<SyncConflictsPage> {
                       Text(
                         '多端同时改同一条数据时，本端会保留被覆盖的那一版。'
                         '恢复后该版本会作为一次新的本端修改参与同步。本表仅存本机。',
-                        style:
-                            TextStyle(fontSize: 12, color: colors.secondaryText),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colors.secondaryText,
+                        ),
                       ),
                       const SizedBox(height: AppDimens.space12),
                       Row(
@@ -183,14 +188,16 @@ class _SyncConflictsPageState extends ConsumerState<SyncConflictsPage> {
                           const Spacer(),
                           TextButton(
                             onPressed: (_busy || _rows.isEmpty) ? null : _clear,
-                            child: Text('清空',
-                                style: TextStyle(color: colors.destructive)),
+                            child: Text(
+                              '清空',
+                              style: TextStyle(color: colors.destructive),
+                            ),
                           ),
                         ],
                       ),
                       const SizedBox(height: AppDimens.space4),
                       if (_loading)
-                        const Padding(
+                        Padding(
                           padding: EdgeInsets.all(AppDimens.space16),
                           child: Center(
                             child: SizedBox(
@@ -211,7 +218,9 @@ class _SyncConflictsPageState extends ConsumerState<SyncConflictsPage> {
                               '暂无冲突；多端并发修改同一记录后会在这里留档。',
                               textAlign: TextAlign.center,
                               style: TextStyle(
-                                  fontSize: 12, color: colors.secondaryText),
+                                fontSize: 12,
+                                color: colors.secondaryText,
+                              ),
                             ),
                           ),
                         )
@@ -227,9 +236,7 @@ class _SyncConflictsPageState extends ConsumerState<SyncConflictsPage> {
             top: 0,
             left: 0,
             right: 0,
-            child: OrbitPageHeader(
-              title: '冲突记录',
-            ),
+            child: OrbitPageHeader(title: '冲突记录'),
           ),
         ],
       ),
@@ -242,7 +249,9 @@ class _SyncConflictsPageState extends ConsumerState<SyncConflictsPage> {
       onTap: () => _switchFilter(value),
       child: Container(
         padding: const EdgeInsets.symmetric(
-            horizontal: AppDimens.space12, vertical: AppDimens.space6),
+          horizontal: AppDimens.space12,
+          vertical: AppDimens.space6,
+        ),
         decoration: BoxDecoration(
           color: selected
               ? OrbitAccents.themeAccent.withValues(alpha: 0.16)
@@ -282,101 +291,120 @@ class _SyncConflictsPageState extends ConsumerState<SyncConflictsPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-          Row(
-            children: [
-              Icon(OrbitIcons.warning,
-                  size: AppDimens.iconSizeMd, color: colors.warning),
-              const SizedBox(width: AppDimens.space8),
-              Expanded(
-                child: Text(
-                  r.recordTitle.isEmpty ? r.recordUuid : r.recordTitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 14, color: colors.bodyText),
-                ),
-              ),
-              if (r.resolution == 'restored')
-                Text('已恢复',
-                    style: TextStyle(fontSize: 11, color: colors.success))
-              else if (r.resolution == 'dismissed')
-                Text('已忽略',
-                    style: TextStyle(fontSize: 11, color: colors.secondaryText)),
-            ],
-          ),
-          const SizedBox(height: AppDimens.space4),
-          Text(
-            '${_tableLabel(r.tableName)} · '
-            '${r.loserSide == 'local' ? '本端版本被他端覆盖' : '他端版本被本端丢弃'} · '
-            '${r.decision == 'tie_version' ? '同毫秒按版本号裁决' : '按修改时间裁决'} · '
-            '${_fmtWhen(r.createdAt)}',
-            style: TextStyle(fontSize: 11, color: colors.secondaryText),
-          ),
-          const SizedBox(height: AppDimens.space8),
-          Row(
-            children: [
-              TextButton(
-                onPressed: () => setState(() => _expanded = open ? null : r.id),
-                child: Text(open ? '收起' : '查看差异（${diffs.length}）'),
-              ),
-              const Spacer(),
-              if (r.resolution == 'unresolved') ...[
-                OutlinedButton(
-                  onPressed: _busy ? null : () => _restore(r),
-                  child: const Text('恢复'),
+            Row(
+              children: [
+                Icon(
+                  OrbitIcons.warning,
+                  size: AppDimens.iconSizeMd,
+                  color: colors.warning,
                 ),
                 const SizedBox(width: AppDimens.space8),
-                TextButton(
-                  onPressed: _busy ? null : () => _dismiss(r),
-                  child: const Text('忽略'),
+                Expanded(
+                  child: Text(
+                    r.recordTitle.isEmpty ? r.recordUuid : r.recordTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 14, color: colors.bodyText),
+                  ),
                 ),
+                if (r.resolution == 'restored')
+                  Text(
+                    '已恢复',
+                    style: TextStyle(fontSize: 11, color: colors.success),
+                  )
+                else if (r.resolution == 'dismissed')
+                  Text(
+                    '已忽略',
+                    style: TextStyle(fontSize: 11, color: colors.secondaryText),
+                  ),
               ],
-            ],
-          ),
-          if (open) ...[
-            const SizedBox(height: AppDimens.space4),
-            OrbitCard(
-              fillColor: colors.background,
-              padding: const EdgeInsets.all(AppDimens.space8),
-              borderRadius: AppShapes.small,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: diffs.isEmpty
-                    ? [
-                        Text('两侧业务字段无可见差异（差异可能只存在于记录元数据）。',
-                            style: TextStyle(
-                                fontSize: 11, color: colors.secondaryText)),
-                      ]
-                    : diffs.map((d) {
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(
-                              vertical: AppDimens.space4),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _fieldLabel(d.key),
-                                style: TextStyle(
-                                    fontSize: 11, color: colors.secondaryText),
-                              ),
-                              Text(
-                                '当前：${_fmtValue(d.key, d.after)}',
-                                style:
-                                    TextStyle(fontSize: 12, color: colors.bodyText),
-                              ),
-                              Text(
-                                '被覆盖：${_fmtValue(d.key, d.before)}',
-                                style:
-                                    TextStyle(fontSize: 12, color: colors.warning),
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-              ),
             ),
+            const SizedBox(height: AppDimens.space4),
+            Text(
+              '${_tableLabel(r.tableName)} · '
+              '${r.loserSide == 'local' ? '本端版本被他端覆盖' : '他端版本被本端丢弃'} · '
+              '${r.decision == 'tie_version' ? '同毫秒按版本号裁决' : '按修改时间裁决'} · '
+              '${_fmtWhen(r.createdAt)}',
+              style: TextStyle(fontSize: 11, color: colors.secondaryText),
+            ),
+            const SizedBox(height: AppDimens.space8),
+            Row(
+              children: [
+                TextButton(
+                  onPressed: () =>
+                      setState(() => _expanded = open ? null : r.id),
+                  child: Text(open ? '收起' : '查看差异（${diffs.length}）'),
+                ),
+                const Spacer(),
+                if (r.resolution == 'unresolved') ...[
+                  OutlinedButton(
+                    onPressed: _busy ? null : () => _restore(r),
+                    child: const Text('恢复'),
+                  ),
+                  const SizedBox(width: AppDimens.space8),
+                  TextButton(
+                    onPressed: _busy ? null : () => _dismiss(r),
+                    child: const Text('忽略'),
+                  ),
+                ],
+              ],
+            ),
+            if (open) ...[
+              const SizedBox(height: AppDimens.space4),
+              OrbitCard(
+                fillColor: colors.background,
+                padding: const EdgeInsets.all(AppDimens.space8),
+                borderRadius: AppShapes.small,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: diffs.isEmpty
+                      ? [
+                          Text(
+                            '两侧业务字段无可见差异（差异可能只存在于记录元数据）。',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: colors.secondaryText,
+                            ),
+                          ),
+                        ]
+                      : diffs.map((d) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: AppDimens.space4,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _fieldLabel(d.key),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: colors.secondaryText,
+                                  ),
+                                ),
+                                Text(
+                                  '当前：${_fmtValue(d.key, d.after)}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: colors.bodyText,
+                                  ),
+                                ),
+                                Text(
+                                  '被覆盖：${_fmtValue(d.key, d.before)}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: colors.warning,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                ),
+              ),
+            ],
           ],
-        ],
-      ),
+        ),
       ),
     );
   }
@@ -438,7 +466,6 @@ class _SyncConflictsPageState extends ConsumerState<SyncConflictsPage> {
 
   /// 值渲染：时间戳类列转本地时间，对象转 JSON，长字符串截断
   static String _fmtValue(String key, Object? v) {
-
     if (v == null) return '（空）';
     if (v is num &&
         (key.endsWith('_at') || key.endsWith('_date')) &&

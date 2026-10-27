@@ -119,20 +119,12 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
   /// 段内重排落点（`onReorderItem`）：落点段决定提交去向——
   /// 落回本段即段内重排，落在另一段即跨段搬移（拖拽中手指可跨过卡片边界）。
   void _onReorderEnabled(int oldIndex, int newIndex) {
-    _commitDrop(
-      sourceEnabled: true,
-      oldIndex: oldIndex,
-      newIndex: newIndex,
-    );
+    _commitDrop(sourceEnabled: true, oldIndex: oldIndex, newIndex: newIndex);
   }
 
   /// 段内重排落点（「更多」段；去向判定同上）
   void _onReorderHidden(int oldIndex, int newIndex) {
-    _commitDrop(
-      sourceEnabled: false,
-      oldIndex: oldIndex,
-      newIndex: newIndex,
-    );
+    _commitDrop(sourceEnabled: false, oldIndex: oldIndex, newIndex: newIndex);
   }
 
   /// 拖拽落点统一提交：按松手位置所在段路由（跨段即搬移，同段即重排）。
@@ -158,9 +150,7 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
       if (id != null) {
         // 跨段搬移：落到悬停槽位（无悬停记录时追加尾部）
         final lens = _dragLens;
-        var slot = dropSection
-            ? (lens?.$1 ?? 0)
-            : (lens?.$2 ?? 0);
+        var slot = dropSection ? (lens?.$1 ?? 0) : (lens?.$2 ?? 0);
         if (_hoverSection == dropSection && _hoverSlot != null) {
           slot = _hoverSlot!;
         }
@@ -182,10 +172,9 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
     final dst = fromEnabled ? hidden : enabled;
     src.remove(id);
     dst.insert(destSlot.clamp(0, dst.length), id);
-    unawaited(QuickActions.write(
-      fromEnabled ? src : dst,
-      fromEnabled ? dst : src,
-    ));
+    unawaited(
+      QuickActions.write(fromEnabled ? src : dst, fromEnabled ? dst : src),
+    );
     _arrived.add(id);
     WidgetsBinding.instance.addPostFrameCallback((_) => _arrived.remove(id));
   }
@@ -223,59 +212,59 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
               return false;
             },
             child: ListView(
-            controller: _scrollController,
-            padding: EdgeInsets.only(
-              top: MediaQuery.of(context).padding.top +
-                  OrbitPageHeader.rowHeight +
-                  AppDimens.space16,
-              left: AppDimens.pageInline,
-              right: AppDimens.pageInline,
-              bottom: AppDimens.gestureInsetFallback + AppDimens.space32,
-            ),
-            children: [
-              _preview(colors, _liveOrder(enabled)),
-              const SizedBox(height: AppDimens.cardGap),
-              SectionCard(
-                title: '编辑操作',
-                child: enabled.isEmpty
-                    // 空段也挂定位 key：更多段的行可直接拖进来建首位
-                    ? SizedBox(
-                        key: _enabledListKey,
-                        child: _emptyHint(colors,
-                            '全部收进了「更多」，工具栏只剩「...」入口。'),
-                      )
-                    : _sectionList(
-                        colors,
-                        listKey: _enabledListKey,
-                        items: enabled,
-                        enabledSection: true,
-                        onReorder: _onReorderEnabled,
-                      ),
+              controller: _scrollController,
+              padding: EdgeInsets.only(
+                top:
+                    MediaQuery.of(context).padding.top +
+                    OrbitPageHeader.rowHeight +
+                    AppDimens.space16,
+                left: AppDimens.pageInline,
+                right: AppDimens.pageInline,
+                bottom: AppDimens.gestureInsetFallback + AppDimens.space32,
               ),
-              if (hidden.isNotEmpty) ...[
+              children: [
+                _preview(colors, _liveOrder(enabled)),
                 const SizedBox(height: AppDimens.cardGap),
                 SectionCard(
-                  title: '更多',
-                  child: _sectionList(
-                    colors,
-                    listKey: _hiddenListKey,
-                    items: hidden,
-                    enabledSection: false,
-                    onReorder: _onReorderHidden,
+                  title: '编辑操作',
+                  child: enabled.isEmpty
+                      // 空段也挂定位 key：更多段的行可直接拖进来建首位
+                      ? SizedBox(
+                          key: _enabledListKey,
+                          child: _emptyHint(colors, '全部收进了「更多」，工具栏只剩「...」入口。'),
+                        )
+                      : _sectionList(
+                          colors,
+                          listKey: _enabledListKey,
+                          items: enabled,
+                          enabledSection: true,
+                          onReorder: _onReorderEnabled,
+                        ),
+                ),
+                if (hidden.isNotEmpty) ...[
+                  const SizedBox(height: AppDimens.cardGap),
+                  SectionCard(
+                    title: '更多',
+                    child: _sectionList(
+                      colors,
+                      listKey: _hiddenListKey,
+                      items: hidden,
+                      enabledSection: false,
+                      onReorder: _onReorderHidden,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: AppDimens.cardGap),
+                Text(
+                  '左右滑动行可在「编辑操作」与「更多」之间移动，也可用行内加减按钮；'
+                  '按住右侧手柄可直接拖到另一段（含跨卡片），上方预览实时跟随。',
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.5,
+                    color: colors.secondaryText,
                   ),
                 ),
               ],
-              const SizedBox(height: AppDimens.cardGap),
-              Text(
-                '左右滑动行可在「编辑操作」与「更多」之间移动，也可用行内加减按钮；'
-                '按住右侧手柄可直接拖到另一段（含跨卡片），上方预览实时跟随。',
-                style: TextStyle(
-                  fontSize: 12,
-                  height: 1.5,
-                  color: colors.secondaryText,
-                ),
-              ),
-            ],
             ),
           ),
           Positioned(
@@ -323,17 +312,18 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
   /// 列表局部 Y → 槽位（允许等于长度，即尾后追加位）
   int _slotIn(Rect rect, Offset global, int length) {
     if (length <= 0) return 0;
-    return ((global.dy - rect.top) / AppDimens.touchTarget)
-        .floor()
-        .clamp(0, length);
+    return ((global.dy - rect.top) / AppDimens.touchTarget).floor().clamp(
+      0,
+      length,
+    );
   }
 
   Rect _expanded(Rect rect, double tolerance) => Rect.fromLTRB(
-        rect.left - tolerance,
-        rect.top - tolerance,
-        rect.right + tolerance,
-        rect.bottom + tolerance,
-      );
+    rect.left - tolerance,
+    rect.top - tolerance,
+    rect.right + tolerance,
+    rect.bottom + tolerance,
+  );
 
   void _onDragMove(Offset global) {
     if (_lifting == null) return;
@@ -399,128 +389,124 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
       // 两段共用同一定位，手指跨过卡片边界即跨段预演
       onPointerMove: (e) => _onDragMove(e.position),
       child: ReorderableListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      buildDefaultDragHandles: false,
-      itemCount: items.length,
-      onReorderItem: onReorder,
-      // 拾起 / 落位各一次轻触感反馈 + 抬起放大（与任务行/项目行同口径）
-      onReorderStart: (index) {
-        HapticFeedback.selectionClick();
-        final (enabled, hidden) = QuickActions.read();
-        setState(() {
-          _lifting = items[index];
-          _liftingFromEnabled = enabledSection;
-          _hoverSection = enabledSection;
-          _hoverSlot = index;
-          _lastPointer = null;
-          _dropHandled = false;
-          _dragLens = (enabled.length, hidden.length);
-        });
-      },
-      onReorderEnd: (_) {
-        HapticFeedback.selectionClick();
-        // 兜底：落点回调未覆盖（如拖拽被取消）时按最后指针位置再路由一次
-        if (!_dropHandled) {
-          final dropSection = _locate(_lastPointer)?.$1 ?? _liftingFromEnabled;
-          final id = _lifting;
-          if (id != null && dropSection != _liftingFromEnabled) {
-            var slot = dropSection
-                ? (_dragLens?.$1 ?? 0)
-                : (_dragLens?.$2 ?? 0);
-            if (_hoverSection == dropSection && _hoverSlot != null) {
-              slot = _hoverSlot!;
-            }
-            _commitCrossMove(id, _liftingFromEnabled, slot);
-          }
-        }
-        if (_lifting != null ||
-            _hoverSlot != null ||
-            _hoverSection != null) {
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        buildDefaultDragHandles: false,
+        itemCount: items.length,
+        onReorderItem: onReorder,
+        // 拾起 / 落位各一次轻触感反馈 + 抬起放大（与任务行/项目行同口径）
+        onReorderStart: (index) {
+          HapticFeedback.selectionClick();
+          final (enabled, hidden) = QuickActions.read();
           setState(() {
-            _lifting = null;
-            _hoverSlot = null;
-            _hoverSection = null;
+            _lifting = items[index];
+            _liftingFromEnabled = enabledSection;
+            _hoverSection = enabledSection;
+            _hoverSlot = index;
+            _lastPointer = null;
+            _dropHandled = false;
+            _dragLens = (enabled.length, hidden.length);
           });
-        }
-      },
-      proxyDecorator: (child, index, animation) => AnimatedBuilder(
-        animation: animation,
-        builder: (context, child) {
-          final elevated = AppMotion.standard.transform(
-            Tween<double>(begin: 0, end: 1).evaluate(animation),
-          );
-          return Transform.scale(
-            scale: 1 + (AppMotion.dragLiftScale - 1) * elevated,
-            child: Material(
-              elevation: 6 * elevated,
-              borderRadius: AppShapes.medium,
-              clipBehavior: Clip.antiAlias,
-              color: Color.lerp(
-                Colors.transparent,
-                colors.surface,
-                elevated,
+        },
+        onReorderEnd: (_) {
+          HapticFeedback.selectionClick();
+          // 兜底：落点回调未覆盖（如拖拽被取消）时按最后指针位置再路由一次
+          if (!_dropHandled) {
+            final dropSection =
+                _locate(_lastPointer)?.$1 ?? _liftingFromEnabled;
+            final id = _lifting;
+            if (id != null && dropSection != _liftingFromEnabled) {
+              var slot = dropSection
+                  ? (_dragLens?.$1 ?? 0)
+                  : (_dragLens?.$2 ?? 0);
+              if (_hoverSection == dropSection && _hoverSlot != null) {
+                slot = _hoverSlot!;
+              }
+              _commitCrossMove(id, _liftingFromEnabled, slot);
+            }
+          }
+          if (_lifting != null || _hoverSlot != null || _hoverSection != null) {
+            setState(() {
+              _lifting = null;
+              _hoverSlot = null;
+              _hoverSection = null;
+            });
+          }
+        },
+        proxyDecorator: (child, index, animation) => AnimatedBuilder(
+          animation: animation,
+          builder: (context, child) {
+            final elevated = AppMotion.standard.transform(
+              Tween<double>(begin: 0, end: 1).evaluate(animation),
+            );
+            return Transform.scale(
+              scale: 1 + (AppMotion.dragLiftScale - 1) * elevated,
+              child: Material(
+                elevation: 6 * elevated,
+                borderRadius: AppShapes.medium,
+                clipBehavior: Clip.antiAlias,
+                color: Color.lerp(Colors.transparent, colors.surface, elevated),
+                child: child,
               ),
-              child: child,
+            );
+          },
+          child: child,
+        ),
+        itemBuilder: (context, index) {
+          final id = items[index];
+          return Dismissible(
+            key: ValueKey(id),
+            direction: DismissDirection.horizontal,
+            movementDuration: AppMotion.normal,
+            resizeDuration: AppMotion.normal,
+            dismissThresholds: const {
+              DismissDirection.startToEnd: _swipeThreshold,
+              DismissDirection.endToStart: _swipeThreshold,
+            },
+            background: _swipeBackground(colors, toEnabled: !enabledSection),
+            secondaryBackground: _swipeBackground(
+              colors,
+              toEnabled: !enabledSection,
+            ),
+            confirmDismiss: (_) async => true,
+            // 跟手驱动预览：手势进度 ÷ 阈值 = 预览插值进度。回弹/落位动画的每帧
+            // 都会回调（行位移控制器的 listener），进度归零即复位，无需收尾。
+            onUpdate: (details) {
+              if (details.reached && !details.previousReached) {
+                HapticFeedback.selectionClick();
+              }
+              final p = (details.progress / _swipeThreshold).clamp(0.0, 1.0);
+              final cur = _swipeLive.value;
+              if (p < 0.02) {
+                if (cur != null) _swipeLive.value = null;
+                return;
+              }
+              if (cur == null ||
+                  cur.id != id ||
+                  cur.fromEnabled != enabledSection ||
+                  (cur.progress - p).abs() > 0.005) {
+                _swipeLive.value = _SwipeLive(
+                  id: id,
+                  fromEnabled: enabledSection,
+                  progress: p,
+                );
+              }
+            },
+            onDismissed: (_) {
+              _swipeLive.value = null;
+              _moveAcross(id, !enabledSection);
+            },
+            child: _EnterTransition(
+              animate: _arrived.contains(id),
+              child: _actionRow(
+                colors,
+                id: id,
+                enabled: enabledSection,
+                index: index,
+              ),
             ),
           );
         },
-        child: child,
-      ),
-      itemBuilder: (context, index) {
-        final id = items[index];
-        return Dismissible(
-          key: ValueKey(id),
-          direction: DismissDirection.horizontal,
-          movementDuration: AppMotion.normal,
-          resizeDuration: AppMotion.normal,
-          dismissThresholds: const {
-            DismissDirection.startToEnd: _swipeThreshold,
-            DismissDirection.endToStart: _swipeThreshold,
-          },
-          background: _swipeBackground(colors, toEnabled: !enabledSection),
-          secondaryBackground:
-              _swipeBackground(colors, toEnabled: !enabledSection),
-          confirmDismiss: (_) async => true,
-          // 跟手驱动预览：手势进度 ÷ 阈值 = 预览插值进度。回弹/落位动画的每帧
-          // 都会回调（行位移控制器的 listener），进度归零即复位，无需收尾。
-          onUpdate: (details) {
-            if (details.reached && !details.previousReached) {
-              HapticFeedback.selectionClick();
-            }
-            final p =
-                (details.progress / _swipeThreshold).clamp(0.0, 1.0);
-            final cur = _swipeLive.value;
-            if (p < 0.02) {
-              if (cur != null) _swipeLive.value = null;
-              return;
-            }
-            if (cur == null ||
-                cur.id != id ||
-                cur.fromEnabled != enabledSection ||
-                (cur.progress - p).abs() > 0.005) {
-              _swipeLive.value = _SwipeLive(
-                id: id,
-                fromEnabled: enabledSection,
-                progress: p,
-              );
-            }
-          },
-          onDismissed: (_) {
-            _swipeLive.value = null;
-            _moveAcross(id, !enabledSection);
-          },
-          child: _EnterTransition(
-            animate: _arrived.contains(id),
-            child: _actionRow(
-              colors,
-              id: id,
-              enabled: enabledSection,
-              index: index,
-            ),
-          ),
-        );
-      },
       ),
     );
   }
@@ -563,12 +549,12 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
 
   /// 空段占位（工具栏被搬空时；「更多」段为空时整卡隐藏，不走这里）
   Widget _emptyHint(AppColorSet colors, String text) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppDimens.space12),
-        child: Text(
-          text,
-          style: TextStyle(fontSize: 13, color: colors.deactivatedText),
-        ),
-      );
+    padding: const EdgeInsets.symmetric(vertical: AppDimens.space12),
+    child: Text(
+      text,
+      style: TextStyle(fontSize: 13, color: colors.deactivatedText),
+    ),
+  );
 
   /// 面板形态预览（只读）：输入框占位 + 工具栏图标行 + 发送钮。
   ///
@@ -609,8 +595,9 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
                     builder: (context, live, _) => SizedBox(
                       width: _previewWidth(enabled, live),
                       height: AppDimens.iconSizeMd,
-                      child:
-                          Stack(children: _previewIcons(colors, enabled, live)),
+                      child: Stack(
+                        children: _previewIcons(colors, enabled, live),
+                      ),
                     ),
                   ),
                 ),
@@ -619,7 +606,7 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
               Container(
                 width: 36,
                 height: 36,
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   color: OrbitAccents.themeAccent,
                   shape: BoxShape.circle,
                 ),
@@ -679,7 +666,8 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
           key: ValueKey(enabled[i]),
           duration: posDuration,
           curve: AppMotion.standard,
-          left: i * _previewSlot -
+          left:
+              i * _previewSlot -
               (outIndex >= 0 && i > outIndex ? p * _previewSlot : 0),
           top: 0,
           child: AnimatedOpacity(
@@ -717,7 +705,8 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
         key: const ValueKey('preview-more'),
         duration: posDuration,
         curve: AppMotion.standard,
-        left: (enabled.length + (swipeIn ? p : 0) - (outIndex >= 0 ? p : 0)) *
+        left:
+            (enabled.length + (swipeIn ? p : 0) - (outIndex >= 0 ? p : 0)) *
             _previewSlot,
         top: 0,
         child: Icon(
@@ -755,8 +744,11 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
                 width: 22,
                 height: 22,
                 decoration: BoxDecoration(
-                  color: Color.lerp(colors.success, colors.destructive, t)!
-                      .withValues(alpha: 0.12),
+                  color: Color.lerp(
+                    colors.success,
+                    colors.destructive,
+                    t,
+                  )!.withValues(alpha: 0.12),
                   shape: BoxShape.circle,
                 ),
                 child: Transform.scale(

@@ -163,7 +163,8 @@ class _SyncStatusButtonState extends ConsumerState<SyncStatusButton> {
       SyncUiStatus.syncing => OrbitAccents.themeAccent,
       SyncUiStatus.success => colors.success,
       SyncUiStatus.error => colors.destructive,
-      SyncUiStatus.unconfigured || SyncUiStatus.locked => colors.deactivatedText,
+      SyncUiStatus.unconfigured ||
+      SyncUiStatus.locked => colors.deactivatedText,
       SyncUiStatus.idle => colors.iconText,
     };
     return SizedBox(
@@ -175,7 +176,7 @@ class _SyncStatusButtonState extends ConsumerState<SyncStatusButton> {
         children: [
           Icon(OrbitIcons.cloud, size: AppDimens.iconSizeMd, color: color),
           if (status == SyncUiStatus.syncing)
-            const SizedBox(
+            SizedBox(
               width: _iconBox,
               height: _iconBox,
               child: CircularProgressIndicator(
@@ -200,8 +201,11 @@ class _SyncStatusButtonState extends ConsumerState<SyncStatusButton> {
                     color: colors.success,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(OrbitIcons.check,
-                      size: 10, color: Colors.white),
+                  child: const Icon(
+                    OrbitIcons.check,
+                    size: 10,
+                    color: Colors.white,
+                  ),
                 ),
               ),
             ),
@@ -255,8 +259,9 @@ class _SyncInfoSheetState extends ConsumerState<_SyncInfoSheet> {
     setState(() => _busy = true);
     widget.onStatusChanged(SyncUiStatus.syncing);
     try {
-      final result =
-          await ref.read(orbitBridgeProvider).cloudSyncNow(origin: 'manual');
+      final result = await ref
+          .read(orbitBridgeProvider)
+          .cloudSyncNow(origin: 'manual');
       ref.invalidate(syncConfigProvider);
       // 拉取合并写入不走 db-change 事件，需在此失效业务缓存（F42：按真正
       // 写入的表精确失效，口径同桌面 useSyncInvalidation）
@@ -264,12 +269,14 @@ class _SyncInfoSheetState extends ConsumerState<_SyncInfoSheet> {
       widget.onStatusChanged(
         result.skipped ? SyncUiStatus.idle : SyncUiStatus.success,
       );
-      WaitToast.success(syncResultSummary(
-        pushedModules: result.pushedModules,
-        pulledModules: result.pulledModules,
-        skipped: result.skipped,
-        errorCount: result.errors.length,
-      ));
+      WaitToast.success(
+        syncResultSummary(
+          pushedModules: result.pushedModules,
+          pulledModules: result.pulledModules,
+          skipped: result.skipped,
+          errorCount: result.errors.length,
+        ),
+      );
       if (mounted && !result.skipped) Navigator.of(context).pop();
     } catch (e) {
       final msg = _errMsg(e);
@@ -327,7 +334,7 @@ class _SyncInfoSheetState extends ConsumerState<_SyncInfoSheet> {
         ),
         child: Row(
           children: [
-            const Icon(
+            Icon(
               OrbitIcons.cloud,
               size: AppDimens.iconSizeMd,
               color: OrbitAccents.themeAccent,
@@ -344,9 +351,7 @@ class _SyncInfoSheetState extends ConsumerState<_SyncInfoSheet> {
           ],
         ),
       ),
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: AppDimens.space16,
-      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: AppDimens.space16),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,

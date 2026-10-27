@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../core/theme/orbit_accents.dart';
+import '../shared/utils/hex_color.dart';
 import 'local_prefs.dart';
 
 /// 外观偏好（对应桌面 localStorage 主题/字号/字重键）
@@ -17,6 +19,9 @@ class Appearance {
   static const themeKey = 'theme_mode';
   static const fontSizeKey = 'font_size_level';
   static const fontWeightKey = 'font_weight_level';
+
+  /// 全局强调色（#RRGGBB；缺省 = `OrbitAccents.defaultThemeAccent`，对齐桌面预设板）
+  static const accentKey = 'theme_accent_hex';
 
   /// 外观变更计数器（appearance_page 写后 bump，app 侧监听重建）
   static final ValueNotifier<int> revision = ValueNotifier(0);
@@ -101,6 +106,27 @@ class Appearance {
 
   static Future<void> setFontWeight(String value) async {
     await LocalPrefs.setString(fontWeightKey, value);
+    revision.value++;
+  }
+
+  /// 启动恢复强调色（`main()` 在 `LocalPrefs.load()` 之后、`runApp` 之前调用）
+  ///
+  /// 脏值/缺省回落 #4E8CFF；不 bump revision（此时根部还没建）。
+  static void restoreAccent() {
+    OrbitAccents.applyThemeAccent(
+      hexToColor(
+        LocalPrefs.getString(accentKey),
+        fallback: OrbitAccents.defaultThemeAccent,
+      ),
+    );
+  }
+
+  /// 覆盖全局强调色（`#RRGGBB`）：只改 themeAccent 槽，todoAccent 不动
+  static Future<void> setAccent(String hex) async {
+    await LocalPrefs.setString(accentKey, hex);
+    OrbitAccents.applyThemeAccent(
+      hexToColor(hex, fallback: OrbitAccents.defaultThemeAccent),
+    );
     revision.value++;
   }
 }

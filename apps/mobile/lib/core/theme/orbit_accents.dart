@@ -5,9 +5,21 @@ import 'package:flutter/material.dart';
 /// 与 React 版 `features/todo/shared/constants.ts` 的数值一一对应，
 /// Flutter 端为唯一消费方（桌面端仍由 React 维护自己的常量）。
 abstract final class OrbitAccents {
-  /// 全局主题强调色（OrbitFab / EqSpinner / 链接等）
+  /// 主题强调色默认值（OrbitFab / EqSpinner / 链接等）
   /// 对应 React 版 themeAccent = #4E8CFF
-  static const Color themeAccent = Color(0xFF4E8CFF);
+  static const Color defaultThemeAccent = Color(0xFF4E8CFF);
+
+  /// 全局主题强调色。
+  ///
+  /// 运行期可被外观页「强调色」覆盖（#107）：改成非 final 静态字段后，
+  /// `Appearance.revision` 一 bump 根部即重建，全库 70+ 处引用无需逐个改签名。
+  /// **只动这一个槽**——[todoAccent]、六档优先级色、状态色一律不跟随。
+  static Color themeAccent = defaultThemeAccent;
+
+  /// 应用强调色（外观页与启动恢复调用；调用方负责 bump `Appearance.revision`）
+  static void applyThemeAccent(Color color) {
+    themeAccent = color;
+  }
 
   /// 待办模块强调色（checkbox 选中、区块标题 accent 等）
   /// 对应 React 版 TODO_ACCENT = #3B82F6
