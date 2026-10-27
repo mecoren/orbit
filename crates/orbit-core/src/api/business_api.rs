@@ -604,6 +604,7 @@ pub async fn update_todo_subtask(
 pub async fn delete_todo_subtask(pool: &SqlitePool, id: i64) -> CoreResult<()> {
     let t: TodoSubtask = generic_repo::get_by_id(pool, "todo_subtasks", id).await?;
     // 同任务存活行一次取全，内存建 children 映射（任务级子任务量为十行级）
+    // bounded-by-data: 按 task_id 取该任务的子任务树（单任务十行级）
     let rows: Vec<TodoSubtask> =
         sqlx::query_as("SELECT * FROM todo_subtasks WHERE task_id = ? AND is_deleted = 0")
             .bind(t.task_id)
@@ -938,6 +939,8 @@ pub async fn list_records_as_json(pool: &SqlitePool, table: &str) -> CoreResult<
         )));
     }
     // 白名单已校验，安全拼接表名
+    // bounded-by-lifecycle: v1 全量备份/导出的整表 JSON，调用方消费后即释放；
+    // 主路径已换 v2 帧式流式（OFS2），此函数保留给旧格式与测试
     let sql = format!("SELECT * FROM \"{}\" WHERE is_deleted = 0", table);
     let rows = sqlx::query(&sql).fetch_all(pool).await?;
     let arr: Vec<serde_json::Value> = rows.iter().map(sqlite_row_to_json).collect();

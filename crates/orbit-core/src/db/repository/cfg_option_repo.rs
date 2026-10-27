@@ -158,6 +158,7 @@ pub async fn soft_delete_category(pool: &SqlitePool, id: i64) -> CoreResult<()> 
 /// 按 category_key 列出启用选项（前端下拉框加载用）
 ///
 /// 仅返回 is_active=1 且未软删除的选项，按 sort_order 排序
+// bounded-by-data: 配置项按分类键取（每个分类的选项是个位数到十位数）
 pub async fn list_items_by_key(
     pool: &SqlitePool,
     category_key: &str,
@@ -177,6 +178,7 @@ pub async fn list_items_by_key(
 }
 
 /// 按 category_id 列出选项（管理用，可包含禁用项）
+// bounded-by-data: 单个分类下的选项（个位数到十位数）
 pub async fn list_items_by_category(
     pool: &SqlitePool,
     category_id: i64,

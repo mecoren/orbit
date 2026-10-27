@@ -82,6 +82,7 @@ fn build_vtimezone(tz_id: &str, now_ms: i64) -> String {
 /// 收录口径：未删除任务全量（done 的带 COMPLETED 时间戳——日历软件
 /// 侧可见完成轨迹）；标题/描述/优先级（1-4 映射 RFC 5545 9 级的
 /// 1=最高——任务 P5 紧急 → ics 1）、截止（DUE，本地时区）。
+// bounded-by-lifecycle: 导出构建的临时集合，函数返回即释放；导出语义本就要求全量
 pub async fn export_ics(pool: &SqlitePool) -> sqlx::Result<IcsExportResult> {
     let projects: Vec<(i64, String)> = sqlx::query("SELECT id, title FROM todo_projects")
         .fetch_all(pool)

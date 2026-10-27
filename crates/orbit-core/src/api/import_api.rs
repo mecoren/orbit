@@ -160,6 +160,7 @@ pub async fn bulk_import_records_from_values(
             .collect()
     };
 
+    // bounded-by-data: 按 900 一批的 IN 查询（SQLite 参数上限内），结果集 = 本批 uuid
     for chunk in unique_uuids.chunks(900) {
         if chunk.is_empty() {
             continue;

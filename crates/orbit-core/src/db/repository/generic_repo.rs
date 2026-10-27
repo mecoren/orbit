@@ -957,6 +957,7 @@ pub async fn count_since(pool: &SqlitePool, table: &str, since_ms: i64) -> CoreR
 ///
 /// 仅返回有记录的桶，前端需自行补齐缺失桶为 0。
 /// 适用于所有有 is_deleted + created_at 列的业务表。
+// bounded-by-data: GROUP BY 日期桶，结果集 = 区间内桶数（day ≤ 365 / month 12 / year 个位数）
 pub async fn count_by_bucket(
     pool: &SqlitePool,
     table: &str,
@@ -1010,6 +1011,7 @@ const ALLOWED_DATE_FIELDS: &[&str] = &[
 /// 用于主页热力图按业务日期（观看时间/购买日期/游玩日期等）聚合，而非记录创建时间。
 /// `date_field` 必须在 [ALLOWED_DATE_FIELDS] 白名单中，否则返回错误。
 /// 业务日期为 NULL 的记录会被 IS NOT NULL 条件过滤，不计入热力图。
+// bounded-by-data: GROUP BY 日期桶，结果集 = 区间内桶数（day ≤ 365 / month 12 / year 个位数）
 pub async fn count_by_bucket_with_field(
     pool: &SqlitePool,
     table: &str,
@@ -1036,6 +1038,7 @@ pub async fn count_by_bucket_with_field(
             )));
         }
     };
+    // bounded-by-data: 结果集 = 区间内日期桶数（与行数无关）
     let sql = format!(
         "SELECT strftime('{}', {}/1000, 'unixepoch', 'localtime') AS bucket_key, \
          COUNT(*) AS cnt FROM {} \

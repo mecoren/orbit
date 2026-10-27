@@ -745,6 +745,7 @@ async fn run_import_job(
     preset: CsvImportPreset,
 ) -> CoreResult<CsvImportStats> {
     let mut stats = CsvImportStats::default();
+    // bounded-by-data: 项目标题 → id 映射，量级为用户手建项目数（百级）
     let mut project_ids: HashMap<String, i64> =
         sqlx::query_as("SELECT title, id FROM todo_projects WHERE is_deleted = 0")
             .fetch_all(pool)
@@ -838,6 +839,7 @@ pub async fn execute_csv_import(
 
     // 项目标题 → id 缓存（含既有项目；key 归一 lowercase 与查询侧一致，
     // 执行中新建项目累加）
+    // bounded-by-data: 项目清单按用户手建项目数（百级）
     let mut project_ids: HashMap<String, i64> =
         sqlx::query_as("SELECT title, id FROM todo_projects WHERE is_deleted = 0")
             .fetch_all(pool)

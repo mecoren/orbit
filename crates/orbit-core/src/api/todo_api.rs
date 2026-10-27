@@ -48,6 +48,7 @@ pub struct TodoTaskDetail {
 }
 
 /// 查询任务详情（含子任务/标签/评论/关系/提醒）
+// bounded-by-data: 五个子查询都按 task_id 取单任务的关联行（十行级）
 pub async fn get_todo_task_detail(pool: &SqlitePool, id: i64) -> CoreResult<TodoTaskDetail> {
     let task: TodoTask = generic_repo::get_by_id(pool, "todo_tasks", id).await?;
 
@@ -81,6 +82,7 @@ pub async fn get_todo_task_detail(pool: &SqlitePool, id: i64) -> CoreResult<Todo
             .fetch_all(pool)
             .await?;
 
+    // bounded-by-data: 单任务提醒（个位数）
     let reminders: Vec<TodoReminder> = sqlx::query_as(
         "SELECT * FROM todo_reminders WHERE task_id = ? AND is_deleted = 0 ORDER BY remind_at, id",
     )
@@ -180,6 +182,7 @@ struct FlatReminderRow {
 }
 
 /// 任务→标签投影（一次往返替代 labels+task_labels 两次整表拉取；只读）
+// bounded-by-lifecycle: 只读投影，Rust 侧不持有；壳层按查询生命周期缓存（db-change 失效即释放）
 pub async fn task_labels_projection(pool: &SqlitePool) -> CoreResult<Vec<TaskLabelsProjection>> {
     let rows: Vec<FlatTaskLabelRow> = sqlx::query_as(
         "SELECT tl.task_id AS task_id, l.id AS id, l.title AS title, l.hex_color AS hex_color \
@@ -209,6 +212,7 @@ pub async fn task_labels_projection(pool: &SqlitePool) -> CoreResult<Vec<TaskLab
 }
 
 /// 任务→提醒投影（一次往返替代万行提醒整表；组内 remind_at 升序，只读）
+// bounded-by-lifecycle: 只读投影，Rust 侧不持有；壳层按查询生命周期缓存（db-change 失效即释放）
 pub async fn task_reminders_projection(
     pool: &SqlitePool,
 ) -> CoreResult<Vec<TaskRemindersProjection>> {
@@ -237,6 +241,7 @@ pub async fn task_reminders_projection(
 }
 
 /// 任务→关联计数旗标（SQL GROUP BY task_id；仅出边、仅存活行；只读）
+// bounded-by-lifecycle: GROUP BY 投影，Rust 侧不持有；壳层按查询生命周期缓存
 pub async fn task_dependency_flags(pool: &SqlitePool) -> CoreResult<Vec<TaskDependencyFlags>> {
     let rows: Vec<TaskDependencyFlags> = sqlx::query_as(
         "SELECT task_id AS task_id, COUNT(*) AS relation_count \
@@ -260,6 +265,7 @@ pub struct TaskDescriptionFlag {
 }
 
 /// 任务→「有描述」投影（只读；只出 description 非空串的存活行）
+// bounded-by-lifecycle: 一位旗标投影（只出有描述的任务），Rust 侧不持有
 pub async fn task_description_flags(pool: &SqlitePool) -> CoreResult<Vec<TaskDescriptionFlag>> {
     let rows: Vec<TaskDescriptionFlag> = sqlx::query_as(
         "SELECT id AS task_id FROM todo_tasks \
@@ -279,6 +285,7 @@ pub struct TaskExistenceFlag {
 }
 
 /// 任务→「有附件」投影（只读；关联表存活行；附件二进制本身不在本表）
+// bounded-by-lifecycle: DISTINCT task_id 一位旗标，Rust 侧不持有
 pub async fn task_attachment_flags(pool: &SqlitePool) -> CoreResult<Vec<TaskExistenceFlag>> {
     let rows: Vec<TaskExistenceFlag> = sqlx::query_as(
         "SELECT DISTINCT task_id AS task_id FROM todo_task_attachments \
@@ -290,6 +297,7 @@ pub async fn task_attachment_flags(pool: &SqlitePool) -> CoreResult<Vec<TaskExis
 }
 
 /// 任务→「有未完成子任务」投影（只读；子任务存活且 done = 0）
+// bounded-by-lifecycle: DISTINCT task_id 一位旗标，Rust 侧不持有
 pub async fn task_open_subtask_flags(pool: &SqlitePool) -> CoreResult<Vec<TaskExistenceFlag>> {
     let rows: Vec<TaskExistenceFlag> = sqlx::query_as(
         "SELECT DISTINCT task_id AS task_id FROM todo_subtasks \
@@ -1062,6 +1070,7 @@ pub struct CompleteTaskResult {
 ///
 /// 事件在事务提交后发出（Insert todo_tasks ×2 / Insert todo_subtasks ×N /
 /// Update todo_tasks），同步引擎与双端缓存照常消费。
+// bounded-by-data: 重复实例推进只读本实例的子任务与提醒（按 task_id，十行级）
 pub async fn complete_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<CompleteTaskResult> {
     let task: TodoTask = generic_repo::get_by_id(pool, "todo_tasks", id).await?;
     if task.is_deleted == 1 {
@@ -1091,6 +1100,7 @@ pub async fn complete_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<Comple
     // 本实例的存活提醒行：完成实例不再提醒（P1#10）——软删原行，
     // 重复任务的行平移 delta 后克隆到下一实例（系列提醒随实例延续，
     // 「不复制提醒」的旧口径废除）。事件在事务提交后统一发射（下方）。
+    // bounded-by-data: 按 task_id 取单任务提醒（个位数）
     // 元组带 is_constant（G2）：持续提醒标记随系列跨实例延续，
     // 否则「吃药」这类持续提醒在完成后就被降级成一次性。
     let old_reminders: Vec<TodoReminder> =
@@ -1247,6 +1257,7 @@ pub async fn complete_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<Comple
             now,
             &device_id,
         );
+        // bounded-by-data: 新实例的子任务（克隆树，十行级）
         let sub_rows: Vec<(i64, String)> = sqlx::query_as(
             "SELECT id, uuid FROM todo_subtasks WHERE task_id = ? AND is_deleted = 0 ORDER BY position, id",
         )
@@ -2521,6 +2532,7 @@ mod repeat_tests {
     // ---------- 完成时提醒行处置（P1#10 修复：完成实例不再提醒） ----------
 
     /// 本实例的存活提醒行（详情/克隆共用口径：is_deleted=0）
+    // bounded-by-data: 单任务存活提醒（个位数）
     async fn live_reminders(pool: &SqlitePool, task_id: i64) -> Vec<TodoReminder> {
         sqlx::query_as(
             "SELECT * FROM todo_reminders WHERE task_id = ? AND is_deleted = 0 ORDER BY remind_at, id",
@@ -3068,6 +3080,7 @@ mod reminder_poll_tests {
         pool
     }
 
+    // bounded-by-data: 单任务存活提醒（个位数）
     async fn live_reminders(pool: &SqlitePool, task_id: i64) -> Vec<TodoReminder> {
         sqlx::query_as(
             "SELECT * FROM todo_reminders WHERE task_id = ? AND is_deleted = 0 ORDER BY remind_at, id",

@@ -64,6 +64,8 @@ pub async fn load_table_items_of(
 }
 
 /// 装载主体（`only_uuids` 为 `None` = 全表）
+// bounded-by-lifecycle: 生产 push/pull 走 `load_table_items_of_cached` 的逐桶
+// uuid 定向装载（见模块头）；此函数返回的整表行集合消费后即释放
 async fn load_table_items_where(
     pool: &SqlitePool,
     table: &str,
@@ -89,6 +91,7 @@ async fn load_table_items_where(
                 })?
         }
         Some(uuids) => {
+            // bounded-by-data: 按 500 一批的 uuid IN 查询，分批累加后一次性返回
             let mut out: Vec<sqlx::sqlite::SqliteRow> = Vec::with_capacity(uuids.len());
             for batch in uuids.chunks(UUID_BATCH) {
                 let holders = std::iter::repeat_n("?", batch.len())
@@ -217,6 +220,8 @@ impl Default for FkResolver {
 ///
 /// 桶归属由 `bucket_of_uuid`（sha256 前 8 hex % 64）决定，SQL 表达不了，
 /// 故索引在 Rust 侧建。
+// bounded-by-data: 每表存活行 uuid 列表（同步分桶索引，量级 = 行数 × ~40B；
+// 桶数固定 64，行数据本身不在这里物化）
 pub async fn load_table_uuids_by_bucket(
     pool: &SqlitePool,
     table: &str,
@@ -265,6 +270,7 @@ pub async fn load_table_items_of_cached(
     /// 单批 `IN` 的变量数（与 [`load_table_items_of`] 同口径）
     const UUID_BATCH: usize = 500;
 
+    // bounded-by-data: 只装调用方给的桶内 uuid（每批 500），任一时刻仅一个桶的行
     let mut rows: Vec<sqlx::sqlite::SqliteRow> = Vec::with_capacity(uuids.len());
     for batch in uuids.chunks(UUID_BATCH) {
         let holders = std::iter::repeat_n("?", batch.len())
@@ -346,6 +352,8 @@ pub async fn scan_local_buckets(
     if watermark <= 0 {
         return Ok(None);
     }
+    // bounded-by-data: 每表 uuid + updated_at 索引（干净桶的 uuid 在归集后立即释放，
+    // 只留脏桶清单；见函数内注释与 N52 口径）
     let sql = format!("SELECT uuid, updated_at FROM \"{table}\" WHERE is_deleted = 0");
     let rows: Vec<(String, Option<i64>)> =
         sqlx::query_as(&sql)
@@ -379,6 +387,7 @@ pub async fn scan_local_buckets(
 }
 
 /// 单表 `id → uuid` 映射（含软删行：软删父行的子记录仍要能标出父 uuid）
+// bounded-by-lifecycle: 本轮同步的 FK 解析映射，push/pull 结束即释放
 pub async fn load_id_uuid_map(
     pool: &SqlitePool,
     table: &str,
@@ -398,6 +407,7 @@ pub async fn load_id_uuid_map(
 }
 
 /// 单表 `uuid → id` 映射（含软删行：软删父行在本端仍是该子行的归属）
+// bounded-by-lifecycle: 本轮同步的 FK 解析映射，push/pull 结束即释放
 pub async fn load_uuid_id_map(
     pool: &SqlitePool,
     table: &str,
@@ -433,6 +443,7 @@ pub struct LocalRecordState {
 /// 加载单表全部记录（含软删除）的 uuid 状态映射
 ///
 /// 软删除记录必须纳入：merge 据此区分「INSERT 新记录」与「复活已有记录」。
+// bounded-by-lifecycle: 合并裁决用的 uuid 状态映射，本轮 merge 结束即释放
 pub async fn load_table_uuid_map(
     pool: &SqlitePool,
     table: &str,
@@ -477,6 +488,7 @@ pub async fn load_table_uuid_map(
 ///
 /// 返回 `bucket(YYYY-MM) -> 墓碑条目`（BTreeMap 保证键升序，便于水位线比较）。
 /// 不含任何上限：墓碑条数即真实删除数（回收由 `gc` 按水位线执行）。
+// bounded-by-lifecycle: 每轮 push 的墓碑清单，上传完成后释放（墓碑数受回收 TTL 约束）
 pub async fn load_table_tombstones(
     pool: &SqlitePool,
     table: &str,

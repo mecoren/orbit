@@ -406,6 +406,7 @@ pub fn builtin_holiday_by_date() -> std::collections::HashMap<String, HolidayInf
 /// **按年合并**（AC-E5）：DB 已覆盖的年份完全以 DB 为准；预置表只兜底 DB 未
 /// 覆盖的年份。合并结果只是读时视图，**不回写 DB**（避免预置表灌库造成概览
 /// 条数虚高），也避免「补写某个历史年份就把预置年份的徽标整体抹掉」。
+// bounded-by-data: cfg_holidays 按年存储（每年数百行，接口按年整年替换）
 pub async fn list_holidays(pool: &SqlitePool) -> CoreResult<Vec<HolidayInfo>> {
     let rows = sqlx::query_as::<_, (String, i32, i32, String)>(
         "SELECT date, year, is_holiday, name FROM cfg_holidays ORDER BY date ASC",

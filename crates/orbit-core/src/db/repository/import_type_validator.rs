@@ -59,6 +59,7 @@ pub async fn load_table_columns_in_tx(
 ) -> CoreResult<HashMap<String, ColumnMeta>> {
     crate::db::repository::generic_repo::validate_column_name(table)?;
 
+    // bounded-by-data: PRAGMA table_info，结果集 = 该表列数（十位数）
     let sql = format!("PRAGMA table_info(\"{}\")", table);
     let rows = sqlx::query(&sql).fetch_all(conn).await?;
 

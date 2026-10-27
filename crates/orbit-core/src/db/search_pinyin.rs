@@ -225,6 +225,8 @@ pub async fn reconcile(pool: &SqlitePool) -> CoreResult<(usize, usize)> {
              LEFT JOIN search_pinyin s ON s.kind = '{kind}' AND s.uuid = t.uuid \
              WHERE t.is_deleted = 0 AND (s.uuid IS NULL OR s.title != t.{column})"
         );
+        // bounded-by-lifecycle: 对账需要一次取出全部不一致行做批量重建，
+        // 事务提交后即释放（不是常驻容器）
         let stale: Vec<(String, String)> = sqlx::query_as(&sql).fetch_all(pool).await?;
         if stale.is_empty() {
             continue;

@@ -73,6 +73,7 @@ fn emit(table: &str, id: i64, uuid: &str, op: DbOp, timestamp: i64) {
 }
 
 /// 列出全部保存的筛选器（sort_order 升序）
+// bounded-by-data: 保存的筛选器由用户手工创建，量级为个位数到十位数
 pub async fn list_saved_filters(pool: &SqlitePool) -> CoreResult<Vec<TodoSavedFilter>> {
     let rows: Vec<TodoSavedFilter> = sqlx::query_as(
         "SELECT * FROM todo_saved_filters WHERE is_deleted = 0 ORDER BY sort_order, id",

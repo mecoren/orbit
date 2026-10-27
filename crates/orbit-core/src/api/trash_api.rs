@@ -288,6 +288,7 @@ pub const TRASH_LIST_LIMIT: i64 = 1000;
 /// 事件载荷取**独立投影查询**而非 [list_trashed_tasks]：后者带列表上限，
 /// 复用它会让「删除行数 > 事件数」（超上限的墓碑被物理删却不发 db-change）。
 /// 投影只取 id/uuid（与 TTL 清理同口径），不整行物化。
+// bounded-by-lifecycle: 物理清除必须遍历全部墓碑；投影只含 id/uuid，函数返回即释放
 pub async fn purge_all_trashed_tasks(pool: &SqlitePool) -> CoreResult<u64> {
     let trashed: Vec<(i64, String)> = sqlx::query_as::<_, (i64, String)>(
         "SELECT id, uuid FROM todo_tasks WHERE is_deleted = 1 AND deleted_at IS NOT NULL",
@@ -405,6 +406,8 @@ pub async fn purge_todo_tasks_before(pool: &SqlitePool, cutoff_ms: i64) -> CoreR
         true => last_pushed_at.max(1),
         false => i64::MAX,
     };
+    // bounded-by-lifecycle: TTL 清理必须遍历区间内全部墓碑；只取 id/uuid 投影，
+    // 集合随函数返回释放（不是常驻容器）
     let candidates: Vec<(i64, String)> = sqlx::query_as::<_, (i64, String)>(
         "SELECT id, uuid FROM todo_tasks WHERE is_deleted = 1 AND deleted_at IS NOT NULL AND deleted_at < ? AND deleted_at < ?",
     )

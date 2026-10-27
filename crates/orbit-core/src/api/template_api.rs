@@ -61,6 +61,7 @@ fn emit(table: &str, id: i64, uuid: &str, op: DbOp, timestamp: i64) {
 }
 
 /// 列出全部模板（sort_order 升序）
+// bounded-by-data: 模板由用户手工创建，量级为个位数到十位数
 pub async fn list_templates(pool: &SqlitePool) -> CoreResult<Vec<TodoTemplate>> {
     let rows: Vec<TodoTemplate> =
         sqlx::query_as("SELECT * FROM todo_templates WHERE is_deleted = 0 ORDER BY sort_order, id")

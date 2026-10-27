@@ -29,6 +29,8 @@ pub struct PlaintextExportResult {
 ///
 /// `exclude_deleted`：true 时过滤 `is_deleted=1` 的墓碑行（明文导出
 /// 的默认口径——用户导出的是"我的数据"而非同步账本）。
+// bounded-by-lifecycle: 单表全量行是导出过程的临时集合，写盘后即释放；
+// 明文导出语义要求完整数据，不能分页丢行
 async fn fetch_table_rows(
     pool: &SqlitePool,
     table: &str,
@@ -124,6 +126,7 @@ pub fn csv_escape(field: &str) -> String {
 }
 
 /// 导出任务主视图 CSV（默认排除墓碑行；含项目名与标签聚合列）
+// bounded-by-lifecycle: 项目/标签映射与任务行都是导出过程的临时集合，写盘后即释放
 pub async fn export_plaintext_csv(
     pool: &SqlitePool,
     exclude_deleted: bool,
@@ -155,6 +158,7 @@ pub async fn export_plaintext_csv(
     }
 
     // 任务行（可选墓碑过滤）
+    // bounded-by-lifecycle: 导出必须全量，行集合随函数返回释放
     let sql = if exclude_deleted {
         "SELECT * FROM todo_tasks WHERE is_deleted = 0"
     } else {

@@ -174,6 +174,7 @@ pub async fn stats_overview(pool: &SqlitePool) -> CoreResult<StatsOverview> {
     stats_overview_impl(&rows).await
 }
 
+// bounded-by-lifecycle: 统计聚合的全表行临时集合，函数返回即释放（只读聚合必须全量扫）
 async fn fetch_stat_rows(pool: &SqlitePool) -> CoreResult<Vec<TaskStatRow>> {
     let rows: Vec<TaskStatRow> =
         sqlx::query_as("SELECT done, done_at FROM todo_tasks WHERE is_deleted = 0")
@@ -339,6 +340,7 @@ async fn stats_streak_impl(rows: &[TaskStatRow]) -> CoreResult<StreakData> {
     Ok(compute_streak(&done_indices, today_idx))
 }
 
+// bounded-by-data: GROUP BY 项目，结果集 = 项目数（百级），与任务总数无关
 async fn stats_by_project_impl(pool: &SqlitePool) -> CoreResult<Vec<ProjectDistRow>> {
     let rows: Vec<(Option<i64>, String, String, i64, i64)> = sqlx::query_as(
         "SELECT t.project_id, \
@@ -365,6 +367,7 @@ async fn stats_by_project_impl(pool: &SqlitePool) -> CoreResult<Vec<ProjectDistR
         .collect())
 }
 
+// bounded-by-data: GROUP BY 优先级，结果集 = 六档优先级（固定 ≤6 行）
 async fn stats_by_priority_impl(pool: &SqlitePool) -> CoreResult<Vec<PriorityDistRow>> {
     let rows: Vec<(i64, i64, i64)> = sqlx::query_as(
         "SELECT priority, \

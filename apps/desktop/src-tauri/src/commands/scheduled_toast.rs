@@ -78,6 +78,7 @@ pub fn schedule_all_on_quit(app: &tauri::AppHandle) {
 
     let rows = tauri::async_runtime::block_on(async {
         let now_ms = chrono::Utc::now().timestamp_millis();
+        // bounded-by-lifecycle: 退出前 24h 窗口内的提醒，一次性排进系统调度器后释放
         sqlx::query_as::<_, (i64, String, i64)>(
             "SELECT r.id, t.title, r.remind_at \
              FROM todo_reminders r \

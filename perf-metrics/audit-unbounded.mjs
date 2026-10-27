@@ -71,14 +71,16 @@ const RULES = [
     blocking: true,
   },
   {
-    // 存量 19 个文件尚未逐个复核（多数是按日期区间/小基数表读的天然有界集），
-    // 故先只报不拦；A6 回收站分页落地后连同复核结论一起翻正为 blocking。
+    // 2026-10-27 复核收口：19 个文件 / 58 处逐个人工判定（按 task_id 等键查询、
+    // 结果集 = 桶数/项目数等天然小集、或导出/GC/同步索引这类函数内临时集合），
+    // 结论随源码 `bounded-*` 标记落地，提示级清零后翻正为拦停。
+    // 新增无 LIMIT 的 fetch_all 必须先说明上界（或补 LIMIT），否则 gate 红。
     name: 'sql-fetch-all',
     lang: 'rust',
     re: /\.fetch_all\s*\(/i,
     evidence: /\bLIMIT\b|\.bind\(\s*(?:\w+\.)?(?:page_size|limit|max)/i,
     window: 30,
-    blocking: false,
+    blocking: true,
   },
 ];
 
