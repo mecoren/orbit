@@ -33,7 +33,13 @@
 - **修复**：`query-patch`/`hideFromQueries` 原假设缓存是行数组——分页缓存是 `{pages:[{items,next_cursor}]}`，原实现会在 `old.some` 抛 `page.map is not a function`，且异常发生在 `todoTaskComplete` 之前，表现为「点勾选没反应、删除不提交」。现同时支持「页 = 行数组」与「页 = `{items}`」两种形态。
 - **回归锚点**：`keyset_paging_tests`（四档 × 多页长逐页遍历必须等于单页全量、换档作废、总览口径）、`buildPagedFilter` 单测、`ipc-contract` 分页保真用例、`query-patch` 分页形态用例；桌面 vitest **730 绿**、e2e **73 绿**。
 - **看板/四象限/日历/Logbook 接入窗口通道**：新增 `list_todo_tasks_board`（先 `GROUP BY` 拿每组总数，再逐组 `LIMIT 60` 取前 N 条；组键与前端 `kanbanColumnKey` 逐字一致）；看板列头报真实总数、列内注明「还有 N 条」；四象限的「已完成」筛选与 `groupEisenhower` 同口径（追加 `done = 0`，显式筛已完成时为空）；日历按月窗口 `due_from`/`due_to` 取数（月/周/议程/时间轴取前后各一月，年视图整年），范围查询首屏计入加载态；Logbook 新增 `done_at` 排序档 + `0012_task_done_at_index.sql` 表达式索引（`done_at` 为空的历史行沉底），滚到底部续拉。标签看板保留全量——列定义随任务标签动态变化，窗口内的标签会让空列消失。
-- **未做（如实记账）**：移动端 provider 仍走 10k 全量（FRB `todo_tasks_page`/`todo_tasks_board` 已就绪；`sub_list_screen` 3000+ 行、多选/批量/周回顾/退场动画都直接读全量缓存，游标状态、逾期独立段与滚动预取需单独一轮）；50k 真机验收线（首屏/滚动 p95/heap/DOM/筛选）未实测。
+- **移动端窗口化（同日补做）**：Dart `ListFilter` 补全 core 全量谓词，并新增 `start_from`/`start_to`（日历时间轴按块起点取数，NULL 不命中；桌面「按开始日期」日历复用同一谓词）。`buildPagedQuery` 纯函数承载「视图态 → ListFilter」下推矩阵（标签筛选与保存筛选器条件同样下推 `label_ids`/`has_reminder`/`has_attachment`/`has_open_subtask`/`created_from`/`done_from` 六谓词，与当前列表范围取交集；唯一回退项只剩标题排序的拼音序与标签看板列定义）；`TaskWindowNotifier`（family + autoDispose）持键集游标与续拉守卫，滚动距底 400px 预取；逾期置顶段独立查询后按 id 去重；列表完成行改独立 `done_at` 通道（前 20 条 + SQL 总数），主窗口只装未完成行；看板/矩阵走 `todo_tasks_board`，日历按可见范围（due ∪ start 两路并集）取数，Logbook 按 `done_at` 续拉。
+- **移动端全量通道收敛**：侧栏/底栏角标、角标刷新与提醒快照改读 `todo_task_overview` 聚合或按需全量；移除 `listenManual(todoTasksProvider)`（它会让万行全量常驻）；周回顾打开时按需取全集；多选改选中即记对象快照（滚出窗口仍可批量撤销）、拖拽限定已加载窗口且 `has_more` 时禁止落位尾部、入场动画已知集只增、今日条改有界两路查询；看板/矩阵首帧渲染常显面板，不再闪整屏骨架。
+- **回归锚点**：mock 桥分页/看板契约 8 例（done/项目集合/start 区间/`exclude_due_before`/游标续拉/看板组键与每列限额）+ 下推矩阵 22 例；flutter 全量 **1075 绿**、analyze 零问题。
+- **修复**：移动端多选「已选 N 项」与批量动作实际落地数不一致——`_toggleSelect` 在拿不到行快照（窗口重建后 `_visibleById` 无该 id）时仍把 id 塞进选中集合，而 `_runBatch` 只处理有快照的行，导致选 3 条只写 2 条（2026-10-27 真机 3000 行库实测复现，批量设优先级 3 选 2 落地 + Toast「已调整 2 个任务」）；改为拿不到快照即不入集合，保证两个集合恒等；重装后同场景复验「已选 3 项 → 3 条 UPDATE」，Toast 文案同步为「已调整 3 个任务」。
+- **新增**：`crates/orbit-core/examples/seed_demo_db.rs` 种子库生成器（明文、全类型关联、分布可调），配 `--rows` 一条命令产出真机/性能验收库；替换流程写在文件头（含原库备份回滚），本批真机验收用的 3000 行库即由此生成。
+- **修复**：桌面 mock 的 `todo_tasks_page`/`todo_tasks_board` 漏了 keyword 谓词（core `build_task_where` 一直有），全量 e2e 表现为「搜索后不匹配的行仍在列表里」（单跑该用例因前序状态不同会假绿）；补 `filterByKeyword` 叠加并加契约用例 ④-4（标题命中/描述命中/看板组总数三断言）；e2e 复跑 **73 绿**。
+- **未做（如实记账）**：50k 真机验收线（首屏 <1.5s、滚动 p95 <20ms、heap ≤120MB、DOM ≤1200、筛选 <300ms）未实测——目前只有搜索 p95 与单测/冒烟证据，按本仓口径「未实测不下结论」。
 
 ### 性能：维护改全量 ANALYZE，`PRAGMA optimize` 退场（docs/13 §七 P5，2026-10-25）
 
