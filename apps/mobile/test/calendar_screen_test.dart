@@ -25,9 +25,9 @@ import 'package:table_calendar/table_calendar.dart'
 import 'support/orbit_test_app.dart';
 
 Widget _wrap(Widget child, MockOrbitBridge bridge) => ProviderScope(
-      overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
-      child: orbitTestAppRouter(routerConfig: _router),
-    );
+  overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
+  child: orbitTestAppRouter(routerConfig: _router),
+);
 
 /// 极简路由：侧栏 + 日历 + 详情占位页
 /// （点击任务卡后以「detail:」前缀文本页落地，验证导航目标）
@@ -135,12 +135,12 @@ MockOrbitBridge _timedBridge() {
 
   /// 相对今天第 dayOffset 天的 HH:mm 时间戳（锚 mock 时钟，不随真实时间漂移）
   int at(int dayOffset, int h, [int m = 0]) => DateTime(
-        today.year,
-        today.month,
-        today.day + dayOffset,
-        h,
-        m,
-      ).millisecondsSinceEpoch;
+    today.year,
+    today.month,
+    today.day + dayOffset,
+    h,
+    m,
+  ).millisecondsSinceEpoch;
   final rows = <Map<String, Object?>>[
     // 显式排程：start 带时刻 → 块起点即 start
     {'id': 701, 'title': '显式排程块', 'start': at(0, 9), 'due': null, 'dur': 60},
@@ -192,12 +192,17 @@ MockOrbitBridge _timedBridge() {
 class _OctHolidayBridge extends MockOrbitBridge {
   @override
   Future<List<HolidayInfo>> holidayList() async => const [
-        HolidayInfo(date: '2026-09-25', year: 2026, isHoliday: true, name: '中秋节'),
-        HolidayInfo(date: '2026-10-01', year: 2026, isHoliday: true, name: '国庆节'),
-        HolidayInfo(date: '2026-10-02', year: 2026, isHoliday: true, name: '国庆节'),
-        HolidayInfo(date: '2026-10-08', year: 2026, isHoliday: true, name: '国庆节'),
-        HolidayInfo(date: '2026-10-10', year: 2026, isHoliday: false, name: '国庆节后补班'),
-      ];
+    HolidayInfo(date: '2026-09-25', year: 2026, isHoliday: true, name: '中秋节'),
+    HolidayInfo(date: '2026-10-01', year: 2026, isHoliday: true, name: '国庆节'),
+    HolidayInfo(date: '2026-10-02', year: 2026, isHoliday: true, name: '国庆节'),
+    HolidayInfo(date: '2026-10-08', year: 2026, isHoliday: true, name: '国庆节'),
+    HolidayInfo(
+      date: '2026-10-10',
+      year: 2026,
+      isHoliday: false,
+      name: '国庆节后补班',
+    ),
+  ];
 }
 
 void main() {
@@ -213,8 +218,9 @@ void main() {
         ),
         GoRoute(
           path: '/todo/:id',
-          builder: (_, s) =>
-              Scaffold(body: Center(child: Text('detail:${s.pathParameters['id']}'))),
+          builder: (_, s) => Scaffold(
+            body: Center(child: Text('detail:${s.pathParameters['id']}')),
+          ),
         ),
       ],
     );
@@ -228,26 +234,29 @@ void main() {
   /// 页头标题里的月份大字（titleWidget 槽内唯一以「月」结尾的 Text；
   /// 相对天数小字「N天前/N天后」不含「月」，trailing 提示在 title 之后）
   String headerTitle(WidgetTester tester) => tester
-      .widget<Text>(find
-          .descendant(
-            of: find.byType(OrbitPageHeader),
-            matching: find.textContaining('月'),
-          )
-          .first)
+      .widget<Text>(
+        find
+            .descendant(
+              of: find.byType(OrbitPageHeader),
+              matching: find.textContaining('月'),
+            )
+            .first,
+      )
       .data!;
 
   /// 页头标题槽内按字面找 Text
   Finder headerText(String text) => find.descendant(
-        of: find.byType(OrbitPageHeader),
-        matching: find.text(text),
-      );
+    of: find.byType(OrbitPageHeader),
+    matching: find.text(text),
+  );
 
   /// 整页滚动一屏（起点取月历下缘之下的列表区）：网格起滑的纵向手势已被
   /// 「上滑收周条/下滑展开」接管（AvailableGestures.all），从列表区起滑
   /// 才走外层整页滚动
   Future<void> dragListUp(WidgetTester tester, [double dy = -300]) async {
-    final calendarBottom =
-        tester.getBottomRight(find.byType(OrbitMonthCalendar)).dy;
+    final calendarBottom = tester
+        .getBottomRight(find.byType(OrbitMonthCalendar))
+        .dy;
     await tester.dragFrom(Offset(120, calendarBottom + 40), Offset(0, dy));
     await tester.pump(const Duration(milliseconds: 200));
     await tester.pumpAndSettle();
@@ -256,9 +265,9 @@ void main() {
   /// 树内的 table_calendar 实例（应用侧是 `TableCalendar<void>`，byType 的
   /// `TableCalendar<dynamic>` 泛型实参不等会扑空，走 `is` 子类型判定）
   Finder tableCalendarFinder() => find.byWidgetPredicate(
-        (w) => w is TableCalendar,
-        description: 'TableCalendar',
-      );
+    (w) => w is TableCalendar,
+    description: 'TableCalendar',
+  );
 
   TableCalendar calendarOf(WidgetTester tester) =>
       tester.widget<TableCalendar>(tableCalendarFinder());
@@ -312,8 +321,9 @@ void main() {
     await tester.tap(card.first);
     await tester.pumpAndSettle();
     expect(
-      find.byWidgetPredicate((w) =>
-          w is Text && (w.data ?? '').startsWith('detail:')),
+      find.byWidgetPredicate(
+        (w) => w is Text && (w.data ?? '').startsWith('detail:'),
+      ),
       findsOneWidget,
     );
   });
@@ -370,10 +380,16 @@ void main() {
     // 点月份标题 → 年视图页（干支生肖标签 + 12 迷你月历）
     await tester.tap(headerText('${DateTime.now().month}月').first);
     await tester.pumpAndSettle();
-    expect(find.byWidgetPredicate(
-      (w) => w is Text && (w.data ?? '').endsWith('年') && (w.data ?? '').length == 4,
-      description: '大年份 2026',
-    ), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (w) =>
+            w is Text &&
+            (w.data ?? '').endsWith('年') &&
+            (w.data ?? '').length == 4,
+        description: '大年份 2026',
+      ),
+      findsOneWidget,
+    );
     expect(find.text('丙午马年'), findsOneWidget);
 
     // 12 个迷你月标题齐全
@@ -385,11 +401,15 @@ void main() {
     // 年视图页滚动区 = SingleChildScrollView（显式指定，PageView 亦为可滚组件会歧义）
     final yearScroll = find.descendant(
       of: find.byWidgetPredicate(
-          (w) => w.runtimeType.toString() == 'YearOverviewPage'),
+        (w) => w.runtimeType.toString() == 'YearOverviewPage',
+      ),
       matching: find.byType(Scrollable).first,
     );
-    await tester.scrollUntilVisible(find.text('9月').first, 200,
-        scrollable: yearScroll);
+    await tester.scrollUntilVisible(
+      find.text('9月').first,
+      200,
+      scrollable: yearScroll,
+    );
     await tester.tap(find.text('9月').first);
     await tester.pumpAndSettle();
     expect(headerText('9月'), findsOneWidget);
@@ -414,8 +434,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 2700));
   });
 
-  testWidgets('页头相对天数小字：跟随选中日（点日格即变），翻月未选中回落锚定 1 号',
-      (tester) async {
+  testWidgets('页头相对天数小字：跟随选中日（点日格即变），翻月未选中回落锚定 1 号', (tester) async {
     final bridge = _seededBridge();
     await tester.pumpWidget(_wrap(const SizedBox(), bridge));
     await settle(tester);
@@ -443,17 +462,26 @@ void main() {
     // 翻到下月（选中日留在本月）：回落为下月 1 号距今天（竞品月份口径）
     await tester.tap(find.byTooltip('下个月'));
     await tester.pumpAndSettle();
-    final nextDiff = DateTime(now.year, now.month + 1, 1).difference(today).inDays;
+    final nextDiff = DateTime(
+      now.year,
+      now.month + 1,
+      1,
+    ).difference(today).inDays;
     expect(headerTitle(tester), '${DateTime(now.year, now.month + 1).month}月');
     expect(
-        headerText(nextDiff == 0
-            ? '今天'
-            : '${nextDiff.abs()}天${nextDiff < 0 ? '前' : '后'}'),
-        findsOneWidget);
+      headerText(
+        nextDiff == 0 ? '今天' : '${nextDiff.abs()}天${nextDiff < 0 ? '前' : '后'}',
+      ),
+      findsOneWidget,
+    );
   });
 
-  testWidgets('月历去卡片化：网格直接铺底（无卡片分段包裹），左右与上方间隔保留',
-      (tester) async {
+  testWidgets('月历去卡片化：网格直接铺底（无卡片分段包裹），左右与上方间隔保留', (tester) async {
+    // #107：宽屏（>=600）月历居中限宽 520，窄屏左缘仍贴 space12。
+    // 本用例钉 360dp 视口作为手机竖屏回归锚点（宽屏中心化由断点单测覆盖）。
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
     final bridge = _seededBridge();
     await tester.pumpWidget(_wrap(const SizedBox(), bridge));
     await settle(tester);
@@ -468,12 +496,41 @@ void main() {
     // 左右间隔保留：左缘距屏幕 space12（去卡片前是卡片 12 + 内衬 8 = 20）
     expect(tester.getTopLeft(calendar).dx, AppDimens.space12);
     // 上方间隔保留：顶缘 = 页头行高 + 页头下 space8 留白
-    expect(tester.getTopLeft(calendar).dy,
-        OrbitPageHeader.rowHeight + AppDimens.space8);
+    expect(
+      tester.getTopLeft(calendar).dy,
+      OrbitPageHeader.rowHeight + AppDimens.space8,
+    );
   });
 
-  testWidgets('年视图间距：页边距 16 / 行组间隔 32 / 日格行高 24（参考三列竞品版式）',
-      (tester) async {
+  testWidgets('无障碍字号回归：360dp + textScale 2.0 月历与列表均不溢出', (tester) async {
+    // #107 回归锚点之二：解除竖屏锁定与加断点后，最窄视口叠加大字号
+    // 仍不得溢出（溢出会以 FlutterError 抛出，pump 即判红）。
+    // 2.0 是 Material 无障碍字号的常见上限档；断点档不随字号变化。
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1.0;
+    tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+    addTearDown(tester.view.reset);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+    final bridge = _seededBridge();
+    await tester.pumpWidget(_wrap(const SizedBox(), bridge));
+    await settle(tester);
+
+    expect(tester.takeException(), isNull);
+    expect(find.byType(OrbitMonthCalendar), findsOneWidget);
+    // 大字号下页头仍只有一个标题行（未因换行把月历挤出首屏）
+    expect(headerTitle(tester), '${DateTime.now().month}月');
+    // 日号必须单行：溢出会抛异常，但**裁剪**不会——这条钉住「没被裁」
+    final dayNumber = find
+        .descendant(
+          of: find.byType(OrbitMonthCalendar),
+          matching: find.text('${DateTime.now().day}'),
+        )
+        .first;
+    expect(tester.getSize(dayNumber).height, lessThan(60));
+  });
+
+  testWidgets('年视图间距：页边距 16 / 行组间隔 32 / 日格行高 24（参考三列竞品版式）', (tester) async {
     await tester.pumpWidget(
       orbitTestApp(
         home: const YearOverviewPage(initialYear: 2026, initialMonth: 9),
@@ -482,8 +539,9 @@ void main() {
     await settle(tester);
 
     // 滚动区内边距：左右页边距 space16、顶部 space12、底部 space32
-    final scroll = tester
-        .widget<SingleChildScrollView>(find.byType(SingleChildScrollView));
+    final scroll = tester.widget<SingleChildScrollView>(
+      find.byType(SingleChildScrollView),
+    );
     final pad = scroll.padding! as EdgeInsets;
     expect(pad.left, AppDimens.space16);
     expect(pad.top, AppDimens.space12);
@@ -493,13 +551,14 @@ void main() {
     // （外层月份行是全页唯一 crossAxisAlignment.start 且含月份标题的 Row，
     // 迷你月历内部行均为默认 center）
     Finder monthRow(String title) => find.ancestor(
-          of: find.text(title),
-          matching: find.byWidgetPredicate(
-            (w) => w is Row && w.crossAxisAlignment == CrossAxisAlignment.start,
-          ),
-        );
+      of: find.text(title),
+      matching: find.byWidgetPredicate(
+        (w) => w is Row && w.crossAxisAlignment == CrossAxisAlignment.start,
+      ),
+    );
     expect(monthRow('1月'), findsOneWidget);
-    final gap = tester.getTopLeft(monthRow('4月')).dy -
+    final gap =
+        tester.getTopLeft(monthRow('4月')).dy -
         tester.getBottomLeft(monthRow('1月')).dy;
     expect(gap, AppDimens.space32);
 
@@ -545,8 +604,11 @@ void main() {
     expect(title(), isNot(currentTitle));
 
     // 右滑 → 回到原月份
-    await tester.fling(find.text('${DateTime.now().day}').first,
-        const Offset(320, 0), 900);
+    await tester.fling(
+      find.text('${DateTime.now().day}').first,
+      const Offset(320, 0),
+      900,
+    );
     await tester.pumpAndSettle();
     expect(title(), currentTitle);
   });
@@ -581,8 +643,7 @@ void main() {
     expect(gridWorkday, findsOneWidget);
   });
 
-  testWidgets('月历上滑收成单行周条、下滑展开复原（收起对齐选中日所在周）',
-      (tester) async {
+  testWidgets('月历上滑收成单行周条、下滑展开复原（收起对齐选中日所在周）', (tester) async {
     final bridge = _seededBridge();
     await tester.pumpWidget(_wrap(const SizedBox(), bridge));
     await settle(tester);
@@ -616,12 +677,14 @@ void main() {
     expect(calendarFormatOf(tester), CalendarFormat.week);
 
     // 下滑 → 展开回整月档（翻周后「今天」已不在条内，锚点改取条内任意日号格）
-    final anyDayCell = find.descendant(
-      of: tableCalendarFinder(),
-      matching: find.byWidgetPredicate(
-        (w) => w is Text && int.tryParse(w.data ?? '') != null,
-      ),
-    ).first;
+    final anyDayCell = find
+        .descendant(
+          of: tableCalendarFinder(),
+          matching: find.byWidgetPredicate(
+            (w) => w is Text && int.tryParse(w.data ?? '') != null,
+          ),
+        )
+        .first;
     await tester.fling(anyDayCell, const Offset(0, 220), 800);
     await tester.pumpAndSettle();
     expect(calendarFormatOf(tester), CalendarFormat.month);
@@ -630,8 +693,7 @@ void main() {
     expect(tester.getSize(calendar).height, greaterThan(weekBarHeight));
   });
 
-  testWidgets('周条跨月周：补位日期不弱化（dimOutsideMonth=false 生效）',
-      (tester) async {
+  testWidgets('周条跨月周：补位日期不弱化（dimOutsideMonth=false 生效）', (tester) async {
     final bridge = _seededBridge();
     await tester.pumpWidget(_wrap(const SizedBox(), bridge));
     await settle(tester);
@@ -639,8 +701,11 @@ void main() {
     // 收成周条后，条内所有日号一律正常色（周档 dimOutsideMonth=false）：
     // 找出条内任一日期格断言非 deactivatedText（月档下补位格是弱化灰，
     // 开关若失效跨月周会露灰）
-    await tester.fling(find.text('${DateTime.now().day}').first,
-        const Offset(0, -220), 800);
+    await tester.fling(
+      find.text('${DateTime.now().day}').first,
+      const Offset(0, -220),
+      800,
+    );
     await tester.pumpAndSettle();
     expect(calendarFormatOf(tester), CalendarFormat.week);
 
@@ -730,8 +795,9 @@ void main() {
     await _switchViewMode(tester, '周');
 
     // 周档：月历收缩为单行周条（table_calendar 的 week 档）
-    final cal =
-        tester.widget<OrbitMonthCalendar>(find.byType(OrbitMonthCalendar));
+    final cal = tester.widget<OrbitMonthCalendar>(
+      find.byType(OrbitMonthCalendar),
+    );
     expect(cal.calendarFormat, CalendarFormat.week);
 
     // 分组列表只含**本周**的日期组（不是整月）：日组头数 ≤ 7
@@ -903,8 +969,7 @@ void main() {
 
   // ── 时间轴拖拽（docs/07 #75：长按 500ms 拾起 + 纵向改时刻）──
 
-  testWidgets('时间轴拖拽：显式排程块长按下拖 → 落库 start_date（15 分钟吸附）',
-      (tester) async {
+  testWidgets('时间轴拖拽：显式排程块长按下拖 → 落库 start_date（15 分钟吸附）', (tester) async {
     _wideSurface(tester);
     final bridge = _timedBridge();
     await tester.pumpWidget(_wrap(const SizedBox(), bridge));
@@ -931,8 +996,7 @@ void main() {
     expect(t.durationMinutes, 60);
   });
 
-  testWidgets('时间轴拖拽：截止倒推块长按下拖 → 改 due_date 且不种 start',
-      (tester) async {
+  testWidgets('时间轴拖拽：截止倒推块长按下拖 → 改 due_date 且不种 start', (tester) async {
     _wideSurface(tester);
     final bridge = _timedBridge();
     await tester.pumpWidget(_wrap(const SizedBox(), bridge));
@@ -969,18 +1033,14 @@ void main() {
 
     final before = (await tester.runAsync(
       () => bridge.todoTaskList(const ListFilter()),
-    ))!
-        .firstWhere((x) => x.title == '显式排程块')
-        .startDate;
+    ))!.firstWhere((x) => x.title == '显式排程块').startDate;
 
     // 3px = 3.75 分钟 < 半格（7.5）→ 吸回原格 → 无变化
     await _dragTimeslotBlock(tester, timeslotBlock('显式排程块'), dy: 3);
 
     final after = (await tester.runAsync(
       () => bridge.todoTaskList(const ListFilter()),
-    ))!
-        .firstWhere((x) => x.title == '显式排程块')
-        .startDate;
+    ))!.firstWhere((x) => x.title == '显式排程块').startDate;
     expect(after, before, reason: '吸附回原格不应产生写库');
   });
 
@@ -998,8 +1058,7 @@ void main() {
     // 起点未被拖动
     final t = (await tester.runAsync(
       () => bridge.todoTaskList(const ListFilter()),
-    ))!
-        .firstWhere((x) => x.title == '显式排程块');
+    ))!.firstWhere((x) => x.title == '显式排程块');
     final now = bridge.store.now();
     final today = DateTime.fromMillisecondsSinceEpoch(now);
     expect(
@@ -1040,7 +1099,12 @@ void main() {
     final bridge = _seededBridge();
     // 造一条今天 17:00 截止的任务（时刻确定，非零点，时间线左列必渲染）
     final now = DateTime.now();
-    final due = DateTime(now.year, now.month, now.day, 17).millisecondsSinceEpoch;
+    final due = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      17,
+    ).millisecondsSinceEpoch;
     bridge.store.tasks[9001] = {
       'id': 9001,
       'uuid': 'uuid-style-1',
@@ -1069,17 +1133,17 @@ void main() {
     await settle(tester);
 
     Finder timelineRows() => find.byWidgetPredicate(
-          (w) => w.runtimeType.toString() == '_DayTimelineRow',
-          description: '_DayTimelineRow',
-        );
+      (w) => w.runtimeType.toString() == '_DayTimelineRow',
+      description: '_DayTimelineRow',
+    );
     // 卡片样式顶层分段（时间线行内部同样用 OrbitCardSegment 包卡片内容，
     // 故不断言绝对零——顶层分段数 == 时间线行数即「无裸卡片分段」）
     Finder cardSegments() => find.byWidgetPredicate(
-          (w) =>
-              w is OrbitCardSegment &&
-              w.child.runtimeType.toString() == '_DayTaskRow',
-          description: 'card OrbitCardSegment',
-        );
+      (w) =>
+          w is OrbitCardSegment &&
+          w.child.runtimeType.toString() == '_DayTaskRow',
+      description: 'card OrbitCardSegment',
+    );
     int count(Finder f) => f.evaluate().length;
 
     // 默认卡片样式（右列时刻在卡内）
@@ -1104,14 +1168,18 @@ void main() {
 
   // ===== 圆点改期（桌面拖拽圆点的移动形态）=====
 
-  testWidgets('点圆点 → 改期抽屉选「明天」：保留原时刻写 due + `+N` 溢出 + 回执',
-      (tester) async {
+  testWidgets('点圆点 → 改期抽屉选「明天」：保留原时刻写 due + `+N` 溢出 + 回执', (tester) async {
     final bridge = MockOrbitBridge();
     // 清掉种子任务：全月只有今天 5 条（确定 4 显 + `+1` 溢出、点第一枚可断言）
     bridge.store.tasks.clear();
     final now = DateTime.now();
-    final due =
-        DateTime(now.year, now.month, now.day, 15, 30).millisecondsSinceEpoch;
+    final due = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      15,
+      30,
+    ).millisecondsSinceEpoch;
     for (var i = 1; i <= 5; i++) {
       final id = 8100 + i;
       bridge.store.tasks[id] = {
@@ -1147,7 +1215,8 @@ void main() {
     final slots = find.descendant(
       of: find.byType(OrbitMonthCalendar),
       matching: find.byWidgetPredicate(
-          (w) => w is SizedBox && w.width == 10 && w.height == 16),
+        (w) => w is SizedBox && w.width == 10 && w.height == 16,
+      ),
     );
     expect(slots, findsNWidgets(4));
 
@@ -1161,8 +1230,13 @@ void main() {
     await settle(tester);
 
     // 原截止 15:30 保留时刻，只换日期（rescheduleDueMs 带时刻分支）
-    final next = DateTime(now.year, now.month, now.day + 1, 15, 30)
-        .millisecondsSinceEpoch;
+    final next = DateTime(
+      now.year,
+      now.month,
+      now.day + 1,
+      15,
+      30,
+    ).millisecondsSinceEpoch;
     expect(bridge.store.tasks[8101]!['due_date'], next);
     // 其余任务不受影响（只改点中的那枚）
     expect(bridge.store.tasks[8102]!['due_date'], due);

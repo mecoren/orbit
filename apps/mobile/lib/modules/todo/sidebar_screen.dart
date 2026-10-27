@@ -37,7 +37,11 @@ import '../../core/theme/icon_map.dart';
 /// 行点击 push 子列表（底栏常驻）；长按项目弹 MoreActions 底部菜单
 /// （编辑 / 删除保护流）。日历 / 统计为底部页签，不再在本页占行。
 class SidebarScreen extends ConsumerStatefulWidget {
-  const SidebarScreen({super.key});
+  const SidebarScreen({super.key, this.embedded = false});
+
+  /// 宽屏（expanded）下嵌在主导航左侧常驻（#107）：隐藏页头与顶栏留白，
+  /// 由外层壳提供视觉分隔；手机竖屏/独立路由仍走完整页面形态。
+  final bool embedded;
 
   @override
   ConsumerState<SidebarScreen> createState() => _SidebarScreenState();
@@ -55,18 +59,24 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
   @override
   void initState() {
     super.initState();
-    // Android 静态快捷方式（长按图标：新建任务 / 今天 / 搜索）落点页——
-    // 三个动作都要页面 context（弹快加表单 / 入栈），故由侧栏注册处理器；
-    // 补发推迟到下一帧：initState 期不能做 InheritedWidget 依赖与弹层
-    ShortcutReceiver.attach(_handleQuickAction);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) ShortcutReceiver.flushPending();
-    });
+    // 常驻（平板宽屏）形态只是导航的一份投影，不接管全局快捷方式落点：
+    // `ShortcutReceiver` 是单槽（后注册者覆盖），而 StatefulShellRoute 会保活
+    // `/todo` 分支——两份同时 attach 时，embedded 实例 dispose 会把槽清空，
+    // 常驻那份 State 不重建 → 长按图标的快捷方式静默失效（2026-10-27 评审）。
+    if (!widget.embedded) {
+      // Android 静态快捷方式（长按图标：新建任务 / 今天 / 搜索）落点页——
+      // 三个动作都要页面 context（弹快加表单 / 入栈），故由侧栏注册处理器；
+      // 补发推迟到下一帧：initState 期不能做 InheritedWidget 依赖与弹层
+      ShortcutReceiver.attach(_handleQuickAction);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) ShortcutReceiver.flushPending();
+      });
+    }
   }
 
   @override
   void dispose() {
-    ShortcutReceiver.detach(_handleQuickAction);
+    if (!widget.embedded) ShortcutReceiver.detach(_handleQuickAction);
     _scrollController.dispose();
     super.dispose();
   }
@@ -105,7 +115,8 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
       counts.quickView[key] ?? 0;
 
   /// 各项目未完成计数（单遍产物）
-  Map<int, int> _undoneByProject(SidebarCounts counts) => counts.undoneByProject;
+  Map<int, int> _undoneByProject(SidebarCounts counts) =>
+      counts.undoneByProject;
 
   // ── M8 项目层级 ──
 
@@ -124,7 +135,8 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
 
   // ── 导航 ──
 
-  void _openView(QuickViewKey key) => context.push('/todo/tasks?view=${key.name}');
+  void _openView(QuickViewKey key) =>
+      context.push('/todo/tasks?view=${key.name}');
 
   // 搜索/回收站/设置均为可配置模块（分支）：go 切分支而非推入，
   // 底栏常驻、返回走页签（推入会叠一整层壳，go_router 分支路由语义）
@@ -317,8 +329,11 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
     final newTitle = await _askProjectName();
     if (!mounted || newTitle == null || newTitle.isEmpty) return;
     try {
-      await ref.read(orbitBridgeProvider).todoProjectCreate(
-          TodoProjectCreateInput(title: newTitle, hexColor: defaultColor));
+      await ref
+          .read(orbitBridgeProvider)
+          .todoProjectCreate(
+            TodoProjectCreateInput(title: newTitle, hexColor: defaultColor),
+          );
       ref.invalidate(todoProjectsProvider);
       WaitToast.success('项目已创建');
     } catch (_) {
@@ -374,8 +389,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                 onCancel: () => Navigator.of(ctx).pop(),
                 confirmLabel: '创建',
                 // 空名禁用确认（与编辑项目整页 ✓ 置灰同口径，避免空提交）
-                onConfirm:
-                    controller.text.trim().isEmpty ? null : submit,
+                onConfirm: controller.text.trim().isEmpty ? null : submit,
               ),
             );
           },
@@ -396,7 +410,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
     final projectsAsync = ref.watch(todoProjectsProvider);
     final sidebarLoading =
         (!countsAsync.hasValue && countsAsync.isLoading) ||
-            (!projectsAsync.hasValue && projectsAsync.isLoading);
+        (!projectsAsync.hasValue && projectsAsync.isLoading);
     final counts = _counts();
     final undoneByProject = _undoneByProject(counts);
     final badgeBackground = colors.surfaceSecondary;
@@ -415,8 +429,11 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
           RefreshIndicator(
             onRefresh: () => pullToRefresh(ref),
             color: OrbitAccents.themeAccent,
-            edgeOffset: MediaQuery.of(context).padding.top +
-                OrbitPageHeader.rowHeight,
+            edgeOffset:
+                MediaQuery.of(context).padding.top +
+                (widget.embedded
+                    ? AppDimens.space8
+                    : OrbitPageHeader.rowHeight),
             displacement: AppDimens.space8,
             // 初次加载骨架：快捷行 + 项目行占位（有旧值时不闪，直接旧内容）
             child: sidebarLoading
@@ -424,9 +441,12 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                 : ListView(
                     controller: _scrollController,
                     padding: EdgeInsets.only(
-                      top: MediaQuery.of(context).padding.top +
-                          OrbitPageHeader.rowHeight +
-                          AppDimens.space8,
+                      // 常驻形态没有自己的页头，顶部只留安全区 + 呼吸位
+                      top:
+                          MediaQuery.of(context).padding.top +
+                          (widget.embedded
+                              ? AppDimens.space8
+                              : OrbitPageHeader.rowHeight + AppDimens.space8),
                       // 底栏页签常驻：页尾只留呼吸留白
                       bottom: AppDimens.space16,
                     ),
@@ -437,19 +457,17 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                       // 区块标题「快捷视图」已去除：底部导航直达后无需重复标注
                       Padding(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: AppDimens.space12),
+                          horizontal: AppDimens.space12,
+                        ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            for (var i = 0;
-                                i < QuickViewKey.values.length;
-                                i++)
+                            for (var i = 0; i < QuickViewKey.values.length; i++)
                               _buildQuickViewRow(
                                 QuickViewKey.values[i],
                                 counts,
                                 badgeBackground,
-                                OrbitCardEdge.of(
-                                    i, QuickViewKey.values.length),
+                                OrbitCardEdge.of(i, QuickViewKey.values.length),
                               ),
                           ],
                         ),
@@ -459,18 +477,26 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                       const SizedBox(height: AppDimens.cardGap),
                       Padding(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: AppDimens.space12),
+                          horizontal: AppDimens.space12,
+                        ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            _buildSearchRow(
-                                context, OrbitCardEdge.of(0, 4)),
+                            _buildSearchRow(context, OrbitCardEdge.of(0, 4)),
                             _buildSavedFiltersRow(
-                                context, OrbitCardEdge.of(1, 4)),
-                            _buildReviewRow(context, badgeBackground,
-                                OrbitCardEdge.of(2, 4)),
-                            _buildTrashRow(context, badgeBackground,
-                                OrbitCardEdge.of(3, 4)),
+                              context,
+                              OrbitCardEdge.of(1, 4),
+                            ),
+                            _buildReviewRow(
+                              context,
+                              badgeBackground,
+                              OrbitCardEdge.of(2, 4),
+                            ),
+                            _buildTrashRow(
+                              context,
+                              badgeBackground,
+                              OrbitCardEdge.of(3, 4),
+                            ),
                           ],
                         ),
                       ),
@@ -483,7 +509,8 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                         // 卡片外缘：左右各让 space12（与任务子列表同口径）；
                         // 上下零垫——卡内段首尾贴边，新建项目行在表外无缝续接
                         padding: const EdgeInsets.symmetric(
-                            horizontal: AppDimens.space12),
+                          horizontal: AppDimens.space12,
+                        ),
                         physics: const NeverScrollableScrollPhysics(),
                         buildDefaultDragHandles: false,
                         itemCount: visibleNodes.length,
@@ -497,40 +524,49 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                         // 拖拽起止触感 + 抬起放大（与任务列表 manual 档同口径）
                         onReorderStart: (_) => HapticFeedback.selectionClick(),
                         onReorderEnd: (_) => HapticFeedback.selectionClick(),
-                        proxyDecorator: (child, index, animation) => AnimatedBuilder(
-                          animation: animation,
-                          builder: (context, child) {
-                            final elevated = AppMotion.standard.transform(
-                              Tween<double>(begin: 0, end: 1).evaluate(animation),
-                            );
-                            return Transform.scale(
-                              scale: 1 + (AppMotion.dragLiftScale - 1) * elevated,
-                              child: Material(
-                                elevation: 6 * elevated,
-                                borderRadius: AppShapes.medium,
-                                clipBehavior: Clip.antiAlias,
-                                // 底面随抬起渐变为实色 surface：项目行本身是扁平
-                                // 透明行，常驻透明会透出页面底色变成灰块（与任务
-                                // 列表 manual 档 / 编辑操作页同口径）
-                                color: Color.lerp(
-                                  Colors.transparent,
-                                  colors.surface,
-                                  elevated,
-                                ),
-                                child: child,
-                              ),
-                            );
-                          },
-                          child: child,
-                        ),
+                        proxyDecorator: (child, index, animation) =>
+                            AnimatedBuilder(
+                              animation: animation,
+                              builder: (context, child) {
+                                final elevated = AppMotion.standard.transform(
+                                  Tween<double>(
+                                    begin: 0,
+                                    end: 1,
+                                  ).evaluate(animation),
+                                );
+                                return Transform.scale(
+                                  scale:
+                                      1 +
+                                      (AppMotion.dragLiftScale - 1) * elevated,
+                                  child: Material(
+                                    elevation: 6 * elevated,
+                                    borderRadius: AppShapes.medium,
+                                    clipBehavior: Clip.antiAlias,
+                                    // 底面随抬起渐变为实色 surface：项目行本身是扁平
+                                    // 透明行，常驻透明会透出页面底色变成灰块（与任务
+                                    // 列表 manual 档 / 编辑操作页同口径）
+                                    color: Color.lerp(
+                                      Colors.transparent,
+                                      colors.surface,
+                                      elevated,
+                                    ),
+                                    child: child,
+                                  ),
+                                );
+                              },
+                              child: child,
+                            ),
                       ),
                       // 新建项目（#36：移动端此前无创建项目入口；项目卡末段）
                       Padding(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: AppDimens.space12),
+                          horizontal: AppDimens.space12,
+                        ),
                         child: OrbitCardSegment(
                           edge: OrbitCardEdge.of(
-                              visibleNodes.length, projectCardCount),
+                            visibleNodes.length,
+                            projectCardCount,
+                          ),
                           child: ListTile(
                             leading: Icon(
                               OrbitIcons.add,
@@ -555,15 +591,17 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                         const OrbitSectionHeader(label: '已归档'),
                         Padding(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: AppDimens.space12),
+                            horizontal: AppDimens.space12,
+                          ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              for (var i = 0;
-                                  i < archivedProjects.length;
-                                  i++)
+                              for (var i = 0; i < archivedProjects.length; i++)
                                 _buildArchivedRow(
-                                    archivedProjects[i], i, archivedProjects.length),
+                                  archivedProjects[i],
+                                  i,
+                                  archivedProjects.length,
+                                ),
                             ],
                           ),
                         ),
@@ -572,7 +610,8 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                       const SizedBox(height: AppDimens.cardGap),
                       Padding(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: AppDimens.space12),
+                          horizontal: AppDimens.space12,
+                        ),
                         child: OrbitCardSegment(
                           edge: OrbitCardEdge.single,
                           child: ListTile(
@@ -595,9 +634,12 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                                 CountBadge.wrap(
                                   // 未分组未完成 = 全部未完成 − 有项目未完成之和
                                   //（fold 带初值 0，空项目 Map 不崩——reduce 空集 No element）
-                                  n: counts.quickView[QuickViewKey.all]! -
-                                      counts.undoneByProject.values
-                                          .fold(0, (a, b) => a + b),
+                                  n:
+                                      counts.quickView[QuickViewKey.all]! -
+                                      counts.undoneByProject.values.fold(
+                                        0,
+                                        (a, b) => a + b,
+                                      ),
                                   background: badgeBackground,
                                 ),
                                 Icon(
@@ -614,34 +656,39 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                     ],
                   ),
           ),
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: OrbitPageHeader(
-              title: '循迹',
-              showMenu: false,
-              showBack: false,
-              // 左端云同步图标（未配置/未解锁直达配置页；就绪弹信息面板）
-              leading: const SyncStatusButton(),
-              actions: [
-                IconButton(
-                  tooltip: '设置',
-                  icon: const Icon(OrbitIcons.settings,
-                      size: AppDimens.iconSizeMd),
-                  onPressed: () => context.go('/settings'),
-                ),
-              ],
+          if (!widget.embedded)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: OrbitPageHeader(
+                title: '循迹',
+                showMenu: false,
+                showBack: false,
+                // 左端云同步图标（未配置/未解锁直达配置页；就绪弹信息面板）
+                leading: const SyncStatusButton(),
+                actions: [
+                  IconButton(
+                    tooltip: '设置',
+                    icon: const Icon(
+                      OrbitIcons.settings,
+                      size: AppDimens.iconSizeMd,
+                    ),
+                    onPressed: () => context.go('/settings'),
+                  ),
+                ],
+              ),
             ),
-          ),
         ],
       ),
     );
   }
 
   /// 保存的筛选器入口行（#35：保存的组合条件命名视图，独立路由页）
-  Widget _buildSavedFiltersRow(BuildContext context,
-      [OrbitCardEdge edge = OrbitCardEdge.none]) {
+  Widget _buildSavedFiltersRow(
+    BuildContext context, [
+    OrbitCardEdge edge = OrbitCardEdge.none,
+  ]) {
     final colors = AppColors.ofContext(context);
     return OrbitCardSegment(
       edge: edge,
@@ -671,8 +718,10 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
   }
 
   /// 搜索入口行（任务/项目/评论三路聚合的专属页面）
-  Widget _buildSearchRow(BuildContext context,
-      [OrbitCardEdge edge = OrbitCardEdge.none]) {
+  Widget _buildSearchRow(
+    BuildContext context, [
+    OrbitCardEdge edge = OrbitCardEdge.none,
+  ]) {
     final colors = AppColors.ofContext(context);
     return OrbitCardSegment(
       edge: edge,
@@ -702,8 +751,11 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
   }
 
   /// 回顾入口行（F1 项目回顾节奏：到期项目归集进回顾中心整页）
-  Widget _buildReviewRow(BuildContext context, Color badgeBackground,
-      [OrbitCardEdge edge = OrbitCardEdge.none]) {
+  Widget _buildReviewRow(
+    BuildContext context,
+    Color badgeBackground, [
+    OrbitCardEdge edge = OrbitCardEdge.none,
+  ]) {
     final colors = AppColors.ofContext(context);
     final dueCount = ref.watch(reviewDueProvider).value?.length ?? 0;
     return OrbitCardSegment(
@@ -739,8 +791,11 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
   }
 
   /// 回收站入口行（已删除任务的恢复入口；独立路由页，同日历行模式）
-  Widget _buildTrashRow(BuildContext context, Color badgeBackground,
-      [OrbitCardEdge edge = OrbitCardEdge.none]) {
+  Widget _buildTrashRow(
+    BuildContext context,
+    Color badgeBackground, [
+    OrbitCardEdge edge = OrbitCardEdge.none,
+  ]) {
     final colors = AppColors.ofContext(context);
     final trashedCount = ref.watch(trashTasksProvider).value?.length ?? 0;
     return OrbitCardSegment(
@@ -831,10 +886,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
         ),
         title: Text(
           project.title,
-          style: TextStyle(
-            fontSize: 15,
-            color: colors.secondaryText,
-          ),
+          style: TextStyle(fontSize: 15, color: colors.secondaryText),
         ),
         dense: true,
         trailing: TextButton(
@@ -885,84 +937,88 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
               horizontal: AppDimens.space16,
               vertical: AppDimens.space12,
             ),
-          child: Row(
-            children: [
-              if (node.depth > 0) SizedBox(width: node.depth * 14),
-              // 折叠箭头（有子项目才有；点击只切折叠态，不触发行导航）
-              if (hasChildren)
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => _toggleFolder(project.uuid),
+            child: Row(
+              children: [
+                if (node.depth > 0) SizedBox(width: node.depth * 14),
+                // 折叠箭头（有子项目才有；点击只切折叠态，不触发行导航）
+                if (hasChildren)
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => _toggleFolder(project.uuid),
+                    child: SizedBox(
+                      width: AppDimens.iconSizeMd + AppDimens.space8,
+                      height: AppDimens.touchTarget,
+                      child: Icon(
+                        collapsed
+                            ? OrbitIcons.chevronRight
+                            : OrbitIcons.expandMore,
+                        size: AppDimens.iconSizeMd,
+                        color: colors.secondaryText,
+                      ),
+                    ),
+                  )
+                else
+                  const SizedBox(
+                    width: AppDimens.iconSizeMd + AppDimens.space8,
+                  ),
+                // 项目固定图标（folder_rounded）按项目自选色染色，无色回退强调色
+                Icon(
+                  OrbitIcons.folder,
+                  size: AppDimens.iconSizeMd,
+                  color: hexToColor(
+                    project.hexColor,
+                    fallback: OrbitAccents.todoAccent,
+                  ),
+                ),
+                const SizedBox(width: AppDimens.space12),
+                Expanded(
+                  child: Text(
+                    project.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: colors.titleText,
+                    ),
+                  ),
+                ),
+                // F1 待回顾徽标（琥珀点）：到期状态提示，入口在功能卡的「回顾」行
+                //（点状提示即可——到期是「状态」不是「计数」，行点击仍进项目列表）
+                if ((ref.watch(reviewDueProvider).value ?? const []).any(
+                  (s) => s.project.id == project.id,
+                )) ...[
+                  Semantics(
+                    label: '待回顾',
+                    child: Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: OrbitAccents.myDayAmber,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppDimens.space8),
+                ],
+                if (undone > 0) ...[
+                  CountBadge(n: undone, background: colors.surfaceSecondary),
+                  const SizedBox(width: AppDimens.space8),
+                ],
+                // 拖拽把手（仅把手可拖，行体点击仍进列表不冲突）
+                ReorderableDragStartListener(
+                  index: index,
                   child: SizedBox(
                     width: AppDimens.iconSizeMd + AppDimens.space8,
                     height: AppDimens.touchTarget,
                     child: Icon(
-                      collapsed ? OrbitIcons.chevronRight : OrbitIcons.expandMore,
+                      OrbitIcons.drag,
                       size: AppDimens.iconSizeMd,
                       color: colors.secondaryText,
                     ),
                   ),
-                )
-              else
-                const SizedBox(width: AppDimens.iconSizeMd + AppDimens.space8),
-              // 项目固定图标（folder_rounded）按项目自选色染色，无色回退强调色
-              Icon(
-                OrbitIcons.folder,
-                size: AppDimens.iconSizeMd,
-                color: hexToColor(project.hexColor,
-                    fallback: OrbitAccents.todoAccent),
-              ),
-              const SizedBox(width: AppDimens.space12),
-              Expanded(
-                child: Text(
-                  project.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: colors.titleText,
-                  ),
                 ),
-              ),
-              // F1 待回顾徽标（琥珀点）：到期状态提示，入口在功能卡的「回顾」行
-              //（点状提示即可——到期是「状态」不是「计数」，行点击仍进项目列表）
-              if ((ref.watch(reviewDueProvider).value ?? const [])
-                  .any((s) => s.project.id == project.id)) ...[
-                Semantics(
-                  label: '待回顾',
-                  child: Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: OrbitAccents.myDayAmber,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: AppDimens.space8),
               ],
-              if (undone > 0) ...[
-                CountBadge(
-                  n: undone,
-                  background: colors.surfaceSecondary,
-                ),
-                const SizedBox(width: AppDimens.space8),
-              ],
-              // 拖拽把手（仅把手可拖，行体点击仍进列表不冲突）
-              ReorderableDragStartListener(
-                index: index,
-                child: SizedBox(
-                  width: AppDimens.iconSizeMd + AppDimens.space8,
-                  height: AppDimens.touchTarget,
-                  child: Icon(
-                    OrbitIcons.drag,
-                    size: AppDimens.iconSizeMd,
-                    color: colors.secondaryText,
-                  ),
-                ),
-              ),
-            ],
             ),
           ),
         ),
@@ -981,22 +1037,23 @@ class _SidebarSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget row(double labelWidth, {double iconSize = 20}) => Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppDimens.space16,
-            vertical: AppDimens.space12,
-          ),
-          child: Row(
-            children: [
-              OrbitSkeleton.circle(size: iconSize),
-              const SizedBox(width: AppDimens.space12),
-              OrbitSkeleton.line(width: labelWidth),
-            ],
-          ),
-        );
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppDimens.space16,
+        vertical: AppDimens.space12,
+      ),
+      child: Row(
+        children: [
+          OrbitSkeleton.circle(size: iconSize),
+          const SizedBox(width: AppDimens.space12),
+          OrbitSkeleton.line(width: labelWidth),
+        ],
+      ),
+    );
     return ListView(
       physics: const NeverScrollableScrollPhysics(),
       padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top +
+        top:
+            MediaQuery.of(context).padding.top +
             OrbitPageHeader.rowHeight +
             AppDimens.space8,
         bottom: AppDimens.space16,

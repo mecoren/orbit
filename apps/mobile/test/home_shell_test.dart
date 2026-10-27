@@ -18,9 +18,9 @@ import 'package:orbit/shared/widgets/shadcn/orbit_fab.dart';
 import 'support/orbit_test_app.dart';
 
 Widget _wrap(MockOrbitBridge bridge) => ProviderScope(
-      overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
-      child: orbitTestAppRouter(routerConfig: appRouter),
-    );
+  overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
+  child: orbitTestAppRouter(routerConfig: appRouter),
+);
 
 Future<void> _pump(WidgetTester tester, MockOrbitBridge bridge) async {
   await tester.pumpWidget(_wrap(bridge));
@@ -39,14 +39,13 @@ MockOrbitBridge _seededBridge() {
 
 /// 底栏页签按图标定位（栏体纯图标无文字，见 OrbitBottomNav）
 Finder _navIcon(IconData icon) => find.descendant(
-      of: find.byType(OrbitBottomNav),
-      matching: find.byIcon(icon),
-    );
+  of: find.byType(OrbitBottomNav),
+  matching: find.byIcon(icon),
+);
 
 void main() {
   setUp(() => LocalPrefs.resetForTest());
-  testWidgets('初始落「今天」页签：页头今天 + 日期副标，五枚页签无中央添加钮',
-      (tester) async {
+  testWidgets('初始落「今天」页签：页头今天 + 日期副标，五枚页签无中央添加钮', (tester) async {
     await _pump(tester, _seededBridge());
 
     expect(find.text('今天'), findsOneWidget); // 仅页头（底栏纯图标无文字）
@@ -93,8 +92,7 @@ void main() {
     expect(find.text('准备做什么？'), findsOneWidget);
   });
 
-  testWidgets('「更多」动作位：弹出面板（标题行带编辑），点条目切分支底栏常驻',
-      (tester) async {
+  testWidgets('「更多」动作位：弹出面板（标题行带编辑），点条目切分支底栏常驻', (tester) async {
     await _pump(tester, _seededBridge());
 
     await tester.tap(_navIcon(OrbitIcons.more));
@@ -114,8 +112,7 @@ void main() {
     expect(find.byType(OrbitBottomNav), findsOneWidget);
   });
 
-  testWidgets('「更多」面板「编辑」：进功能模块配置页，两段列表齐出',
-      (tester) async {
+  testWidgets('「更多」面板「编辑」：进功能模块配置页，两段列表齐出', (tester) async {
     await _pump(tester, _seededBridge());
 
     await tester.tap(_navIcon(OrbitIcons.more));
@@ -132,12 +129,18 @@ void main() {
     for (final label in ['今天', '清单', '日历', '四象限']) {
       expect(find.text(label), findsOneWidget);
     }
-    await tester.scrollUntilVisible(find.text('未启用'), 200,
-        scrollable: pageScroll);
+    await tester.scrollUntilVisible(
+      find.text('未启用'),
+      200,
+      scrollable: pageScroll,
+    );
     expect(find.text('未启用'), findsOneWidget);
     // 滚到底：未启用段 4 行齐出（池内 8 模块全员可见可配）
-    await tester.scrollUntilVisible(find.text('设置'), 200,
-        scrollable: pageScroll);
+    await tester.scrollUntilVisible(
+      find.text('设置'),
+      200,
+      scrollable: pageScroll,
+    );
     for (final label in ['统计', '搜索', '回收站', '设置']) {
       expect(find.text(label), findsOneWidget);
     }
@@ -172,19 +175,16 @@ void main() {
     await tester.tap(find.byTooltip('停用').at(3));
     await tester.pumpAndSettle();
     expect(
-      find.descendant(
-          of: preview, matching: find.byIcon(OrbitIcons.grid)),
+      find.descendant(of: preview, matching: find.byIcon(OrbitIcons.grid)),
       findsNothing,
     );
     expect(
-      find.descendant(
-          of: preview, matching: find.byIcon(OrbitIcons.trending)),
+      find.descendant(of: preview, matching: find.byIcon(OrbitIcons.trending)),
       findsOneWidget,
     );
   });
 
-  testWidgets('配置页停用「四象限」：返回壳后底栏页签由统计顺延顶替',
-      (tester) async {
+  testWidgets('配置页停用「四象限」：返回壳后底栏页签由统计顺延顶替', (tester) async {
     await _pump(tester, _seededBridge());
 
     await tester.tap(_navIcon(OrbitIcons.more));
@@ -211,7 +211,8 @@ void main() {
     expect(find.text('今天'), findsOneWidget); // 仅页头（底栏纯图标）
   });
 
-  testWidgets('「今天」页签角标：有今天截止未完成任务时显示计数', (tester) async {    final bridge = _seededBridge();
+  testWidgets('「今天」页签角标：有今天截止未完成任务时显示计数', (tester) async {
+    final bridge = _seededBridge();
     // 造一条今天截止的未完成任务（截止 = 当前时刻，落在今天日界内）
     final now = bridge.store.now();
     bridge.store.tasks[9001] = {
@@ -242,8 +243,9 @@ void main() {
 
     // 角标挂在「今天」页签图标右上：底部导航内的计数文本与页面页头计数并存。
     // today 视图含逾期（截止 < 明日零点即计入，与 computeSidebarCounts 同口径）
-    final endOfToday =
-        DateTime.fromMillisecondsSinceEpoch(now).add(const Duration(days: 1));
+    final endOfToday = DateTime.fromMillisecondsSinceEpoch(
+      now,
+    ).add(const Duration(days: 1));
     final endOfTodayMs = DateTime(
       endOfToday.year,
       endOfToday.month,
@@ -262,5 +264,27 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('平板宽屏（>=840）：清单页签不重复嵌侧栏，其它模块左侧常驻一份', (tester) async {
+    // #107 回归：清单页签的根页本身就是 SidebarScreen，壳若再嵌一份会出现
+    // 两份快捷视图 + 双页头（2026-10-27 评审发现）；其它模块则要常驻导航。
+    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await _pump(tester, _seededBridge());
+    expect(find.byType(SidebarScreen), findsOneWidget); // 今天页签：常驻一份
+
+    await tester.tap(_navIcon(OrbitIcons.list));
+    await tester.pumpAndSettle();
+    expect(find.byType(SidebarScreen), findsOneWidget);
+
+    await tester.tap(_navIcon(OrbitIcons.calendarDays));
+    await tester.pumpAndSettle();
+    expect(find.byType(SidebarScreen), findsOneWidget);
+    expect(find.byType(CalendarScreen), findsOneWidget);
+    // 常驻侧栏贴左缘（内容区在它右侧）
+    expect(tester.getTopLeft(find.byType(SidebarScreen)).dx, 0);
   });
 }

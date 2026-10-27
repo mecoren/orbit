@@ -21,6 +21,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sh;
 
+import '../../../core/layout/orbit_breakpoints.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimens.dart';
 
@@ -69,37 +70,44 @@ class OrbitSheetScaffold extends StatelessWidget {
 
     // 键盘避让：底部 padding 跟随 viewInsets（输入型抽屉必有）
     return Padding(
-      padding:
-          EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: SafeArea(
         top: false,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(context).size.height * maxHeightFactor,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (showHandle) const _SheetHandle(),
-              ?headerWidget,
-              Flexible(
-                child: contentScrollable
-                    ? SingleChildScrollView(
-                        padding: contentPadding,
-                        child: content,
-                      )
-                    : Padding(
-                        padding: contentPadding ?? EdgeInsets.zero,
-                        child: content,
-                      ),
-              ),
-              // 尾栏固定在底部：与内容区之间用 1px 分隔线划界（不随内容滚动）
-              if (actions != null) ...[
-                Divider(height: 1, color: colors.divider),
-                actions!,
+        // #107 平板：抽屉内容限宽居中（640），避免输入框/按钮横贯 1200dp；
+        // 外层背景与圆角仍由 showModalBottomSheet 承载，观感不变
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              // 只订阅 height 字段（同文件 viewInsetsOf 口径）：键盘开合不应
+              // 让整个抽屉内容跟着重建
+              maxHeight: MediaQuery.sizeOf(context).height * maxHeightFactor,
+              maxWidth: OrbitBreakpoints.sheetMaxWidth,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (showHandle) const _SheetHandle(),
+                ?headerWidget,
+                Flexible(
+                  child: contentScrollable
+                      ? SingleChildScrollView(
+                          padding: contentPadding,
+                          child: content,
+                        )
+                      : Padding(
+                          padding: contentPadding ?? EdgeInsets.zero,
+                          child: content,
+                        ),
+                ),
+                // 尾栏固定在底部：与内容区之间用 1px 分隔线划界（不随内容滚动）
+                if (actions != null) ...[
+                  Divider(height: 1, color: colors.divider),
+                  actions!,
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -185,8 +193,8 @@ class OrbitSheetActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final label = confirmChild ??
-        Text(confirmLabel, textAlign: TextAlign.center);
+    final label =
+        confirmChild ?? Text(confirmLabel, textAlign: TextAlign.center);
 
     return Padding(
       padding: const EdgeInsets.all(AppDimens.space12),
@@ -203,14 +211,8 @@ class OrbitSheetActions extends StatelessWidget {
           ],
           Expanded(
             child: destructive
-                ? sh.Button.destructive(
-                    onPressed: onConfirm,
-                    child: label,
-                  )
-                : sh.Button.primary(
-                    onPressed: onConfirm,
-                    child: label,
-                  ),
+                ? sh.Button.destructive(onPressed: onConfirm, child: label)
+                : sh.Button.primary(onPressed: onConfirm, child: label),
           ),
         ],
       ),

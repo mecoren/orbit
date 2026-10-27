@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart' show CalendarFormat;
 
 import '../../core/lunar/chinese_almanac.dart';
+import '../../core/layout/orbit_breakpoints.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../core/theme/app_motion.dart';
@@ -45,12 +46,12 @@ const List<int> timelineSpans = [1, 3, 7, 14];
 
 /// 跨度档名（对齐桌面 `TIMELINE_SPAN_LABEL`）
 String timelineSpanLabel(int span) => switch (span) {
-      1 => '日',
-      3 => '三日',
-      7 => '周',
-      14 => '两周',
-      _ => '$span 天',
-    };
+  1 => '日',
+  3 => '三日',
+  7 => '周',
+  14 => '两周',
+  _ => '$span 天',
+};
 
 /// 圆点改期的目标日档（今天/明天/下周 + 任意日；「下周 = 下周一」与
 /// 批量改期 `batchRescheduleMs` 同口径，周一起始周）
@@ -138,26 +139,28 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       if (!mounted) return;
       final node = _groupKeys[_ymd(DateTime.now())]?.currentContext;
       if (node != null) {
-        Scrollable.ensureVisible(node,
-            duration: AppMotion.scrollSettle,
-            curve: AppMotion.scrollSettleCurve);
+        Scrollable.ensureVisible(
+          node,
+          duration: AppMotion.scrollSettle,
+          curve: AppMotion.scrollSettleCurve,
+        );
       }
     });
   }
 
   /// 页头档位抽屉（月历 / 周 / 议程 / 时间）
   Future<void> _pickViewMode() => showSelectBottomSheet<CalendarViewMode>(
-        context,
-        title: '视图',
-        current: _viewMode,
-        items: const [
-          SelectItem(value: CalendarViewMode.month, label: '月历'),
-          SelectItem(value: CalendarViewMode.week, label: '周'),
-          SelectItem(value: CalendarViewMode.agenda, label: '议程'),
-          SelectItem(value: CalendarViewMode.timeline, label: '时间'),
-        ],
-        onSelect: _setViewMode,
-      );
+    context,
+    title: '视图',
+    current: _viewMode,
+    items: const [
+      SelectItem(value: CalendarViewMode.month, label: '月历'),
+      SelectItem(value: CalendarViewMode.week, label: '周'),
+      SelectItem(value: CalendarViewMode.agenda, label: '议程'),
+      SelectItem(value: CalendarViewMode.timeline, label: '时间'),
+    ],
+    onSelect: _setViewMode,
+  );
 
   /// 时间轴跨度切换（日 / 三日 / 周 / 两周）
   void _setTimelineSpan(int span) => setState(() => _timelineSpan = span);
@@ -215,17 +218,21 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   /// 月档位下跳整月：焦点日必须同步落到目标月 1 号（focusedDay prop 驱动
   /// table_calendar 翻页），否则网格停在原月而标题已换
   void _setMonth(DateTime monthStart) => setState(() {
-        _month = monthStart;
-        _focusedDate = monthStart;
-      });
+    _month = monthStart;
+    _focusedDate = monthStart;
+  });
 
-  void _prevMonth() => _setMonth(_month.month == 1
-      ? DateTime(_month.year - 1, 12)
-      : DateTime(_month.year, _month.month - 1));
+  void _prevMonth() => _setMonth(
+    _month.month == 1
+        ? DateTime(_month.year - 1, 12)
+        : DateTime(_month.year, _month.month - 1),
+  );
 
-  void _nextMonth() => _setMonth(_month.month == 12
-      ? DateTime(_month.year + 1, 1)
-      : DateTime(_month.year, _month.month + 1));
+  void _nextMonth() => _setMonth(
+    _month.month == 12
+        ? DateTime(_month.year + 1, 1)
+        : DateTime(_month.year, _month.month + 1),
+  );
 
   /// 页头相对天数小字：优先锚定**选中日**距今天（点日格即变：今天 →
   /// 「今天」、9/20 → 「N天前」）；选中日不在所看月份（翻月浏览未重新
@@ -238,18 +245,20 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     final anchor = inViewMonth
         ? DateTime(selected.year, selected.month, selected.day)
         : DateTime(_month.year, _month.month, 1);
-    final diff = anchor.difference(DateTime(now.year, now.month, now.day)).inDays;
+    final diff = anchor
+        .difference(DateTime(now.year, now.month, now.day))
+        .inDays;
     if (diff == 0) return '今天';
     return diff < 0 ? '${-diff}天前' : '$diff天后';
   }
 
   void _goToday() => setState(() {
-        final now = DateTime.now();
-        _month = DateTime(now.year, now.month);
-        _selectedDate = DateTime(now.year, now.month, now.day);
-        // 周档收起时同样跳回今天所在周
-        _focusedDate = _selectedDate;
-      });
+    final now = DateTime.now();
+    _month = DateTime(now.year, now.month);
+    _selectedDate = DateTime(now.year, now.month, now.day);
+    // 周档收起时同样跳回今天所在周
+    _focusedDate = _selectedDate;
+  });
 
   /// 月历收展（网格上滑收成单行周条 / 下滑展开整月）：收起对齐**选中日**
   /// 所在周（周条即「选中日 + 前后各几日」），展开回到当前周所在的整月页
@@ -267,7 +276,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
   void _onSwipeStart(DragStartDetails _) => _swipeDx = 0;
 
-  void _onSwipeUpdate(DragUpdateDetails details) => _swipeDx += details.delta.dx;
+  void _onSwipeUpdate(DragUpdateDetails details) =>
+      _swipeDx += details.delta.dx;
 
   /// 左右滑动翻月（左滑 = 下月、右滑 = 上月）：与年视图 PageView 滑动切年
   /// 对称。速度或位移任一越阈即翻页——只判速度会漏掉慢速长拖
@@ -289,9 +299,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     if (node != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          Scrollable.ensureVisible(node,
-              duration: AppMotion.scrollSettle,
-              curve: AppMotion.scrollSettleCurve);
+          Scrollable.ensureVisible(
+            node,
+            duration: AppMotion.scrollSettle,
+            curve: AppMotion.scrollSettleCurve,
+          );
         }
       });
     }
@@ -302,8 +314,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   void _addOnDate(DateTime date) {
     showQuickAddSheet(
       context,
-      initialDueDate:
-          DateTime(date.year, date.month, date.day).millisecondsSinceEpoch,
+      initialDueDate: DateTime(
+        date.year,
+        date.month,
+        date.day,
+      ).millisecondsSinceEpoch,
     );
   }
 
@@ -332,10 +347,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   Future<void> _toggleDone(TodoTask task) async {
     try {
       if (task.isDone) {
-        await ref.read(orbitBridgeProvider).todoTaskUpdate(
-              task.id,
-              encodePatch(buildDoneTogglePatch(task)),
-            );
+        await ref
+            .read(orbitBridgeProvider)
+            .todoTaskUpdate(task.id, encodePatch(buildDoneTogglePatch(task)));
       } else {
         await ref.read(orbitBridgeProvider).todoTaskComplete(task.id);
       }
@@ -358,7 +372,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     if (taskId == null) return;
     final byDay =
         ref.read(calendarByDayRangeProvider(_visibleRange)).value ??
-            const <String, List<TodoTask>>{};
+        const <String, List<TodoTask>>{};
     TodoTask? found;
     for (final t in byDay[_ymd(date)] ?? const <TodoTask>[]) {
       if (t.id == taskId) {
@@ -388,8 +402,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           _RescheduleTarget.today => today,
           _RescheduleTarget.tomorrow => today.add(const Duration(days: 1)),
           // 下周 = 下周一（周一起始周，与批量改期同口径）
-          _RescheduleTarget.nextWeek =>
-            today.add(Duration(days: 8 - now.weekday)),
+          _RescheduleTarget.nextWeek => today.add(
+            Duration(days: 8 - now.weekday),
+          ),
           _RescheduleTarget.pick => null,
         };
         if (choice == _RescheduleTarget.pick) {
@@ -422,16 +437,16 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         : DateTime.fromMillisecondsSinceEpoch(task.dueDate!);
     // 真保留了原时刻才出副标（桌面按 due 非空即出——零点档实际是归
     // 18:00 不保留时刻，移动端收紧为真话）
-    final keptTime = orig != null &&
+    final keptTime =
+        orig != null &&
         (orig.hour != 0 ||
             orig.minute != 0 ||
             orig.second != 0 ||
             orig.millisecond != 0);
     try {
-      await ref.read(orbitBridgeProvider).todoTaskUpdate(
-            task.id,
-            encodePatch({'due_date': nextDue}),
-          );
+      await ref
+          .read(orbitBridgeProvider)
+          .todoTaskUpdate(task.id, encodePatch({'due_date': nextDue}));
       ref.invalidate(todoTasksProvider);
       ref.invalidate(taskDetailProvider);
       WaitToast.global(
@@ -448,7 +463,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   String _clipTitle(String title) =>
       title.length <= 20 ? title : '${title.substring(0, 20)}…';
 
-    /// 月份标题点击：打开年视图，返回后定位到所选日期
+  /// 月份标题点击：打开年视图，返回后定位到所选日期
   Future<void> _openYearOverview() async {
     final picked = await YearOverviewPage.push(
       context,
@@ -472,19 +487,21 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     // 派生聚合（按可见范围，P1 窗口化）：只拉前后各一月 + 时间轴 span 天
     // 的任务，不再全量拉取后内存分桶
     final range = _visibleRange;
-    final byDay = ref.watch(calendarByDayRangeProvider(range)).value ??
+    final byDay =
+        ref.watch(calendarByDayRangeProvider(range)).value ??
         const <String, List<TodoTask>>{};
     final holidayByDate = _holidayByDate();
     // 提醒投影（A4 只读聚合）：选中日任务卡的行内提醒图标数据源，
     // 未就绪回落空表（不渲染图标，不阻塞列表）
-    final reminderRows = ref.watch(taskRemindersProjectionProvider).value ??
+    final reminderRows =
+        ref.watch(taskRemindersProjectionProvider).value ??
         const <TaskRemindersProjection>[];
     final remindersByTask = {
       for (final r in reminderRows) r.taskId: r.reminders,
     };
     // 「有描述」任务 id 集（列表通道裁剪 description，图标位走行元信息投影）
-    final descriptionIds = ref.watch(taskDescriptionFlagsProvider).value ??
-        const <int>{};
+    final descriptionIds =
+        ref.watch(taskDescriptionFlagsProvider).value ?? const <int>{};
     final now = DateTime.now();
     final todayYmd = _ymd(now);
     final selectedYmd = _ymd(_selectedDate);
@@ -516,8 +533,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     //（周一起始，与网格 week 档同口径）；跨月的周天数直接按 byDay 取，
     // 不受 _month 边界裁剪
     final weekMode = _viewMode == CalendarViewMode.week;
-    final weekStart = DateTime(_selectedDate.year, _selectedDate.month,
-        _selectedDate.day - (_selectedDate.weekday - 1));
+    final weekStart = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day - (_selectedDate.weekday - 1),
+    );
     final weekEnd = weekStart.add(const Duration(days: 6));
     final shownGroups = <({DateTime date, List<TodoTask> items})>[];
     if (weekMode) {
@@ -529,8 +549,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     } else {
       shownGroups.addAll(monthGroups);
     }
-    final monthTotal =
-        shownGroups.fold<int>(0, (sum, g) => sum + g.items.length);
+    final monthTotal = shownGroups.fold<int>(
+      0,
+      (sum, g) => sum + g.items.length,
+    );
 
     return Scaffold(
       body: Stack(
@@ -561,48 +583,63 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                       // 留白保留（周条收起态同口径）
                       Padding(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: AppDimens.space12),
-                        child: OrbitMonthCalendar(
-                          size: AppCalendarSize.large,
-                          showHeader: false,
-                          month: _month,
-                          focusedDay: _focusedDate,
-                          calendarFormat: _calFormat,
-                          // 月 ⇄ 周两档：网格上滑收成单行周条、下滑展开
-                          // （顺序必须大到小，上滑 = 档位序下一档 = 周）
-                          availableCalendarFormats: const {
-                            CalendarFormat.month: '月',
-                            CalendarFormat.week: '周',
-                          },
-                          onFormatChange: _onCalFormatChange,
-                          // 周条跨月周不弱化补位日期
-                          dimOutsideMonth: _calFormat != CalendarFormat.week,
-                          selected: _selectedDate,
-                          onDayTap: _selectDate,
-                          onDayLongPress: _addOnDate,
-                          // 横滑翻月/翻周：月历网格自带 PageView（纵向收展走
-                          // 月历的轴锁定门），必须把页码回调**原样**接回（周档
-                          // 收到的是 ±7 天的逐字日期，归一化到 1 号会把周条拽回
-                          // 月初周），否则网格翻页了而标题还停在旧月份
-                          onMonthChange: (focused) => setState(() {
-                            _focusedDate = focused;
-                            _month = DateTime(focused.year, focused.month, 1);
-                          }),
-                          // 选中/今天强调色与桌面端日历同源（桌面月历 --primary 即
-                          // themeAccent 体系）：不走 scheme.primary——M3 fromSeed
-                          // 会把 #4E8CFF 派生成 #455E91 灰蓝，与桌面明显偏差
-                          accentColor: OrbitAccents.themeAccent,
-                          weekendColor: ChineseCalendarColors.weekend,
-                          holidays: {
-                            for (final e in holidayByDate.entries)
-                              e.key: e.value.isHoliday,
-                          },
-                          subLabelBuilder: ChineseAlmanac.daySubLabel,
-                          // ≤4 圆点 + `+N` 溢出；点圆点改期（见 _rescheduleFromDot）
-                          eventDotsBuilder: (date) =>
-                              monthDots[_ymd(date)] ??
-                              const <CalendarEventDot>[],
-                          onEventDotTap: _rescheduleFromDot,
+                          horizontal: AppDimens.space12,
+                        ),
+                        // #107 平板：日格宽度封顶，避免横屏/平板上格子被拉成
+                        // 大方块（圆点与农历副标签的间距失衡）；360dp 下不生效
+                        child: Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(
+                              maxWidth: OrbitBreakpoints.calendarGridMaxWidth,
+                            ),
+                            child: OrbitMonthCalendar(
+                              size: AppCalendarSize.large,
+                              showHeader: false,
+                              month: _month,
+                              focusedDay: _focusedDate,
+                              calendarFormat: _calFormat,
+                              // 月 ⇄ 周两档：网格上滑收成单行周条、下滑展开
+                              // （顺序必须大到小，上滑 = 档位序下一档 = 周）
+                              availableCalendarFormats: const {
+                                CalendarFormat.month: '月',
+                                CalendarFormat.week: '周',
+                              },
+                              onFormatChange: _onCalFormatChange,
+                              // 周条跨月周不弱化补位日期
+                              dimOutsideMonth:
+                                  _calFormat != CalendarFormat.week,
+                              selected: _selectedDate,
+                              onDayTap: _selectDate,
+                              onDayLongPress: _addOnDate,
+                              // 横滑翻月/翻周：月历网格自带 PageView（纵向收展走
+                              // 月历的轴锁定门），必须把页码回调**原样**接回（周档
+                              // 收到的是 ±7 天的逐字日期，归一化到 1 号会把周条拽回
+                              // 月初周），否则网格翻页了而标题还停在旧月份
+                              onMonthChange: (focused) => setState(() {
+                                _focusedDate = focused;
+                                _month = DateTime(
+                                  focused.year,
+                                  focused.month,
+                                  1,
+                                );
+                              }),
+                              // 选中/今天强调色与桌面端日历同源（桌面月历 --primary 即
+                              // themeAccent 体系）：不走 scheme.primary——M3 fromSeed
+                              // 会把 #4E8CFF 派生成 #455E91 灰蓝，与桌面明显偏差
+                              accentColor: OrbitAccents.themeAccent,
+                              weekendColor: ChineseCalendarColors.weekend,
+                              holidays: {
+                                for (final e in holidayByDate.entries)
+                                  e.key: e.value.isHoliday,
+                              },
+                              subLabelBuilder: ChineseAlmanac.daySubLabel,
+                              // ≤4 圆点 + `+N` 溢出；点圆点改期（见 _rescheduleFromDot）
+                              eventDotsBuilder: (date) =>
+                                  monthDots[_ymd(date)] ??
+                                  const <CalendarEventDot>[],
+                              onEventDotTap: _rescheduleFromDot,
+                            ),
+                          ),
                         ),
                       ),
                       const SizedBox(height: AppDimens.space4),
@@ -614,7 +651,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                     if (_agendaMode || weekMode) ...[
                       Padding(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: AppDimens.space16),
+                          horizontal: AppDimens.space16,
+                        ),
                         child: Row(
                           children: [
                             Text(
@@ -630,10 +668,13 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                             const SizedBox(width: AppDimens.space6),
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 7, vertical: 2),
+                                horizontal: 7,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
-                                color: colors.secondaryText
-                                    .withValues(alpha: 0.12),
+                                color: colors.secondaryText.withValues(
+                                  alpha: 0.12,
+                                ),
                                 borderRadius: BorderRadius.circular(999),
                               ),
                               child: Text(
@@ -659,21 +700,24 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                       if (monthTotal == 0)
                         Padding(
                           padding: const EdgeInsets.fromLTRB(
-                              AppDimens.space12,
-                              AppDimens.space8,
-                              AppDimens.space12,
-                              0),
+                            AppDimens.space12,
+                            AppDimens.space8,
+                            AppDimens.space12,
+                            0,
+                          ),
                           child: OrbitCardSegment(
                             edge: OrbitCardEdge.single,
                             child: Padding(
-                              padding:
-                                  const EdgeInsets.all(AppDimens.space16),
+                              padding: const EdgeInsets.all(AppDimens.space16),
                               child: Row(
                                 children: [
-                                  Icon(OrbitIcons.calendarBlocked,
-                                      size: 16,
-                                      color: colors.secondaryText
-                                          .withValues(alpha: 0.6)),
+                                  Icon(
+                                    OrbitIcons.calendarBlocked,
+                                    size: 16,
+                                    color: colors.secondaryText.withValues(
+                                      alpha: 0.6,
+                                    ),
+                                  ),
                                   const SizedBox(width: AppDimens.space8),
                                   Expanded(
                                     child: Text(
@@ -699,8 +743,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                             isToday: _ymd(group.date) == todayYmd,
                             // 议程档日期头带休/班徽标（桌面 VirtualGroupedList
                             // 的 showHolidayMark 同口径；月档右栏不带）
-                            holidayMark: holidayByDate[_ymd(group.date)]
-                                ?.isHoliday,
+                            holidayMark:
+                                holidayByDate[_ymd(group.date)]?.isHoliday,
                             tasks: group.items,
                             onOpenTask: _openTask,
                             onTaskLongPress: _showTaskActions,
@@ -711,7 +755,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                         colors,
                         // 时段块按**起点日**分桶（timelineBlocksByDayProvider）：
                         // 显式排程块的视图日在 start 日，按 due 分桶会丢块
-                        ref.watch(timelineBlocksByDayRangeProvider(range)).value ??
+                        ref
+                                .watch(timelineBlocksByDayRangeProvider(range))
+                                .value ??
                             const <String, List<TodoTask>>{},
                       )
                     else
@@ -746,8 +792,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               titleWidget: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(OrbitIcons.chevronLeft,
-                        size: AppDimens.iconSizeLg),
+                    icon: const Icon(
+                      OrbitIcons.chevronLeft,
+                      size: AppDimens.iconSizeLg,
+                    ),
                     onPressed: _prevMonth,
                     tooltip: '上个月',
                   ),
@@ -803,8 +851,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(OrbitIcons.chevronRight,
-                        size: AppDimens.iconSizeLg),
+                    icon: const Icon(
+                      OrbitIcons.chevronRight,
+                      size: AppDimens.iconSizeLg,
+                    ),
                     onPressed: _nextMonth,
                     tooltip: '下个月',
                   ),
@@ -812,8 +862,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               ),
               actions: [
                 IconButton(
-                  icon: const Icon(OrbitIcons.calendarCheck,
-                      size: AppDimens.iconSizeMd),
+                  icon: const Icon(
+                    OrbitIcons.calendarCheck,
+                    size: AppDimens.iconSizeMd,
+                  ),
                   onPressed: _goToday,
                   tooltip: '回到今天',
                 ),
@@ -874,8 +926,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               ),
               const SizedBox(width: AppDimens.space6),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                 decoration: BoxDecoration(
                   color: colors.secondaryText.withValues(alpha: 0.12),
                   borderRadius: AppShapes.of(999),
@@ -908,7 +959,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 AppDimens.space16,
                 AppDimens.space8,
                 AppDimens.space16,
-                0),
+                0,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -919,8 +971,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                     entries: _blocksOf(date, byDay),
                     projectColorOf: (taskId) {
                       final pid = taskById[taskId]?.projectId;
-                      final hex =
-                          pid == null ? null : projectById[pid]?.hexColor;
+                      final hex = pid == null
+                          ? null
+                          : projectById[pid]?.hexColor;
                       return (hex == null || hex.isEmpty)
                           ? OrbitAccents.todoAccent
                           : hexToColor(hex);
@@ -947,8 +1000,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     );
     return CalendarRange(
       fromMs: from.millisecondsSinceEpoch,
-      toMs: monthTo.millisecondsSinceEpoch >
-              timelineTo.millisecondsSinceEpoch
+      toMs: monthTo.millisecondsSinceEpoch > timelineTo.millisecondsSinceEpoch
           ? monthTo.millisecondsSinceEpoch
           : timelineTo.millisecondsSinceEpoch,
     );
@@ -956,13 +1008,13 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
   /// 时间轴覆盖的日期（从选中日起 span 天）
   List<DateTime> get _timelineDays => [
-        for (var i = 0; i < _timelineSpan; i++)
-          DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day + i),
-      ];
+    for (var i = 0; i < _timelineSpan; i++)
+      DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day + i),
+  ];
 
   /// 某日的时段块（已分车道；口径见 logic/time_block.dart）
   List<({TimeBlock block, BlockLayout layout, int lane, int laneCount})>
-      _blocksOf(DateTime date, Map<String, List<TodoTask>> byDay) {
+  _blocksOf(DateTime date, Map<String, List<TodoTask>> byDay) {
     final blocks = [
       for (final t in byDay[_ymd(date)] ?? const <TodoTask>[])
         ?taskTimeBlock(t),
@@ -971,8 +1023,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   }
 
   /// 跨度内的时段总数（档内计数徽标）
-  int _totalBlocks(Map<String, List<TodoTask>> byDay) => _timelineDays
-      .fold<int>(0, (sum, d) => sum + _blocksOf(d, byDay).length);
+  int _totalBlocks(Map<String, List<TodoTask>> byDay) =>
+      _timelineDays.fold<int>(0, (sum, d) => sum + _blocksOf(d, byDay).length);
 
   /// 长按拖拽时段落位（#75）：长按 500ms 拾起后纵向拖改起点，15 分钟吸附。
   ///
@@ -1010,12 +1062,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
   /// 空态主文案（「当天」/「这三天」/「这一周」/「这两周」）
   String _timelineEmptyLabel() => switch (_timelineSpan) {
-        1 => '当天',
-        3 => '这三天',
-        7 => '这一周',
-        14 => '这两周',
-        _ => '这段时间',
-      };
+    1 => '当天',
+    3 => '这三天',
+    7 => '这一周',
+    14 => '这两周',
+    _ => '这段时间',
+  };
 
   /// 分组锚点 key（懒创建，跨月复用）
   GlobalKey _groupKeyFor(String ymd) =>
@@ -1023,19 +1075,19 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
   /// 当前档位的页头动作图标（进入抽屉前的回显）
   IconData get _viewModeIcon => switch (_viewMode) {
-        CalendarViewMode.month => OrbitIcons.calendar,
-        CalendarViewMode.week => OrbitIcons.calendarRange,
-        CalendarViewMode.agenda => OrbitIcons.list,
-        CalendarViewMode.timeline => OrbitIcons.clock,
-      };
+    CalendarViewMode.month => OrbitIcons.calendar,
+    CalendarViewMode.week => OrbitIcons.calendarRange,
+    CalendarViewMode.agenda => OrbitIcons.list,
+    CalendarViewMode.timeline => OrbitIcons.clock,
+  };
 
   /// 当前档位中文名（tooltip 回显，与抽屉选项文案同源）
   String get _viewModeLabel => switch (_viewMode) {
-        CalendarViewMode.month => '月历',
-        CalendarViewMode.week => '周',
-        CalendarViewMode.agenda => '议程',
-        CalendarViewMode.timeline => '时间',
-      };
+    CalendarViewMode.month => '月历',
+    CalendarViewMode.week => '周',
+    CalendarViewMode.agenda => '议程',
+    CalendarViewMode.timeline => '时间',
+  };
 
   Widget _buildUpdateButton() {
     final meta = ref.watch(holidayMetaProvider).value;
@@ -1119,9 +1171,8 @@ class _TimelineDayHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
     final now = DateTime.now();
-    final isToday = date.year == now.year &&
-        date.month == now.month &&
-        date.day == now.day;
+    final isToday =
+        date.year == now.year && date.month == now.month && date.day == now.day;
     return Row(
       children: [
         Text(
@@ -1192,9 +1243,11 @@ class _MonthDayGroup extends StatelessWidget {
   String get _relativeLabel {
     final today = DateTime.now();
     final todayStart = DateTime(today.year, today.month, today.day);
-    final diff = DateTime(date.year, date.month, date.day)
-        .difference(todayStart)
-        .inDays;
+    final diff = DateTime(
+      date.year,
+      date.month,
+      date.day,
+    ).difference(todayStart).inDays;
     if (diff == 0) return '今天';
     return diff > 0 ? '$diff天后' : '${-diff}天前';
   }
@@ -1204,14 +1257,22 @@ class _MonthDayGroup extends StatelessWidget {
     final colors = AppColors.ofContext(context);
     final now = DateTime.now();
     // 今天零点 ms（逾期红判定口径：截止在今天内不算逾期）
-    final todayMs = DateTime(now.year, now.month, now.day).millisecondsSinceEpoch;
+    final todayMs = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).millisecondsSinceEpoch;
     // 卡内段数：日期头首段 + 任务行
     final total = 1 + tasks.length;
 
     return Padding(
       // 组卡外缘：左右各让 space12（与任务子列表同口径），组间 cardGap 下垫
-      padding: const EdgeInsets.fromLTRB(AppDimens.space12, 0,
-          AppDimens.space12, AppDimens.cardGap),
+      padding: const EdgeInsets.fromLTRB(
+        AppDimens.space12,
+        0,
+        AppDimens.space12,
+        AppDimens.cardGap,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1229,7 +1290,9 @@ class _MonthDayGroup extends StatelessWidget {
                     )
                   : null,
               padding: const EdgeInsets.symmetric(
-                  horizontal: AppDimens.space12, vertical: AppDimens.space8),
+                horizontal: AppDimens.space12,
+                vertical: AppDimens.space8,
+              ),
               child: Row(
                 children: [
                   Text(
@@ -1245,18 +1308,12 @@ class _MonthDayGroup extends StatelessWidget {
                   const SizedBox(width: AppDimens.space8),
                   Text(
                     '星期${_weekdayNames[date.weekday - 1]}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: colors.secondaryText,
-                    ),
+                    style: TextStyle(fontSize: 12, color: colors.secondaryText),
                   ),
                   const SizedBox(width: AppDimens.space8),
                   Text(
                     _relativeLabel,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: colors.secondaryText,
-                    ),
+                    style: TextStyle(fontSize: 12, color: colors.secondaryText),
                   ),
                   // 休/班徽标（议程档）：底色取值与月历日格徽标同源
                   if (holidayMark != null) ...[
@@ -1286,7 +1343,9 @@ class _MonthDayGroup extends StatelessWidget {
                     const SizedBox(width: AppDimens.space8),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 1),
+                        horizontal: 6,
+                        vertical: 1,
+                      ),
                       decoration: BoxDecoration(
                         border: Border.all(color: OrbitAccents.themeAccent),
                         borderRadius: BorderRadius.circular(999),
@@ -1345,7 +1404,8 @@ class _TaskCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
     final hex = priorityColorHex(task.priority);
-    final overdue = !task.isDone && task.dueDate != null && task.dueDate! < todayMs;
+    final overdue =
+        !task.isDone && task.dueDate != null && task.dueDate! < todayMs;
     final hasTime =
         task.dueDate != null && (task.dueDate! % 86400000) != 0; // 零点=纯日期
 
@@ -1356,10 +1416,11 @@ class _TaskCard extends StatelessWidget {
       child: OrbitCardSegment(
         edge: edge,
         child: Container(
-          constraints:
-              const BoxConstraints(minHeight: AppDimens.touchTarget),
+          constraints: const BoxConstraints(minHeight: AppDimens.touchTarget),
           padding: const EdgeInsets.symmetric(
-              horizontal: AppDimens.space12, vertical: AppDimens.space8),
+            horizontal: AppDimens.space12,
+            vertical: AppDimens.space8,
+          ),
           child: Row(
             children: [
               Container(
@@ -1389,7 +1450,8 @@ class _TaskCard extends StatelessWidget {
                   padding: const EdgeInsets.only(left: AppDimens.space8),
                   child: Text(
                     DateFormat('HH:mm').format(
-                        DateTime.fromMillisecondsSinceEpoch(task.dueDate!)),
+                      DateTime.fromMillisecondsSinceEpoch(task.dueDate!),
+                    ),
                     style: TextStyle(
                       fontSize: 12,
                       fontFeatures: const [FontFeature.tabularFigures()],
@@ -1399,8 +1461,11 @@ class _TaskCard extends StatelessWidget {
                     ),
                   ),
                 ),
-              Icon(OrbitIcons.chevronRight,
-                  size: 18, color: colors.secondaryText),
+              Icon(
+                OrbitIcons.chevronRight,
+                size: 18,
+                color: colors.secondaryText,
+              ),
             ],
           ),
         ),
@@ -1471,7 +1536,11 @@ class _SelectedDayList extends StatelessWidget {
           // 日期语义头
           Padding(
             padding: const EdgeInsets.fromLTRB(
-                0, AppDimens.space8, 0, AppDimens.space4),
+              0,
+              AppDimens.space8,
+              0,
+              AppDimens.space4,
+            ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
@@ -1480,17 +1549,16 @@ class _SelectedDayList extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: isToday ? OrbitAccents.themeAccent : colors.titleText,
+                    color: isToday
+                        ? OrbitAccents.themeAccent
+                        : colors.titleText,
                   ),
                 ),
                 if (!isToday) ...[
                   const SizedBox(width: AppDimens.space8),
                   Text(
                     '星期${_weekdayNames[date.weekday - 1]}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: colors.secondaryText,
-                    ),
+                    style: TextStyle(fontSize: 12, color: colors.secondaryText),
                   ),
                 ],
                 if (subLabel != null) ...[
@@ -1533,10 +1601,7 @@ class _SelectedDayList extends StatelessWidget {
                 const Spacer(),
                 Text(
                   '长按日历快捷新增',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: colors.secondaryText,
-                  ),
+                  style: TextStyle(fontSize: 11, color: colors.secondaryText),
                 ),
                 const SizedBox(width: AppDimens.space4),
                 // 卡片 ⇄ 时间线切换（图标 = 切过去的目标样式，与议程切换钮同口径）
@@ -1566,8 +1631,9 @@ class _SelectedDayList extends StatelessWidget {
             OrbitCardSegment(
               edge: OrbitCardEdge.single,
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(vertical: AppDimens.space20),
+                padding: const EdgeInsets.symmetric(
+                  vertical: AppDimens.space20,
+                ),
                 child: Center(
                   child: Text(
                     '当天没有任务',
@@ -1583,8 +1649,7 @@ class _SelectedDayList extends StatelessWidget {
                 edge: OrbitCardEdge.of(i, tasks.length),
                 hasDescription: descriptionIds.contains(tasks[i].id),
                 reminder: displayReminder(
-                  remindersByTask[tasks[i].id] ??
-                      const <ProjectedReminder>[],
+                  remindersByTask[tasks[i].id] ?? const <ProjectedReminder>[],
                   nowMs,
                   taskDone: tasks[i].isDone,
                 ),
@@ -1602,8 +1667,7 @@ class _SelectedDayList extends StatelessWidget {
                   task: tasks[i],
                   hasDescription: descriptionIds.contains(tasks[i].id),
                   reminder: displayReminder(
-                    remindersByTask[tasks[i].id] ??
-                        const <ProjectedReminder>[],
+                    remindersByTask[tasks[i].id] ?? const <ProjectedReminder>[],
                     nowMs,
                     taskDone: tasks[i].isDone,
                   ),
@@ -1661,7 +1725,8 @@ class _DayTaskRow extends StatelessWidget {
     final d = task.dueDate == null
         ? null
         : DateTime.fromMillisecondsSinceEpoch(task.dueDate!);
-    final hasTime = d != null &&
+    final hasTime =
+        d != null &&
         (d.hour != 0 || d.minute != 0 || d.second != 0 || d.millisecond != 0);
     final meta = <Widget>[
       if (task.repeatMode > 0)
@@ -1672,7 +1737,8 @@ class _DayTaskRow extends StatelessWidget {
           size: 12,
           color: reminder!.fired ? OrbitAccents.overdueRed : colors.iconText,
         ),
-      if (hasDescription) Icon(OrbitIcons.fileText, size: 12, color: colors.iconText),
+      if (hasDescription)
+        Icon(OrbitIcons.fileText, size: 12, color: colors.iconText),
     ];
 
     return InkWell(
@@ -1783,7 +1849,8 @@ class _DayTimelineRow extends StatelessWidget {
     final d = task.dueDate == null
         ? null
         : DateTime.fromMillisecondsSinceEpoch(task.dueDate!);
-    final hasTime = d != null &&
+    final hasTime =
+        d != null &&
         (d.hour != 0 || d.minute != 0 || d.second != 0 || d.millisecond != 0);
 
     return Row(

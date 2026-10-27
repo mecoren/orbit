@@ -56,8 +56,8 @@ class ChineseCalendarColors {
   /// 调休上班日的压暗底（与休息日浅识别底同源派生）
   static Color workdayBackground(Brightness brightness) =>
       brightness == Brightness.dark
-          ? const Color(0x14F59E0B)
-          : const Color(0x0FF59E0B);
+      ? const Color(0x14F59E0B)
+      : const Color(0x0FF59E0B);
 }
 
 /// 月历日格事件圆点（large 档；[OrbitMonthCalendar.eventDotsBuilder] 的载荷）。
@@ -195,29 +195,34 @@ class OrbitMonthCalendar extends StatelessWidget {
 
   static const _weekdayLabels = ['一', '二', '三', '四', '五', '六', '日'];
 
+  /// 字号缩放的封顶倍数：日格是定宽定高网格（窄屏 42×74dp），系统字号
+  /// 无限放大只会把日号/副标签挤出格子（`textScale` 2.0 实测溢出）。
+  /// 日历是纯几何组件，故整棵子树把缩放封顶在此档；页面其余文本不受影响。
+  static const double _maxTextScale = 1.3;
+
   double get _cellHeight => switch (size) {
-        AppCalendarSize.large => 74,
-        AppCalendarSize.medium => 48,
-        AppCalendarSize.small => 36,
-      };
+    AppCalendarSize.large => 74,
+    AppCalendarSize.medium => 48,
+    AppCalendarSize.small => 36,
+  };
 
   double get _numberFont => switch (size) {
-        AppCalendarSize.large => 19.5,
-        AppCalendarSize.medium => 14,
-        AppCalendarSize.small => 12.5,
-      };
+    AppCalendarSize.large => 19.5,
+    AppCalendarSize.medium => 14,
+    AppCalendarSize.small => 12.5,
+  };
 
   double get _titleFont => switch (size) {
-        AppCalendarSize.large => 22,
-        AppCalendarSize.medium => 18,
-        AppCalendarSize.small => 14,
-      };
+    AppCalendarSize.large => 22,
+    AppCalendarSize.medium => 18,
+    AppCalendarSize.small => 14,
+  };
 
   double get _navIconSize => switch (size) {
-        AppCalendarSize.large => 22,
-        AppCalendarSize.medium => 18,
-        AppCalendarSize.small => 16,
-      };
+    AppCalendarSize.large => 22,
+    AppCalendarSize.medium => 18,
+    AppCalendarSize.small => 16,
+  };
 
   String _ymd(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-'
@@ -235,15 +240,14 @@ class OrbitMonthCalendar extends StatelessWidget {
     required String tooltip,
     required VoidCallback? onPressed,
     required IconData icon,
-  }) =>
-      sh.Tooltip(
-        tooltip: (context) => Text(tooltip),
-        child: IconButton(
-          onPressed: onPressed,
-          icon: Icon(icon, size: _navIconSize + 4),
-          visualDensity: VisualDensity.compact,
-        ),
-      );
+  }) => sh.Tooltip(
+    tooltip: (context) => Text(tooltip),
+    child: IconButton(
+      onPressed: onPressed,
+      icon: Icon(icon, size: _navIconSize + 4),
+      visualDensity: VisualDensity.compact,
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -268,64 +272,65 @@ class OrbitMonthCalendar extends StatelessWidget {
     final multiFormat = formats != null && formats.length > 1;
 
     Widget calendar = TableCalendar<void>(
-          // 网格与手势交给 table_calendar；今天/选中的底色由我们自己画，
-          // 故把内置装饰全部置空，避免"双份高亮"
-          firstDay: firstDay,
-          lastDay: lastDay,
-          focusedDay: focusedDay ?? monthStart,
-          locale: 'zh_CN',
-          startingDayOfWeek: StartingDayOfWeek.monday,
-          calendarFormat: calendarFormat,
-          availableCalendarFormats: formats ?? const {CalendarFormat.month: ''},
-          // 纵向收展一律走外层轴锁定门（内置纵向检测关闭，避免斜向误触发）
-          availableGestures: AvailableGestures.horizontalSwipe,
-          headerVisible: false,
-          daysOfWeekHeight:
-              showWeekdays ? (size == AppCalendarSize.large ? 24 : 18) : 0,
-          rowHeight: _cellHeight,
-          pageAnimationDuration: AppMotion.normal,
-          pageAnimationCurve: AppMotion.standard,
-          selectedDayPredicate: (day) =>
-              selected != null && isSameDay(day, selected),
-          onDaySelected: (selectedDay, focusedDay) {
-            if (_outOfRange(selectedDay)) return;
-            onDayTap?.call(selectedDay);
-            onMonthChange?.call(focusedDay);
-          },
-          // 注意：table_calendar 的 onDayLongPressed 复用双参 OnDaySelected 签名
-          onDayLongPressed: (selectedDay, _) {
-            if (_outOfRange(selectedDay)) return;
-            onDayLongPress?.call(selectedDay);
-          },
-          onPageChanged: (focusedDay) => onMonthChange?.call(focusedDay),
-          calendarStyle: const CalendarStyle(
-            todayDecoration: BoxDecoration(),
-            selectedDecoration: BoxDecoration(),
-            markerDecoration: BoxDecoration(),
-            outsideDaysVisible: true,
-            cellMargin: EdgeInsets.zero,
-          ),
-          calendarBuilders: CalendarBuilders<void>(
-            // 单一入口接管全部日格（含前后月补位），保证 today/selected/
-            // 休班/农历副标签/事件圆点 的判定与旧实现完全一致
-            prioritizedBuilder: (context, day, _) =>
-                _buildCell(context, colors, day, accent, weekend),
-            dowBuilder: showWeekdays
-                ? (context, day) => Center(
-                      child: Text(
-                        _weekdayLabels[(day.weekday - 1) % 7],
-                        style: TextStyle(
-                          fontSize: switch (size) {
-                            AppCalendarSize.large => 14,
-                            AppCalendarSize.medium => 12,
-                            AppCalendarSize.small => 10,
-                          },
-                          color: colors.secondaryText,
-                        ),
-                      ),
-                    )
-                : null,
-          ),
+      // 网格与手势交给 table_calendar；今天/选中的底色由我们自己画，
+      // 故把内置装饰全部置空，避免"双份高亮"
+      firstDay: firstDay,
+      lastDay: lastDay,
+      focusedDay: focusedDay ?? monthStart,
+      locale: 'zh_CN',
+      startingDayOfWeek: StartingDayOfWeek.monday,
+      calendarFormat: calendarFormat,
+      availableCalendarFormats: formats ?? const {CalendarFormat.month: ''},
+      // 纵向收展一律走外层轴锁定门（内置纵向检测关闭，避免斜向误触发）
+      availableGestures: AvailableGestures.horizontalSwipe,
+      headerVisible: false,
+      daysOfWeekHeight: showWeekdays
+          ? (size == AppCalendarSize.large ? 24 : 18)
+          : 0,
+      rowHeight: _cellHeight,
+      pageAnimationDuration: AppMotion.normal,
+      pageAnimationCurve: AppMotion.standard,
+      selectedDayPredicate: (day) =>
+          selected != null && isSameDay(day, selected),
+      onDaySelected: (selectedDay, focusedDay) {
+        if (_outOfRange(selectedDay)) return;
+        onDayTap?.call(selectedDay);
+        onMonthChange?.call(focusedDay);
+      },
+      // 注意：table_calendar 的 onDayLongPressed 复用双参 OnDaySelected 签名
+      onDayLongPressed: (selectedDay, _) {
+        if (_outOfRange(selectedDay)) return;
+        onDayLongPress?.call(selectedDay);
+      },
+      onPageChanged: (focusedDay) => onMonthChange?.call(focusedDay),
+      calendarStyle: const CalendarStyle(
+        todayDecoration: BoxDecoration(),
+        selectedDecoration: BoxDecoration(),
+        markerDecoration: BoxDecoration(),
+        outsideDaysVisible: true,
+        cellMargin: EdgeInsets.zero,
+      ),
+      calendarBuilders: CalendarBuilders<void>(
+        // 单一入口接管全部日格（含前后月补位），保证 today/selected/
+        // 休班/农历副标签/事件圆点 的判定与旧实现完全一致
+        prioritizedBuilder: (context, day, _) =>
+            _buildCell(context, colors, day, accent, weekend),
+        dowBuilder: showWeekdays
+            ? (context, day) => Center(
+                child: Text(
+                  _weekdayLabels[(day.weekday - 1) % 7],
+                  style: TextStyle(
+                    fontSize: switch (size) {
+                      AppCalendarSize.large => 14,
+                      AppCalendarSize.medium => 12,
+                      AppCalendarSize.small => 10,
+                    },
+                    color: colors.secondaryText,
+                  ),
+                ),
+              )
+            : null,
+      ),
     );
 
     if (multiFormat) {
@@ -336,6 +341,11 @@ class OrbitMonthCalendar extends StatelessWidget {
       );
     }
 
+    // 定高网格与系统大字号互斥：日格高度（74/48/36）不随字号变化，
+    // 系统 textScale 2.0 时「日号 + 农历副标签」在 42dp 格宽内折行，
+    // 实测溢出 84px（2026-10-27，360dp 回归锚点用例暴露）。网格是纯几何
+    // 组件（与 iOS/Google 日历同款处理），故只把**网格**的字号缩放封顶到
+    // 1.3：页面其余文本仍按系统档，自绘页头是弹性 Row（放得下）不跟着降档。
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -343,7 +353,10 @@ class OrbitMonthCalendar extends StatelessWidget {
           _buildHeader(context, colors, monthStart),
           const SizedBox(height: 4),
         ],
-        calendar,
+        MediaQuery.withClampedTextScaling(
+          maxScaleFactor: _maxTextScale,
+          child: calendar,
+        ),
       ],
     );
   }
@@ -408,10 +421,10 @@ class OrbitMonthCalendar extends StatelessWidget {
           onPressed: onMonthChange == null
               ? null
               : () => onMonthChange!(
-                    monthStart.month == 1
-                        ? DateTime(monthStart.year - 1, 12)
-                        : DateTime(monthStart.year, monthStart.month - 1),
-                  ),
+                  monthStart.month == 1
+                      ? DateTime(monthStart.year - 1, 12)
+                      : DateTime(monthStart.year, monthStart.month - 1),
+                ),
           icon: OrbitIcons.chevronLeft,
         ),
         _navButton(
@@ -419,10 +432,10 @@ class OrbitMonthCalendar extends StatelessWidget {
           onPressed: onMonthChange == null
               ? null
               : () => onMonthChange!(
-                    monthStart.month == 12
-                        ? DateTime(monthStart.year + 1, 1)
-                        : DateTime(monthStart.year, monthStart.month + 1),
-                  ),
+                  monthStart.month == 12
+                      ? DateTime(monthStart.year + 1, 1)
+                      : DateTime(monthStart.year, monthStart.month + 1),
+                ),
           icon: OrbitIcons.chevronRight,
         ),
         ...headerActions,
@@ -464,11 +477,7 @@ class OrbitMonthCalendar extends StatelessWidget {
       // 圆点槽窄于视窗时（≥5 个事件）热区随槽收窄，但圆点仍居中可辨
       behavior: HitTestBehavior.opaque,
       onTap: () => onTap(date, dot),
-      child: SizedBox(
-        width: 10,
-        height: 16,
-        child: Center(child: circle),
-      ),
+      child: SizedBox(width: 10, height: 16, child: Center(child: circle)),
     );
   }
 
@@ -487,7 +496,8 @@ class OrbitMonthCalendar extends StatelessWidget {
     final now = DateTime.now();
     // 周档跨月周不弱化补位（dimOutsideMonth = false）：单行周条里前后月日期
     // 与当月日期同等显示，只弱化可选范围外的越界格
-    final inMonth = !dimOutsideMonth ||
+    final inMonth =
+        !dimOutsideMonth ||
         (date.month == month.month && date.year == month.year);
     final isToday = isSameDay(date, now);
     final isSelected = selected != null && _ymd(selected!) == ymd;
@@ -513,7 +523,9 @@ class OrbitMonthCalendar extends StatelessWidget {
     // 完全接管模式
     if (dayCellBuilder != null) {
       final custom = dayCellBuilder!(dayContext);
-      if (custom != null) return SizedBox(height: _cellHeight, child: custom);
+      if (custom != null) {
+        return SizedBox(height: _cellHeight, child: custom);
+      }
     }
 
     // ===== 默认日格 =====
@@ -526,14 +538,15 @@ class OrbitMonthCalendar extends StatelessWidget {
     final numberColor = outOfRange
         ? colors.deactivatedText.withValues(alpha: 0.5)
         : filled
-            ? const Color(0xFFFFFFFF)
-            : !inMonth
-                ? colors.deactivatedText
-                : isWeekend
-                    ? weekend
-                    : colors.titleText;
+        ? const Color(0xFFFFFFFF)
+        : !inMonth
+        ? colors.deactivatedText
+        : isWeekend
+        ? weekend
+        : colors.titleText;
 
-    final showBadge = holidays != null &&
+    final showBadge =
+        holidays != null &&
         holidays!.containsKey(ymd) &&
         size != AppCalendarSize.small;
 
@@ -565,7 +578,9 @@ class OrbitMonthCalendar extends StatelessWidget {
                 // 补位格副标签与上方数字同步弱化
                 color: filled
                     ? const Color(0xFFFFFFFF).withValues(alpha: 0.9)
-                    : colors.secondaryText.withValues(alpha: inMonth ? 1 : 0.45),
+                    : colors.secondaryText.withValues(
+                        alpha: inMonth ? 1 : 0.45,
+                      ),
               ),
             ),
           )
@@ -623,8 +638,7 @@ class OrbitMonthCalendar extends StatelessWidget {
                 color: cellBackground,
                 shape: isCircle ? BoxShape.circle : BoxShape.rectangle,
                 borderRadius: isCircle ? null : AppShapes.small,
-                border:
-                    outlined ? Border.all(color: accent, width: 1.5) : null,
+                border: outlined ? Border.all(color: accent, width: 1.5) : null,
               ),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
@@ -632,8 +646,12 @@ class OrbitMonthCalendar extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // 日号恒单行：格子是定宽（窄屏 42dp），一旦允许折行，
+                    // 大字号或方体测试字体会把两位数拆成两行顶出格子
                     Text(
                       '${date.day}',
+                      maxLines: 1,
+                      softWrap: false,
                       style: TextStyle(
                         fontSize: _numberFont,
                         fontWeight: isToday || isSelected

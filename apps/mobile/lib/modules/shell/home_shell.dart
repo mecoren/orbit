@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/layout/orbit_breakpoints.dart';
 import '../../core/theme/icon_map.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/providers/bridge_provider.dart';
@@ -13,6 +14,7 @@ import '../todo/logic/quick_add_context.dart';
 import '../todo/logic/task_logic.dart';
 import '../todo/providers/task_window_provider.dart';
 import '../todo/quick_add_sheet.dart' show showQuickAddSheet;
+import '../todo/sidebar_screen.dart';
 import 'nav_modules.dart';
 
 /// 主导航壳（底部页签 + 右下悬浮新建钮 + 「更多」面板）
@@ -54,8 +56,7 @@ class HomeShell extends ConsumerWidget {
             OrbitPanelItem(
               icon: m.icon,
               label: m.label,
-              onTap: () =>
-                  navigationShell.goBranch(m.branchIndex),
+              onTap: () => navigationShell.goBranch(m.branchIndex),
             ),
         ],
       ],
@@ -69,7 +70,8 @@ class HomeShell extends ConsumerWidget {
     // 「今天」角标 = 今天截止视图的未完成数（0 不显示，见 [OrbitBottomNav]）；
     // 今天模块不在底栏时无角标位。P1 窗口化后改读 SQL 聚合：底栏常驻，
     // 不能再为一个小角标在内存里留一份万行任务数组。
-    final counts = ref.watch(sidebarCountsProvider).value ??
+    final counts =
+        ref.watch(sidebarCountsProvider).value ??
         const SidebarCounts(quickView: {}, undoneByProject: {});
     final todayPos = tabs.indexOf(OrbitNavModule.today);
     // 当前分支对应模块不在底栏（经「更多」面板/侧栏内跳进入）时，选中态落
@@ -85,8 +87,27 @@ class HomeShell extends ConsumerWidget {
       }
     });
 
+    // 平板/横屏（#107）：清单页本身即 SidebarScreen，其它模块左侧常驻一份
+    // 清单导航，避免在宽屏上来回「汉堡 → 清单 → 回来」。
+    // 判据是**模块**而非路由：`/todo` 的 `sidebar` 分支根页就是侧栏整页，
+    // 在它旁边再嵌一份会重复渲染（两份快捷视图 + 双页头，2026-10-27 评审发现）。
+    final showEmbeddedSidebar =
+        OrbitBreakpoints.isExpanded(context) &&
+        currentModule != OrbitNavModule.sidebar;
+
     return Scaffold(
-      body: navigationShell,
+      body: showEmbeddedSidebar
+          ? Row(
+              children: [
+                const SizedBox(
+                  width: OrbitBreakpoints.sidebarWidth,
+                  child: SidebarScreen(embedded: true),
+                ),
+                const VerticalDivider(width: 1),
+                Expanded(child: navigationShell),
+              ],
+            )
+          : navigationShell,
       floatingActionButton: OrbitFab(
         accentColor: OrbitAccents.themeAccent,
         // 新建落点跟随当前列表（无页面语境时面板内自选）
@@ -99,15 +120,14 @@ class HomeShell extends ConsumerWidget {
           );
         },
         // 长按 = 从模板新建（与列表页长按加号同源；无模板静默返回）
-        onLongPress: () => showTemplateCreateFlow(
-          context,
-          ref.read(orbitBridgeProvider),
-        ),
+        onLongPress: () =>
+            showTemplateCreateFlow(context, ref.read(orbitBridgeProvider)),
       ),
       bottomNavigationBar: OrbitBottomNav(
         currentIndex: currentTabPos >= 0 ? currentTabPos : tabs.length,
         moreTabIndex: tabs.length,
-        onMoreTap: (anchor) => _showMorePanel(context, anchor, nav.morePanelItems),
+        onMoreTap: (anchor) =>
+            _showMorePanel(context, anchor, nav.morePanelItems),
         // 重复点击当前页签回退到该页签根（go_router 惯例：保留栈内其余状态）
         onTap: (index) {
           final module = tabs[index];

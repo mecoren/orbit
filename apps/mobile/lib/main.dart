@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:progressive_background_blur/progressive_background_blur.dart';
@@ -9,23 +8,26 @@ import 'package:progressive_background_blur/progressive_background_blur.dart';
 import 'app.dart';
 import 'data/api/rust_orbit_bridge.dart';
 import 'data/providers/bridge_provider.dart';
+import 'services/appearance.dart';
 import 'services/local_prefs.dart';
 
 /// Orbit 移动端入口
 ///
 /// 启动序列（对齐 React 版 App.tsx 门控）：
-/// 竖屏锁定 → intl 日期本地化数据 → FRB 运行时初始化 → 启动门控
+/// intl 日期本地化数据 → FRB 运行时初始化 → 本机偏好/强调色 → 启动门控
 /// （masterAuthHas? unlock : plaintext）。
+///
+/// 不锁屏幕方向（#107）：平板/横屏由 `OrbitBreakpoints` 断点驱动布局。
 ///
 /// 桥接切换：默认注入 RustOrbitBridge（真 Rust 后端）；
 /// 纯 UI 开发可用 `flutter run --dart-define=ORBIT_USE_MOCK_BRIDGE=true`
 /// 切回内存 Mock（MockOrbitBridge，无需 Rust 工具链/NDK）。
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
+  // #107：不再锁竖屏。平板/横屏由 OrbitBreakpoints 断点驱动布局
+  // （840dp 起非清单页常驻侧栏、详情/子列表/抽屉限宽、月历日格封顶）；
+  // 360dp 竖屏保持原版式。有意不设 landscapeLeft/Right 白名单：
+  // 折叠屏/分屏的旋转语义归系统。
 
   // 月历（table_calendar）与 zh_CN 日期格式依赖 intl 的语言数据，
   // 必须在 runApp 前装载完成，否则首帧日历会抛 LocaleDataException。
@@ -40,6 +42,9 @@ Future<void> main() async {
 
   // 本机 UI 偏好（隐藏已完成等视图态）：首帧前载入，失败静默走默认值
   await LocalPrefs.load();
+
+  // 强调色（#107）：首帧前写回 OrbitAccents，避免启动瞬间闪一次默认蓝
+  Appearance.restoreAccent();
 
   // 图片解码缓存上限（内存收口 2026-09-25）：Flutter 默认 1000 张 / 100MB，
   // 附件图多的库来回浏览会把驻留顶高；解码侧已有 cacheWidth 降采样
