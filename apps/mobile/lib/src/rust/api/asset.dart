@@ -20,6 +20,23 @@ Future<TaskAttachmentView> taskAttachmentAdd({
   data: data,
 );
 
+/// 从本地文件路径流式上传并挂载（文件选择器主路径）
+///
+/// 与 [`task_attachment_add`] 的唯一区别是**不把整文件读成 `List<int>` 过桥**：
+/// core 按 256KiB 块边读边算 SHA-256，Dart/Rust 两侧峰值都与文件大小无关。
+/// 拍照等内存里已有字节的来源仍走字节版。
+Future<TaskAttachmentView> taskAttachmentAddPath({
+  required PlatformInt64 taskId,
+  required String fileName,
+  required String mimeType,
+  required String sourcePath,
+}) => RustLib.instance.api.crateApiAssetTaskAttachmentAddPath(
+  taskId: taskId,
+  fileName: fileName,
+  mimeType: mimeType,
+  sourcePath: sourcePath,
+);
+
 /// 列出任务全部附件（含本地缓存状态）
 Future<List<TaskAttachmentView>> taskAttachmentsList({
   required PlatformInt64 taskId,

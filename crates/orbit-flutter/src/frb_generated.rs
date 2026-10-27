@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -161942128;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 283210214;
 
 // Section: executor
 
@@ -4307,6 +4307,51 @@ fn wire__crate__api__asset__task_attachment_add_impl(
                             api_file_name,
                             api_mime_type,
                             api_data,
+                        )
+                        .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__asset__task_attachment_add_path_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "task_attachment_add_path",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_task_id = <i64>::sse_decode(&mut deserializer);
+            let api_file_name = <String>::sse_decode(&mut deserializer);
+            let api_mime_type = <String>::sse_decode(&mut deserializer);
+            let api_source_path = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok = crate::api::asset::task_attachment_add_path(
+                            api_task_id,
+                            api_file_name,
+                            api_mime_type,
+                            api_source_path,
                         )
                         .await?;
                         Ok(output_ok)
@@ -10594,188 +10639,194 @@ fn pde_ffi_dispatcher_primary_impl(
             data_len,
         ),
         117 => wire__crate__api__asset__task_attachment_add_impl(port, ptr, rust_vec_len, data_len),
-        118 => {
+        118 => wire__crate__api__asset__task_attachment_add_path_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        119 => {
             wire__crate__api__todo__task_attachment_flags_impl(port, ptr, rust_vec_len, data_len)
         }
-        119 => {
+        120 => {
             wire__crate__api__asset__task_attachment_read_impl(port, ptr, rust_vec_len, data_len)
         }
-        120 => {
+        121 => {
             wire__crate__api__asset__task_attachment_remove_impl(port, ptr, rust_vec_len, data_len)
         }
-        121 => {
+        122 => {
             wire__crate__api__asset__task_attachments_list_impl(port, ptr, rust_vec_len, data_len)
         }
-        122 => {
+        123 => {
             wire__crate__api__todo__task_dependency_flags_impl(port, ptr, rust_vec_len, data_len)
         }
-        123 => {
+        124 => {
             wire__crate__api__todo__task_description_flags_impl(port, ptr, rust_vec_len, data_len)
         }
-        124 => {
+        125 => {
             wire__crate__api__todo__task_labels_projection_impl(port, ptr, rust_vec_len, data_len)
         }
-        125 => {
+        126 => {
             wire__crate__api__todo__task_open_subtask_flags_impl(port, ptr, rust_vec_len, data_len)
         }
-        126 => wire__crate__api__todo__task_reminders_projection_impl(
+        127 => wire__crate__api__todo__task_reminders_projection_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        127 => wire__crate__api__template__template_create_impl(port, ptr, rust_vec_len, data_len),
-        128 => wire__crate__api__template__template_delete_impl(port, ptr, rust_vec_len, data_len),
-        129 => wire__crate__api__template__template_update_impl(port, ptr, rust_vec_len, data_len),
-        130 => wire__crate__api__template__templates_list_impl(port, ptr, rust_vec_len, data_len),
-        131 => wire__crate__api__todo__todo_comments_create_impl(port, ptr, rust_vec_len, data_len),
-        132 => wire__crate__api__todo__todo_comments_delete_impl(port, ptr, rust_vec_len, data_len),
-        133 => wire__crate__api__todo__todo_comments_get_impl(port, ptr, rust_vec_len, data_len),
-        134 => wire__crate__api__todo__todo_comments_list_impl(port, ptr, rust_vec_len, data_len),
-        135 => wire__crate__api__todo__todo_labels_create_impl(port, ptr, rust_vec_len, data_len),
-        136 => wire__crate__api__todo__todo_labels_delete_impl(port, ptr, rust_vec_len, data_len),
-        137 => wire__crate__api__todo__todo_labels_get_impl(port, ptr, rust_vec_len, data_len),
-        138 => wire__crate__api__todo__todo_labels_list_impl(port, ptr, rust_vec_len, data_len),
-        139 => wire__crate__api__todo__todo_labels_update_impl(port, ptr, rust_vec_len, data_len),
-        140 => wire__crate__api__todo__todo_project_mark_reviewed_impl(
+        128 => wire__crate__api__template__template_create_impl(port, ptr, rust_vec_len, data_len),
+        129 => wire__crate__api__template__template_delete_impl(port, ptr, rust_vec_len, data_len),
+        130 => wire__crate__api__template__template_update_impl(port, ptr, rust_vec_len, data_len),
+        131 => wire__crate__api__template__templates_list_impl(port, ptr, rust_vec_len, data_len),
+        132 => wire__crate__api__todo__todo_comments_create_impl(port, ptr, rust_vec_len, data_len),
+        133 => wire__crate__api__todo__todo_comments_delete_impl(port, ptr, rust_vec_len, data_len),
+        134 => wire__crate__api__todo__todo_comments_get_impl(port, ptr, rust_vec_len, data_len),
+        135 => wire__crate__api__todo__todo_comments_list_impl(port, ptr, rust_vec_len, data_len),
+        136 => wire__crate__api__todo__todo_labels_create_impl(port, ptr, rust_vec_len, data_len),
+        137 => wire__crate__api__todo__todo_labels_delete_impl(port, ptr, rust_vec_len, data_len),
+        138 => wire__crate__api__todo__todo_labels_get_impl(port, ptr, rust_vec_len, data_len),
+        139 => wire__crate__api__todo__todo_labels_list_impl(port, ptr, rust_vec_len, data_len),
+        140 => wire__crate__api__todo__todo_labels_update_impl(port, ptr, rust_vec_len, data_len),
+        141 => wire__crate__api__todo__todo_project_mark_reviewed_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        141 => wire__crate__api__todo__todo_project_set_review_interval_impl(
+        142 => wire__crate__api__todo__todo_project_set_review_interval_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        142 => wire__crate__api__todo__todo_project_snooze_review_impl(
+        143 => wire__crate__api__todo__todo_project_snooze_review_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        143 => wire__crate__api__todo__todo_projects_create_impl(port, ptr, rust_vec_len, data_len),
-        144 => wire__crate__api__todo__todo_projects_delete_impl(port, ptr, rust_vec_len, data_len),
-        145 => wire__crate__api__todo__todo_projects_due_for_review_impl(
+        144 => wire__crate__api__todo__todo_projects_create_impl(port, ptr, rust_vec_len, data_len),
+        145 => wire__crate__api__todo__todo_projects_delete_impl(port, ptr, rust_vec_len, data_len),
+        146 => wire__crate__api__todo__todo_projects_due_for_review_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        146 => wire__crate__api__todo__todo_projects_get_impl(port, ptr, rust_vec_len, data_len),
-        147 => wire__crate__api__todo__todo_projects_get_by_uuid_impl(
+        147 => wire__crate__api__todo__todo_projects_get_impl(port, ptr, rust_vec_len, data_len),
+        148 => wire__crate__api__todo__todo_projects_get_by_uuid_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        148 => wire__crate__api__todo__todo_projects_list_impl(port, ptr, rust_vec_len, data_len),
-        149 => wire__crate__api__todo__todo_projects_list_archived_impl(
+        149 => wire__crate__api__todo__todo_projects_list_impl(port, ptr, rust_vec_len, data_len),
+        150 => wire__crate__api__todo__todo_projects_list_archived_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        150 => wire__crate__api__todo__todo_projects_update_impl(port, ptr, rust_vec_len, data_len),
-        151 => wire__crate__api__todo__todo_projects_update_sort_order_impl(
+        151 => wire__crate__api__todo__todo_projects_update_impl(port, ptr, rust_vec_len, data_len),
+        152 => wire__crate__api__todo__todo_projects_update_sort_order_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        152 => {
+        153 => {
             wire__crate__api__todo__todo_reminders_create_impl(port, ptr, rust_vec_len, data_len)
         }
-        153 => {
+        154 => {
             wire__crate__api__todo__todo_reminders_delete_impl(port, ptr, rust_vec_len, data_len)
         }
-        154 => wire__crate__api__todo__todo_reminders_get_impl(port, ptr, rust_vec_len, data_len),
-        155 => wire__crate__api__todo__todo_reminders_list_impl(port, ptr, rust_vec_len, data_len),
-        156 => wire__crate__api__todo__todo_subtasks_create_impl(port, ptr, rust_vec_len, data_len),
-        157 => wire__crate__api__todo__todo_subtasks_delete_impl(port, ptr, rust_vec_len, data_len),
-        158 => wire__crate__api__todo__todo_subtasks_get_impl(port, ptr, rust_vec_len, data_len),
-        159 => wire__crate__api__todo__todo_subtasks_list_impl(port, ptr, rust_vec_len, data_len),
-        160 => {
+        155 => wire__crate__api__todo__todo_reminders_get_impl(port, ptr, rust_vec_len, data_len),
+        156 => wire__crate__api__todo__todo_reminders_list_impl(port, ptr, rust_vec_len, data_len),
+        157 => wire__crate__api__todo__todo_subtasks_create_impl(port, ptr, rust_vec_len, data_len),
+        158 => wire__crate__api__todo__todo_subtasks_delete_impl(port, ptr, rust_vec_len, data_len),
+        159 => wire__crate__api__todo__todo_subtasks_get_impl(port, ptr, rust_vec_len, data_len),
+        160 => wire__crate__api__todo__todo_subtasks_list_impl(port, ptr, rust_vec_len, data_len),
+        161 => {
             wire__crate__api__todo__todo_subtasks_promote_impl(port, ptr, rust_vec_len, data_len)
         }
-        161 => wire__crate__api__todo__todo_subtasks_toggle_done_impl(
+        162 => wire__crate__api__todo__todo_subtasks_toggle_done_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        162 => wire__crate__api__todo__todo_subtasks_update_impl(port, ptr, rust_vec_len, data_len),
-        163 => {
+        163 => wire__crate__api__todo__todo_subtasks_update_impl(port, ptr, rust_vec_len, data_len),
+        164 => {
             wire__crate__api__todo__todo_task_labels_create_impl(port, ptr, rust_vec_len, data_len)
         }
-        164 => {
+        165 => {
             wire__crate__api__todo__todo_task_labels_delete_impl(port, ptr, rust_vec_len, data_len)
         }
-        165 => wire__crate__api__todo__todo_task_labels_get_impl(port, ptr, rust_vec_len, data_len),
-        166 => {
+        166 => wire__crate__api__todo__todo_task_labels_get_impl(port, ptr, rust_vec_len, data_len),
+        167 => {
             wire__crate__api__todo__todo_task_labels_list_impl(port, ptr, rust_vec_len, data_len)
         }
-        167 => wire__crate__api__todo__todo_task_overview_impl(port, ptr, rust_vec_len, data_len),
-        168 => wire__crate__api__todo__todo_task_relations_create_impl(
+        168 => wire__crate__api__todo__todo_task_overview_impl(port, ptr, rust_vec_len, data_len),
+        169 => wire__crate__api__todo__todo_task_relations_create_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        169 => wire__crate__api__todo__todo_task_relations_delete_impl(
+        170 => wire__crate__api__todo__todo_task_relations_delete_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        170 => {
+        171 => {
             wire__crate__api__todo__todo_task_relations_get_impl(port, ptr, rust_vec_len, data_len)
         }
-        171 => {
+        172 => {
             wire__crate__api__todo__todo_task_relations_list_impl(port, ptr, rust_vec_len, data_len)
         }
-        172 => wire__crate__api__todo__todo_tasks_board_impl(port, ptr, rust_vec_len, data_len),
-        173 => wire__crate__api__todo__todo_tasks_complete_impl(port, ptr, rust_vec_len, data_len),
-        174 => wire__crate__api__todo__todo_tasks_create_impl(port, ptr, rust_vec_len, data_len),
-        175 => wire__crate__api__todo__todo_tasks_delete_impl(port, ptr, rust_vec_len, data_len),
-        176 => wire__crate__api__todo__todo_tasks_duplicate_impl(port, ptr, rust_vec_len, data_len),
-        177 => wire__crate__api__todo__todo_tasks_get_impl(port, ptr, rust_vec_len, data_len),
-        178 => {
+        173 => wire__crate__api__todo__todo_tasks_board_impl(port, ptr, rust_vec_len, data_len),
+        174 => wire__crate__api__todo__todo_tasks_complete_impl(port, ptr, rust_vec_len, data_len),
+        175 => wire__crate__api__todo__todo_tasks_create_impl(port, ptr, rust_vec_len, data_len),
+        176 => wire__crate__api__todo__todo_tasks_delete_impl(port, ptr, rust_vec_len, data_len),
+        177 => wire__crate__api__todo__todo_tasks_duplicate_impl(port, ptr, rust_vec_len, data_len),
+        178 => wire__crate__api__todo__todo_tasks_get_impl(port, ptr, rust_vec_len, data_len),
+        179 => {
             wire__crate__api__todo__todo_tasks_get_by_uuid_impl(port, ptr, rust_vec_len, data_len)
         }
-        179 => {
+        180 => {
             wire__crate__api__todo__todo_tasks_get_detail_impl(port, ptr, rust_vec_len, data_len)
         }
-        180 => wire__crate__api__todo__todo_tasks_list_impl(port, ptr, rust_vec_len, data_len),
-        181 => wire__crate__api__todo__todo_tasks_page_impl(port, ptr, rust_vec_len, data_len),
-        182 => wire__crate__api__todo__todo_tasks_recalc_percent_impl(
+        181 => wire__crate__api__todo__todo_tasks_list_impl(port, ptr, rust_vec_len, data_len),
+        182 => wire__crate__api__todo__todo_tasks_page_impl(port, ptr, rust_vec_len, data_len),
+        183 => wire__crate__api__todo__todo_tasks_recalc_percent_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        183 => wire__crate__api__todo__todo_tasks_update_impl(port, ptr, rust_vec_len, data_len),
-        184 => wire__crate__api__todo__todo_tasks_update_position_impl(
+        184 => wire__crate__api__todo__todo_tasks_update_impl(port, ptr, rust_vec_len, data_len),
+        185 => wire__crate__api__todo__todo_tasks_update_position_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        185 => wire__crate__api__trash__trash_meta_impl(port, ptr, rust_vec_len, data_len),
-        186 => wire__crate__api__trash__trash_purge_all_impl(port, ptr, rust_vec_len, data_len),
-        187 => wire__crate__api__trash__trash_purge_expired_impl(port, ptr, rust_vec_len, data_len),
-        188 => wire__crate__api__trash__trash_set_retention_days_impl(
+        186 => wire__crate__api__trash__trash_meta_impl(port, ptr, rust_vec_len, data_len),
+        187 => wire__crate__api__trash__trash_purge_all_impl(port, ptr, rust_vec_len, data_len),
+        188 => wire__crate__api__trash__trash_purge_expired_impl(port, ptr, rust_vec_len, data_len),
+        189 => wire__crate__api__trash__trash_set_retention_days_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        189 => wire__crate__api__trash__trash_task_purge_impl(port, ptr, rust_vec_len, data_len),
-        190 => wire__crate__api__trash__trash_task_restore_impl(port, ptr, rust_vec_len, data_len),
-        191 => wire__crate__api__trash__trash_tasks_list_impl(port, ptr, rust_vec_len, data_len),
-        192 => wire__crate__api__widget__widget_todo_query_impl(port, ptr, rust_vec_len, data_len),
-        193 => wire__crate__api__widget__widget_todo_toggle_impl(port, ptr, rust_vec_len, data_len),
+        190 => wire__crate__api__trash__trash_task_purge_impl(port, ptr, rust_vec_len, data_len),
+        191 => wire__crate__api__trash__trash_task_restore_impl(port, ptr, rust_vec_len, data_len),
+        192 => wire__crate__api__trash__trash_tasks_list_impl(port, ptr, rust_vec_len, data_len),
+        193 => wire__crate__api__widget__widget_todo_query_impl(port, ptr, rust_vec_len, data_len),
+        194 => wire__crate__api__widget__widget_todo_toggle_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }

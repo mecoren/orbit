@@ -2,6 +2,8 @@
 // crates/orbit-core/src/api/asset_api.rs——同任务同内容幂等（同 link）、
 // 跨任务内容寻址共享 hash、上限 20、空内容拒绝、移除后列表为空。
 // 与桌面 ipc-mock 的 task_attachment_* 同构。
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
@@ -64,6 +66,28 @@ void main() {
       );
       expect(
         () => bridge.taskAttachmentAdd(task.id, 'e.txt', 'text/plain', <int>[]),
+        throwsException,
+      );
+    });
+
+    test('路径入参从磁盘读字节挂载（文件选择器主路径）', () async {
+      final bridge = MockOrbitBridge();
+      final task = await bridge.todoTaskCreate(
+        TodoTaskCreateInput(title: '路径挂载测试'),
+      );
+      final dir = Directory.systemTemp.createTempSync('orbit-attach-');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final file = File('${dir.path}/note.txt')..writeAsBytesSync([4, 5, 6, 7]);
+
+      final view = await bridge.taskAttachmentAddPath(
+          task.id, 'note.txt', 'text/plain', file.path);
+      expect(view.sizeBytes, 4, reason: '字节数取自磁盘文件而非调用方');
+      expect((await bridge.taskAttachmentsList(task.id)).length, 1);
+
+      // 源文件缺失：与 core 的「读取附件源文件失败」同语义
+      expect(
+        () => bridge.taskAttachmentAddPath(
+            task.id, 'gone.txt', 'text/plain', '${dir.path}/gone.txt'),
         throwsException,
       );
     });

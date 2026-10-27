@@ -6,8 +6,9 @@
 //!   task_attachment_remove / attachments_gc / attachments_unused_list /
 //!   attachments_unused_delete。
 //!
-//! 文件读取由 Dart 侧 file_picker 完成后传 bytes（附件目录 = base_dir/attachments，
-//! 与 sync.rs 的 attachments_dir 同源）。
+//! 文件选择器走路径入参（`task_attachment_add_path`，core 流式读盘，峰值与文件
+//! 大小无关）；拍照等内存里已有字节的来源仍走字节版。附件目录 = base_dir/attachments，
+//! 与 sync.rs 的 attachments_dir 同源。
 
 use orbit_core::api::asset_api;
 
@@ -27,6 +28,32 @@ pub async fn task_attachment_add(
         .await
         .map_err(|e| e.to_string())
         .map(TaskAttachmentView::from)
+}
+
+/// 从本地文件路径流式上传并挂载（文件选择器主路径）
+///
+/// 与 [`task_attachment_add`] 的唯一区别是**不把整文件读成 `List<int>` 过桥**：
+/// core 按 256KiB 块边读边算 SHA-256，Dart/Rust 两侧峰值都与文件大小无关。
+/// 拍照等内存里已有字节的来源仍走字节版。
+pub async fn task_attachment_add_path(
+    task_id: i64,
+    file_name: String,
+    mime_type: String,
+    source_path: String,
+) -> Result<TaskAttachmentView, String> {
+    let (pool, base_dir) = with_state(|s| Ok((s.pool.clone(), s.base_dir.clone())))?;
+    let dir = base_dir.join("attachments").to_string_lossy().to_string();
+    asset_api::add_task_attachment_from_path(
+        &pool,
+        &dir,
+        task_id,
+        &file_name,
+        &mime_type,
+        std::path::Path::new(&source_path),
+    )
+    .await
+    .map_err(|e| e.to_string())
+    .map(TaskAttachmentView::from)
 }
 
 /// 列出任务全部附件（含本地缓存状态）

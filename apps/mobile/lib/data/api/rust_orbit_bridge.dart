@@ -1005,6 +1005,18 @@ class RustOrbitBridge implements OrbitBridge {
   }
 
   @override
+  Future<TaskAttachmentView> taskAttachmentAddPath(
+      int taskId, String fileName, String mimeType, String sourcePath) async {
+    final r = await gen_asset.taskAttachmentAddPath(
+      taskId: taskId,
+      fileName: fileName,
+      mimeType: mimeType,
+      sourcePath: sourcePath,
+    );
+    return _mapAttachment(r);
+  }
+
+  @override
   Future<List<TaskAttachmentView>> taskAttachmentsList(int taskId) async {
     final rows = await gen_asset.taskAttachmentsList(taskId: taskId);
     return rows.map(_mapAttachment).toList();

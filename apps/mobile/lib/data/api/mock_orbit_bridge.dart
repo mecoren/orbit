@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
@@ -1692,40 +1693,51 @@ class MockOrbitBridge implements OrbitBridge {
   @override
   Future<TaskAttachmentView> taskAttachmentAdd(
       int taskId, String fileName, String mimeType, List<int> data) {
+    return _delay(() => _addAttachment(taskId, fileName, mimeType, data));
+  }
+
+  @override
+  Future<TaskAttachmentView> taskAttachmentAddPath(
+      int taskId, String fileName, String mimeType, String sourcePath) {
     return _delay(() {
-      if (data.isEmpty) throw Exception('附件内容为空');
-      if (data.length > 50 * 1024 * 1024) throw Exception('附件超过单文件上限 50MB');
-      final task = store.tasks[taskId];
-      if (task == null) throw Exception('task $taskId not found');
-      // 简化内容指纹（djb2）保证同内容同键，幂等去重
-      var h = 5381;
-      for (final b in data) {
-        h = ((h << 5) + h + b) & 0x7fffffff;
-      }
-      final hash = h.toRadixString(16).padLeft(8, '0');
-      final dup = store.attachments.values
-          .where((a) => a['task_id'] == taskId && a['hash'] == hash)
-          .toList();
-      if (dup.isNotEmpty) return _mapMockAttachment(dup.first);
-      if (store.attachments.values
-              .where((a) => a['task_id'] == taskId)
-              .length >=
-          20) {
-        throw Exception('单任务附件数已达上限 20');
-      }
-      final link = {
-        'link_id': store.id,
-        'link_uuid': 'att-${DateTime.now().millisecondsSinceEpoch}',
-        'task_id': taskId,
-        'hash': hash,
-        'original_name': fileName,
-        'mime_type': mimeType,
-        'size_bytes': data.length,
-        'is_local_cached': 1,
-      };
-      store.attachments[link['link_id'] as int] = link;
-      return _mapMockAttachment(link);
+      final file = File(sourcePath);
+      if (!file.existsSync()) throw Exception('读取附件源文件失败');
+      return _addAttachment(taskId, fileName, mimeType, file.readAsBytesSync());
     });
+  }
+
+  TaskAttachmentView _addAttachment(
+      int taskId, String fileName, String mimeType, List<int> data) {
+    if (data.isEmpty) throw Exception('附件内容为空');
+    if (data.length > 50 * 1024 * 1024) throw Exception('附件超过单文件上限 50MB');
+    final task = store.tasks[taskId];
+    if (task == null) throw Exception('task $taskId not found');
+    // 简化内容指纹（djb2）保证同内容同键，幂等去重
+    var h = 5381;
+    for (final b in data) {
+      h = ((h << 5) + h + b) & 0x7fffffff;
+    }
+    final hash = h.toRadixString(16).padLeft(8, '0');
+    final dup = store.attachments.values
+        .where((a) => a['task_id'] == taskId && a['hash'] == hash)
+        .toList();
+    if (dup.isNotEmpty) return _mapMockAttachment(dup.first);
+    if (store.attachments.values.where((a) => a['task_id'] == taskId).length >=
+        20) {
+      throw Exception('单任务附件数已达上限 20');
+    }
+    final link = {
+      'link_id': store.id,
+      'link_uuid': 'att-${DateTime.now().millisecondsSinceEpoch}',
+      'task_id': taskId,
+      'hash': hash,
+      'original_name': fileName,
+      'mime_type': mimeType,
+      'size_bytes': data.length,
+      'is_local_cached': 1,
+    };
+    store.attachments[link['link_id'] as int] = link;
+    return _mapMockAttachment(link);
   }
 
   @override

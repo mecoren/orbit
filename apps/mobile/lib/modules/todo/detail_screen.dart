@@ -2400,14 +2400,32 @@ class _AttachmentsSectionState extends ConsumerState<_AttachmentsSection> {
     }
   }
 
+  /// 文件来源走路径入参：core 流式读盘，不把整份字节读进 Dart 堆
+  Future<void> _uploadPath(String name, String path, String source) async {
+    setState(() => _busy = true);
+    try {
+      await ref.read(orbitBridgeProvider).taskAttachmentAddPath(
+            widget.taskId,
+            name,
+            _mimeFromName(name),
+            path,
+          );
+      await _load();
+      if (mounted) WaitToast.success('已添加附件（$source）');
+    } catch (e) {
+      if (mounted) WaitToast.destructive('附件上传失败');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _addFile() async {
     if (_busy) return;
     final result = await FilePicker.platform.pickFiles(allowMultiple: false);
-    final path = result?.files.single.path;
+    final file = result?.files.single;
+    final path = file?.path;
     if (path == null) return;
-    final name = result!.files.single.name;
-    final bytes = await File(path).readAsBytes();
-    await _uploadBytes(name, bytes, '文件');
+    await _uploadPath(file!.name, path, '文件');
   }
 
   /// 拍照添加附件（相机直拍；取消静默返回，无权限时提示）

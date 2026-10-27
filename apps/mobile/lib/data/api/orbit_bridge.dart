@@ -513,9 +513,16 @@ abstract class OrbitBridge {
 
   // ── 任务附件（内容寻址：上传/列表/读取/卸下）──
 
-  /// 上传并挂载附件（bytes 由 file_picker 读得；单任务 20 个/单文件 50MB）
+  /// 上传并挂载附件（内存已有字节的来源：拍照/分享；单任务 20 个/单文件 50MB）
   Future<TaskAttachmentView> taskAttachmentAdd(
       int taskId, String fileName, String mimeType, List<int> data);
+
+  /// 从本地文件路径挂载附件（文件选择器主路径）
+  ///
+  /// 不经 Dart 读整份字节：core 按 256KiB 块流式读盘并算 SHA-256，调用方峰值
+  /// 与文件大小无关。`sourcePath` 为 file_picker 返回的临时路径。
+  Future<TaskAttachmentView> taskAttachmentAddPath(
+      int taskId, String fileName, String mimeType, String sourcePath);
 
   /// 任务附件列表（含 isLocalCached 状态）
   Future<List<TaskAttachmentView>> taskAttachmentsList(int taskId);
