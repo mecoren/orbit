@@ -1,47 +1,114 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../core/theme/icon_map.dart';
+import '../../data/providers/bridge_provider.dart';
 import '../../shared/widgets/shadcn/orbit_card.dart';
+import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
+import '../../shared/widgets/shadcn/orbit_toast.dart';
+import 'update_check.dart';
 
 /// 关于页 /about（设置页关于卡入口）
 ///
 /// 三分区：品牌 + 版本（package_info_plus 真实构建版本，不硬编码）+
 /// 更新日志（与 CHANGELOG.md / changelog.ts 同源要点）+
 /// 开源许可（showLicensePage 系统许可页）。
-class AboutPage extends StatefulWidget {
+class AboutPage extends ConsumerStatefulWidget {
   const AboutPage({super.key});
 
   @override
-  State<AboutPage> createState() => _AboutPageState();
+  ConsumerState<AboutPage> createState() => _AboutPageState();
 }
 
-class _AboutPageState extends State<AboutPage> {
+class _AboutPageState extends ConsumerState<AboutPage> {
   String _version = '…';
+
+  /// 纯版本号（不带 build 号），用于与发布清单比较
+  String _currentVersion = '';
+  bool _checking = false;
 
   @override
   void initState() {
     super.initState();
-    PackageInfo.fromPlatform().then((info) {
-      if (mounted) {
-        setState(() => _version = '${info.version}+${info.buildNumber}');
-      }
-    }).catchError((_) {});
+    PackageInfo.fromPlatform()
+        .then((info) {
+          if (!mounted) return;
+          setState(() {
+            _version = '${info.version}+${info.buildNumber}';
+            _currentVersion = info.version;
+          });
+        })
+        .catchError((_) {});
   }
 
+  /// 检查更新（#107）：只在点击时请求一次；有新版本给「打开发布页」，
+  /// 失败同样给发布页兜底——不做静默轮询、不下载安装包。
+  Future<void> _checkUpdate() async {
+    if (_checking) return;
+    setState(() => _checking = true);
+    try {
+      final info = await ref.read(orbitBridgeProvider).checkLatestRelease();
+      if (!mounted) return;
+      if (isNewerVersion(info.version, _currentVersion)) {
+        final notes = info.notes?.trim() ?? '';
+        final ok = await showConfirmBottomSheet(
+          context,
+          title: '发现新版本 ${info.version}',
+          message: [
+            if (info.pubDate != null && info.pubDate!.isNotEmpty)
+              '发布于 ${info.pubDate}',
+            notes.isNotEmpty ? notes : '前往发布页查看更新说明与下载。',
+          ].join('\n\n'),
+          confirmLabel: '打开发布页',
+        );
+        if (ok == true && mounted) {
+          await launchUrl(
+            Uri.parse(info.downloadUrl),
+            mode: LaunchMode.externalApplication,
+          );
+        }
+      } else {
+        WaitToast.info('已是最新版本（$_currentVersion）');
+      }
+    } catch (_) {
+      if (!mounted) return;
+      final ok = await showConfirmBottomSheet(
+        context,
+        title: '检查更新失败',
+        message: '网络不可用或发布清单暂不可达，可前往发布页手动查看最新版本。',
+        confirmLabel: '打开发布页',
+      );
+      if (ok == true && mounted) {
+        await launchUrl(
+          Uri.parse('https://github.com/mecoren/orbit/releases/latest'),
+          mode: LaunchMode.externalApplication,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _checking = false);
+    }
+  }
+
+  /// 最近版本要点（与仓库 CHANGELOG.md 同源；发版时同步更新，
+  /// 不写「Unreleased」——关于页是用户可见的已发布说明）
   static const _changelog = <Map<String, String>>[
     {
-      'version': 'Unreleased',
-      'summary': '移动端补齐：FRB 桥 10 函数缺口、筛选器七键抽屉、详情关联搜索、附件拍照、外观三态、通知历史、关于页真实版本',
+      'version': '0.6.0（2026-10-26）',
+      'summary':
+          '平板/横屏适配、强调色自定义、存储清理（未使用附件/过期回收站）、'
+          '检查更新、保存筛选器编辑与窗口化下推',
     },
     {
       'version': '0.1.0（2026-09-19）',
-      'summary': '首个版本：本地优先 + 端到端加密的跨平台待办——双端全功能、云同步/备份、附件、统计与 ICS/CSV 数据出口一次到位',
+      'summary':
+          '首个版本：本地优先 + 端到端加密的跨平台待办——双端全功能、云同步/备份、附件、统计与 ICS/CSV 数据出口一次到位',
     },
   ];
 
@@ -54,13 +121,13 @@ class _AboutPageState extends State<AboutPage> {
           Positioned.fill(
             child: ListView(
               padding: EdgeInsets.only(
-                top: MediaQuery.of(context).padding.top +
+                top:
+                    MediaQuery.of(context).padding.top +
                     OrbitPageHeader.rowHeight +
                     AppDimens.space16,
                 left: AppDimens.pageInline,
                 right: AppDimens.pageInline,
-                bottom:
-                    AppDimens.gestureInsetFallback + AppDimens.space32,
+                bottom: AppDimens.gestureInsetFallback + AppDimens.space32,
               ),
               children: [
                 Column(
@@ -89,6 +156,18 @@ class _AboutPageState extends State<AboutPage> {
                         color: colors.secondaryText,
                       ),
                     ),
+                    const SizedBox(height: AppDimens.space4),
+                    TextButton.icon(
+                      onPressed: _checking ? null : _checkUpdate,
+                      icon: _checking
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(OrbitIcons.refresh, size: 16),
+                      label: Text(_checking ? '检查中…' : '检查更新'),
+                    ),
                   ],
                 ),
                 const SizedBox(height: AppDimens.space16),
@@ -97,15 +176,12 @@ class _AboutPageState extends State<AboutPage> {
                   child: Column(
                     children: [
                       for (var i = 0; i < _changelog.length; i++) ...[
-                        if (i > 0)
-                          const SizedBox(height: AppDimens.space8),
+                        if (i > 0) const SizedBox(height: AppDimens.space8),
                         OrbitCard(
                           fillColor: colors.surfaceSecondary,
-                          padding:
-                              const EdgeInsets.all(AppDimens.space12),
+                          padding: const EdgeInsets.all(AppDimens.space12),
                           child: Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
                                 _changelog[i]['version']!,
@@ -148,8 +224,7 @@ class _AboutPageState extends State<AboutPage> {
                       '数据经端到端同步加密，仅你持有密钥。',
                       style: TextStyle(
                         fontSize: 12,
-                        color: OrbitAccents.themeAccent
-                            .withValues(alpha: 0.9),
+                        color: OrbitAccents.themeAccent.withValues(alpha: 0.9),
                       ),
                     ),
                   ),
@@ -161,9 +236,7 @@ class _AboutPageState extends State<AboutPage> {
             top: 0,
             left: 0,
             right: 0,
-            child: OrbitPageHeader(
-              title: '关于',
-            ),
+            child: OrbitPageHeader(title: '关于'),
           ),
         ],
       ),
