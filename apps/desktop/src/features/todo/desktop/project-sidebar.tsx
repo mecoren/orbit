@@ -371,7 +371,10 @@ export function ProjectSidebar({
     return (
       // 整栏统一滚动（2026-10-10）：小窗高度下窄条内容同样溢出被裁，根列即滚动容器，
       // 原生滚动条走全局标准常显可见（禁 scrollbar-width 非 auto 值）
-      <div className="flex h-full w-12 shrink-0 flex-col items-center gap-1 overflow-y-auto border-r border-border bg-card/30 py-3">
+      <nav
+        aria-label="侧栏导航"
+        className="flex h-full w-12 shrink-0 flex-col items-center gap-1 overflow-y-auto border-r border-border bg-card/30 py-3"
+      >
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -524,7 +527,7 @@ export function ProjectSidebar({
             );
           })}
         </div>
-      </div>
+      </nav>
     );
   }
 
@@ -534,7 +537,10 @@ export function ProjectSidebar({
     // 项目区挤到 0 高（723×378 实测 viewport 0px、30 个项目行全部不可达），项目列表里的
     // Radix ScrollArea 滚动条又是 hover 才渲染的悬浮条——用户感知「没有滑动条」。
     // 取舍：「项目 +」标题与顶部「视图」头随内容滚走（不再钉住）。
-    <div className="flex h-full w-56 shrink-0 flex-col overflow-y-auto border-r border-border bg-card/30">
+    <nav
+      aria-label="侧栏导航"
+      className="flex h-full w-56 shrink-0 flex-col overflow-y-auto border-r border-border bg-card/30"
+    >
       {/* 展开态头部：折叠钮（#21 手动覆盖入口） */}
       <div className="flex items-center justify-between px-3 pt-3">
         <span className="text-xs uppercase tracking-wide text-muted-foreground">视图</span>
@@ -853,7 +859,7 @@ export function ProjectSidebar({
         onClose={() => setEditTarget(null)}
         onSaved={() => void refetchProjects()}
       />
-    </div>
+    </nav>
   );
 }
 

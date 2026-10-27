@@ -123,7 +123,13 @@ export function LogbookView({
   };
 
   return (
-    <div ref={scrollRef} onScroll={handleScroll} className="min-h-0 flex-1 overflow-y-auto p-2">
+    <div
+      ref={scrollRef}
+      onScroll={handleScroll}
+      role="region"
+      aria-label="已完成任务（Logbook）"
+      className="min-h-0 flex-1 overflow-y-auto p-2"
+    >
       <div style={{ height: virtualizer.getTotalSize(), position: "relative", width: "100%" }}>
         {virtualizer.getVirtualItems().map((vi) => {
           const item = flat[vi.index];

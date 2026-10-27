@@ -96,7 +96,7 @@ export function ReviewPanel() {
   const due = dueQuery.data;
 
   return (
-    <div className="flex h-full flex-col">
+    <div role="region" aria-label="回顾中心" className="flex h-full flex-col">
       {/* 工具栏 */}
       <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
         <div className="flex items-baseline gap-2">

@@ -395,7 +395,11 @@ export default function TodoShell() {
           />
 
           {/* 中间区：路由出口（任务面板 / 回收站面板） */}
-          <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <div
+            role="region"
+            aria-label="任务面板"
+            className="flex min-w-0 flex-1 flex-col overflow-hidden"
+          >
             <Outlet />
           </div>
 
