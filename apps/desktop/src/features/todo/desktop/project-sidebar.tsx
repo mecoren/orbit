@@ -743,16 +743,19 @@ export function ProjectSidebar({
                       type="button"
                       aria-expanded={archivedOpen}
                       onClick={() => setArchivedOpen((v) => !v)}
-                      className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent/50"
+                      className="flex w-full items-center gap-2 rounded-md py-1.5 pl-3 pr-2 text-sm text-muted-foreground hover:bg-accent/50"
                     >
-                      {archivedOpen ? (
-                        <ChevronDown className="size-3.5" />
-                      ) : (
-                        <ChevronRight className="size-3.5" />
-                      )}
                       <Archive className="size-3.5" />
                       <span>已归档</span>
                       <span className="text-xs tabular-nums">{archivedProjects.length}</span>
+                      {/* 折叠箭头钉在行尾：与项目行（hasChildren 箭头）同版式，size-4 槽居中 */}
+                      <span className="ml-auto flex size-4 shrink-0 items-center justify-center">
+                        {archivedOpen ? (
+                          <ChevronDown className="size-3.5" />
+                        ) : (
+                          <ChevronRight className="size-3.5" />
+                        )}
+                      </span>
                     </button>
                     {archivedOpen && (
                       <div className="space-y-0.5 pl-2">
@@ -760,7 +763,7 @@ export function ProjectSidebar({
                           <div
                             key={p.id}
                             className={cn(
-                              "group flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm",
+                              "group flex w-full items-center gap-2 rounded-md py-1.5 pl-3 pr-2 text-sm",
                               effectiveProjectId === p.id
                                 ? "bg-primary/10 font-medium text-primary"
                                 : "hover:bg-accent/50",
