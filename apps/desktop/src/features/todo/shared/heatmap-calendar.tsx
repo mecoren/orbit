@@ -36,10 +36,14 @@ const CELL_SIZE = 12;
 const CELL_GAP = 2;
 const WEEKDAY_LABEL_WIDTH = 30;
 const MONTH_LABEL_HEIGHT = 18;
-// shadcn Button size="sm" + w-14（56px）视觉宽度（wait-home 同款）
-const YEAR_PILL_WIDTH = 56;
 /** 年份栏与热力图主体之间的 flex 间距（px） */
 const FLEX_GAP = 12;
+/**
+ * 固定排版槽数：闰年且 1/1 为周日时一年占 54 列（其余年 53 列）。
+ * 所有年份统一按 54 槽算格宽——否则 53/54 列年份切换时格宽差 1px，
+ * 格阵高度跟着变，页面滚动条随之出现/消失，整页内容上下跳一次。
+ */
+const MAX_COLUMNS = 54;
 
 /** 4 档色阶 alpha（0 档 = muted 空格；与 wait-home 22/45/68/90% 一致） */
 const HEAT_ALPHAS = [0, 0.22, 0.45, 0.68, 0.9] as const;
@@ -74,18 +78,21 @@ export function HeatmapCalendar({ cells, year, years, onYearChange }: HeatmapCal
     return layoutHeatmap(counts, year);
   }, [cells, year]);
 
-  // 动态格宽：撑满年份栏之外的可用宽度（最小 12px，不够时横向滚动）。
-  // blockWidth 未测量时回退默认 12px（首帧），测量到达后重铺；
+  // 排版槽数统一取 MAX_COLUMNS：所有年份格宽、格阵宽高完全一致
+  const layoutColumns = Math.max(totalColumns, MAX_COLUMNS);
+
+  // 动态格宽：撑满滚动区可用宽度（最小 12px，不够时该层自己横向滚动）。
+  // blockWidth = 滚动容器的 clientWidth（年份栏已在 flex 布局中扣除，不再手动减）；
+  // 未测量时回退默认 12px（首帧），测量到达后重铺；
   // 向下取整保证合计宽度 ≤ 可用宽度（ceil 会差 1~Npx 触发无谓横滚）
   const dynamicCellSize = useMemo(() => {
-    if (blockWidth === 0 || totalColumns <= 0) return CELL_SIZE;
-    const available =
-      blockWidth - YEAR_PILL_WIDTH - FLEX_GAP - WEEKDAY_LABEL_WIDTH - CELL_GAP;
-    const computed = (available - (totalColumns - 1) * CELL_GAP) / totalColumns;
+    if (blockWidth === 0 || layoutColumns <= 0) return CELL_SIZE;
+    const available = blockWidth - WEEKDAY_LABEL_WIDTH - CELL_GAP;
+    const computed = (available - (layoutColumns - 1) * CELL_GAP) / layoutColumns;
     return Math.max(CELL_SIZE, Math.floor(computed));
-  }, [blockWidth, totalColumns]);
+  }, [blockWidth, layoutColumns]);
 
-  const gridWidth = totalColumns * (dynamicCellSize + CELL_GAP) - CELL_GAP;
+  const gridWidth = layoutColumns * (dynamicCellSize + CELL_GAP) - CELL_GAP;
   const gridHeight = 7 * (dynamicCellSize + CELL_GAP) - CELL_GAP;
 
   // 年份按钮降序（最新年在顶部）；当前选中不在列表也并入（防 core 回退口径漂移）
@@ -97,11 +104,13 @@ export function HeatmapCalendar({ cells, year, years, onYearChange }: HeatmapCal
 
   return (
     <>
-      {/* 滚动条走全局 index.css 标准（10px 透明轨道主题色圆角滑块）；
+      {/* 年份列固定在右侧、不参与横向滚动：窄窗口下网格走横滚时，年份按钮
+          不会被推出可视区（此前整行一起滚，2023 这类靠后的年份会滚到屏幕外）。
+          滚动条走全局 index.css 标准（10px 透明轨道主题色圆角滑块）；
           不可设 scrollbar-width——非 auto 值会禁用 webkit 自定义退化为系统原生条 */}
-      <div ref={setBlockEl} className="w-full overflow-x-auto pb-1">
-      {/* 子项全部 shrink-0：行宽自然 = 内容宽，窄卡片时溢出由外层横滚承接 */}
-      <div className="flex items-start" style={{ gap: FLEX_GAP }}>
+      <div className="flex w-full items-start" style={{ gap: FLEX_GAP }}>
+      <div ref={setBlockEl} className="min-w-0 flex-1 overflow-x-auto pb-1">
+      {/* 子项全部 shrink-0：行宽自然 = 内容宽，窄卡片时溢出由本层横滚承接 */}
       <div className="shrink-0" style={{ width: WEEKDAY_LABEL_WIDTH + CELL_GAP + gridWidth }}>
           {/* 月份标签行 */}
           <div
@@ -159,7 +168,7 @@ export function HeatmapCalendar({ cells, year, years, onYearChange }: HeatmapCal
               style={{
                 width: gridWidth,
                 height: gridHeight,
-                gridTemplateColumns: `repeat(${totalColumns}, ${dynamicCellSize}px)`,
+                gridTemplateColumns: `repeat(${layoutColumns}, ${dynamicCellSize}px)`,
                 gridTemplateRows: `repeat(7, ${dynamicCellSize}px)`,
                 gap: CELL_GAP,
               }}
@@ -189,18 +198,13 @@ export function HeatmapCalendar({ cells, year, years, onYearChange }: HeatmapCal
             </div>
           </div>
         </div>
+      </div>
 
       {/* 右侧年份按钮（outline + 选中态 border-primary/bg-primary/5）。
-          隐藏滚动条三件套对齐全局 index.css 的 ScrollArea viewport 同款写法
-          （scrollbar-width:none + display:none 双通道，目标均为隐藏，
-          与全项目口径一致） */}
-      <div
-        className="flex shrink-0 flex-col items-stretch gap-1 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-        style={{
-          maxHeight: MONTH_LABEL_HEIGHT + CELL_GAP + gridHeight,
-          maxWidth: YEAR_PILL_WIDTH,
-        }}
-      >
+          不设高度上限、不内滚：年份数量跟着历史数据长（本次示例数据就有 4 个年份），
+          一旦 maxHeight 低于按钮总高，最后一个年份会被裁掉一半且没有滚动条提示
+          （隐藏滚动条是既定口径），所以这里让列自然撑高、由卡片容纳。 */}
+      <div className="flex shrink-0 flex-col items-stretch gap-1">
         {sortedYears.map((y) => {
           const selected = y === year;
           return (
@@ -213,7 +217,8 @@ export function HeatmapCalendar({ cells, year, years, onYearChange }: HeatmapCal
               aria-pressed={selected}
               aria-label={`切换到 ${y} 年`}
               className={cn(
-                "w-14 px-2 py-0.5 text-xs tabular-nums",
+                // h-6：4–5 个年份能在网格高度内排下，不至于把卡片撑得太高
+                "h-6 w-14 px-2 py-0 text-[11px] leading-none tabular-nums",
                 selected
                   ? "border-primary bg-primary/5 text-primary"
                   : "text-muted-foreground hover:bg-accent/50",
@@ -223,7 +228,6 @@ export function HeatmapCalendar({ cells, year, years, onYearChange }: HeatmapCal
             </Button>
           );
         })}
-      </div>
       </div>
       </div>
 

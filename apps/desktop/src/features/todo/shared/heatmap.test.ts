@@ -60,6 +60,22 @@ describe("layoutHeatmap", () => {
     expect(cells[0]).toMatchObject({ day: "2025-01-01", row: 3 });
   });
 
+  it("末日为周日时总列数不多算一列（2023 全年 53 列）", () => {
+    const { cells, totalColumns } = layoutHeatmap(new Map(), 2023, NOW);
+    expect(cells.length).toBe(365);
+    // 2023-01-01 周日 → 首列只有周日一格；2023-12-31 也是周日
+    expect(cells[0]).toMatchObject({ day: "2023-01-01", row: 7, col: 1 });
+    expect(cells[364]).toMatchObject({ day: "2023-12-31", row: 7, col: 53 });
+    // 此前用循环游标回报 54，导致 2023 比 53 列的年份格宽少 1px、页面高度跳动
+    expect(totalColumns).toBe(53);
+  });
+
+  it("闰年且首日为周日占 54 列（排版统一按 54 槽的最坏情况）", () => {
+    const { cells, totalColumns } = layoutHeatmap(new Map(), 2012, NOW);
+    expect(cells.length).toBe(366);
+    expect(totalColumns).toBe(54);
+  });
+
   it("月份标签按最小列距过滤 + total 累计窗口内完成数", () => {
     const counts = new Map([
       ["2026-09-10", 2],

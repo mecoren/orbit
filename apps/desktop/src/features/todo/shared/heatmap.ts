@@ -125,7 +125,9 @@ export function layoutHeatmap(
   return {
     cells: cells.map((c) => ({ ...c, level: heatLevel(c.value, maxValue) })),
     monthLabels,
-    totalColumns: col,
+    // 用末日实际所在列，而不是循环结束后的游标：末日恰为周日时会先 ++col
+    // 再退出，多算一列（2023 全年会报 54 列），年份间格宽随之差 1px
+    totalColumns: cells.length > 0 ? cells[cells.length - 1].col : 1,
     total,
   };
 }
