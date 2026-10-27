@@ -114,6 +114,8 @@ cd apps/desktop/src-tauri && cargo check   # 桌面壳单独检查（嵌套 work
 # 是 FRB codegen 的既定步骤，两者不要混用）
 flutter_rust_bridge_codegen generate \
   --config-file crates/orbit-flutter/flutter_rust_bridge.yaml   # FRB codegen 后须 cargo fmt --all
+pnpm frb                  # 上面两步 + 仅格式化生成物 + git 差异自检（等价 CI 门禁，改了桥层就跑这个；
+                          # 漏跑 fmt 时 CI 必红的差异永远只是那两行 use 排序，见 scripts/frb-codegen.mjs）
 
 # 移动端（apps/mobile）
 flutter analyze
@@ -164,7 +166,7 @@ pnpm bump:check           # 只校验一致性（零写入，CI/本地通用）
 - 错误走 `CoreResult<T>` / `String`（桥层 map_err 透传给前端可读形式）；测试内 unwrap 放宽。
 - 时间运算在本地时区整数域做（day index = `num_days_from_ce() - 719_163`）；**不要**用 ordinal0+year*366 拼接（跨年边界不单调，曾致 366 格错位）。
 - 单元测试写对应 crate 内 `#[cfg(test)] mod tests` + 纯函数独立 `mod xxx_fn_tests`；内存库 `sqlite::memory:` + `migrate!` 建 fixture。
-- FRB：改桥接 API 后必须跑 codegen + `cargo fmt --all` 再提交（CI 门禁校验生成物一致性）；codegen 会顺带同步 rust 源注释到 dart 产物。
+- FRB：改桥接 API 后必须跑 codegen + `cargo fmt --all` 再提交（CI 门禁校验生成物一致性；直接 `pnpm frb` 一次跑完 codegen + 生成物格式化 + 差异自检）；codegen 会顺带同步 rust 源注释到 dart 产物。
 - FRB 生成物不只看 `pub` 函数面：`api/<domain>.rs` 里**增删/改名任何函数（含私有 fn）**都会改写 dart 产物首行那句「ignored because they are not marked as `pub`」注释清单，漏重生成即门禁红（F24 删桥层私有 `now_ms` 未重生成踩坑）。判据：跑完 codegen 后 `git diff apps/mobile/lib/src/rust crates/orbit-flutter/src/frb_generated.rs` 必须为空；收尾**只 add 生成物路径**——`cargo fmt --all` 会顺带重排 orbit-core 若干既有非 rustfmt-clean 文件（噪音 diff，不属于本批改动）。
 
 ## 桌面前端约定
