@@ -48,6 +48,8 @@ const TABLE_QUERY_KEYS: Record<string, string[][]> = {
   todo_task_attachments: [["task-attachments"], ["todo_task_attachments", "flags"]],
   todo_templates: [["templates"]],
   todo_saved_filters: [["saved-filters"]],
+  // 冲突记录由同步引擎写入（恢复/忽略/清理后角标与列表一并收敛）
+  sync_conflicts: [["sync_conflicts"]],
 };
 
 /**

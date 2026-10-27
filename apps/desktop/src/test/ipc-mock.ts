@@ -1756,6 +1756,15 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
     for (const s of db.subtasks.filter((x) => !x.is_deleted && !x.done)) ids.add(s.task_id);
     return ipcClone([...ids].sort((x, y) => x - y).map((task_id) => ({ task_id })));
   },
+  // 任务→「有描述」旗标（与 Rust task_description_flags 同口径：存活行 + 非空描述）
+  task_description_flags: (_a, { db }) =>
+    ipcClone(
+      db.tasks
+        .filter((t) => !t.is_deleted && (t.description ?? "") !== "")
+        .map((t) => t.id)
+        .sort((x, y) => x - y)
+        .map((task_id) => ({ task_id })),
+    ),
 
   // ---- labels / task_labels ----
   todo_labels_list: (_a, { db }) => ipcClone(db.labels),

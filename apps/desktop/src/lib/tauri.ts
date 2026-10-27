@@ -724,6 +724,8 @@ export const taskRemindersProjection = () => invoke<TaskRemindersProjection[]>("
 export const taskDependencyFlags = () => invoke<TaskDependencyFlags[]>("task_dependency_flags");
 export const taskAttachmentFlags = () => invoke<TaskExistenceFlag[]>("task_attachment_flags");
 export const taskOpenSubtaskFlags = () => invoke<TaskExistenceFlag[]>("task_open_subtask_flags");
+/** 任务→「有描述」旗标（列表通道裁剪 description，行内只取有无） */
+export const taskDescriptionFlags = () => invoke<TaskExistenceFlag[]>("task_description_flags");
 
 // ========== M3 安全与同步 ==========
 
@@ -1788,6 +1790,27 @@ export interface DiagnosticsSnapshot {
 /** 采集诊断快照（只读聚合，不触发 db-change） */
 export const diagnosticsSnapshot = () =>
   invoke<DiagnosticsSnapshot>("diagnostics_snapshot");
+
+/**
+ * Mica 云母材质诊断读数（镜像 `mica_cmd::MicaDiagnostics`，serde camelCase）。
+ *
+ * 命令本身会顺带重新断言一次材质（幂等），故只在诊断分区挂载/点刷新时调用。
+ */
+export interface MicaDiagnostics {
+  platform: string;
+  windowsBuild?: number;
+  windowsMajor?: number;
+  windowsMinor?: number;
+  micaSupported: boolean;
+  /** 系统「个性化 → 颜色 → 透明效果」开关；false 时 Mica 不会渲染 */
+  transparencyEnabled?: boolean;
+  topHwnd?: string;
+  hasNoRedirectionBitmap?: boolean;
+  backdropBefore?: number;
+  backdropAfter?: number;
+  applyResult: string;
+}
+export const micaDiagnostics = () => invoke<MicaDiagnostics>("mica_diagnostics");
 
 // ========== 测试数据（仅开发构建；release 命令返回不可用，前端入口 DEV 门禁）==========
 /** 生成规模（镜像 orbit_core::api::dev_seed_api::DevSeedPlan；只暴露任务条数） */

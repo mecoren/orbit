@@ -94,7 +94,11 @@ PagedTaskQuery? buildPagedQuery({
   if (sortKey == TaskSortKey.title) return null;
 
   final now = DateTime.fromMillisecondsSinceEpoch(nowMs);
-  final dayStart = DateTime(now.year, now.month, now.day).millisecondsSinceEpoch;
+  final dayStart = DateTime(
+    now.year,
+    now.month,
+    now.day,
+  ).millisecondsSinceEpoch;
   final dayEnd = dayStart + 86400000;
 
   // 目标互斥优先级与 filterTasks 逐字一致：
@@ -226,7 +230,11 @@ ListFilter mergeSavedFilterConditions(
   }
 
   final now = DateTime.fromMillisecondsSinceEpoch(nowMs);
-  final dayStart = DateTime(now.year, now.month, now.day).millisecondsSinceEpoch;
+  final dayStart = DateTime(
+    now.year,
+    now.month,
+    now.day,
+  ).millisecondsSinceEpoch;
 
   var dueFrom = base.dueFrom;
   var dueTo = base.dueTo;
@@ -250,7 +258,10 @@ ListFilter mergeSavedFilterConditions(
       .toList(growable: false);
   if (condProjects != null) {
     if (condProjects.isEmpty) {
-      // 条件里「没选项目」= 不限，不收缩范围
+      // 空数组 = 匹配不到任何项目（本地 applySavedFilter 的 `contains` 恒 false）。
+      // 表单不选项目时不写这个键，空数组只来自导入/手改的脏条件——按恒假处理，
+      // 与桌面 `mergeSavedFilterConditions` 逐字同义。
+      impossible = true;
     } else if (base.ungrouped == true) {
       impossible = true; // 未分组任务不可能属于某个具体项目
     } else if (projectIds != null) {
@@ -282,8 +293,16 @@ ListFilter mergeSavedFilterConditions(
         for (final id in labelIds)
           if (wanted.contains(id)) id,
       ];
+      // 空交集 ≠ 不过滤：core 里 `label_ids: []` 是「没限制」，必须显式落空结果
+      if (labelIds.isEmpty) impossible = true;
     }
   }
+
+  // ── 优先级：下限取 max（与 priority_eq 在 SQL 里天然 AND） ──
+  final condPriorityMin = (c['priority_min'] as num?)?.toInt();
+  final priorityMin = condPriorityMin == null
+      ? base.priorityMin
+      : math.max(condPriorityMin, base.priorityMin ?? condPriorityMin);
 
   // ── 状态 / 完成态 ──
   var status = base.status;
@@ -336,12 +355,13 @@ ListFilter mergeSavedFilterConditions(
     pageSize: base.pageSize,
     done: done,
     status: status,
-    priorityMin: base.priorityMin,
+    priorityMin: priorityMin,
     priorityEq: base.priorityEq,
     projectId: projectId,
     projectIds: projectIds,
-    favoriteOnly:
-        base.favoriteOnly == true || c['favorite_only'] == true ? true : null,
+    favoriteOnly: base.favoriteOnly == true || c['favorite_only'] == true
+        ? true
+        : null,
     myDayToday: base.myDayToday,
     ungrouped: base.ungrouped,
     excludeDueBefore: base.excludeDueBefore,
@@ -377,77 +397,80 @@ ListFilter mergeSavedFilterConditions(
 /// 主列表**不**带 excludeDueBefore（那会让 queryKey 挂上时间戳、每分钟重拉
 /// 首屏）；两段合并时按 id 去重即可（见 `mergeOverdueFirst`）。
 ListFilter overdueFilterOf(PagedTaskQuery query, int nowMs) => ListFilter(
-      done: false,
-      status: query.filter.status,
-      priorityMin: query.filter.priorityMin,
-      priorityEq: query.filter.priorityEq,
-      projectId: query.filter.projectId,
-      projectIds: query.filter.projectIds,
-      ungrouped: query.filter.ungrouped,
-      favoriteOnly: query.filter.favoriteOnly,
-      myDayToday: query.filter.myDayToday,
-      hasDue: query.filter.hasDue,
-      // 保存筛选器条件必须一起带过来：否则「筛选器只留某标签」时逾期段
-      // 仍会把别的标签行置顶出来（主列表与置顶段各说各话）。
-      labelIds: query.filter.labelIds,
-      hasReminder: query.filter.hasReminder,
-      hasAttachment: query.filter.hasAttachment,
-      hasOpenSubtask: query.filter.hasOpenSubtask,
-      createdFrom: query.filter.createdFrom,
-      doneFrom: query.filter.doneFrom,
-      dueTo: nowMs,
-      sortKey: 'due',
-      sortDir: 'asc',
-    );
+  done: false,
+  status: query.filter.status,
+  priorityMin: query.filter.priorityMin,
+  priorityEq: query.filter.priorityEq,
+  projectId: query.filter.projectId,
+  projectIds: query.filter.projectIds,
+  ungrouped: query.filter.ungrouped,
+  favoriteOnly: query.filter.favoriteOnly,
+  myDayToday: query.filter.myDayToday,
+  hasDue: query.filter.hasDue,
+  // 保存筛选器条件必须一起带过来：否则「筛选器只留某标签」时逾期段
+  // 仍会把别的标签行置顶出来（主列表与置顶段各说各话）。
+  labelIds: query.filter.labelIds,
+  hasReminder: query.filter.hasReminder,
+  hasAttachment: query.filter.hasAttachment,
+  hasOpenSubtask: query.filter.hasOpenSubtask,
+  createdFrom: query.filter.createdFrom,
+  doneFrom: query.filter.doneFrom,
+  dueTo: nowMs,
+  sortKey: 'due',
+  sortDir: 'asc',
+);
 
 /// 列表尾部「已完成」窗口：完成时刻倒序取前 N 条（卡内直显）。
 ListFilter doneCardFilterOf(PagedTaskQuery query) => ListFilter(
-      done: true,
-      projectId: query.filter.projectId,
-      projectIds: query.filter.projectIds,
-      ungrouped: query.filter.ungrouped,
-      favoriteOnly: query.filter.favoriteOnly,
-      myDayToday: query.filter.myDayToday,
-      hasDue: query.filter.hasDue,
-      // 「已完成 N」卡与主窗口共用筛选器条件（标签/存在性/时间下界）
-      labelIds: query.filter.labelIds,
-      hasReminder: query.filter.hasReminder,
-      hasAttachment: query.filter.hasAttachment,
-      hasOpenSubtask: query.filter.hasOpenSubtask,
-      createdFrom: query.filter.createdFrom,
-      doneFrom: query.filter.doneFrom,
-      sortKey: 'done_at',
-      sortDir: 'desc',
-    );
+  done: true,
+  projectId: query.filter.projectId,
+  projectIds: query.filter.projectIds,
+  ungrouped: query.filter.ungrouped,
+  favoriteOnly: query.filter.favoriteOnly,
+  myDayToday: query.filter.myDayToday,
+  hasDue: query.filter.hasDue,
+  // 「已完成 N」卡与主窗口共用筛选器条件（标签/存在性/时间下界）
+  labelIds: query.filter.labelIds,
+  hasReminder: query.filter.hasReminder,
+  hasAttachment: query.filter.hasAttachment,
+  hasOpenSubtask: query.filter.hasOpenSubtask,
+  createdFrom: query.filter.createdFrom,
+  doneFrom: query.filter.doneFrom,
+  sortKey: 'done_at',
+  sortDir: 'desc',
+);
 
 /// Logbook 通道：完成时刻倒序键集分页。
 ListFilter logbookFilterOf(PagedTaskQuery query) => ListFilter(
-      done: true,
-      status: query.filter.status,
-      priorityMin: query.filter.priorityMin,
-      priorityEq: query.filter.priorityEq,
-      projectId: query.filter.projectId,
-      projectIds: query.filter.projectIds,
-      ungrouped: query.filter.ungrouped,
-      favoriteOnly: query.filter.favoriteOnly,
-      myDayToday: query.filter.myDayToday,
-      hasDue: query.filter.hasDue,
-      // Logbook 与主窗口同一套筛选器条件（含 done_from 的时间下界）
-      labelIds: query.filter.labelIds,
-      hasReminder: query.filter.hasReminder,
-      hasAttachment: query.filter.hasAttachment,
-      hasOpenSubtask: query.filter.hasOpenSubtask,
-      createdFrom: query.filter.createdFrom,
-      doneFrom: query.filter.doneFrom,
-      sortKey: 'done_at',
-      sortDir: 'desc',
-    );
+  done: true,
+  status: query.filter.status,
+  priorityMin: query.filter.priorityMin,
+  priorityEq: query.filter.priorityEq,
+  projectId: query.filter.projectId,
+  projectIds: query.filter.projectIds,
+  ungrouped: query.filter.ungrouped,
+  favoriteOnly: query.filter.favoriteOnly,
+  myDayToday: query.filter.myDayToday,
+  hasDue: query.filter.hasDue,
+  // Logbook 与主窗口同一套筛选器条件（含 done_from 的时间下界）
+  labelIds: query.filter.labelIds,
+  hasReminder: query.filter.hasReminder,
+  hasAttachment: query.filter.hasAttachment,
+  hasOpenSubtask: query.filter.hasOpenSubtask,
+  createdFrom: query.filter.createdFrom,
+  doneFrom: query.filter.doneFrom,
+  sortKey: 'done_at',
+  sortDir: 'desc',
+);
 
 /// 逾期段与主窗口合并：按 id 去重，逾期行在前。
 ///
 /// 主窗口里同一行仍在其原排序位置（逾期只是视觉置顶），不去重会渲染两份
 /// ——两枚 checkbox 是灾难（桌面同款注释）。
-List<TodoTask> mergeOverdueFirst(List<TodoTask> overdue, List<TodoTask> window) {
+List<TodoTask> mergeOverdueFirst(
+  List<TodoTask> overdue,
+  List<TodoTask> window,
+) {
   if (overdue.isEmpty) return window;
   final pinned = {for (final t in overdue) t.id};
   return [

@@ -14,26 +14,26 @@ final int _dayEnd = _dayStart + 86400000;
 
 /// 最小列表行（fromListJson 要求全部列表列存在，缺一会 cast null 崩）
 TodoTask _task(int id) => TodoTask.fromListJson(<String, dynamic>{
-      'id': id,
-      'title': 't$id',
-      'description': null,
-      'project_id': null,
-      'priority': 0,
-      'status': 'pending',
-      'done': 0,
-      'done_at': null,
-      'due_date': null,
-      'start_date': null,
-      'repeat_mode': 0,
-      'percent_done': 0,
-      'position': 0,
-      'is_favorite': 0,
-      'my_day_date': null,
-      'duration_minutes': null,
-      'is_deleted': 0,
-      'created_at': 1,
-      'updated_at': 1,
-    });
+  'id': id,
+  'title': 't$id',
+  'description': null,
+  'project_id': null,
+  'priority': 0,
+  'status': 'pending',
+  'done': 0,
+  'done_at': null,
+  'due_date': null,
+  'start_date': null,
+  'repeat_mode': 0,
+  'percent_done': 0,
+  'position': 0,
+  'is_favorite': 0,
+  'my_day_date': null,
+  'duration_minutes': null,
+  'is_deleted': 0,
+  'created_at': 1,
+  'updated_at': 1,
+});
 
 PagedTaskQuery? _build({
   TaskFilterInput input = const TaskFilterInput(),
@@ -41,15 +41,14 @@ PagedTaskQuery? _build({
   TaskSortKey sortKey = TaskSortKey.manual,
   TaskSortDir? sortDir,
   String? savedConditions,
-}) =>
-    buildPagedQuery(
-      input: input,
-      filters: filters,
-      sortKey: sortKey,
-      sortDir: sortDir,
-      savedConditions: savedConditions,
-      nowMs: _now,
-    );
+}) => buildPagedQuery(
+  input: input,
+  filters: filters,
+  sortKey: sortKey,
+  sortDir: sortDir,
+  savedConditions: savedConditions,
+  nowMs: _now,
+);
 
 void main() {
   group('buildPagedQuery：回退全量的组合', () {
@@ -71,17 +70,51 @@ void main() {
       expect(q.filter.labelIds, [3]);
       expect(q.filter.hasReminder, isTrue);
     });
+
+    test('priority_min 条件必须下推（不能被丢弃，与桌面 #107 同口径）', () {
+      final q = _build(savedConditions: '{"priority_min":3}')!;
+      expect(q.filter.priorityMin, 3);
+    });
+
+    test('标签交集为空 → 空结果（core 里空 label_ids 是「不过滤」）', () {
+      final q = _build(
+        filters: const TaskListFilters(labelId: 1),
+        savedConditions: '{"label_ids":[2]}',
+      )!;
+      // 恒假集合是唯一表达：空 label_ids 会被 core 当成「没限制」
+      expect(q.filter.projectIds, isEmpty);
+      expect(q.filter.labelIds, isNull);
+    });
+
+    test('done_from 与主窗口 done=false 冲突 → 空结果', () {
+      final q = _build(savedConditions: '{"done_from":1234}')!;
+      expect(q.filter.projectIds, isEmpty);
+    });
+
+    test('条件里空项目集合（脏数据）→ 空结果，与本地过滤同义', () {
+      final q = _build(savedConditions: '{"project_ids":[]}')!;
+      expect(q.filter.projectIds, isEmpty);
+    });
+
+    test('due_overdue 落成 done=false 与截止上界=今日零点', () {
+      final q = _build(savedConditions: '{"due_overdue":true}')!;
+      expect(q.filter.done, isFalse);
+      expect(q.filter.dueTo, _dayStart);
+    });
   });
 
   group('buildPagedQuery：快捷视图 → ListFilter', () {
     test('全部/未完成：主窗口只装未完成行（完成行由完成卡承载）', () {
-      final all = _build(input: const TaskFilterInput(quickView: QuickViewKey.all))!;
+      final all = _build(
+        input: const TaskFilterInput(quickView: QuickViewKey.all),
+      )!;
       expect(all.filter.done, isFalse);
       expect(all.sortKey, 'manual');
       expect(all.sortDir, 'asc');
 
-      final undone =
-          _build(input: const TaskFilterInput(quickView: QuickViewKey.undone))!;
+      final undone = _build(
+        input: const TaskFilterInput(quickView: QuickViewKey.undone),
+      )!;
       expect(undone.filter.done, isFalse);
     });
 
@@ -96,34 +129,39 @@ void main() {
     });
 
     test('今天：due_to = 明日零点（无下界，含逾期）', () {
-      final q =
-          _build(input: const TaskFilterInput(quickView: QuickViewKey.today))!;
+      final q = _build(
+        input: const TaskFilterInput(quickView: QuickViewKey.today),
+      )!;
       expect(q.filter.dueTo, _dayEnd);
       expect(q.filter.dueFrom, isNull);
       expect(q.filter.done, isFalse);
     });
 
     test('近7天：due_to = 明日零点 + 6 天', () {
-      final q =
-          _build(input: const TaskFilterInput(quickView: QuickViewKey.week))!;
+      final q = _build(
+        input: const TaskFilterInput(quickView: QuickViewKey.week),
+      )!;
       expect(q.filter.dueTo, _dayEnd + 6 * 86400000);
     });
 
     test('我的一天：my_day_today = 本地零点', () {
-      final q =
-          _build(input: const TaskFilterInput(quickView: QuickViewKey.myDay))!;
+      final q = _build(
+        input: const TaskFilterInput(quickView: QuickViewKey.myDay),
+      )!;
       expect(q.filter.myDayToday, _dayStart);
     });
 
     test('无日期：has_due = false（不受 done 谓词影响）', () {
-      final q =
-          _build(input: const TaskFilterInput(quickView: QuickViewKey.nodate))!;
+      final q = _build(
+        input: const TaskFilterInput(quickView: QuickViewKey.nodate),
+      )!;
       expect(q.filter.hasDue, isFalse);
     });
 
     test('收藏：favorite_only=true', () {
-      final q =
-          _build(input: const TaskFilterInput(quickView: QuickViewKey.favorite))!;
+      final q = _build(
+        input: const TaskFilterInput(quickView: QuickViewKey.favorite),
+      )!;
       expect(q.filter.favoriteOnly, isTrue);
     });
   });
@@ -143,9 +181,7 @@ void main() {
     });
 
     test('项目集合非空 → project_ids；空集合回落下一档', () {
-      final withIds = _build(
-        input: const TaskFilterInput(projectIds: [3, 4]),
-      )!;
+      final withIds = _build(input: const TaskFilterInput(projectIds: [3, 4]))!;
       expect(withIds.filter.projectIds, [3, 4]);
       expect(withIds.filter.projectId, isNull);
 
@@ -157,10 +193,14 @@ void main() {
     });
 
     test('状态档：undone/done 映射完成位，pending 等映射 status 等值', () {
-      expect(_build(filters: const TaskListFilters(status: 'undone'))!.filter.done,
-          isFalse);
-      expect(_build(filters: const TaskListFilters(status: 'done'))!.filter.done,
-          isTrue);
+      expect(
+        _build(filters: const TaskListFilters(status: 'undone'))!.filter.done,
+        isFalse,
+      );
+      expect(
+        _build(filters: const TaskListFilters(status: 'done'))!.filter.done,
+        isTrue,
+      );
       final doing = _build(filters: const TaskListFilters(status: 'doing'))!;
       expect(doing.filter.status, 'doing');
     });
@@ -179,7 +219,9 @@ void main() {
   });
 
   group('派生查询', () {
-    final base = _build(input: const TaskFilterInput(quickView: QuickViewKey.today))!;
+    final base = _build(
+      input: const TaskFilterInput(quickView: QuickViewKey.today),
+    )!;
 
     test('逾期段：强制未完成 + 截止上界收到 now + due 升序', () {
       final f = overdueFilterOf(base, _now);
@@ -224,39 +266,28 @@ void main() {
       final board = TodoTaskBoardResult(
         total: 4,
         groups: [
-          TodoTaskBoardGroup(
-            key: '7',
-            total: 3,
-            items: [_task(1)],
-          ),
-          TodoTaskBoardGroup(
-            key: 'ungrouped',
-            total: 1,
-            items: [_task(2)],
-          ),
+          TodoTaskBoardGroup(key: '7', total: 3, items: [_task(1)]),
+          TodoTaskBoardGroup(key: 'ungrouped', total: 1, items: [_task(2)]),
         ],
       );
-      final columns = kanbanColumnsFromBoard(
-        board,
-        KanbanGroupBy.project,
-        const [
-          TodoProject(
-            id: 7,
-            uuid: 'u7',
-            title: '项目七',
-            description: null,
-            hexColor: '#123456',
-            sortOrder: 0,
-            parentUuid: null,
-            isArchived: 0,
-            isDeleted: 0,
-            createdAt: 1,
-            updatedAt: 1,
-            deletedAt: null,
-            version: 1,
-          ),
-        ],
-      );
+      final columns =
+          kanbanColumnsFromBoard(board, KanbanGroupBy.project, const [
+            TodoProject(
+              id: 7,
+              uuid: 'u7',
+              title: '项目七',
+              description: null,
+              hexColor: '#123456',
+              sortOrder: 0,
+              parentUuid: null,
+              isArchived: 0,
+              isDeleted: 0,
+              createdAt: 1,
+              updatedAt: 1,
+              deletedAt: null,
+              version: 1,
+            ),
+          ]);
       expect(columns.map((c) => c.key).toList(), ['p7', 'none']);
       expect(columns[0].tasks.single.id, 1);
       expect(columns[0].totalCount, 3);
@@ -267,9 +298,7 @@ void main() {
       final columns = kanbanColumnsFromBoard(
         const TodoTaskBoardResult(
           total: 2,
-          groups: [
-            TodoTaskBoardGroup(key: 'pri:3', total: 2, items: []),
-          ],
+          groups: [TodoTaskBoardGroup(key: 'pri:3', total: 2, items: [])],
         ),
         KanbanGroupBy.priority,
         const [],

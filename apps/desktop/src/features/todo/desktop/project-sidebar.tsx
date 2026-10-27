@@ -35,7 +35,7 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { Archive, ArchiveRestore, BarChart3, CalendarCheck, ChevronDown, ChevronRight, Filter, Folder, FolderInput, Inbox, PanelLeftClose, PanelLeftOpen, Plus, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, BarChart3, CalendarCheck, ChevronDown, ChevronRight, Filter, Folder, FolderInput, Inbox, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/stores/app-store";
@@ -118,6 +118,8 @@ interface ProjectSidebarProps {
   onSelectSavedFilter: (id: number) => void;
   /** #35：新建筛选器（把当前面板的工具栏筛选存为命名视图） */
   onCreateSavedFilter: () => void;
+  /** #107：编辑既有筛选器（改名 / 改条件） */
+  onEditSavedFilter: (id: number) => void;
   onDeleteSavedFilter: (id: number) => void;
 }
 
@@ -134,6 +136,7 @@ export function ProjectSidebar({
   onSelectUngrouped,
   onSelectSavedFilter,
   onCreateSavedFilter,
+  onEditSavedFilter,
   onDeleteSavedFilter,
 }: ProjectSidebarProps) {
   const qc = useQueryClient();
@@ -645,6 +648,14 @@ export function ProjectSidebar({
                     onClick={() => onSelectSavedFilter(f.id)}
                   >
                     {f.name}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`编辑筛选器 ${f.name}`}
+                    className="shrink-0 opacity-0 group-hover:opacity-100"
+                    onClick={() => onEditSavedFilter(f.id)}
+                  >
+                    <Pencil className="size-3 text-muted-foreground hover:text-foreground" />
                   </button>
                   <button
                     type="button"

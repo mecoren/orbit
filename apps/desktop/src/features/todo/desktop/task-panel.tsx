@@ -266,9 +266,11 @@ export default function TaskPanel() {
   //
   // title 排序档例外：中文拼音序依赖 localeCompare，SQL 侧复刻不了，
   // 该档也回落全量通道（否则翻页边界与视觉顺序会分叉）。
-  // 窗口化基线：保存筛选器（条件应用在本地）与 title 档（拼音序 SQL 复刻不了）
-  // 必须全量；其余视图各走自己的服务端窗口通道
-  const windowedBase = !activeSavedFilter && sortKey !== "title";
+  // 窗口化基线：保存筛选器条件已下推（#107，14 键全部能表达成 core 谓词），
+  // 只剩两处回退——筛选器数据尚未落地（conditions 未知，先按全量显示）与
+  // title 档（中文拼音序 SQL 复刻不了）。其余视图各走自己的服务端窗口通道。
+  const savedFilterReady = savedFilterId == null || activeSavedFilter != null;
+  const windowedBase = savedFilterReady && sortKey !== "title";
   const pagedMode = (viewMode === "list" || viewMode === "table") && !isLogbook && windowedBase;
   // 看板/矩阵：每列前 N 条 + 组总数。标签档保留全量——分列定义来自标签投影，
   // 列数随任务标签动态变化，窗口内的标签会让空列消失
@@ -320,6 +322,7 @@ export default function TaskPanel() {
         // 逾期行不在这里排除：把它写进 filter 会让 queryKey 带上时间戳，
         // 每分钟重拉首屏、滚动位置回跳。改由下方合并时按 id 去重（见 visibleTasks）
         excludeOverdueBefore: null,
+        savedConditions: activeSavedFilter?.conditions ?? null,
         now: new Date(nowTick),
       }),
     [
@@ -329,6 +332,7 @@ export default function TaskPanel() {
       activeProjectIds,
       projectId,
       savedFilterId,
+      activeSavedFilter?.conditions,
       quickView,
       statusFilter,
       priorityFilter,
@@ -367,6 +371,7 @@ export default function TaskPanel() {
         sortKey: "due",
         sortDir: "asc",
         excludeOverdueBefore: null,
+        savedConditions: activeSavedFilter?.conditions ?? null,
         now: new Date(nowTick),
       }),
     [
@@ -376,6 +381,7 @@ export default function TaskPanel() {
       activeProjectIds,
       projectId,
       savedFilterId,
+      activeSavedFilter?.conditions,
       quickView,
       statusFilter,
       priorityFilter,
@@ -387,8 +393,13 @@ export default function TaskPanel() {
     queryKey: ["todo_tasks", "overdue", overdueFilter, nowTick],
     queryFn: () =>
       todoTaskPage(
-        // 强制未完成：逾期段不该混进已完成行（statusFilter=done 时 hideDone 不生效）
-        { ...overdueFilter, done: false, due_to: nowTick },
+        // 强制未完成：逾期段不该混进已完成行（statusFilter=done 时 hideDone 不生效）。
+        // 截止上界取 min——保存筛选器的 due_until 可能比 now 更窄，直接覆盖会放宽条件。
+        {
+          ...overdueFilter,
+          done: false,
+          due_to: Math.min(overdueFilter.due_to ?? nowTick, nowTick),
+        },
         null,
         OVERDUE_PAGE_LIMIT,
       ).then((p) => p.items),
@@ -536,7 +547,24 @@ export default function TaskPanel() {
           openSubtaskTaskIds,
         },
       );
-      return sortTasks(filtered, sortKey, sortDir ?? undefined);
+      // 与分页通道同语义（#107）：条件与「当前列表范围（项目/未分组/工具栏
+      // 状态/优先级/hideDone）」取交集——分页路径在 buildPagedFilter 里就是
+      // 这么拼的。此前这里只跑条件不过滤范围，导致同一筛选器在「手动排序」
+      // 与「标题排序（回落全量）」下条数与内容不同。
+      return sortTasks(
+        filterTasks(filtered, {
+          // 快捷视图在选中筛选器时不叠加（两侧一致：buildPagedFilter 传 null）
+          quickView: null,
+          projectId,
+          projectIds: activeProjectIds,
+          ungrouped,
+          statusFilter,
+          priorityFilter: priorityFilter === "all" ? null : Number(priorityFilter),
+          hideDone,
+        }),
+        sortKey,
+        sortDir ?? undefined,
+      );
     }
     return sortTasks(
       filterTasks(
@@ -793,6 +821,18 @@ export default function TaskPanel() {
             sortKey={sortKey}
             loading={boardLoading}
             groupTotals={boardGroupBy ? boardTotals : undefined}
+            onOpenColumnInList={(colKey) => {
+              // 列满出口：能映射到工具栏筛选的档位带上条件，其余仅切列表
+              if (kanbanGroupBy === "priority" && colKey.startsWith("pri:")) {
+                setPriorityFilter(String(Number(colKey.slice(4))) as PriorityFilter);
+              } else if (
+                kanbanGroupBy === "status" &&
+                (colKey === "pending" || colKey === "doing" || colKey === "done")
+              ) {
+                setStatusFilter(colKey);
+              }
+              setViewMode("list");
+            }}
           />
         ) : viewMode === "calendar" ? (
           <CalendarView
@@ -818,6 +858,12 @@ export default function TaskPanel() {
             error={listError}
             onLoadMore={loadMore}
             hasMore={pagedMode && pagedQuery.hasNextPage}
+            sortKey={sortKey}
+            sortDir={effectiveSortDir}
+            onSortChange={(key, dir) => {
+              setSortKey(key);
+              setSortDir(dir);
+            }}
             onOpenDetail={(id) => setSelectedTaskId(id)}
           />
         ) : viewMode === "matrix" ? (

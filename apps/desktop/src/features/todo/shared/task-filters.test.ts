@@ -680,4 +680,123 @@ describe("buildPagedFilter（分页通道下推，P1）", () => {
     expect(f.sort_dir).toBe("desc");
     expect(f.exclude_due_before).toBe(1234);
   });
+
+  // ---- 保存筛选器条件下推（#107）：选中筛选器不再回退万行全量 ----
+  const T0 = new Date("2026-10-26T00:00:00").getTime();
+
+  it("优先级/收藏条件直接成为谓词（不再因选中筛选器而禁用分页）", () => {
+    const f = buildPagedFilter({
+      ...base,
+      savedConditions: JSON.stringify({ priority_min: 2, favorite_only: true }),
+    });
+    expect(f.priority_min).toBe(2);
+    expect(f.favorite_only).toBe(true);
+  });
+
+  it("逾期条件：截止上界收到今日零点并要求未完成", () => {
+    const f = buildPagedFilter({
+      ...base,
+      savedConditions: JSON.stringify({ due_overdue: true }),
+    });
+    expect(f.due_to).toBe(T0);
+    expect(f.done).toBe(false);
+  });
+
+  it("due_within_days：半开区间 [今日零点, 今日零点 + N 天)", () => {
+    const f = buildPagedFilter({
+      ...base,
+      savedConditions: JSON.stringify({ due_within_days: 3 }),
+    });
+    expect(f.due_from).toBe(T0);
+    expect(f.due_to).toBe(T0 + 3 * 86_400_000);
+  });
+
+  it("区间取交集：下界取 max、上界取 min；done_from 隐含已完成", () => {
+    const f = buildPagedFilter({
+      ...base,
+      // 今天视图自身带 due_to = 今日 24:00；条件上界更窄时取 min
+      quickView: "today",
+      savedConditions: JSON.stringify({
+        due_from: T0 + 2000,
+        due_until: T0 + 8000,
+        created_from: 800,
+        done_from: 1234,
+      }),
+    });
+    expect(f.due_from).toBe(T0 + 2000);
+    expect(f.due_to).toBe(T0 + 8000);
+    expect(f.created_from).toBe(800);
+    expect(f.done_from).toBe(1234);
+    expect(f.done).toBe(true);
+  });
+
+  it("done_from 与「仅未完成」冲突 → 空结果（恒假集合，不是不过滤）", () => {
+    const f = buildPagedFilter({
+      ...base,
+      hideDone: true,
+      savedConditions: JSON.stringify({ done_from: 1 }),
+    });
+    expect(f.project_ids).toEqual([]);
+  });
+
+  it("存在三态按条件覆盖：false = 仅无（不是不限）", () => {
+    const f = buildPagedFilter({
+      ...base,
+      savedConditions: JSON.stringify({
+        has_reminder: false,
+        has_attachment: true,
+        has_open_subtask: false,
+      }),
+    });
+    expect(f.has_reminder).toBe(false);
+    expect(f.has_attachment).toBe(true);
+    expect(f.has_open_subtask).toBe(false);
+  });
+
+  it("项目条件与当前清单范围取交集；与未分组冲突则空结果", () => {
+    const intersect = buildPagedFilter({
+      ...base,
+      predicate: { project_ids: [1, 2, 3] },
+      savedConditions: JSON.stringify({ project_ids: [2, 3, 4] }),
+    });
+    expect(intersect.project_ids).toEqual([2, 3]);
+
+    const conflict = buildPagedFilter({
+      ...base,
+      ungrouped: true,
+      savedConditions: JSON.stringify({ project_ids: [2] }),
+    });
+    expect(conflict.project_ids).toEqual([]);
+  });
+
+  it("条件 JSON 损坏 → 忽略条件（与本地过滤同口径，不清空列表）", () => {
+    const f = buildPagedFilter({ ...base, savedConditions: "{not-json" });
+    expect(f.priority_min ?? null).toBe(null);
+    expect(f.project_ids ?? null).toBe(null);
+  });
+
+  it("条件里的空 project_ids（脏数据）→ 空结果，与本地 includes 恒 false 同义", () => {
+    const f = buildPagedFilter({
+      ...base,
+      savedConditions: JSON.stringify({ project_ids: [] }),
+    });
+    expect(f.project_ids).toEqual([]);
+  });
+
+  it("status 与工具栏冲突 → 空结果；一致则原样保留", () => {
+    const conflict = buildPagedFilter({
+      ...base,
+      statusFilter: "doing",
+      savedConditions: JSON.stringify({ status: "pending" }),
+    });
+    expect(conflict.project_ids).toEqual([]);
+
+    const same = buildPagedFilter({
+      ...base,
+      statusFilter: "doing",
+      savedConditions: JSON.stringify({ status: "doing" }),
+    });
+    expect(same.status).toBe("doing");
+    expect(same.project_ids ?? null).toBe(null);
+  });
 });

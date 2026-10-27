@@ -93,6 +93,10 @@ export interface SavedFilterDialogProps {
   open: boolean;
   /** 预填条件 JSON（存为视图入口传工具栏映射结果；空 "{}" = 全新） */
   initialConditions: string;
+  /** 预填名称：编辑既有筛选器时回填（新建为空） */
+  initialName?: string;
+  /** 编辑态只改标题/按钮文案，提交仍走同一个 onSubmit */
+  mode?: "create" | "edit";
   projects: { id: number; title: string; hex_color: string }[];
   labels: { id: number; title: string; hex_color: string }[];
   onCancel: () => void;
@@ -105,6 +109,8 @@ const DUE_WINDOW_CHOICES = [1, 3, 7, 14, 30, 90];
 export function SavedFilterDialog({
   open,
   initialConditions,
+  initialName = "",
+  mode = "create",
   projects,
   labels,
   onCancel,
@@ -113,13 +119,13 @@ export function SavedFilterDialog({
   const [name, setName] = useState("");
   const [form, setForm] = useState<FilterFormState>(EMPTY_FILTER_FORM);
 
-  // 打开时重置表单 + 预填（initialConditions 变化即新一轮）
+  // 打开时重置表单 + 预填（initialConditions/initialName 变化即新一轮）
   useEffect(() => {
     if (open) {
-      setName("");
+      setName(initialName);
       setForm(parseConditions(initialConditions));
     }
-  }, [open, initialConditions]);
+  }, [open, initialConditions, initialName]);
 
   const set = <K extends keyof FilterFormState>(key: K, value: FilterFormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
@@ -153,7 +159,7 @@ export function SavedFilterDialog({
     <Dialog open={open} onOpenChange={(o) => !o && onCancel()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>保存筛选器</DialogTitle>
+          <DialogTitle>{mode === "edit" ? "编辑筛选器" : "保存筛选器"}</DialogTitle>
         </DialogHeader>
 
         <Input
@@ -423,7 +429,7 @@ export function SavedFilterDialog({
             取消
           </Button>
           <Button disabled={!name.trim()} onClick={submit}>
-            保存
+            {mode === "edit" ? "保存修改" : "保存"}
           </Button>
         </DialogFooter>
       </DialogContent>

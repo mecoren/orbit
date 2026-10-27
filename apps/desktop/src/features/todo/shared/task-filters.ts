@@ -8,6 +8,7 @@
  */
 import { type ListFilter, type TaskListPredicate, type TodoTaskListItem } from "@/lib/tauri";
 import { type QuickViewKey } from "./constants";
+import { type SavedFilterConditions } from "./saved-filter";
 
 export type TaskStatusFilter = "all" | "pending" | "doing" | "done" | "undone";
 
@@ -251,6 +252,14 @@ export interface PagedFilterInput {
   sortDir?: TaskSortDir | null;
   /** 主列表排除逾期行的时刻（毫秒）；null = 不排除（表格视图无逾期置顶段） */
   excludeOverdueBefore?: number | null;
+  /**
+   * 当前生效的保存筛选器条件 JSON（null = 未选）。
+   *
+   * #107：条件里的 14 键全部能在 SQL 侧表达，选中筛选器后仍走键集分页；
+   * 合并规则见 [mergeSavedFilterConditions]（与移动端
+   * `mergeSavedFilterConditions` 逐字同义，两端只允许一份语义）。
+   */
+  savedConditions?: string | null;
   now?: Date;
 }
 
@@ -292,7 +301,7 @@ export function buildPagedFilter(input: PagedFilterInput): ListFilter {
     done = false;
   }
 
-  return {
+  const filter: ListFilter = {
     keyword: input.keyword.trim() || null,
     page: 1,
     page_size: 0,
@@ -305,6 +314,164 @@ export function buildPagedFilter(input: PagedFilterInput): ListFilter {
     exclude_due_before: input.excludeOverdueBefore ?? null,
     sort_key: input.sortKey,
     sort_dir: input.sortDir ?? null,
+  };
+
+  return input.savedConditions != null
+    ? mergeSavedFilterConditions(filter, input.savedConditions, now)
+    : filter;
+}
+
+/**
+ * 保存筛选器条件 → `ListFilter`（**与当前列表范围取交集**，#107）。
+ *
+ * 语义与本地过滤 [applySavedFilter] 逐键对齐（#35/#71 的 14 键），区别只在
+ * 「在哪算」：条件全部能表达成 core 谓词后改为 SQL 下推，键集分页通道不再
+ * 因选中筛选器而回退万行全量。合并规则与移动端
+ * `mergeSavedFilterConditions`（`logic/paged_query.dart`）逐字同义：
+ *
+ * - 项目：两侧 `project_ids` 求交；与 `ungrouped` 冲突或交集为空 → 空结果。
+ * - 标签：`label_ids` 也是「任一命中」，两侧求交；交集为空 → 空结果
+ *   （注意 core 侧空 `label_ids` 语义是「不过滤」，故空交集必须用恒假集合表达）。
+ * - 优先级：`priority_min` 取 max、`priority_eq` 原样保留（SQL 天然 AND）。
+ * - 区间：截止/创建/完成的下界取 max、上界取 min（半开区间，右端不含）。
+ * - 完成态：`done_from` 隐含只看已完成；与 `done = false` 冲突 → 空结果。
+ * - 条件 JSON 损坏：忽略条件（与本地过滤同口径，不静默清空列表）。
+ */
+export function mergeSavedFilterConditions(
+  base: ListFilter,
+  rawConditions: string,
+  now = new Date(),
+): ListFilter {
+  let c: SavedFilterConditions;
+  try {
+    const parsed = JSON.parse(rawConditions) as unknown;
+    if (parsed == null || typeof parsed !== "object" || Array.isArray(parsed)) return base;
+    c = parsed as SavedFilterConditions;
+  } catch {
+    return base;
+  }
+
+  const dayStart = new Date(now);
+  dayStart.setHours(0, 0, 0, 0);
+  const todayZero = dayStart.getTime();
+
+  let dueFrom = base.due_from ?? null;
+  let dueTo = base.due_to ?? null;
+  const raiseFrom = (v: number | null | undefined) => {
+    if (v == null) return;
+    dueFrom = dueFrom == null ? v : Math.max(dueFrom, v);
+  };
+  const lowerTo = (v: number | null | undefined) => {
+    if (v == null) return;
+    dueTo = dueTo == null ? v : Math.min(dueTo, v);
+  };
+
+  let impossible = false;
+
+  // ── 项目：交集 ──
+  let projectId = base.project_id ?? null;
+  let projectIds = base.project_ids ?? null;
+  const condProjects = Array.isArray(c.project_ids) ? c.project_ids : null;
+  if (condProjects != null) {
+    if (condProjects.length === 0) {
+      // 空数组 = 匹配不到任何项目（与 applySavedFilter 的 `includes` 恒 false 同义）。
+      // 表单不选项目时根本不写这个键（见 buildConditions），故空数组只可能来自
+      // 导入/手改的脏条件——按「恒假」处理才能与本地过滤逐键对齐。
+      impossible = true;
+    } else if (base.ungrouped === true) {
+      impossible = true; // 未分组任务不可能属于某个具体项目
+    } else if (projectIds != null) {
+      const allowed = new Set(condProjects);
+      projectIds = projectIds.filter((id) => allowed.has(id));
+    } else if (projectId != null) {
+      projectIds = condProjects.includes(projectId) ? [projectId] : [];
+      projectId = null;
+    } else {
+      projectIds = [...condProjects];
+    }
+  }
+
+  // ── 标签：两侧都是「任一命中」，求交 ──
+  let labelIds = base.label_ids ?? null;
+  const condLabels = Array.isArray(c.label_ids) ? c.label_ids : null;
+  if (condLabels != null && condLabels.length > 0) {
+    if (labelIds == null || labelIds.length === 0) {
+      labelIds = [...condLabels];
+    } else {
+      const wanted = new Set(condLabels);
+      labelIds = labelIds.filter((id) => wanted.has(id));
+      // 空交集 ≠ 不过滤：core 里 `label_ids: []` 是「没限制」，必须显式落空结果
+      if (labelIds.length === 0) impossible = true;
+    }
+  }
+
+  // ── 状态 / 完成态 ──
+  let status = base.status ?? null;
+  if (typeof c.status === "string") {
+    if (status != null && status !== c.status) impossible = true;
+    status = c.status;
+  }
+  let done = base.done ?? null;
+  if (c.due_overdue === true) {
+    // 逾期 = 未完成且截止早于今日零点（与本地过滤同口径，不是 now）
+    lowerTo(todayZero);
+    if (done === true) impossible = true;
+    done = false;
+  }
+  if (typeof c.done_from === "number") {
+    if (done === false) impossible = true;
+    done = true;
+  }
+
+  // ── 优先级 ──
+  const priorityMin =
+    typeof c.priority_min === "number"
+      ? Math.max(c.priority_min, base.priority_min ?? c.priority_min)
+      : (base.priority_min ?? null);
+
+  // ── 截止区间 ──
+  if (typeof c.due_within_days === "number") {
+    raiseFrom(todayZero);
+    lowerTo(todayZero + c.due_within_days * 86_400_000);
+  }
+  raiseFrom(typeof c.due_from === "number" ? c.due_from : null);
+  lowerTo(typeof c.due_until === "number" ? c.due_until : null);
+
+  const createdFrom =
+    typeof c.created_from === "number"
+      ? Math.max(c.created_from, base.created_from ?? c.created_from)
+      : (base.created_from ?? null);
+  const doneFrom =
+    typeof c.done_from === "number"
+      ? Math.max(c.done_from, base.done_from ?? c.done_from)
+      : (base.done_from ?? null);
+
+  if (impossible) {
+    // 恒假子句：`project_ids: []` 在 core 侧生成 `AND 1 = 0`
+    return { ...base, project_id: null, project_ids: [], ungrouped: null };
+  }
+
+  return {
+    ...base,
+    done,
+    status,
+    priority_min: priorityMin,
+    project_id: projectId,
+    project_ids: projectIds,
+    favorite_only: base.favorite_only === true || c.favorite_only === true ? true : null,
+    due_from: dueFrom,
+    due_to: dueTo,
+    label_ids: labelIds,
+    has_reminder:
+      typeof c.has_reminder === "boolean" ? c.has_reminder : (base.has_reminder ?? null),
+    has_attachment:
+      typeof c.has_attachment === "boolean" ? c.has_attachment : (base.has_attachment ?? null),
+    has_open_subtask:
+      typeof c.has_open_subtask === "boolean"
+        ? c.has_open_subtask
+        : (base.has_open_subtask ?? null),
+    created_from: createdFrom,
+    done_from: doneFrom,
   };
 }
 

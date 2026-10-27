@@ -25,6 +25,7 @@ import {
   savedFilterCreate,
   savedFilterDelete,
   savedFiltersList,
+  savedFilterUpdate,
   templatesList,
   todoLabelList,
   todoProjectList,
@@ -266,12 +267,27 @@ export default function TodoShell() {
   // 新建入口由面板触发（把当前工具栏筛选存为命名视图——面板传条件 JSON）：
   // 壳层挂载弹层与提交；F3 升级可视化构建器（裸 JSON 手填退役）
   const [savedFilterDraftConditions, setSavedFilterDraftConditions] = useState<string | null>(null);
-  const handleCreateSavedFilter = async (name: string, conditions: string) => {
+  // #107：编辑态筛选器 id（null = 新建）。打开弹层时把既有名称/条件回填，
+  // 提交走 saved_filter_update（此前只能删了重建）。
+  const [savedFilterEditingId, setSavedFilterEditingId] = useState<number | null>(null);
+  const editingSavedFilter =
+    savedFilterEditingId == null
+      ? null
+      : (savedFilters.find((f) => f.id === savedFilterEditingId) ?? null);
+  const closeSavedFilterDialog = () => {
+    setSavedFilterDraftConditions(null);
+    setSavedFilterEditingId(null);
+  };
+  const handleSaveSavedFilter = async (name: string, conditions: string) => {
     try {
-      await savedFilterCreate({ name, conditions });
+      if (savedFilterEditingId != null) {
+        await savedFilterUpdate(savedFilterEditingId, { name, conditions });
+      } else {
+        await savedFilterCreate({ name, conditions });
+      }
       invalidateFilters();
     } finally {
-      setSavedFilterDraftConditions(null);
+      closeSavedFilterDialog();
     }
   };
   const handleDeleteSavedFilter = async (id: number) => {
@@ -390,7 +406,16 @@ export default function TodoShell() {
             onSelectProject={ctx.onSelectProject}
             onSelectUngrouped={ctx.onSelectUngrouped}
             onSelectSavedFilter={ctx.onSelectSavedFilter}
-            onCreateSavedFilter={() => setSavedFilterDraftConditions("{}")}
+            onCreateSavedFilter={() => {
+              setSavedFilterEditingId(null);
+              setSavedFilterDraftConditions("{}");
+            }}
+            onEditSavedFilter={(id) => {
+              const target = savedFilters.find((f) => f.id === id);
+              if (!target) return;
+              setSavedFilterEditingId(id);
+              setSavedFilterDraftConditions(target.conditions);
+            }}
             onDeleteSavedFilter={handleDeleteSavedFilter}
           />
 
@@ -421,14 +446,16 @@ export default function TodoShell() {
             }
           />
 
-          {/* #35 新建筛选器弹层（F3：可视化构建器，裸 JSON 手填退役） */}
+          {/* #35 新建 / #107 编辑筛选器弹层（F3：可视化构建器，裸 JSON 手填退役） */}
           <SavedFilterDialog
             open={savedFilterDraftConditions != null}
             initialConditions={savedFilterDraftConditions ?? "{}"}
+            initialName={editingSavedFilter?.name ?? ""}
+            mode={savedFilterEditingId != null ? "edit" : "create"}
             projects={projects}
             labels={labelsQuery.data ?? []}
-            onCancel={() => setSavedFilterDraftConditions(null)}
-            onSubmit={(name, conditions) => void handleCreateSavedFilter(name, conditions)}
+            onCancel={closeSavedFilterDialog}
+            onSubmit={(name, conditions) => void handleSaveSavedFilter(name, conditions)}
           />
 
           {/* 标签管理器十色板（04 §3.8） */}
