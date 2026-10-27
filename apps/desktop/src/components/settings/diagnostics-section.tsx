@@ -10,15 +10,24 @@
  * - `performance.memory` 是 Chromium 私有 API（WebView2 有、Safari/Firefox 没有），
  *   取不到时明写「当前环境不支持」而不是显示 0——0 会被读成「内存占用为零」。
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, Cloud, FileCog, HardDrive, RefreshCw, Trash2 } from "lucide-react";
+import { Activity, Cloud, Cpu, FileCog, HardDrive, RefreshCw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { DangerousConfirmDialog } from "@/components/ui/dangerous-confirm-dialog";
 import { cn } from "@/lib/utils";
-import { cloudOrphanChunksGc, diagnosticsSnapshot, syncConfigGet } from "@/lib/tauri";
+import {
+  cloudOrphanChunksGc,
+  cloudSyncPullThenPush,
+  cloudSyncPushOnly,
+  diagnosticsSnapshot,
+  fullBackupDeviceInfo,
+  micaDiagnostics,
+  syncConfigGet,
+  type MicaDiagnostics,
+} from "@/lib/tauri";
 import { formatBytes, formatCount } from "./diagnostics-format";
 import { CloudUnusedAttachmentsDialog } from "./cloud-unused-attachments-dialog";
 import { UnusedAttachmentsDialog } from "./unused-attachments-dialog";
@@ -66,6 +75,7 @@ export function DiagnosticsSection() {
   const [cloudCleanupOpen, setCloudCleanupOpen] = useState(false);
   const [chunkGcOpen, setChunkGcOpen] = useState(false);
   const [chunkGcBusy, setChunkGcBusy] = useState(false);
+  const [diagSyncBusy, setDiagSyncBusy] = useState<"push" | "pull" | null>(null);
   const { data, isFetching, refetch } = useQuery({
     queryKey: ["diagnostics"],
     queryFn: diagnosticsSnapshot,
@@ -82,9 +92,70 @@ export function DiagnosticsSection() {
   });
   const cloudConfigured =
     syncConfig != null && (syncConfig.engine === "webdav" || syncConfig.engine === "s3");
+  // Mica 链路读数（Windows 独有）：build / 透明效果 / DWM 背景类型 before→after。
+  // 命令本身幂等重断言一次材质，故只在挂载与点刷新时采集。
+  const [mica, setMica] = useState<MicaDiagnostics | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void micaDiagnostics()
+      .then((m) => {
+        if (!cancelled) setMica(m);
+      })
+      .catch(() => {
+        /* 非 Windows/命令不可用时保持「尚未采集」，不阻塞诊断分区 */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  // 设备 ID 进程内不变，取一次即可（与备份清单 device_id 同源）
+  const { data: device } = useQuery({
+    queryKey: ["full_backup_device"],
+    queryFn: fullBackupDeviceInfo,
+    staleTime: Infinity,
+  });
   const refresh = () => {
     setRuntime(readRuntime());
     void refetch();
+    void micaDiagnostics()
+      .then(setMica)
+      .catch(() => {
+        /* 同上：读数不可用不弹错 */
+      });
+  };
+
+  /**
+   * 单向同步诊断（#107）：`pull` = 先拉后推，`push` = 只推不拉。
+   * 只用于排障（判断是拉取侧还是推送侧卡住），不做常规入口——单向同步
+   * 会跳过多端合并的一侧，连续点可能让对端改动晚一轮才可见。
+   */
+  const runDiagnosticSync = async (mode: "push" | "pull") => {
+    setDiagSyncBusy(mode);
+    try {
+      const result =
+        mode === "push" ? await cloudSyncPushOnly("manual") : await cloudSyncPullThenPush("manual");
+      if (result.skipped) {
+        toast.info("已有同步任务在进行中");
+      } else if (result.errors.length > 0) {
+        toast.warning(`同步完成但有 ${result.errors.length} 条错误`, {
+          description: result.errors[0],
+        });
+      } else {
+        toast.success(
+          mode === "push"
+            ? `仅推送完成：${result.pushed_modules} 个模块`
+            : `先拉后推完成：拉取 ${result.pulled_modules} 个模块`,
+          { description: `耗时 ${(result.duration_ms / 1000).toFixed(1)}s` },
+        );
+      }
+      void refetch();
+    } catch (e) {
+      toast.error("诊断同步失败", {
+        description: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      setDiagSyncBusy(null);
+    }
   };
 
   /** 孤儿数据分桶回收（#96 尾款入口）：只动 tables/，与附件对象无关 */
@@ -193,10 +264,33 @@ export function DiagnosticsSection() {
               </Button>
             </div>
           </div>
+          <div className="flex flex-wrap items-center gap-2 border-t pt-3">
+            <span className="mr-1 text-xs text-muted-foreground">单向同步（排障）</span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={diagSyncBusy != null}
+              onClick={() => void runDiagnosticSync("push")}
+            >
+              仅推送
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={diagSyncBusy != null}
+              onClick={() => void runDiagnosticSync("pull")}
+            >
+              先拉后推
+            </Button>
+            {diagSyncBusy != null ? (
+              <span className="text-xs text-muted-foreground">进行中…</span>
+            ) : null}
+          </div>
           <p className="text-xs text-muted-foreground">
             云端附件对象不会被自动回收（删除任务/卸载附件后仍留在网盘）。附件清理只扫描 30
             天前、且无任何设备引用的对象；服务端不提供时间的对象一律跳过。「回收孤儿数据桶」
             清的是同步清单已不再引用的旧分桶（24 小时窗口）。均需同步密钥已解锁。
+            单向同步只用于判断卡在拉取还是推送；它会跳过另一侧，不要当作常规同步使用。
           </p>
         </div>
       ) : null}
@@ -219,6 +313,55 @@ export function DiagnosticsSection() {
         </div>
         <p className="text-xs text-muted-foreground">
           只读快照，点「刷新」重新采集；库体积与行数来自 Rust 侧（重新查询数据库）。
+        </p>
+      </div>
+
+      <div className="space-y-2 rounded-lg border p-5">
+        <div className="flex items-center gap-2">
+          <Cpu className="size-4 text-muted-foreground" />
+          <p className="text-sm font-medium">运行环境</p>
+        </div>
+        <div className="divide-y">
+          <Reading label="应用版本" value={__APP_VERSION__} />
+          <Reading
+            label="设备 ID"
+            value={device?.device_id || "未初始化"}
+            hint="与备份清单 device_id 同源"
+          />
+          {mica ? (
+            <>
+              <Reading label="平台" value={mica.platform} />
+              {mica.windowsBuild != null ? (
+                <Reading
+                  label="Windows 版本"
+                  value={`${mica.windowsMajor ?? 0}.${mica.windowsMinor ?? 0}.${mica.windowsBuild}`}
+                />
+              ) : null}
+              <Reading
+                label="Mica 支持"
+                value={mica.micaSupported ? "是（build ≥ 22000）" : "否"}
+              />
+              {mica.transparencyEnabled != null ? (
+                <Reading
+                  label="系统透明效果"
+                  value={mica.transparencyEnabled ? "已开启" : "已关闭（Mica 不会渲染）"}
+                />
+              ) : null}
+              {mica.backdropBefore != null || mica.backdropAfter != null ? (
+                <Reading
+                  label="DWM 背景类型"
+                  value={`${mica.backdropBefore ?? "-"} → ${mica.backdropAfter ?? "-"}`}
+                  hint="4 = Mica"
+                />
+              ) : null}
+              <Reading label="材质应用结果" value={mica.applyResult} />
+            </>
+          ) : (
+            <Reading label="材质读数" value="尚未采集" hint="点右上角刷新" />
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Mica 链路读数来自 Rust 侧 DWM 直调（仅 Windows）；非 Windows 平台只显示平台名。
         </p>
       </div>
 

@@ -4,8 +4,10 @@
  * 左侧 w-48 导航（安全/同步/主题），右侧 max-w-2xl 内容区按分类渲染分区组件。
  */
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import { cn } from "@/lib/utils";
+import { syncConflictCount } from "@/lib/tauri";
 import { Button } from "@/components/ui/button";
 import {
   settingsCategories,
@@ -27,6 +29,13 @@ import { UpdaterSection } from "@/components/settings/updater-section";
 
 export function SettingsPage() {
   const [active, setActive] = useState<SettingsCategoryKey>("security");
+  // 未处理冲突角标（#107）：冲突页此前只能点进去才发现有积压。
+  // 与冲突列表同前缀 ["sync_conflicts"]，db-change 失效链一并刷新。
+  const { data: conflictCount = 0 } = useQuery({
+    queryKey: ["sync_conflicts", "count"],
+    queryFn: () => syncConflictCount("unresolved"),
+    staleTime: 60_000,
+  });
 
   return (
     <div className="flex h-full flex-col">
@@ -37,7 +46,8 @@ export function SettingsPage() {
 
       <div className="flex min-h-0 flex-1">
         {/* 左导航 */}
-        <nav className="w-48 shrink-0 space-y-1 overflow-y-auto border-r p-3">
+        {/* 窄窗（900–1023）收窄导航，把宽度让给内容区；宽窗恢复 12rem */}
+        <nav className="w-40 shrink-0 space-y-1 overflow-y-auto border-r p-2 xl:w-48 xl:p-3">
           {settingsCategories.map((cat) => (
             <Button
               key={cat.key}
@@ -51,14 +61,22 @@ export function SettingsPage() {
               )}
             >
               <cat.icon className="size-4" />
-              {cat.label}
+              <span className="truncate">{cat.label}</span>
+              {cat.key === "conflicts" && conflictCount > 0 ? (
+                <span
+                  className="ml-auto rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-medium leading-none text-white tabular-nums"
+                  aria-label={`${conflictCount} 条未处理冲突`}
+                >
+                  {conflictCount > 99 ? "99+" : conflictCount}
+                </span>
+              ) : null}
             </Button>
           ))}
         </nav>
 
         {/* 右内容 */}
         <div className="min-w-0 flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-2xl p-6">
+          <div className="mx-auto max-w-2xl p-4 xl:p-6">
             {active === "general" && <GeneralSection />}
             {active === "security" && <SecuritySection />}
             {active === "sync" && <SyncSection />}

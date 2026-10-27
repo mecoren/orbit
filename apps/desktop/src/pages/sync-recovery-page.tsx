@@ -25,9 +25,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   cloudSyncRekey,
+  syncCryptoImportBundle,
   syncCryptoMetaVersion,
   syncCryptoUnlock,
   syncCryptoUpgradeV2,
+  type SyncCryptoBundle,
 } from "@/lib/tauri";
 
 export function SyncRecoveryPage() {
@@ -38,6 +40,11 @@ export function SyncRecoveryPage() {
   const [rekeyConfirmOpen, setRekeyConfirmOpen] = useState(false);
   // v1 升级同样全量重传云端（换钥覆盖），同走五秒时停
   const [upgradeConfirmOpen, setUpgradeConfirmOpen] = useState(false);
+  // 密钥包导入（#107）：换机 / 忘记云端密码时的第三条恢复路径。
+  // 两段式——先读文件校验结构，再拿上方密码导入（避免密码输完才发现文件坏了）。
+  const [bundle, setBundle] = useState<SyncCryptoBundle | null>(null);
+  const [bundleName, setBundleName] = useState("");
+  const [forceConfirmOpen, setForceConfirmOpen] = useState(false);
 
   // 探测本机密钥方案版本：v1 存量设备才显示迁移入口
   useEffect(() => {
@@ -68,6 +75,54 @@ export function SyncRecoveryPage() {
       toast.error(
         String(err).includes("wrong_password") ? "同步密码错误" : String(err),
       );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** 选择密钥包文件（只做结构校验，不读密码） */
+  const handlePickBundle = async () => {
+    try {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const selected = await open({
+        title: "选择密钥包文件",
+        multiple: false,
+        filters: [{ name: "Orbit 密钥包", extensions: ["json"] }],
+      });
+      if (!selected || typeof selected !== "string") return;
+      const { readTextFile } = await import("@tauri-apps/plugin-fs");
+      const parsed: unknown = JSON.parse(await readTextFile(selected));
+      if (
+        parsed == null ||
+        typeof parsed !== "object" ||
+        typeof (parsed as SyncCryptoBundle).salt !== "string" ||
+        typeof (parsed as SyncCryptoBundle).encrypted_data_key !== "string"
+      ) {
+        toast.error("不是有效的密钥包文件（缺少 salt / encrypted_data_key 字段）");
+        return;
+      }
+      setBundle(parsed as SyncCryptoBundle);
+      setBundleName(selected.split(/[\\/]/).pop() ?? selected);
+    } catch (err) {
+      toast.error(`读取密钥包失败：${String(err)}`);
+    }
+  };
+
+  /** 路径 3：导入密钥包。本机已有 meta 时先确认，再 force 覆盖 */
+  const handleImportBundle = async (force: boolean) => {
+    if (bundle == null) return;
+    setBusy(true);
+    try {
+      await syncCryptoImportBundle(bundle, password, force);
+      toast.success("密钥包已导入，请用同一密码解锁后同步");
+      navigate("/settings");
+    } catch (err) {
+      const msg = String(err);
+      if (!force && msg.includes("local_meta_exists")) {
+        setForceConfirmOpen(true);
+        return;
+      }
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
@@ -148,6 +203,43 @@ export function SyncRecoveryPage() {
         </div>
       </div>
 
+      {/* 路径 3：密钥包导入（换机 / 忘记云端密码） */}
+      <div className="space-y-2 rounded-lg border p-4">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <KeyRound className="size-4 text-muted-foreground" />
+          补充路径 · 导入密钥包（换机恢复）
+        </div>
+        <p className="text-xs text-muted-foreground">
+          选择另一台设备「导出密钥包」得到的 JSON，并在上方输入导出时使用的同步密码。
+        </p>
+        {bundle != null ? (
+          <div className="flex items-center gap-2">
+            <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+              {bundleName}
+            </span>
+            <Button
+              size="sm"
+              disabled={busy || !password}
+              onClick={() => void handleImportBundle(false)}
+            >
+              导入
+            </Button>
+            <Button size="sm" variant="ghost" disabled={busy} onClick={() => setBundle(null)}>
+              取消
+            </Button>
+          </div>
+        ) : (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy}
+            onClick={() => void handlePickBundle()}
+          >
+            选择密钥包文件…
+          </Button>
+        )}
+      </div>
+
       {/* 路径 2 */}
       <div className="space-y-2 rounded-lg border border-destructive/30 p-4">
         <div className="flex items-center gap-2 text-sm font-medium">
@@ -186,6 +278,27 @@ export function SyncRecoveryPage() {
         confirmLabel="确认重置云端"
         busy={busy}
         onConfirm={() => void handleRekey()}
+      />
+
+      {/* 本机已存在密钥时导入会覆盖本机密钥，强制二次确认 */}
+      <DangerousConfirmDialog
+        open={forceConfirmOpen}
+        onOpenChange={setForceConfirmOpen}
+        title="本机已存在同步密钥"
+        description={
+          <>
+            导入密钥包会
+            <strong className="text-destructive">覆盖本机现有的同步密钥</strong>，
+            之后需用该密钥包的密码解锁。若本机数据尚未同步到云端，建议先完成一次同步。
+            此操作不可撤销。
+          </>
+        }
+        confirmLabel="仍然导入"
+        busy={busy}
+        onConfirm={() => {
+          setForceConfirmOpen(false);
+          void handleImportBundle(true);
+        }}
       />
 
       {/* v1 迁移（仅存量 v1 设备显示）：升级即换钥全量重传，同走时停 */}

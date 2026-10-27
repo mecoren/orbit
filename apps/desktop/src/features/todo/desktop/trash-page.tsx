@@ -36,6 +36,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import {
   trashMeta,
   trashPurgeAll,
+  trashPurgeExpired,
   trashTaskPurge,
   trashTaskRestore,
   trashTasksList,
@@ -65,6 +66,7 @@ export function TrashPanel() {
   const qc = useQueryClient();
   const [purgeTarget, setPurgeTarget] = useState<TodoTask | null>(null);
   const [purgeAllOpen, setPurgeAllOpen] = useState(false);
+  const [purgeExpiredOpen, setPurgeExpiredOpen] = useState(false);
 
   const trashQuery = useQuery({
     queryKey: ["trash", "tasks"],
@@ -131,6 +133,26 @@ export function TrashPanel() {
     });
   };
 
+  // 立即清理过期（#107）：不等 60s 守护 tick。core 会跳过「删除尚未 push」
+  // 的墓碑（guarded），这里如实把跳过条数告诉用户，避免误以为全清了。
+  const purgeExpiredMutation = useMutation({
+    mutationFn: trashPurgeExpired,
+    onSuccess: (stats) => {
+      setPurgeExpiredOpen(false);
+      const guardedHint =
+        stats.guarded > 0 ? `${stats.guarded} 条因删除尚未同步到云端而保留。` : undefined;
+      if (stats.purged === 0) {
+        toast.info("没有可清理的过期任务", {
+          description: guardedHint ?? "保留期内的任务不会被提前清除。",
+        });
+      } else {
+        toast.success(`已清理 ${stats.purged} 条过期任务`, { description: guardedHint });
+      }
+      invalidate();
+    },
+    onError: (e) => toast.error(String(e)),
+  });
+
   return (
     <div role="region" aria-label="回收站" className="flex h-full flex-col">
       {/* 工具栏 */}
@@ -142,16 +164,28 @@ export function TrashPanel() {
             （保留 {retentionLabel(retentionDays)}，可在设置 - 待办中调整）
           </span>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8"
-          disabled={tasks.length === 0}
-          onClick={() => setPurgeAllOpen(true)}
-        >
-          <Trash2 size={14} className="mr-1" />
-          清空回收站
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8"
+            disabled={tasks.length === 0 || purgeExpiredMutation.isPending}
+            onClick={() => setPurgeExpiredOpen(true)}
+          >
+            <Trash2 size={14} className="mr-1" />
+            清理过期
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8"
+            disabled={tasks.length === 0}
+            onClick={() => setPurgeAllOpen(true)}
+          >
+            <Trash2 size={14} className="mr-1" />
+            清空回收站
+          </Button>
+        </div>
       </div>
 
       {/* 列表区：空态在 ScrollArea 外普通容器里垂直居中（ScrollArea 内 h-full
@@ -235,6 +269,30 @@ export function TrashPanel() {
               }}
             >
               彻底删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* 清理过期确认（只动已过保留期的墓碑，不做撤销：物理删除不可逆） */}
+      <AlertDialog open={purgeExpiredOpen} onOpenChange={setPurgeExpiredOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>清理过期任务</AlertDialogTitle>
+            <AlertDialogDescription>
+              {retentionDays === 0
+                ? "当前为永久保留，不会有过期任务被清理。"
+                : `立即执行一次保留期清理（等价于后台守护每 60 秒的一轮）。只物理删除已超过 ${retentionDays} 天保留期的任务，删除尚未同步到云端的会跳过。`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={purgeExpiredMutation.isPending}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white hover:bg-destructive/90"
+              disabled={purgeExpiredMutation.isPending}
+              onClick={() => purgeExpiredMutation.mutate()}
+            >
+              立即清理
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
