@@ -25,6 +25,7 @@ import 'logic/project_actions.dart';
 import 'logic/project_palette.dart';
 import 'logic/project_tree.dart';
 import 'logic/task_logic.dart';
+import 'providers/task_window_provider.dart';
 import 'providers/todo_providers.dart';
 import 'quick_add_sheet.dart' show showQuickAddSheet;
 import '../../core/theme/icon_map.dart';
@@ -93,12 +94,11 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
   List<TodoProject> _archivedProjects() =>
       ref.watch(todoArchivedProjectsProvider).value ?? const [];
 
-  List<TodoTask> _tasks() =>
-      ref.watch(todoTasksProvider).value ?? const [];
-
-  /// 侧栏计数单遍聚合（此前每个快捷视图行各跑一遍 filterTasks——
-  /// 7 遍全量 + 7 次 DateTime.now()，万任务下 build 一次 8+ 遍遍历）
-  SidebarCounts _counts(List<TodoTask> tasks) => computeSidebarCounts(tasks);
+  /// 侧栏计数（P1 窗口化）：SQL 聚合的 7 路 COUNT，不再为角标拉一份
+  /// 万行任务数组。统计口径与原 `computeSidebarCounts` 一致。
+  SidebarCounts _counts() =>
+      ref.watch(sidebarCountsProvider).value ??
+      const SidebarCounts(quickView: {}, undoneByProject: {});
 
   /// 视图计数（badge 口径：all/today/… 未完成数；done 视图已完成数）
   int _undoneCount(SidebarCounts counts, QuickViewKey key) =>
@@ -389,16 +389,15 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
-    final tasks = _tasks();
     final projects = _projects();
     // 初次加载（任一无旧值可守）才给骨架：重查走旧内容，不闪骨架
     //（同 provider 在同 build 内复 watch 一次只为取 Async 状态，不产生新查询）
-    final tasksAsync = ref.watch(todoTasksProvider);
+    final countsAsync = ref.watch(sidebarCountsProvider);
     final projectsAsync = ref.watch(todoProjectsProvider);
     final sidebarLoading =
-        (!tasksAsync.hasValue && tasksAsync.isLoading) ||
+        (!countsAsync.hasValue && countsAsync.isLoading) ||
             (!projectsAsync.hasValue && projectsAsync.isLoading);
-    final counts = _counts(tasks);
+    final counts = _counts();
     final undoneByProject = _undoneByProject(counts);
     final badgeBackground = colors.surfaceSecondary;
     final archivedProjects = _archivedProjects();

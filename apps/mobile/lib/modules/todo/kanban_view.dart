@@ -122,7 +122,8 @@ class KanbanBoard extends StatelessWidget {
                 ),
               ),
               Text(
-                '${column.tasks.length}',
+                // 角标报**真实总数**（窗口化时列内只有前 60 条）
+                '${column.totalCount}',
                 style: TextStyle(fontSize: 12, color: colors.secondaryText),
               ),
             ],
@@ -142,12 +143,33 @@ class KanbanBoard extends StatelessWidget {
                   )
                 : ListView.builder(
                     padding: EdgeInsets.zero,
-                    itemCount: column.tasks.length,
-                    itemBuilder: (context, i) => _card(
-                      context,
-                      column.tasks[i],
-                      selected: selectedIds.contains(column.tasks[i].id),
-                    ),
+                    // 列内超出窗口上限时末尾补一行「还有 N 条」——窗口只装
+                    // 前 60 条，不告知会让用户以为该列就这么多
+                    itemCount: column.tasks.length +
+                        (column.totalCount > column.tasks.length ? 1 : 0),
+                    itemBuilder: (context, i) {
+                      if (i >= column.tasks.length) {
+                        return Padding(
+                          padding: const EdgeInsets.only(
+                              top: AppDimens.space4,
+                              bottom: AppDimens.space8),
+                          child: Text(
+                            '还有 ${column.totalCount - column.tasks.length} 条'
+                            '（进入列表查看全部）',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color:
+                                  colors.secondaryText.withValues(alpha: 0.7),
+                            ),
+                          ),
+                        );
+                      }
+                      return _card(
+                        context,
+                        column.tasks[i],
+                        selected: selectedIds.contains(column.tasks[i].id),
+                      );
+                    },
                   ),
           ),
         ],

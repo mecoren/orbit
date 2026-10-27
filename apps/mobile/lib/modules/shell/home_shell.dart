@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme/icon_map.dart';
 import '../../core/theme/orbit_accents.dart';
-import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/widgets/shadcn/orbit_bottom_nav.dart';
 import '../../shared/widgets/shadcn/orbit_dropdown_panel.dart';
@@ -12,7 +11,7 @@ import '../../shared/widgets/shadcn/orbit_fab.dart';
 import '../todo/form_bottom_sheet.dart';
 import '../todo/logic/quick_add_context.dart';
 import '../todo/logic/task_logic.dart';
-import '../todo/providers/todo_providers.dart';
+import '../todo/providers/task_window_provider.dart';
 import '../todo/quick_add_sheet.dart' show showQuickAddSheet;
 import 'nav_modules.dart';
 
@@ -65,12 +64,13 @@ class HomeShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tasks = ref.watch(todoTasksProvider).value ?? const <TodoTask>[];
     final nav = ref.watch(navModulesProvider);
     final tabs = nav.bottomTabs;
     // 「今天」角标 = 今天截止视图的未完成数（0 不显示，见 [OrbitBottomNav]）；
-    // 今天模块不在底栏时无角标位
-    final counts = computeSidebarCounts(tasks);
+    // 今天模块不在底栏时无角标位。P1 窗口化后改读 SQL 聚合：底栏常驻，
+    // 不能再为一个小角标在内存里留一份万行任务数组。
+    final counts = ref.watch(sidebarCountsProvider).value ??
+        const SidebarCounts(quickView: {}, undoneByProject: {});
     final todayPos = tabs.indexOf(OrbitNavModule.today);
     // 当前分支对应模块不在底栏（经「更多」面板/侧栏内跳进入）时，选中态落
     // 「更多」动作位（竞品同款：面板进入的模块页高亮「更多」）

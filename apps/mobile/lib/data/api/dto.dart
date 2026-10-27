@@ -13,34 +13,257 @@ class ListFilter {
   final String? keyword;
   final int page;
   final int pageSize;
-  /// 排序键（P1 键集分页）：manual/due/priority/created；title 走全量通道
+
+  /// 完成态过滤：true = 仅已完成，false = 仅未完成，null = 不过滤
+  final bool? done;
+
+  /// 状态等值（pending/doing/done）
+  final String? status;
+
+  /// 优先级下限（priority >= 此值）
+  final int? priorityMin;
+
+  /// 优先级等值（工具栏单值档；与 [priorityMin] 不同语义）
+  final int? priorityEq;
+
+  /// 项目 id 等值
+  final int? projectId;
+
+  /// 项目 id **集合**（清单文件夹聚合）：非空时优先于 [projectId]；
+  /// 空集合 = 空结果（不是不过滤）
+  final List<int>? projectIds;
+
+  /// 仅收藏
+  final bool? favoriteOnly;
+
+  /// 我的一天：仅 my_day_date = 今天本地零点（调用方算好传入）
+  final int? myDayToday;
+
+  /// 未分组视图：true = project_id IS NULL
+  final bool? ungrouped;
+
+  /// 排除早于此时刻的截止（保留无截止行）：逾期置顶段独立取走后，
+  /// 主列表用它避免同一行渲染两次
+  final int? excludeDueBefore;
+
+  /// 是否有截止：false = due_date IS NULL（日历「未排期」区）
+  final bool? hasDue;
+
+  /// 排序键（P1 键集分页）：manual/due/priority/created/done_at；
+  /// title 依赖 localeCompare 拼音序，SQL 复刻不了，该档走全量通道
   final String? sortKey;
+
   /// 排序方向 asc/desc；null = 各档默认方向
   final String? sortDir;
+
   /// 截止区间下界（毫秒，含）：日历按可见范围取数
   final int? dueFrom;
+
   /// 截止区间上界（毫秒，不含）
   final int? dueTo;
+
+  /// 开始区间下界（毫秒，含）：日历时间轴按块起点取数
+  final int? startFrom;
+
+  /// 开始区间上界（毫秒，不含）
+  final int? startTo;
+
+  /// 标签集合（**任一命中**）：保存筛选器 `label_ids` 与列表内标签筛选共用
+  /// 同一谓词。空集合 = 不过滤（条件里「没选标签」不等于清空列表）。
+  final List<int>? labelIds;
+
+  /// 有提醒：true = 至少一条活提醒行，false = 一条也没有
+  final bool? hasReminder;
+
+  /// 有附件（`todo_task_attachments` 活行）；语义同上
+  final bool? hasAttachment;
+
+  /// 有未完成子任务；语义同上
+  final bool? hasOpenSubtask;
+
+  /// 创建时间下界（毫秒，含）：保存筛选器 `created_from`
+  final int? createdFrom;
+
+  /// 完成时间下界（毫秒，含；隐含只看已完成）：保存筛选器 `done_from`
+  final int? doneFrom;
 
   const ListFilter({
     this.keyword,
     this.page = 1,
     this.pageSize = 500,
+    this.done,
+    this.status,
+    this.priorityMin,
+    this.priorityEq,
+    this.projectId,
+    this.projectIds,
+    this.favoriteOnly,
+    this.myDayToday,
+    this.ungrouped,
+    this.excludeDueBefore,
+    this.hasDue,
     this.sortKey,
     this.sortDir,
     this.dueFrom,
     this.dueTo,
+    this.startFrom,
+    this.startTo,
+    this.labelIds,
+    this.hasReminder,
+    this.hasAttachment,
+    this.hasOpenSubtask,
+    this.createdFrom,
+    this.doneFrom,
   });
 
+  /// 复制并按需覆盖字段（未给出的字段原样保留）。
+  ///
+  /// [done] 例外：`done: null` 也是有效值（放开完成态过滤），故用
+  /// [clearDone] 显式表达——逾期段「强制未完成」与主通道「放开完成态」
+  /// 的差异只在这一位。
+  ListFilter copyWith({
+    bool? done,
+    bool clearDone = false,
+    int? page,
+    int? pageSize,
+    int? excludeDueBefore,
+    int? dueFrom,
+    int? dueTo,
+    int? startFrom,
+    int? startTo,
+    String? sortKey,
+    String? sortDir,
+  }) =>
+      ListFilter(
+        keyword: keyword,
+        page: page ?? this.page,
+        pageSize: pageSize ?? this.pageSize,
+        done: clearDone ? null : (done ?? this.done),
+        status: status,
+        priorityMin: priorityMin,
+        priorityEq: priorityEq,
+        projectId: projectId,
+        projectIds: projectIds,
+        favoriteOnly: favoriteOnly,
+        myDayToday: myDayToday,
+        ungrouped: ungrouped,
+        excludeDueBefore: excludeDueBefore ?? this.excludeDueBefore,
+        hasDue: hasDue,
+        sortKey: sortKey ?? this.sortKey,
+        sortDir: sortDir ?? this.sortDir,
+        dueFrom: dueFrom ?? this.dueFrom,
+        dueTo: dueTo ?? this.dueTo,
+        startFrom: startFrom ?? this.startFrom,
+        startTo: startTo ?? this.startTo,
+        // 保存筛选器谓词没有「就地改」的场景，原样透传防丢键
+        labelIds: labelIds,
+        hasReminder: hasReminder,
+        hasAttachment: hasAttachment,
+        hasOpenSubtask: hasOpenSubtask,
+        createdFrom: createdFrom,
+        doneFrom: doneFrom,
+      );
+
+  /// bridge 载荷（FRB/ipc 同名 snake_case）
   Map<String, dynamic> toJson() => {
         'keyword': keyword,
         'page': page,
         'page_size': pageSize,
+        'done': done,
+        'status': status,
+        'priority_min': priorityMin,
+        'priority_eq': priorityEq,
+        'project_id': projectId,
+        'project_ids': projectIds,
+        'favorite_only': favoriteOnly,
+        'my_day_today': myDayToday,
+        'ungrouped': ungrouped,
+        'exclude_due_before': excludeDueBefore,
+        'has_due': hasDue,
         'sort_key': sortKey,
         'sort_dir': sortDir,
         'due_from': dueFrom,
         'due_to': dueTo,
+        'start_from': startFrom,
+        'start_to': startTo,
+        'label_ids': labelIds,
+        'has_reminder': hasReminder,
+        'has_attachment': hasAttachment,
+        'has_open_subtask': hasOpenSubtask,
+        'created_from': createdFrom,
+        'done_from': doneFrom,
       };
+
+  static bool _sameIds(List<int>? a, List<int>? b) {
+    if (identical(a, b)) return true;
+    if (a == null || b == null || a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ListFilter &&
+          keyword == other.keyword &&
+          page == other.page &&
+          pageSize == other.pageSize &&
+          done == other.done &&
+          status == other.status &&
+          priorityMin == other.priorityMin &&
+          priorityEq == other.priorityEq &&
+          projectId == other.projectId &&
+          _sameIds(projectIds, other.projectIds) &&
+          favoriteOnly == other.favoriteOnly &&
+          myDayToday == other.myDayToday &&
+          ungrouped == other.ungrouped &&
+          excludeDueBefore == other.excludeDueBefore &&
+          hasDue == other.hasDue &&
+          sortKey == other.sortKey &&
+          sortDir == other.sortDir &&
+          dueFrom == other.dueFrom &&
+          dueTo == other.dueTo &&
+          startFrom == other.startFrom &&
+          startTo == other.startTo &&
+          _sameIds(labelIds, other.labelIds) &&
+          hasReminder == other.hasReminder &&
+          hasAttachment == other.hasAttachment &&
+          hasOpenSubtask == other.hasOpenSubtask &&
+          createdFrom == other.createdFrom &&
+          doneFrom == other.doneFrom;
+
+  // 20 个字段已超出 Object.hash 的位参上限，改 hashAll（保序、支持任意长度）
+  @override
+  int get hashCode => Object.hashAll([
+        keyword,
+        page,
+        pageSize,
+        done,
+        status,
+        priorityMin,
+        priorityEq,
+        projectId,
+        projectIds == null ? null : Object.hashAll(projectIds!),
+        favoriteOnly,
+        myDayToday,
+        ungrouped,
+        excludeDueBefore,
+        hasDue,
+        sortKey,
+        sortDir,
+        dueFrom,
+        dueTo,
+        startFrom,
+        startTo,
+        labelIds == null ? null : Object.hashAll(labelIds!),
+        hasReminder,
+        hasAttachment,
+        hasOpenSubtask,
+        createdFrom,
+        doneFrom,
+      ]);
 }
 
 /// 键集分页游标（镜像 Rust ListCursor）
@@ -92,6 +315,37 @@ class TodoTaskOverview {
     required this.total,
     required this.undoneByProject,
   });
+}
+
+/// 看板/四象限分组维度（镜像 Rust `BoardGroupBy`）。
+///
+/// 标签档没有对应项：列定义随任务标签动态变化，窗口内的标签会让空列消失，
+/// 故标签档仍走全量通道（与桌面 `boardGroupBy` 判定同口径）。
+enum TodoBoardGroupBy { project, status, priority, due, quadrant }
+
+/// 看板单列（镜像 Rust TodoTaskBoardGroup）
+class TodoTaskBoardGroup {
+  /// 组键（与 core `board_group_expr` 逐字一致：项目 = `{id}`/`ungrouped`、
+  /// 优先级 = `pri:{n}`、截止 = `due:{bucket}`、四象限 = `{quadrant}`）
+  final String key;
+
+  /// 组总数（不受每列上限影响）
+  final int total;
+  final List<TodoTask> items;
+
+  const TodoTaskBoardGroup({
+    required this.key,
+    required this.total,
+    required this.items,
+  });
+}
+
+/// 看板/四象限窗口结果（镜像 Rust TodoTaskBoard）
+class TodoTaskBoardResult {
+  final List<TodoTaskBoardGroup> groups;
+  final int total;
+
+  const TodoTaskBoardResult({required this.groups, required this.total});
 }
 
 /// 更新载荷构建约定（对齐 Rust `Option<Option<T>>` 三态语义）：

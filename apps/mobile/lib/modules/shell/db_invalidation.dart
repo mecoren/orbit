@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/api/dto.dart';
+import '../todo/providers/task_window_provider.dart';
 import '../todo/providers/todo_providers.dart';
 
 /// db-change 表级失效目标（B7，与 provider 解耦的纯枚举——决策面可单测）
@@ -132,6 +133,18 @@ bool invalidateByTable(WidgetRef ref, String table) {
     switch (target) {
       case DbCacheTarget.tasks:
         ref.invalidate(todoTasksProvider);
+        // 窗口化家族（P1，docs/07 #105）：列表/表格/看板/逾期/完成卡/
+        // 总览/侧栏计数的真值收敛者。family 整体失效 = 所有筛选档一起重拉
+        //（只有屏幕上正在 watch 的那档会真正发查询）
+        ref.invalidate(taskWindowProvider);
+        ref.invalidate(taskWindowTotalProvider);
+        ref.invalidate(taskOverdueProvider);
+        ref.invalidate(taskDoneCardProvider);
+        ref.invalidate(taskDoneTotalProvider);
+        ref.invalidate(taskTodayStripProvider);
+        ref.invalidate(taskBoardProvider);
+        ref.invalidate(taskOverviewProvider);
+        ref.invalidate(sidebarCountsProvider);
       case DbCacheTarget.taskDetail:
         ref.invalidate(taskDetailProvider);
       case DbCacheTarget.trashTasks:

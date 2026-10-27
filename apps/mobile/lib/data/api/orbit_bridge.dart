@@ -328,6 +328,19 @@ abstract class OrbitBridge {
   /// 任务总览：总数（「已加载 X / 共 Y」）+ 按项目未完成计数（侧栏角标）
   Future<TodoTaskOverview> todoTaskOverview(ListFilter filter);
 
+  /// 看板/四象限窗口化（对齐桌面 `todo_tasks_board`）：每列前
+  /// [limitPerGroup] 条 + 每列总数（不受上限影响）。
+  ///
+  /// [dayStart]/[dayEnd] 由 Dart 侧按本地时区算好传入——due 五分桶与
+  /// 四象限「今天以内到期 = 紧急」的界不在 Rust 侧重算。
+  Future<TodoTaskBoardResult> todoTaskBoard(
+    ListFilter filter,
+    TodoBoardGroupBy groupBy,
+    int limitPerGroup,
+    int dayStart,
+    int dayEnd,
+  );
+
   Future<TodoTask> todoTaskGet(int id);
   Future<TodoTask> todoTaskCreate(TodoTaskCreateInput input);
   Future<TodoTask> todoTaskUpdate(int id, String patchJson);

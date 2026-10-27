@@ -357,7 +357,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     final taskId = dot.taskId;
     if (taskId == null) return;
     final byDay =
-        ref.read(calendarByDayProvider).value ?? const <String, List<TodoTask>>{};
+        ref.read(calendarByDayRangeProvider(_visibleRange)).value ??
+            const <String, List<TodoTask>>{};
     TodoTask? found;
     for (final t in byDay[_ymd(date)] ?? const <TodoTask>[]) {
       if (t.id == taskId) {
@@ -468,9 +469,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
-    // 派生聚合（calendarByDayProvider）：选中日等局部 setState 不再触发
-    // 全量重聚合，仅任务数据变化时重算一次
-    final byDay = ref.watch(calendarByDayProvider).value ??
+    // 派生聚合（按可见范围，P1 窗口化）：只拉前后各一月 + 时间轴 span 天
+    // 的任务，不再全量拉取后内存分桶
+    final range = _visibleRange;
+    final byDay = ref.watch(calendarByDayRangeProvider(range)).value ??
         const <String, List<TodoTask>>{};
     final holidayByDate = _holidayByDate();
     // 提醒投影（A4 只读聚合）：选中日任务卡的行内提醒图标数据源，
@@ -709,7 +711,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                         colors,
                         // 时段块按**起点日**分桶（timelineBlocksByDayProvider）：
                         // 显式排程块的视图日在 start 日，按 due 分桶会丢块
-                        ref.watch(timelineBlocksByDayProvider).value ??
+                        ref.watch(timelineBlocksByDayRangeProvider(range)).value ??
                             const <String, List<TodoTask>>{},
                       )
                     else
@@ -933,6 +935,25 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     );
   }
 
+  /// 日历可见范围：月历前后各一月（table_calendar 六周网格会带补位日）
+  /// 与时间轴 span 天取并集——一份查询同时喂日格与时间轴。
+  CalendarRange get _visibleRange {
+    final from = DateTime(_month.year, _month.month - 1, 1);
+    final monthTo = DateTime(_month.year, _month.month + 2, 1);
+    final timelineTo = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day + _timelineSpan,
+    );
+    return CalendarRange(
+      fromMs: from.millisecondsSinceEpoch,
+      toMs: monthTo.millisecondsSinceEpoch >
+              timelineTo.millisecondsSinceEpoch
+          ? monthTo.millisecondsSinceEpoch
+          : timelineTo.millisecondsSinceEpoch,
+    );
+  }
+
   /// 时间轴覆盖的日期（从选中日起 span 天）
   List<DateTime> get _timelineDays => [
         for (var i = 0; i < _timelineSpan; i++)
@@ -973,7 +994,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       await ref
           .read(orbitBridgeProvider)
           .todoTaskUpdate(taskId, encodePatch(patch));
-      ref.invalidate(todoTasksProvider);
+      // 范围聚合依赖任务表：拖拽落库后整体失效（family 全档一起标脏，
+      // 只有日历正在看的那一档会真正重查）
+      ref.invalidate(calendarRangeTasksProvider);
       WaitToast.warning(
         '时段已调整',
         description: patch.containsKey('due_date')

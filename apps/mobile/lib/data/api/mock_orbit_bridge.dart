@@ -58,11 +58,12 @@ class MockOrbitBridge implements OrbitBridge {
 
   // ── 任务键集分页辅助（与 Rust generic_repo::list_tasks_page 同语义）──
 
-  /// 排序方向：缺省 = 各档默认（priority/created 降序），与 BASE_SORT_DIR 一致
+  /// 排序方向：缺省 = 各档默认（priority/created/done_at 降序），
+  /// 与 BASE_SORT_DIR 一致
   static bool _taskSortDesc(String key, String? dir) {
     if (dir == 'asc') return false;
     if (dir == 'desc') return true;
-    return key == 'priority' || key == 'created';
+    return key == 'priority' || key == 'created' || key == 'done_at';
   }
 
   static num _taskNum(Map<String, dynamic> t, String field) =>
@@ -96,6 +97,14 @@ class MockOrbitBridge implements OrbitBridge {
         if (byPri != 0) return byPri;
         final byPos = _cmpNum(_taskNum(a, 'position'), _taskNum(b, 'position'), false);
         return byPos != 0 ? byPos : ida.compareTo(idb);
+      case 'done_at':
+        // 完成时刻倒序（Logbook）；done_at 缺失的脏行恒沉底（方向无关）
+        final ad = a['done_at'] as num?;
+        final bd = b['done_at'] as num?;
+        if ((ad == null) != (bd == null)) return ad == null ? 1 : -1;
+        if (ad == null && bd == null) return _cmpNum(ida, idb, desc);
+        final byDone = _cmpNum(ad!, bd!, desc);
+        return byDone != 0 ? byDone : _cmpNum(ida, idb, desc);
       default: // created
         final byCreated = _cmpNum(_taskNum(a, 'created_at'), _taskNum(b, 'created_at'), desc);
         return byCreated != 0 ? byCreated : _cmpNum(ida, idb, desc);
@@ -129,6 +138,14 @@ class MockOrbitBridge implements OrbitBridge {
         final pos = _taskNum(t, 'position');
         final k2 = c.key2 ?? 0;
         return pos > k2 || (pos == k2 && id > c.id);
+      case 'done_at':
+        final done = t['done_at'] as num?;
+        if (c.key == null) {
+          return done == null && (desc ? id < c.id : id > c.id);
+        }
+        if (done == null) return true;
+        if (done != k) return desc ? done < k : done > k;
+        return desc ? id < c.id : id > c.id;
       default: // created
         final ts = _taskNum(t, 'created_at');
         if (ts != k) return desc ? ts < k : ts > k;
@@ -141,9 +158,11 @@ class MockOrbitBridge implements OrbitBridge {
         ? _taskNum(t, 'position').toDouble()
         : key == 'due'
             ? (t['due_date'] as num?)?.toDouble()
-            : key == 'priority'
-                ? _taskNum(t, 'priority').toDouble()
-                : _taskNum(t, 'created_at').toDouble();
+            : key == 'done_at'
+                ? (t['done_at'] as num?)?.toDouble()
+                : key == 'priority'
+                    ? _taskNum(t, 'priority').toDouble()
+                    : _taskNum(t, 'created_at').toDouble();
     return ListCursor(
       sortKey: key,
       dir: dir,
@@ -153,9 +172,10 @@ class MockOrbitBridge implements OrbitBridge {
     );
   }
 
-  /// 谓词过滤（mock 侧）：is_deleted 基线 + keyword + 截止区间。
-  /// done/项目等谓词在移动端 ListFilter DTO 尚未暴露（列表仍走全量缓存派生），
-  /// 故此处与旧 todoTaskList 口径一致，不起那几档。
+  /// 谓词过滤（mock 侧）：与 core `build_task_predicate_clause` /
+  /// `build_task_where` 同口径——基线 is_deleted=0，其余谓词逐项下推。
+  ///
+  /// 顺序无关（AND 组合）；`project_ids` 优先于 `project_id`，空集合 = 空结果。
   List<Map<String, dynamic>> _taskRows(ListFilter f) {
     var rows = store.tasks.values.where((t) => t['is_deleted'] == 0).toList();
     final kw = f.keyword?.trim().toLowerCase();
@@ -165,6 +185,45 @@ class MockOrbitBridge implements OrbitBridge {
               (t['title'] as String? ?? '').toLowerCase().contains(kw) ||
               (t['description'] as String? ?? '').toLowerCase().contains(kw))
           .toList();
+    }
+    if (f.done != null) {
+      rows = rows.where((t) => (t['done'] == 1) == f.done).toList();
+    }
+    if (f.status != null) {
+      rows = rows.where((t) => t['status'] == f.status).toList();
+    }
+    if (f.priorityMin != null) {
+      rows = rows
+          .where((t) => (_taskNum(t, 'priority')) >= f.priorityMin!)
+          .toList();
+    }
+    if (f.priorityEq != null) {
+      rows =
+          rows.where((t) => _taskNum(t, 'priority') == f.priorityEq).toList();
+    }
+    final ids = f.projectIds;
+    if (ids != null) {
+      if (ids.isEmpty) return const [];
+      final set = ids.toSet();
+      rows = rows
+          .where((t) => t['project_id'] != null && set.contains(t['project_id']))
+          .toList();
+    } else if (f.projectId != null) {
+      rows = rows.where((t) => t['project_id'] == f.projectId).toList();
+    }
+    if (f.favoriteOnly == true) {
+      rows = rows.where((t) => t['is_favorite'] == 1).toList();
+    }
+    if (f.myDayToday != null) {
+      rows = rows.where((t) => t['my_day_date'] == f.myDayToday).toList();
+    }
+    if (f.ungrouped == true) {
+      rows = rows.where((t) => t['project_id'] == null).toList();
+    }
+    if (f.hasDue == true) {
+      rows = rows.where((t) => t['due_date'] != null).toList();
+    } else if (f.hasDue == false) {
+      rows = rows.where((t) => t['due_date'] == null).toList();
     }
     if (f.dueFrom != null) {
       final from = f.dueFrom!;
@@ -178,6 +237,85 @@ class MockOrbitBridge implements OrbitBridge {
       rows = rows.where((t) {
         final due = t['due_date'] as num?;
         return due != null && due < to;
+      }).toList();
+    }
+    if (f.startFrom != null) {
+      final from = f.startFrom!;
+      rows = rows.where((t) {
+        final start = t['start_date'] as num?;
+        return start != null && start >= from;
+      }).toList();
+    }
+    if (f.startTo != null) {
+      final to = f.startTo!;
+      rows = rows.where((t) {
+        final start = t['start_date'] as num?;
+        return start != null && start < to;
+      }).toList();
+    }
+    // 逾期行由置顶段独立取走：主列表排除它们但保留无截止行
+    if (f.excludeDueBefore != null) {
+      final before = f.excludeDueBefore!;
+      rows = rows.where((t) {
+        final due = t['due_date'] as num?;
+        return due == null || due >= before;
+      }).toList();
+    }
+    // 标签任一命中（core 侧是 EXISTS 子查询；空集合 = 不过滤）
+    final labelIds = f.labelIds;
+    if (labelIds != null && labelIds.isNotEmpty) {
+      final wanted = labelIds.toSet();
+      rows = rows.where((t) {
+        final owned = store.taskLabels[_taskNum(t, 'id').toInt()];
+        return owned != null && owned.keys.any(wanted.contains);
+      }).toList();
+    }
+    // 存在性三态：与 core 的 EXISTS / NOT EXISTS 同义
+    if (f.hasReminder != null) {
+      final withReminder = {
+        for (final r in store.reminders.values)
+          if (r['is_deleted'] == 0) _taskNum(r, 'task_id').toInt(),
+      };
+      rows = rows
+          .where((t) =>
+              withReminder.contains(_taskNum(t, 'id').toInt()) ==
+              f.hasReminder)
+          .toList();
+    }
+    if (f.hasAttachment != null) {
+      final withAttachment = {
+        for (final a in store.attachments.values)
+          if (a['is_deleted'] == 0) _taskNum(a, 'task_id').toInt(),
+      };
+      rows = rows
+          .where((t) =>
+              withAttachment.contains(_taskNum(t, 'id').toInt()) ==
+              f.hasAttachment)
+          .toList();
+    }
+    if (f.hasOpenSubtask != null) {
+      final withOpen = {
+        for (final s in store.subtasks.values)
+          if (s['is_deleted'] == 0 && s['done'] != 1)
+            _taskNum(s, 'task_id').toInt(),
+      };
+      rows = rows
+          .where((t) =>
+              withOpen.contains(_taskNum(t, 'id').toInt()) == f.hasOpenSubtask)
+          .toList();
+    }
+    // 创建 / 完成时间下界（done_from 隐含只看已完成）
+    if (f.createdFrom != null) {
+      final from = f.createdFrom!;
+      rows = rows
+          .where((t) => _taskNum(t, 'created_at').toInt() >= from)
+          .toList();
+    }
+    if (f.doneFrom != null) {
+      final from = f.doneFrom!;
+      rows = rows.where((t) {
+        final doneAt = t['done_at'] as num?;
+        return t['done'] == 1 && doneAt != null && doneAt >= from;
       }).toList();
     }
     return rows;
@@ -699,7 +837,8 @@ class MockOrbitBridge implements OrbitBridge {
   ) =>
       _delay(() {
         final key = filter.sortKey ?? 'manual';
-        if (!const ['manual', 'due', 'priority', 'created'].contains(key)) {
+        if (!const ['manual', 'due', 'priority', 'created', 'done_at']
+            .contains(key)) {
           throw ArgumentError('未知或不可分页的排序键: $key');
         }
         final desc = key == 'manual' ? false : _taskSortDesc(key, filter.sortDir);
@@ -749,6 +888,83 @@ class MockOrbitBridge implements OrbitBridge {
               .toList(),
         );
       });
+
+  /// 看板/四象限窗口（与 core `task_board` 同口径）：
+  /// 组键逐字一致，`quadrant` 追加 done=0（不覆盖调用方 done 谓词）。
+  @override
+  Future<TodoTaskBoardResult> todoTaskBoard(
+    ListFilter filter,
+    TodoBoardGroupBy groupBy,
+    int limitPerGroup,
+    int dayStart,
+    int dayEnd,
+  ) =>
+      _delay(() {
+        var rows = _taskRows(filter);
+        if (groupBy == TodoBoardGroupBy.quadrant) {
+          rows = rows.where((t) => t['done'] != 1).toList();
+        }
+        final key = filter.sortKey ?? 'manual';
+        final desc = _taskSortDesc(key, filter.sortDir);
+        rows.sort((a, b) => _compareTasks(a, b, key, desc));
+        final grouped = <String, List<Map<String, dynamic>>>{};
+        for (final t in rows) {
+          final k = _boardKey(groupBy, t, dayStart, dayEnd);
+          (grouped[k] ??= []).add(t);
+        }
+        final keys = grouped.keys.toList()..sort();
+        final prune = filter.keyword?.trim().isEmpty ?? true;
+        final limit = limitPerGroup.clamp(1, 200);
+        return TodoTaskBoardResult(
+          total: rows.length,
+          groups: [
+            for (final k in keys)
+              TodoTaskBoardGroup(
+                key: k,
+                total: grouped[k]!.length,
+                items: grouped[k]!
+                    .take(limit)
+                    .map((t) => TodoTask.fromListJson(_listRow(t, prune)))
+                    .toList(),
+              ),
+          ],
+        );
+      });
+
+  /// 看板组键（与 core `board_group_expr` 逐字一致）
+  static String _boardKey(
+    TodoBoardGroupBy groupBy,
+    Map<String, dynamic> t,
+    int dayStart,
+    int dayEnd,
+  ) {
+    const day = 86400000;
+    switch (groupBy) {
+      case TodoBoardGroupBy.project:
+        final pid = t['project_id'] as int?;
+        return pid == null ? 'ungrouped' : '$pid';
+      case TodoBoardGroupBy.status:
+        final s = t['status'] as String?;
+        return (s == 'doing' || s == 'done') ? s! : 'pending';
+      case TodoBoardGroupBy.priority:
+        final p = _taskNum(t, 'priority').toInt();
+        return 'pri:${(p >= 0 && p <= 5) ? p : 0}';
+      case TodoBoardGroupBy.due:
+        final due = t['due_date'] as num?;
+        if (due == null) return 'due:none';
+        if (due < dayStart) return 'due:overdue';
+        if (due < dayStart + day) return 'due:today';
+        if (due < dayStart + 7 * day) return 'due:week';
+        return 'due:later';
+      case TodoBoardGroupBy.quadrant:
+        final due = t['due_date'] as num?;
+        final important = _taskNum(t, 'priority') >= 3;
+        if (due != null && due < dayEnd) {
+          return important ? 'urgentImportant' : 'urgentNotImportant';
+        }
+        return important ? 'importantNotUrgent' : 'neither';
+    }
+  }
 
   @override
   Future<TodoTask> todoTaskGet(int id) =>

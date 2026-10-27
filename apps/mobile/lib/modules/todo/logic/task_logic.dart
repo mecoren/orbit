@@ -1167,12 +1167,87 @@ class KanbanColumn {
   final String colorHex;
   final List<TodoTask> tasks;
 
+  /// 列内**真实总数**（窗口化时 [tasks] 只是每列前 N 条）；null = 全量
+  /// 分组，总数即 `tasks.length`。列头角标读它，不能数已加载行。
+  final int? total;
+
   const KanbanColumn({
     required this.key,
     required this.title,
     required this.colorHex,
     required this.tasks,
+    this.total,
   });
+
+  /// 列头角标/「还有 N 条」用的总数
+  int get totalCount => total ?? tasks.length;
+}
+
+/// 看板列（服务端窗口版）：按移动端列定义与顺序生成列，任务与总数取自
+/// [TodoTaskBoardResult]（core 每列前 N 条 + 组总数）。
+///
+/// 与 [groupTasksForKanban] 的差别只在数据来源：列键仍在移动端定义
+/// （`p{id}`/`none`、`pri:{n}`、`due:{bucket}`），core 的组键在此映射
+/// （项目 = `{id}`/`ungrouped`，其余同名）。标签档不走此函数。
+List<KanbanColumn> kanbanColumnsFromBoard(
+  TodoTaskBoardResult board,
+  KanbanGroupBy by,
+  List<TodoProject> projects,
+) {
+  final groups = {for (final g in board.groups) g.key: g};
+  KanbanColumn col(
+    String localKey,
+    String serverKey,
+    String title,
+    String colorHex,
+  ) {
+    final g = groups[serverKey];
+    return KanbanColumn(
+      key: localKey,
+      title: title,
+      colorHex: colorHex,
+      tasks: g?.items ?? const <TodoTask>[],
+      total: g?.total ?? 0,
+    );
+  }
+
+  switch (by) {
+    case KanbanGroupBy.status:
+      return [
+        for (final s in const ['pending', 'doing', 'done'])
+          col(s, s, statusLabel(s), statusColorHex(s)),
+      ];
+    case KanbanGroupBy.priority:
+      return [
+        for (var lv = 5; lv >= 0; lv--)
+          col('pri:$lv', 'pri:$lv', priorityLabel(lv), priorityColorHex(lv)),
+      ];
+    case KanbanGroupBy.due:
+      const buckets = [
+        ('due:overdue', '逾期', 4),
+        ('due:today', '今天', 2),
+        ('due:week', '本周', 3),
+        ('due:later', '以后', 1),
+        ('due:none', '无截止日期', 0),
+      ];
+      return [
+        for (final (key, title, lv) in buckets)
+          col(key, key, title, priorityColorHex(lv)),
+      ];
+    case KanbanGroupBy.project:
+      final columns = <KanbanColumn>[
+        for (final p in projects)
+          if (groups.containsKey('${p.id}'))
+            col('p${p.id}', '${p.id}', p.title, p.hexColor),
+      ];
+      if (groups.containsKey('ungrouped')) {
+        columns.add(col('none', 'ungrouped', '未分组', '#6B7280'));
+      }
+      return columns;
+    case KanbanGroupBy.label:
+      // 标签档由调用方回退全量分组（列定义随标签动态变化）
+      return groupTasksForKanban(const <TodoTask>[], by, projects);
+  }
 }
 
 /// 截止分桶键（镜像桌面 kanban-group.ts `dueBucketOf`：纯日期口径五分桶；

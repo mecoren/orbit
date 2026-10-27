@@ -18,9 +18,10 @@ import '../../services/reminder_snooze.dart';
 import '../../services/share_receiver.dart';
 import '../../services/shortcut_receiver.dart';
 import '../../services/sync_on_change_scheduler.dart';
-import '../todo/logic/badge_count.dart';
 // as rep：规避 Flutter widgets 自带 RepeatMode 类名冲突（同 detail_screen）
 import '../todo/logic/repeat_logic.dart' as rep;
+import '../todo/logic/task_logic.dart' show QuickViewKey;
+import '../todo/providers/task_window_provider.dart';
 import '../todo/providers/todo_providers.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../auth/unlock_page.dart';
@@ -146,15 +147,16 @@ class _BootGateState extends ConsumerState<BootGate>
     }
   }
 
-  /// B6 角标刷新：读单份任务缓存（[todoTasksProvider]）算「今天截止或
-  /// 已逾期」未完成数——此前直拉 bridge.todoTaskList 全量 IPC，与缓存
-  /// 完全重复（双份万行过桥）；现只在缓存换值时计算，未就绪静默跳过
-  /// （listenManual 订阅会在数据到达后补刷）。
+  /// B6 角标刷新：「今天截止或已逾期」未完成数。
+  ///
+  /// P1 窗口化后改读 [sidebarCountsProvider]（SQL COUNT 聚合）——此前
+  /// listenManual 订阅 [todoTasksProvider] 会让这份万行全量查询常驻，
+  /// 只为算一个角标数字。
   Future<void> _refreshBadge() async {
     try {
-      final tasks = ref.read(todoTasksProvider).value;
-      if (!mounted || tasks == null) return;
-      await _badge.update(dueTodayOrOverdueCount(tasks));
+      final counts = await ref.read(sidebarCountsProvider.future);
+      if (!mounted) return;
+      await _badge.update(counts.quickView[QuickViewKey.today] ?? 0);
     } catch (e) {
       debugPrint('[BootGate] badge refresh failed: $e');
     }
@@ -262,7 +264,12 @@ class _BootGateState extends ConsumerState<BootGate>
     // 缓存完全重复）；快照为 null（缓存未就绪）时服务内回落直拉一次
     _scheduler = ReminderScheduler.attachOnce(
       ref.read(orbitBridgeProvider),
-      taskSnapshot: () => ref.read(todoTasksProvider).value,
+      // 只在缓存已存在时取快照：`ref.read` 会初始化 provider，若列表页
+      // 从未打开过，这里读一次就等于把万行全量拉回来。缓存缺失时调度器
+      // 自行回落直拉（提醒重排本来就要标题，一次定向查询可接受）。
+      taskSnapshot: () => ref.exists(todoTasksProvider)
+          ? ref.read(todoTasksProvider).value
+          : null,
     );
     // 每日摘要排程（G3）：读 cfg_kv 偏好 → 落一条系统闹钟「每日重复」通知。
     // 手机进程会被杀，故不走 Rust tick 而走系统闹钟（见 digest_scheduler 类头）；
@@ -366,7 +373,7 @@ class _BootGateState extends ConsumerState<BootGate>
     // B6 图标角标数据口：订阅单份任务缓存，每次换值（含失效重拉完成）即
     // 重算——订阅本身让失效立即重拉并回调，不必在 dbChanges 里抢跑
     //（ref.listen 仅限 build 期——异步流程用 listenManual）
-    ref.listenManual(todoTasksProvider, (_, _) => _refreshBadge());
+    ref.listenManual(sidebarCountsProvider, (_, _) => _refreshBadge());
     _refreshBadge(); // 订阅前缓存已就绪（热重入）时补一次
 
     // 小组件快照（#3）：ready 首刷（后续由 todo_tasks 事件驱动）

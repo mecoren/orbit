@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/api/dto.dart';
 import '../../../data/providers/bridge_provider.dart';
+import '../logic/paged_query.dart';
 import '../logic/time_block.dart';
+import 'task_window_provider.dart';
 
 /// 待办模块 Riverpod 手动声明（无 codegen）
 ///
@@ -96,13 +98,17 @@ final taskOpenSubtaskFlagsProvider = FutureProvider<Set<int>>((ref) async {
 });
 
 /// 任务列表单次拉取上限（A5/B6，与桌面 `TASK_LIST_PAGE_SIZE` 同口径）：
-/// 单份缓存与列表页「不完整」条幅共用——结果集达到它即意味着还有未取到的
-/// 任务，条幅按此判定而非另开 count 接口。
+/// 回退全量通道的上限（P1 窗口化后只服务回退视图）：标签筛选/标题排序/
+/// 保存筛选器预览等 core 无谓词的组合仍一次取回，达到上限提示收窄范围。
 const int taskListPageSize = 10000;
 
-/// 全量任务列表（B6 单份缓存）：全 App 唯一一份万行全量，各视图
-/// （侧栏计数 / 子列表 / 日历 / 保存筛选 / 角标）经 task_logic 派生过滤，
-/// 不再按参数分叉缓存——family 时代每个 keyword 都留一份万行副本。
+/// 全量任务列表（**按需**通道，P1 窗口化后不再是列表主数据源）。
+///
+/// 列表/表格/看板/矩阵/日历/Logbook 已改走 [taskWindowProvider] 等窗口通道；
+/// 本 provider 只留给确实需要整份集合的流程：周回顾、收件箱分诊、回顾中心、
+/// 保存筛选器预览、项目编辑页计数，以及上方的回退视图（标签筛选/标题排序/
+/// 标签看板）。**不要在任何常驻 UI（侧栏/底栏/角标）watch 它**——那会让
+/// 万行数组常驻，窗口化的内存收益归零（侧栏/底栏已改 [sidebarCountsProvider]）。
 ///
 /// 关键词查询**不走本 provider**：单份缓存是列裁剪产物（keyword 空时
 /// description 不随行传输），在其上做客户端关键词过滤会把「按描述搜索」
@@ -150,68 +156,117 @@ final taskActivityProvider =
       ref.watch(orbitBridgeProvider).taskActivityList(q.taskId, limit: q.limit),
 );
 
-/// 时段块起点日 → 任务聚合（时间轴档专用；docs/07 #74）。
-///
-/// 与 [calendarByDayProvider] 的差别：按**块起点所在日**而非 due_date 分桶——
-/// 显式排程块（`start_date` 带时刻、due 为空或异日）的可视图就是它的起点日，
-/// 按 due 分桶会把它落在别的日子甚至整个丢掉（无 due 的任务压根不进 byDay）。
-/// 分桶键与 [calendarByDayProvider] 同为 `yyyy-MM-dd`，便于复用同一套查询。
-///
-/// 起算口径（显式 start 优先 / due 倒推 / 两者皆无时刻不出块）见
-/// `logic/time_block.dart` 头注释——本 provider 只做派生，不重复判定。
-final timelineBlocksByDayProvider = FutureProvider<Map<String, List<TodoTask>>>(
-  (ref) async {
-    final tasks = await ref.watch(todoTasksProvider.future);
-    final map = <String, List<TodoTask>>{};
-    for (final t in tasks) {
-      final block = taskTimeBlock(t);
-      if (block == null) continue;
-      final d = DateTime.fromMillisecondsSinceEpoch(block.startMs);
-      final key = '${d.year.toString().padLeft(4, '0')}-'
-          '${d.month.toString().padLeft(2, '0')}-'
-          '${d.day.toString().padLeft(2, '0')}';
-      (map[key] ??= []).add(t);
-    }
-    // 组内按块起点升序（时间轴自上而下即时间序；同刻按 id 稳定）
-    for (final list in map.values) {
-      list.sort((a, b) {
-        final sa = taskTimeBlock(a)!.startMs;
-        final sb = taskTimeBlock(b)!.startMs;
-        if (sa != sb) return sa.compareTo(sb);
-        return a.id.compareTo(b.id);
-      });
-    }
-    return map;
-  },
-);
+// 时段块 / due 分桶的日历聚合已迁到范围版（见下方
+// `timelineBlocksByDayRangeProvider` / `calendarByDayRangeProvider`）：
+// 全量派生在 50k 档既拉全表又在每次数据变动时全表重排，已被窗口化取代。
 
-/// due_date → 本地 YYYY-MM-DD 任务聚合（日历视图月历圆点/按日分组共用）。
+/// 日历可见范围（本地日界毫秒，半开区间 `[fromMs, toMs)`）。
+@immutable
+class CalendarRange {
+  final int fromMs;
+  final int toMs;
+
+  const CalendarRange({required this.fromMs, required this.toMs});
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CalendarRange && fromMs == other.fromMs && toMs == other.toMs;
+
+  @override
+  int get hashCode => Object.hash(fromMs, toMs);
+}
+
+/// 范围内任务（P1 窗口化，docs/07 #105）：日历不再拉全量后内存分桶。
 ///
-/// 从 todoTasksProvider 派生而非在日历 build 里每次重算：点击选中日等
-/// 局部 setState 也会触发 build，全量重聚合 + 逐日排序在千条任务下是
-/// 每帧数万次比较——派生后仅在任务列表数据真正变化时重算一次。
-final calendarByDayProvider = FutureProvider<Map<String, List<TodoTask>>>(
-  (ref) async {
-    // 保持依赖：任务列表刷新时本聚合同步重算
-    final tasks = await ref.watch(todoTasksProvider.future);
-    final map = <String, List<TodoTask>>{};
-    for (final t in tasks) {
-      final due = t.dueDate;
-      if (due == null) continue;
-      final d = DateTime.fromMillisecondsSinceEpoch(due);
-      final key =
-          '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-      (map[key] ??= []).add(t);
-    }
-    for (final list in map.values) {
-      list.sort((a, b) {
-        if (a.position != b.position) return a.position.compareTo(b.position);
-        return b.createdAt.compareTo(a.createdAt);
-      });
-    }
-    return map;
-  },
-);
+/// 两路并集（按 id 去重）：
+/// - `due_date ∈ [from, to)`：月历日格/议程按 due 分桶；
+/// - `start_date ∈ [from, to)`：时间轴按**块起点**分桶，显式排程块的
+///   start 可能落在 due 之外（甚至无 due），只查 due 会漏块。
+final calendarRangeTasksProvider = FutureProvider.autoDispose
+    .family<List<TodoTask>, CalendarRange>((ref, range) async {
+  final bridge = ref.watch(orbitBridgeProvider);
+  final pages = await Future.wait([
+    fetchAllTaskPages(
+      (cursor) => bridge.todoTaskPage(
+        ListFilter(
+          dueFrom: range.fromMs,
+          dueTo: range.toMs,
+          sortKey: 'due',
+          sortDir: 'asc',
+        ),
+        cursor,
+        kTaskPageWindow,
+      ),
+    ),
+    fetchAllTaskPages(
+      (cursor) => bridge.todoTaskPage(
+        ListFilter(
+          startFrom: range.fromMs,
+          startTo: range.toMs,
+          sortKey: 'due',
+          sortDir: 'asc',
+        ),
+        cursor,
+        kTaskPageWindow,
+      ),
+    ),
+  ]);
+  final seen = <int>{};
+  return [
+    for (final page in pages)
+      for (final t in page)
+        if (seen.add(t.id)) t,
+  ];
+});
+
+/// 日历日格聚合（范围版）：`due_date` → 本地 YYYY-MM-DD。
+final calendarByDayRangeProvider = FutureProvider.autoDispose
+    .family<Map<String, List<TodoTask>>, CalendarRange>((ref, range) async {
+  final tasks = await ref.watch(calendarRangeTasksProvider(range).future);
+  final map = <String, List<TodoTask>>{};
+  for (final t in tasks) {
+    final due = t.dueDate;
+    if (due == null) continue;
+    (map[_localYmd(due)] ??= []).add(t);
+  }
+  for (final list in map.values) {
+    list.sort((a, b) {
+      if (a.position != b.position) return a.position.compareTo(b.position);
+      return b.createdAt.compareTo(a.createdAt);
+    });
+  }
+  return map;
+});
+
+/// 时间轴聚合（范围版）：按块的**起点日**分桶（口径见 `task_time_block`）。
+final timelineBlocksByDayRangeProvider = FutureProvider.autoDispose
+    .family<Map<String, List<TodoTask>>, CalendarRange>((ref, range) async {
+  final tasks = await ref.watch(calendarRangeTasksProvider(range).future);
+  final map = <String, List<TodoTask>>{};
+  for (final t in tasks) {
+    final block = taskTimeBlock(t);
+    if (block == null) continue;
+    (map[_localYmd(block.startMs)] ??= []).add(t);
+  }
+  // 组内按块起点升序（同一刻按 id 稳定）
+  for (final list in map.values) {
+    list.sort((a, b) {
+      final sa = taskTimeBlock(a)!.startMs;
+      final sb = taskTimeBlock(b)!.startMs;
+      if (sa != sb) return sa.compareTo(sb);
+      return a.id.compareTo(b.id);
+    });
+  }
+  return map;
+});
+
+String _localYmd(int ms) {
+  final d = DateTime.fromMillisecondsSinceEpoch(ms);
+  return '${d.year.toString().padLeft(4, '0')}-'
+      '${d.month.toString().padLeft(2, '0')}-'
+      '${d.day.toString().padLeft(2, '0')}';
+}
 
 /// 同步配置；未配置返回 null（设置页消费）
 final syncConfigProvider = FutureProvider<SyncConfigView?>(
@@ -292,6 +347,16 @@ void invalidateBusinessCaches(WidgetRef ref) {
   ref.invalidate(taskAttachmentFlagsProvider);
   ref.invalidate(taskOpenSubtaskFlagsProvider);
   ref.invalidate(todoTasksProvider);
+  // 窗口化家族（P1）：列表/表格/看板/逾期/完成卡/总览/侧栏计数
+  ref.invalidate(taskWindowProvider);
+  ref.invalidate(taskWindowTotalProvider);
+  ref.invalidate(taskOverdueProvider);
+  ref.invalidate(taskDoneCardProvider);
+  ref.invalidate(taskDoneTotalProvider);
+  ref.invalidate(taskTodayStripProvider);
+  ref.invalidate(taskBoardProvider);
+  ref.invalidate(taskOverviewProvider);
+  ref.invalidate(sidebarCountsProvider);
   ref.invalidate(taskDetailProvider);
   ref.invalidate(taskActivityProvider);
   ref.invalidate(syncConfigProvider);

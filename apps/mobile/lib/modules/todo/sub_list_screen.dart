@@ -37,10 +37,12 @@ import 'logic/batch_actions.dart';
 import 'logic/quick_add_context.dart';
 import 'logic/repeat_logic.dart' as rep;
 import 'logic/display_prefs.dart';
+import 'logic/paged_query.dart';
 import 'logic/project_tree.dart';
 import 'logic/task_logic.dart';
 import 'logic/undo_stack.dart';
 import 'logic/view_mode.dart';
+import 'providers/task_window_provider.dart';
 import 'providers/todo_providers.dart';
 import 'providers/undo_provider.dart';
 import 'quick_add_sheet.dart';
@@ -189,6 +191,38 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   // 刻意不做全局 Provider）。非空即选择模式。
   final Set<int> _selected = {};
 
+  /// 选中行快照（id → 任务）：窗口化后选中行可能滚出已加载窗口，批量
+  /// patch 的「原值」不能只从当前窗口反查——选中时即记下对象，撤销/批量
+  /// 全程用同一份快照，与落库时的原值一致。
+  final Map<int, TodoTask> _selectedSnapshots = {};
+
+  /// 逾期/快捷视图的本地日界基准：每分钟走一格（跨零点后判定不滞后），
+  /// 也不会每帧重建查询键。
+  int _nowTick = DateTime.now().millisecondsSinceEpoch;
+  Timer? _nowTimer;
+
+  /// 上一帧的分页查询键（切筛选/排序/视图时重置入场动画的已知集）
+  String? _lastWindowKey;
+
+  /// 已加载窗口是否还有下一层（manual 拖拽落位尾部时的跨窗口保护）
+  bool _windowHasMore = false;
+
+  /// 当前可见的未完成行（build 落定）：批量/重排/多选入口读它，
+  /// 不再回读全量缓存（窗口化后全量通道可能根本没打开）。
+  List<TodoTask> _visibleUndone = const [];
+  Map<int, TodoTask> _visibleById = const {};
+
+  /// 当前窗口查询（build 落定）：滚动预取按它续拉下一页
+  PagedTaskQuery? _activeWindowQuery;
+
+  /// 滚动预取（阈值 400px ≈ 两屏尾距）：反复触发由 notifier 的
+  /// `hasMore/loadingMore` 守卫去重，无需再做节流
+  void _maybeLoadMore() {
+    final q = _activeWindowQuery;
+    if (q == null) return;
+    ref.read(taskWindowProvider(q).notifier).loadMore();
+  }
+
   /// 批量动作进行中（防重复触发；批量期间串行写库）
   bool _batchBusy = false;
 
@@ -261,17 +295,42 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     _viewMode = loadViewModeForProject(widget.query.projectId);
     // 登记新建落点：底部导航中央添加钮读取本屏筛选入参做预填（退场清空）
     QuickAddContext.set(widget.query);
+    // 逾期/今天/近7天/我的一天的日界基准每分钟走一格
+    _nowTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (!mounted) return;
+      setState(() => _nowTick = DateTime.now().millisecondsSinceEpoch);
+    });
   }
 
   @override
   void dispose() {
     QuickAddContext.set(null);
+    _nowTimer?.cancel();
     _reorderScrollController.dispose();
     _listScrollController.dispose();
     // 退场窗内直接离屏：补一次失效，避免主列表缓存残留已删行
     //（窗后 mounted 熄火，本该触发的那次 invalidate 没发生）
-    if (_exitingIds.isNotEmpty) ref.invalidate(todoTasksProvider);
+    if (_exitingIds.isNotEmpty) _invalidateTaskCaches();
     super.dispose();
+  }
+
+  /// 任务读通道统一失效：全量通道 + 窗口化家族（列表/表格/看板/逾期/
+  /// 完成卡/总览/侧栏计数）。
+  ///
+  /// 窗口化后主列表不再 watch [todoTasksProvider]——只失效全量通道会让
+  /// 列表一行不刷。db-change 的精确失效链在 `db_invalidation.dart` 里
+  /// 也挂了同一个家族（云同步拉取无事件时走这里）。
+  void _invalidateTaskCaches() {
+    ref.invalidate(todoTasksProvider);
+    ref.invalidate(taskWindowProvider);
+    ref.invalidate(taskWindowTotalProvider);
+    ref.invalidate(taskOverdueProvider);
+    ref.invalidate(taskDoneCardProvider);
+    ref.invalidate(taskDoneTotalProvider);
+    ref.invalidate(taskTodayStripProvider);
+    ref.invalidate(taskBoardProvider);
+    ref.invalidate(taskOverviewProvider);
+    ref.invalidate(sidebarCountsProvider);
   }
 
   /// 按下：重置位移原点（时间上先于 500ms 的长按拾起）
@@ -562,15 +621,14 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   /// 面板「批量选择」入口：多选态以「选中集非空」为准，故先选上当前视图的
   /// 首条未完成任务——与长按菜单「多选」同语义（那里选的是被长按的那行）
   void _enterSelectionFromPanel() {
-    final tasks = ref.read(todoTasksProvider).value ?? const <TodoTask>[];
-    final first = sortTasks(filterTasks(tasks, _listQuery()), _sortKey, _sortDir)
-        .where((t) => !t.isDone)
-        .firstOrNull;
+    // 窗口化后「首条」= 当前已加载窗口的首条未完成行；视口里没有行时
+    // 不再回读全量（用户看不到的行不该被预选进批量工具条）
+    final first = _visibleUndone.firstOrNull;
     if (first == null) {
       WaitToast.info('没有可多选的任务');
       return;
     }
-    setState(() => _selected.add(first.id));
+    _enterSelection(first);
   }
 
   /// 今日上下文条是否有内容（今日已达成 / 今日已排 / 已设预算三者其一）。
@@ -634,7 +692,10 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
 
   /// 周回顾向导（G5）：三步引导处置逾期/无日期/停滞，写路径复用 _patchTask
   Future<void> _startWeeklyReview() async {
-    final tasks = ref.read(todoTasksProvider).value ?? const <TodoTask>[];
+    // 周回顾要跨全部逾期/无日期/停滞：窗口不够用，按需拉一次全量
+    //（全量通道平时不再被列表常驻 watch，关闭本页即不再续拉）
+    final tasks = await ref.read(todoTasksProvider.future);
+    if (!mounted) return;
     final handled = await showWeeklyReviewSheet(
       context,
       tasks: tasks,
@@ -649,7 +710,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
       },
     );
     if (handled != null && handled.isNotEmpty) {
-      ref.invalidate(todoTasksProvider);
+      _invalidateTaskCaches();
       ref.invalidate(taskDetailProvider);
     }
   }
@@ -839,7 +900,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   }) async {
     try {
       await ref.read(orbitBridgeProvider).todoTaskUpdate(id, encodePatch(patch));
-      ref.invalidate(todoTasksProvider);
+      _invalidateTaskCaches();
       ref.invalidate(taskDetailProvider);
     } catch (_) {
       WaitToast.destructive(failMessage);
@@ -872,7 +933,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     if (task.isDone) return _patchTask(task.id, buildDoneTogglePatch(task));
     try {
       final res = await ref.read(orbitBridgeProvider).todoTaskComplete(task.id);
-      ref.invalidate(todoTasksProvider);
+      _invalidateTaskCaches();
       ref.invalidate(taskDetailProvider);
       _notifyNextInstance(res);
     } catch (_) {
@@ -938,7 +999,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     await Future.delayed(AppMotion.slow);
     if (!mounted) return;
     setState(() => _exitingIds.remove(taskId));
-    ref.invalidate(todoTasksProvider);
+    _invalidateTaskCaches();
   }
 
   Future<void> _deleteTask(TodoTask task) async {
@@ -956,7 +1017,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
         // 标准分支：ghost 退场（其余缓存已在 runner 内即时失效）
         unawaited(_removeRowWithExit(task.id));
       } else {
-        ref.invalidate(todoTasksProvider);
+        _invalidateTaskCaches();
       }
       // 删除可撤销（桌面 use-undoable-delete 同语义）：撤销 = 从回收站恢复
       _offerUndo(UndoEntry(
@@ -977,23 +1038,49 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   /// 矩阵档桌面无多选，菜单不给入口）
   void _enterSelection(TodoTask task) {
     setState(() => _selected.add(task.id));
+    _selectedSnapshots[task.id] = task;
   }
 
   void _toggleSelect(int taskId) {
+    final task = _visibleById[taskId] ?? _selectedSnapshots[taskId];
     setState(() {
-      if (!_selected.remove(taskId)) _selected.add(taskId);
+      if (_selected.remove(taskId)) {
+        _selectedSnapshots.remove(taskId);
+      } else {
+        // 拿不到行快照就不入集合：否则「已选 N 项」里会混进无法定位的行，
+        // 批量动作按 [_selectedTasks] 过滤后静默少写一条（2026-10-27 真机
+        // 批量设优先级「3 项选中只落地 2 条」的根因）。
+        if (task == null) return;
+        _selected.add(taskId);
+        _selectedSnapshots[taskId] = task;
+      }
     });
   }
 
   void _exitSelection() {
-    setState(_selected.clear);
+    setState(() {
+      _selected.clear();
+      _selectedSnapshots.clear();
+    });
   }
 
-  /// 选中集（按当前缓存快照取，保证批量 patch 的「原值」与落库一致）
-  List<TodoTask> _selectedTasks() {
-    final tasks = ref.read(todoTasksProvider).value ?? const <TodoTask>[];
-    return tasks.where((t) => _selected.contains(t.id)).toList();
+  /// 全选当前可见的未完成行（+ 展开时的完成卡直显行）：只选**看得见**的，
+  /// 不做跨窗口全选——否则批量删除会连带清掉屏上根本没出现的行。
+  void _selectAllVisible(List<TodoTask> doneShown) {
+    setState(() {
+      for (final t in [..._visibleUndone, ...doneShown]) {
+        _selected.add(t.id);
+        _selectedSnapshots[t.id] = t;
+      }
+    });
   }
+
+  /// 选中集（选中时记下的对象快照）：批量 patch 的「原值」必须与用户
+  /// 当时看到/勾选的行一致——窗口化后回读缓存可能已不含该行。
+  List<TodoTask> _selectedTasks() => [
+        for (final id in _selected)
+          if (_selectedSnapshots[id] != null) _selectedSnapshots[id]!,
+      ];
 
   /// 批量动作统一入口：串行写库 + 单次收敛刷新 + 可撤销浮层
   ///
@@ -1100,7 +1187,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
         }
       }
 
-      ref.invalidate(todoTasksProvider);
+      _invalidateTaskCaches();
       ref.invalidate(taskDetailProvider);
       if (action == BatchAction.addLabel) {
         ref.invalidate(taskLabelsProjectionProvider);
@@ -1189,7 +1276,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
         }
       }
     } finally {
-      ref.invalidate(todoTasksProvider);
+      _invalidateTaskCaches();
       ref.invalidate(taskDetailProvider);
       ref.invalidate(taskLabelsProjectionProvider);
       ref.invalidate(trashTasksProvider);
@@ -1236,7 +1323,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
           failures++;
         }
       }
-      ref.invalidate(todoTasksProvider);
+      _invalidateTaskCaches();
       ref.invalidate(taskDetailProvider);
       if (!mounted) return;
       if (changed == 0) {
@@ -1270,18 +1357,24 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   /// 头行/分隔行若插进流会打破 ReorderableListView 的槽位索引，
   /// 故只排序不插行；无逾期时原样返回（重排落库数学与旧口径一致）。
   List<TodoTask> _manualReorderStream(List<TodoTask> undone) {
-    final grouped = groupOverdueFirst(undone);
+    // 与 build 里的 overdueGroups 共用同一时间基准：两处各取 DateTime.now()
+    // 会在分钟边界上把同一行判成「逾期/不逾期」两种，槽位与渲染对不上
+    final grouped = groupOverdueFirst(undone, _nowTick);
     return grouped.overdue.isEmpty
         ? undone
         : [...grouped.overdue, ...grouped.rest];
   }
 
   Future<void> _reorderTasks(int oldIndex, int newIndex) async {
-    final tasks =
-        ref.read(todoTasksProvider).value ?? const <TodoTask>[];
-    final visible = sortTasks(filterTasks(tasks, _listQuery()), _sortKey, _sortDir)
-        .where((t) => !t.isDone)
-        .toList();
+    // 只用已加载窗口算落位邻居（与 ReorderableListView 的槽位同源）。
+    // 还有下一页时不允许把行拖到窗口末尾之后：那会插到看不见的行上方，
+    // 落库位置与用户预期不符（docs/13 P1 第 4 条：跨窗口拖拽不猜）
+    if (_windowHasMore && newIndex >= _visibleUndone.length - 1) {
+      WaitToast.info('还有未加载的任务，请先滚动加载后再拖到最后');
+      _invalidateTaskCaches();
+      return;
+    }
+    final visible = _visibleUndone;
     final reordered = reorderItems(_manualReorderStream(visible), oldIndex, newIndex);
     final dragged = reordered[newIndex];
     final prevPos = newIndex > 0 ? reordered[newIndex - 1].position : null;
@@ -1295,7 +1388,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     } catch (_) {
       WaitToast.destructive('排序失败');
     } finally {
-      ref.invalidate(todoTasksProvider);
+      _invalidateTaskCaches();
     }
   }
 
@@ -1307,7 +1400,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
       ref,
       task: task,
       onChanged: () {
-        ref.invalidate(todoTasksProvider);
+        _invalidateTaskCaches();
         ref.invalidate(taskDetailProvider(task.id));
         ref.invalidate(taskRemindersProjectionProvider);
       },
@@ -1438,7 +1531,12 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   /// 通常仍在加载（`value ?? []` 为空），若此时就播种，数据到达后整表都会播
   /// 入场（观感是列表整体撑开）。同样地，滚动出场不重播——虚拟化复用重建时
   /// id 已在集合中；清空视图后重新出现的行会正常播一次。
-  void _trackTaskAppearance(List<TodoTask> tasks) {
+  void _trackTaskAppearance(List<TodoTask> tasks, String windowKey) {
+    // 切筛选/排序/视图 = 一份新数据源：重置已知集，重新出现的行正常播一次
+    if (_lastWindowKey != windowKey) {
+      _lastWindowKey = windowKey;
+      _knownTaskIds = null;
+    }
     final ids = {for (final t in tasks) t.id};
     final known = _knownTaskIds;
     if (known == null) {
@@ -1448,7 +1546,8 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
       return;
     }
     _appearedTaskIds = ids.difference(known);
-    _knownTaskIds = ids;
+    // 已知集只增不减：翻页后上一页 id 仍算「已出现」，回滚/重建不重播入场
+    _knownTaskIds = {...known, ...ids};
   }
 
   /// 标准列表分支的行入场包装。manual 重排档与 Logbook 分组档有意不做：
@@ -1471,16 +1570,17 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final tasksAsync = ref.watch(todoTasksProvider);
-    final tasks = tasksAsync.value ?? [];
-    // 初次加载（无旧值可守）才给骨架：重查/下拉刷新走旧内容，不闪骨架
-    final tasksLoading = !tasksAsync.hasValue && tasksAsync.isLoading;
     final projects = ref.watch(todoProjectsProvider).value ?? [];
 
     // done 快捷视图 → Logbook 分组态（按完成日倒序，与桌面同口径）；
-    // 隐藏开关不参与（完成集入口）。其余视图照旧平铺 + 逾期置顶
+    // 其余视图照旧平铺 + 逾期置顶
     // （今天页签切换到已完成同样进 Logbook：标题与分组同步跟随覆写视图）
     final isLogbook = _effectiveQuery.quickView == QuickViewKey.done;
+    // 看板/表格/矩阵仅在非 Logbook 态生效：完成历史按日分组的语义在分列/
+    // 表格/象限里会丢失（桌面同口径）
+    final showKanban = _viewMode == TaskViewMode.kanban && !isLogbook;
+    final showTable = _viewMode == TaskViewMode.table && !isLogbook;
+    final showMatrix = _viewMode == TaskViewMode.matrix && !isLogbook;
 
     // 标签投影（A4 只读聚合）：列表内标签筛选与看板/表格标签色点共用；
     // 投影未就绪时回落空表（标签档不生效、色点不渲染，不阻塞列表）
@@ -1507,40 +1607,169 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     // 显示偏好（竞品「显示详细/显示设置」）：行内副标题渲染粒度
     final displayPrefs = ref.watch(displayPrefsProvider);
 
-    final visible = applyTaskListFilters(
-      isLogbook
-          ? filterTasks(tasks, _listQuery(projects))
-          : sortTasks(
-              // 列表档：完成行交给尾部「已完成」折叠卡承接（不再是页头开关
-              // 一刀切隐藏）；看板 / 表格没有承接位，维持改版前的隐藏口径——
-              // 完成历史混进卡片墙/表格会淹掉这两档的工作面板语义
-              filterTasks(tasks, _listQuery(projects),
-                  hideDone: _viewMode != TaskViewMode.list),
-              _sortKey,
-              _sortDir),
-      _filters,
-      labelIdsByTask: labelIdsByTask,
+    // =======================================================================
+    // P1 窗口化：列表/表格/看板/矩阵/Logbook 各走服务端窗口通道
+    // =======================================================================
+    //
+    // 回退全量的两类组合（标题排序/标签看板）仍走 [todoTasksProvider]，
+    // 且只有在那时才 watch 全量通道——分页省下的内存不会被常驻的万行
+    // 查询填回去。标签筛选与保存筛选器条件已下推 SQL（label_ids 等谓词）。
+    final listQuery = _listQuery(projects);
+    final pagedQuery = buildPagedQuery(
+      input: listQuery,
+      filters: _filters,
+      sortKey: _sortKey,
+      sortDir: _sortDir,
+      // 本屏没有「选中保存筛选器」态（筛选器页独立路由），故不传 savedConditions
+      nowMs: _nowTick,
     );
+    // 标签看板：列定义随任务标签动态变化，窗口内的标签会让空列消失 → 全量
+    final labelBoardFallback =
+        showKanban && _kanbanGroupBy == KanbanGroupBy.label;
+    final windowed = pagedQuery != null && !labelBoardFallback;
+    final windowQuery = !windowed
+        ? null
+        : isLogbook
+            ? PagedTaskQuery(
+                filter: logbookFilterOf(pagedQuery),
+                sortKey: 'done_at',
+                sortDir: 'desc',
+              )
+            : pagedQuery;
+
+    // 看板/矩阵只消费 board 通道，不再额外拉一份主窗口分页
+    final boardOnly = showKanban || showMatrix;
+    final windowAsync = (windowQuery == null || boardOnly)
+        ? null
+        : ref.watch(taskWindowProvider(windowQuery));
+    final windowItems = windowAsync?.value?.items ?? const <TodoTask>[];
+    // 初次加载（无旧值可守）才给骨架：翻页/失效重查走旧内容，不闪骨架
+    final windowLoading =
+        windowAsync != null && !windowAsync.hasValue && windowAsync.isLoading;
+    final windowTotal = (windowQuery == null || boardOnly)
+        ? null
+        : ref.watch(taskWindowTotalProvider(windowQuery)).value;
+
+    // 逾期置顶段：独立查询（按 id 去重合并），仅列表/表格需要
+    final overdueItems = (windowed && !isLogbook && !showKanban && !showMatrix)
+        ? ref
+                .watch(taskOverdueProvider(
+                    (query: pagedQuery, nowMs: _nowTick)))
+                .value ??
+            const <TodoTask>[]
+        : const <TodoTask>[];
+
+    // 列表尾部「已完成 N」卡：完成时刻倒序前 20 条 + 总数（SQL 聚合）
+    final doneCardEnabled =
+        windowed && !isLogbook && !showKanban && !showTable && !showMatrix;
+    final doneCardItems = doneCardEnabled
+        ? ref.watch(taskDoneCardProvider(pagedQuery)).value ??
+            const <TodoTask>[]
+        : const <TodoTask>[];
+    final doneCardTotal = doneCardEnabled
+        ? ref.watch(taskDoneTotalProvider(pagedQuery)).value
+        : null;
+
+    // 看板/四象限窗口：每列前 N 条 + 每列真实总数
+    final boardGroupBy = showMatrix
+        ? TodoBoardGroupBy.quadrant
+        : showKanban
+            ? switch (_kanbanGroupBy) {
+                KanbanGroupBy.project => TodoBoardGroupBy.project,
+                KanbanGroupBy.status => TodoBoardGroupBy.status,
+                KanbanGroupBy.priority => TodoBoardGroupBy.priority,
+                KanbanGroupBy.due => TodoBoardGroupBy.due,
+                KanbanGroupBy.label => null,
+              }
+            : null;
+    final nowForBoard = DateTime.fromMillisecondsSinceEpoch(_nowTick);
+    final dayStartMs = DateTime(nowForBoard.year, nowForBoard.month,
+            nowForBoard.day)
+        .millisecondsSinceEpoch;
+    final boardQuery = (windowed && boardGroupBy != null)
+        ? BoardQuery(
+            query: pagedQuery,
+            groupBy: boardGroupBy,
+            dayStart: dayStartMs,
+            dayEnd: dayStartMs + 86400000,
+          )
+        : null;
+    final boardAsync =
+        boardQuery == null ? null : ref.watch(taskBoardProvider(boardQuery));
+    final boardResult = boardAsync?.value;
+    final boardLoading =
+        boardAsync != null && !boardAsync.hasValue && boardAsync.isLoading;
+
+    // 全量通道：只在回退时 watch（标题排序/标签看板）
+    final fallbackAsync = windowed ? null : ref.watch(todoTasksProvider);
+    final tasks = fallbackAsync?.value ?? const <TodoTask>[];
+    final tasksLoading = windowed
+        ? (boardQuery != null ? boardLoading : windowLoading)
+        : (!fallbackAsync!.hasValue && fallbackAsync.isLoading);
+
+    // 今日条数据源：窗口化后不再从主窗口推断（主窗口装不下今日完成行）
+    final todayStripTasks = windowed
+        ? ref.watch(taskTodayStripProvider(_nowTick)).value ??
+            const <TodoTask>[]
+        : tasks;
+
+    final List<TodoTask> visible;
+    if (boardResult != null) {
+      visible = [for (final g in boardResult.groups) ...g.items];
+    } else if (windowed) {
+      visible = isLogbook
+          ? windowItems
+          : mergeOverdueFirst(overdueItems, windowItems);
+    } else {
+      visible = applyTaskListFilters(
+        isLogbook
+            ? filterTasks(tasks, listQuery)
+            : sortTasks(
+                // 回退全量时维持改版前口径：列表档完成行由尾部折叠卡承接，
+                // 看板/表格隐藏完成行
+                filterTasks(tasks, listQuery,
+                    hideDone: _viewMode != TaskViewMode.list),
+                _sortKey,
+                _sortDir),
+        _filters,
+        labelIdsByTask: labelIdsByTask,
+      );
+    }
     final projectById = {for (final p in projects) p.id: p};
 
-    _trackTaskAppearance(visible);
+    _trackTaskAppearance(
+      visible,
+      '${windowQuery ?? 'full'}|${_viewMode.name}|'
+      '${showKanban ? _kanbanGroupBy.name : ''}',
+    );
+    _windowHasMore = windowAsync?.value?.hasMore ?? false;
+    _activeWindowQuery = windowQuery;
 
     // 未完成区（列表本体；逾期置顶只作用于这一段）
     final undone =
         isLogbook ? const <TodoTask>[] : visible.where((t) => !t.isDone).toList();
 
     // 已完成区（列表尾部折叠卡的数据源；Logbook 本身即完成集，不重复一份）：
-    // 完成时刻倒序——卡内直显最近 [_doneInlineMax] 条，其余走「查看全部」
+    // 窗口化时来自独立的 done_at 通道（主窗口只装未完成行），回退全量时
+    // 直接从 visible 拆出——两条口径都以完成时刻倒序喂卡内直显。
     final done = isLogbook
         ? const <TodoTask>[]
-        : (visible.where((t) => t.isDone).toList()
-          ..sort((a, b) =>
-              (b.doneAt ?? b.createdAt).compareTo(a.doneAt ?? a.createdAt)));
+        : doneCardEnabled
+            ? doneCardItems
+            : (visible.where((t) => t.isDone).toList()
+              ..sort((a, b) =>
+                  (b.doneAt ?? b.createdAt).compareTo(a.doneAt ?? a.createdAt)));
+    final doneTotal = doneCardEnabled ? (doneCardTotal ?? done.length) : done.length;
+
+    _visibleUndone = undone;
+    _visibleById = {
+      for (final t in [...undone, ...done]) t.id: t,
+    };
 
     // 逾期置顶分组（性能批次 UX 优化，与桌面同口径）：逾期行渲染在列表
     // 顶部的红调区块，其余照旧——长按拖拽语义不受影响（重排走下方
     // manualUndone 同口径平铺流）
-    final overdueGroups = groupOverdueFirst(undone);
+    final overdueGroups = groupOverdueFirst(undone, _nowTick);
     final manualUndone = _manualReorderStream(undone);
 
     // Logbook 分组（done 视图）：按完成日倒序，组内完成时刻倒序
@@ -1561,7 +1790,8 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     final showDateSubtitle =
         _effectiveQuery.quickView == QuickViewKey.today && !widget.showBack;
     // 筛选生效时给出更贴切的空态文案（否则用户会以为是数据丢了）
-    final filteredEmpty = !_filters.isEmpty && tasks.isNotEmpty;
+    final filteredEmpty = !_filters.isEmpty &&
+        (windowed ? (windowTotal ?? 0) == 0 : tasks.isNotEmpty);
     final emptyMessage = filteredEmpty
         ? '没有符合筛选条件的任务'
         : emptyMessageFor(_effectiveQuery);
@@ -1570,21 +1800,19 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     // 顺序由排序键决定，拖了也会被覆盖（与桌面 sortable 同口径）。
     // 选择态强制回落普通列表：整行长按拾起与「点行切换选中」抢同一手势
     final reorderable = _sortKey == TaskSortKey.manual && !_selectionMode;
-    // 看板/表格/矩阵仅在非 Logbook 态生效：完成历史按日分组的语义在分列/
-    // 表格/象限里会丢失（桌面同口径——done 档列表被 LogbookView 接管）
-    final showKanban = _viewMode == TaskViewMode.kanban && !isLogbook;
-    final showTable = _viewMode == TaskViewMode.table && !isLogbook;
-    final showMatrix = _viewMode == TaskViewMode.matrix && !isLogbook;
 
-    // 命中上限条幅（A5，桌面 task-panel 同口径）：单份缓存拉取被截断时
-    // 明确告知列表不完整；条幅常驻标题栏下沿，列表顶部让出同高，
-    // 收窄范围后结果集低于上限即自动消失
-    final truncated = tasks.length >= taskListPageSize;
+    // 条幅：窗口化后不再是「超过上限」，而是「已加载 X / 共 Y」的进度
+    //（滚动续拉，收窄范围后消失）；回退全量时仍是上限提示
+    final loadedCount = windowItems.length;
+    final truncated = windowed
+        ? (windowTotal != null && loadedCount < windowTotal)
+        : tasks.length >= taskListPageSize;
     final topInset =
         MediaQuery.of(context).padding.top + OrbitPageHeader.rowHeight;
     // 今日上下文条（G2 正反馈 + G4 容量）：有内容才显示（今日已达成/
     // 今日已排/已设预算三者其一），列表顶部按其让位——与截断条幅同款约定
-    final showTodayStrip = !isLogbook && _hasTodayStripContent(tasks);
+    final showTodayStrip =
+        !isLogbook && _hasTodayStripContent(todayStripTasks);
     // 底栏页签常驻（分支内容在其上方）：页尾只留呼吸留白；选择态另让出
     // 批量工具条整段占位（条体 + 底距 + 呼吸），末行不被浮动工具条遮住
     final listPadding = EdgeInsets.only(
@@ -1668,7 +1896,9 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
       final shown = _doneExpanded
           ? done.take(_doneInlineMax).toList()
           : const <TodoTask>[];
-      final hasMore = _doneExpanded && done.length > shown.length;
+      // 卡头报**真实总数**（窗口化后 done 只有直显的 20 条）；尾行按
+      // 「总数超出直显」出「查看全部」，不再用已取条数判定
+      final hasMore = _doneExpanded && doneTotal > shown.length;
       final segments = 1 + shown.length + (hasMore ? 1 : 0);
       var seg = 0;
       Widget next(Widget child) => OrbitCardSegment(
@@ -1685,9 +1915,9 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              next(_doneCardHeader(colors, done.length)),
+              next(_doneCardHeader(colors, doneTotal)),
               for (final t in shown) next(buildTile(t)),
-              if (hasMore) next(_doneCardMore(colors, done.length)),
+              if (hasMore) next(_doneCardMore(colors, doneTotal)),
             ],
           ),
         ),
@@ -1710,10 +1940,14 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
       for (final t in overdueGroups.rest) _TaskListEntry.task(t),
     ];
 
-    final Widget list = tasksLoading
-        // 初次加载骨架：8 行任务行占位（复选圆 + 标题行 + 元信息行）
+    final Widget list = tasksLoading && !showKanban && !showMatrix
+        // 初次加载骨架：8 行任务行占位（复选圆 + 标题行 + 元信息行）。
+        // 看板/矩阵例外：面板（列头/象限框）本身就是稳定骨架，整屏骨架
+        // 会让视图切换的「淡入目标树」出现空档
         ? _TaskListSkeleton(padding: cardListPadding)
-        : visible.isEmpty
+        // 看板/矩阵：空数据也渲染面板（列头/象限框常显），不进空态——
+        // 首帧 board 查询未就绪时若走空态，视图切换会闪一下「没有任务」
+        : (visible.isEmpty && !showKanban && !showMatrix)
             ? Padding(
                 padding: EdgeInsets.only(
                   top: MediaQuery.of(context).padding.top +
@@ -1735,12 +1969,20 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
             )
             : showKanban
             ? KanbanBoard(
-                columns: groupTasksForKanban(
-                  visible,
-                  _kanbanGroupBy,
-                  projects,
-                  labelsByTask: labelsByTask,
-                ),
+                // 窗口化：列内只装箱前 kBoardPageLimit 条，列头/「还有 N 条」
+                // 读服务端组总数；标签档 board 不可用（回退全量分组）
+                columns: boardResult != null
+                    ? kanbanColumnsFromBoard(
+                        boardResult,
+                        _kanbanGroupBy,
+                        projects,
+                      )
+                    : groupTasksForKanban(
+                        visible,
+                        _kanbanGroupBy,
+                        projects,
+                        labelsByTask: labelsByTask,
+                      ),
                 // 列卡与标准列表卡同让位：左右 12 页边（列间 12 由卡间距承担）
                 padding: cardListPadding,
                 onToggleDone: _toggleDone,
@@ -1784,6 +2026,15 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                 : showMatrix
                     ? EisenhowerMatrixBoard(
                         tasks: visible,
+                        // 每象限只装箱前 kBoardPageLimit 条：格头计数读服务端
+                        // 组总数，格底注明「还有 N 条」
+                        totalByQuadrant: boardResult == null
+                            ? null
+                            : {
+                                for (final g in boardResult.groups)
+                                  for (final q in EisenhowerQuadrant.values)
+                                    if (q.name == g.key) q: g.total,
+                              },
                         // 象限卡与标准列表卡同让位：左右 12 页边
                         padding: cardListPadding,
                         onOpen: (t) => context.push('/todo/${t.id}'),
@@ -1961,10 +2212,17 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
       body: Stack(
         children: [
           Positioned.fill(
-            // 视图切换过渡：列表 / 看板 / 表格三态用淡入 + 轻微上滑衔接
-            //（viewSwitch 200ms；key 只跟视图走——任务增删、骨架落定、
-            // 下拉刷新都不触发，仍是瞬时替换，避免整列表无谓重播）
-            child: AnimatedSwitcher(
+            // 滚动预取：滚到距底 400px 内续拉下一页（窗口化才挂；
+            // 回退全量时 loadMore 由 notifier 的空查询守卫直接返回）
+            child: NotificationListener<ScrollNotification>(
+              onNotification: (n) {
+                if (windowed && n.metrics.extentAfter < 400) _maybeLoadMore();
+                return false;
+              },
+              // 视图切换过渡：列表 / 看板 / 表格三态用淡入 + 轻微上滑衔接
+              //（viewSwitch 200ms；key 只跟视图走——任务增删、骨架落定、
+              // 下拉刷新都不触发，仍是瞬时替换，避免整列表无谓重播）
+              child: AnimatedSwitcher(
               duration: AppMotion.viewSwitch,
               switchInCurve: AppMotion.decelerate,
               switchOutCurve: AppMotion.accelerate,
@@ -1978,9 +2236,10 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                   child: child,
                 ),
               ),
-              child: KeyedSubtree(
-                key: ValueKey('view-${_viewMode.name}'),
-                child: body,
+                child: KeyedSubtree(
+                  key: ValueKey('view-${_viewMode.name}'),
+                  child: body,
+                ),
               ),
             ),
           ),
@@ -1989,7 +2248,12 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
               top: topInset,
               left: 0,
               right: 0,
-              child: const _TruncationBanner(),
+              child: windowed
+                  ? _TruncationBanner(
+                      loaded: loadedCount,
+                      total: windowTotal,
+                    )
+                  : const _TruncationBanner(),
             ),
           // 今日上下文条（G2 正反馈 + G4 容量）：紧贴截断条幅下沿（无则页头下沿）
           if (showTodayStrip)
@@ -1998,7 +2262,8 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
               left: 0,
               right: 0,
               child: TodayStrip(
-                tasks: tasks,
+                // 窗口化后从独立的有界今日查询取数（主窗口装不下今日完成行）
+                tasks: todayStripTasks,
                 budgetMinutes: _budgetMinutes,
                 onTapBudget: _editCapacityBudget,
               ),
@@ -2068,7 +2333,8 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                             if (undone.isNotEmpty) ...[
                               const SizedBox(width: AppDimens.space6),
                               Text(
-                                '${undone.length}',
+                                // 窗口化后 undone 只是已加载页：计数读 SQL 总数
+                                '${windowed ? (windowTotal ?? undone.length) : undone.length}',
                                 style: TextStyle(
                                   fontSize: 13,
                                   color: colors.secondaryText,
@@ -2092,28 +2358,24 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
               // 完成进度线：只在「既有未完成又有已完成」时出现——看板/表格
               // 档隐藏完成行（done 空）、Logbook 恒为完成集（undone 空），
               // 进度线在这些档位只会误导
-              progress: !_selectionMode && undone.isNotEmpty && done.isNotEmpty
-                  ? done.length / (done.length + undone.length)
+              progress: !_selectionMode &&
+                      undone.isNotEmpty &&
+                      doneTotal > 0
+                  ? doneTotal /
+                      (doneTotal +
+                          (windowed ? (windowTotal ?? undone.length) : undone.length))
                   : null,
               actions: _selectionMode
                   ? [
                       TextButton(
                         onPressed: _batchBusy
                             ? null
-                            : () => setState(() {
-                                  _selected
-                                    ..clear()
-                                    // 全选只选**看得见**的：未完成任务区恒在；
-                                    // 已完成卡收起时卡内行不在树上，展开时也只
-                                    // 算直显的前 [_doneInlineMax] 条（否则批量
-                                    // 删除会连带清掉屏上根本没出现的完成行）
-                                    ..addAll(undone.map((t) => t.id))
-                                    ..addAll(_doneExpanded
-                                        ? done
-                                            .take(_doneInlineMax)
-                                            .map((t) => t.id)
-                                        : const <int>[]);
-                                }),
+                            // 全选只选**看得见**的：未完成区 = 已加载窗口；
+                            // 已完成卡收起时卡内行不在树上，展开时也只算
+                            // 直显的前 [_doneInlineMax] 条
+                            : () => _selectAllVisible(_doneExpanded
+                                ? done.take(_doneInlineMax).toList()
+                                : const <TodoTask>[]),
                         child: const Text('全选'),
                       ),
                       IconButton(
@@ -3029,7 +3291,11 @@ class _LogbookList extends StatelessWidget {
 /// 文案与桌面 task-panel 条幅同口径，收窄范围（搜索/项目/快捷视图）后
 /// 结果集低于上限即自动消失。固定高度（定值），列表顶部按其让位。
 class _TruncationBanner extends StatelessWidget {
-  const _TruncationBanner();
+  const _TruncationBanner({this.loaded, this.total});
+
+  /// 已加载行数 / 总行数（窗口化）：null = 回退全量时的上限提示
+  final int? loaded;
+  final int? total;
 
   /// 条幅高度（固定值）：列表 padding 与 Positioned 共用，改这里即两处同步
   static const height = 44.0;
@@ -3037,9 +3303,12 @@ class _TruncationBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
+    final windowed = loaded != null && total != null;
     return Container(
       height: height,
-      color: colors.warning.withValues(alpha: 0.12),
+      color: windowed
+          ? colors.accent.withValues(alpha: 0.10)
+          : colors.warning.withValues(alpha: 0.12),
       padding: const EdgeInsets.symmetric(
         horizontal: AppDimens.space16,
         vertical: AppDimens.space4,
@@ -3047,18 +3316,24 @@ class _TruncationBanner extends StatelessWidget {
       child: Row(
         children: [
           Icon(
-            OrbitIcons.warning,
+            windowed ? OrbitIcons.refresh : OrbitIcons.warning,
             size: AppDimens.iconSizeSm,
-            color: colors.warning,
+            color: windowed ? colors.accent : colors.warning,
           ),
           const SizedBox(width: AppDimens.space4),
           Expanded(
             child: Text(
-              '任务数超过单次加载上限 ${_withThousands(taskListPageSize)} 条，'
-              '当前列表不完整——请用搜索、项目或快捷视图收窄范围',
+              windowed
+                  ? '已加载 ${_withThousands(loaded!)} / 共 '
+                      '${_withThousands(total!)} 条，继续滚动加载更多'
+                  : '任务数超过单次加载上限 ${_withThousands(taskListPageSize)} 条，'
+                      '当前列表不完整——请用搜索、项目或快捷视图收窄范围',
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 12, color: colors.warning),
+              style: TextStyle(
+                fontSize: 12,
+                color: windowed ? colors.accent : colors.warning,
+              ),
             ),
           ),
         ],

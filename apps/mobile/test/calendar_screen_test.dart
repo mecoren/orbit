@@ -596,6 +596,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(calendarFormatOf(tester), CalendarFormat.week);
     expect(tester.getSize(calendar).height, lessThan(monthHeight));
+    final weekBarHeight = tester.getSize(calendar).height;
     // 周条 = 选中日（今天）所在周：今天仍在条内
     expect(find.text('$today'), findsWidgets);
     // focusedDay 原样落在选中日（收起对齐选中周，未拽回月初那一周）
@@ -624,7 +625,9 @@ void main() {
     await tester.fling(anyDayCell, const Offset(0, 220), 800);
     await tester.pumpAndSettle();
     expect(calendarFormatOf(tester), CalendarFormat.month);
-    expect(tester.getSize(calendar).height, monthHeight);
+    // 展开的是「翻周后」所在月，可能比初始月多一行补位（6 周月份），
+    // 不能与 monthHeight 直接相等；只断言已回到整月档高度（> 单行周条）
+    expect(tester.getSize(calendar).height, greaterThan(weekBarHeight));
   });
 
   testWidgets('周条跨月周：补位日期不弱化（dimOutsideMonth=false 生效）',

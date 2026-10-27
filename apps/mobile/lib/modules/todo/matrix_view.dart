@@ -35,7 +35,11 @@ class EisenhowerMatrixBoard extends StatelessWidget {
     this.onLongPress,
     this.onToggleFavorite,
     this.remindersByTask = const {},
+    this.totalByQuadrant,
   });
+
+  /// 象限真实总数（窗口化：每象限只装前 60 条）；null = 全量分组
+  final Map<EisenhowerQuadrant, int>? totalByQuadrant;
 
   /// 已按当前排序档排好的任务集（matrix 档 hideDone 由调用方保证，完成行不入桶）
   final List<TodoTask> tasks;
@@ -125,6 +129,8 @@ class EisenhowerMatrixBoard extends StatelessWidget {
   ) {
     final colors = AppColors.ofContext(context);
     final tint = _tint(colors, q);
+    // 窗口化时 tasks 只是该象限前 60 条，计数必须报真实总数
+    final total = totalByQuadrant?[q] ?? tasks.length;
     return OrbitCard(
       padding: EdgeInsets.zero,
       child: Column(
@@ -166,7 +172,7 @@ class EisenhowerMatrixBoard extends StatelessWidget {
                 ),
                 const SizedBox(width: AppDimens.space4),
                 Text(
-                  '${tasks.length}',
+                  '$total',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -190,8 +196,23 @@ class EisenhowerMatrixBoard extends StatelessWidget {
                 : ListView.builder(
                     padding: const EdgeInsets.symmetric(
                         vertical: AppDimens.space2),
-                    itemCount: tasks.length,
+                    itemCount: tasks.length + (total > tasks.length ? 1 : 0),
                     itemBuilder: (context, index) {
+                      if (index >= tasks.length) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: AppDimens.space12,
+                              vertical: AppDimens.space4),
+                          child: Text(
+                            '还有 ${total - tasks.length} 条（进入列表查看全部）',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color:
+                                  colors.secondaryText.withValues(alpha: 0.7),
+                            ),
+                          ),
+                        );
+                      }
                       final task = tasks[index];
                       return _QuadrantRow(
                         task: task,

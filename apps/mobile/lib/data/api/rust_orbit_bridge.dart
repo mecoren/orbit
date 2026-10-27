@@ -1,6 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 
+// FRB 生成物用自定义 Int64List（Web 语义为 BigInt），不能用 dart:typed_data 同名类型
+import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
+    show Int64List;
+
 import 'package:path_provider/path_provider.dart';
 
 import '../../src/rust/api/dto.dart' as gen;
@@ -351,6 +355,39 @@ class RustOrbitBridge implements OrbitBridge {
           .map((b) => TodoProjectUndone(
                 projectId: b.projectId?.toInt(),
                 count: b.count.toInt(),
+              ))
+          .toList(),
+    );
+  }
+
+  @override
+  Future<TodoTaskBoardResult> todoTaskBoard(
+    ListFilter filter,
+    TodoBoardGroupBy groupBy,
+    int limitPerGroup,
+    int dayStart,
+    int dayEnd,
+  ) async {
+    final board = await gen_todo.todoTasksBoard(
+      filter: _genFilter(filter),
+      groupBy: switch (groupBy) {
+        TodoBoardGroupBy.project => gen.BoardGroupBy.project,
+        TodoBoardGroupBy.status => gen.BoardGroupBy.status,
+        TodoBoardGroupBy.priority => gen.BoardGroupBy.priority,
+        TodoBoardGroupBy.due => gen.BoardGroupBy.due,
+        TodoBoardGroupBy.quadrant => gen.BoardGroupBy.quadrant,
+      },
+      limitPerGroup: limitPerGroup,
+      dayStart: dayStart,
+      dayEnd: dayEnd,
+    );
+    return TodoTaskBoardResult(
+      total: board.total.toInt(),
+      groups: board.groups
+          .map((g) => TodoTaskBoardGroup(
+                key: g.key,
+                total: g.total.toInt(),
+                items: g.items.map(_mapTaskRow).toList(),
               ))
           .toList(),
     );
@@ -1821,10 +1858,32 @@ class RustOrbitBridge implements OrbitBridge {
         keyword: f.keyword,
         page: f.page,
         pageSize: f.pageSize,
+        done: f.done,
+        status: f.status,
+        priorityMin: f.priorityMin,
+        priorityEq: f.priorityEq,
+        projectId: f.projectId,
+        // FRB 的 i64 载体是 Int64List（`List<int>` 不能直接赋值）
+        projectIds:
+            f.projectIds == null ? null : Int64List.fromList(f.projectIds!),
+        favoriteOnly: f.favoriteOnly,
+        myDayToday: f.myDayToday,
+        ungrouped: f.ungrouped,
+        excludeDueBefore: f.excludeDueBefore,
+        hasDue: f.hasDue,
         sortKey: f.sortKey,
         sortDir: f.sortDir,
         dueFrom: f.dueFrom,
         dueTo: f.dueTo,
+        startFrom: f.startFrom,
+        startTo: f.startTo,
+        labelIds:
+            f.labelIds == null ? null : Int64List.fromList(f.labelIds!),
+        hasReminder: f.hasReminder,
+        hasAttachment: f.hasAttachment,
+        hasOpenSubtask: f.hasOpenSubtask,
+        createdFrom: f.createdFrom,
+        doneFrom: f.doneFrom,
       );
 
   static TodoProject _mapProject(gen.TodoProject p) => TodoProject(

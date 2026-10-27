@@ -130,9 +130,9 @@ void main() {
     expect(find.text('无日期'), findsOneWidget);
   });
 
-  testWidgets('任务子列表：命中拉取上限出「不完整」条幅（A5）', (tester) async {
+  testWidgets('任务子列表：窗口化后出「已加载 X / 共 Y」条幅（A5）', (tester) async {
     final bridge = MockOrbitBridge();
-    // 造满单份缓存上限（mock 不过滤 pageSize，返回全量——刚好 10000 条即命中）
+    // 造满 10000 条：窗口首屏 200 条，条幅按 SQL 总数报「已加载 / 共」
     final now = bridge.store.now();
     while (bridge.store.tasks.length < taskListPageSize) {
       final t = <String, dynamic>{
@@ -170,7 +170,10 @@ void main() {
     ));
     await _settlePastMockLatency(tester);
 
-    expect(find.textContaining('当前列表不完整'), findsOneWidget);
+    // 窗口化条幅：首屏 200 条 + SQL 总数（造数受 id 冲突影响可能少 1 条，
+    // 故只断言「已加载 200 / 共」前缀与续拉提示，不写死总数）
+    expect(find.textContaining('已加载 200 / 共'), findsOneWidget);
+    expect(find.textContaining('条，继续滚动加载更多'), findsOneWidget);
   });
 
   // 多选崩屏回归（2026-09-20）：选择态强制回落 ListView.builder 分支，该分支
