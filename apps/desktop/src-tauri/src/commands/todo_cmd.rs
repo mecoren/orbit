@@ -172,3 +172,13 @@ pub async fn task_open_subtask_flags(
         .await
         .map_err(|e| e.to_string())
 }
+
+/// 任务→「有描述」旗标（列表通道裁剪 description 后的行内图标数据源；只读）
+#[tauri::command]
+pub async fn task_description_flags(
+    state: State<'_, AppState>,
+) -> Result<Vec<todo_api::TaskDescriptionFlag>, String> {
+    todo_api::task_description_flags(&state.pool)
+        .await
+        .map_err(|e| e.to_string())
+}

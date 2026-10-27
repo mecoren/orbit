@@ -5,14 +5,16 @@
  * （Vikunja 四视图口径）。数据/字段组件全部复用列表视图管线：
  * visibleTasks 注入 + PRIORITY_COLOR 竖条 + LabelChips + dueText 同口径。
  * 多选批量语义与列表视图一致（selected Set + shift 区间 + runBatch）。
- * 不做列头点击排序与表内编辑（YAGNI，留后续）；manual 档不可拖（与看板一致）。
+ * 列头排序（#107）：标题/截止/优先级三列可点，写回 task-panel 的 sortKey/sortDir
+ * 单一口径（标题档自动回退万行全量，与列表视图同约束）；表内编辑仍不做（YAGNI）。
+ * manual 档不可拖（与看板一致）。
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
-import { Clock, ListChecks, Star, Sunrise } from "lucide-react";
+import { ArrowDown, ArrowUp, Clock, ListChecks, Star, Sunrise } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import {
@@ -32,7 +34,13 @@ import {
 import { completeTask } from "../shared/task-actions";
 import { useUndoableDeleteAction, hideManyFromQueries } from "@/hooks/use-undoable-delete";
 import { listNavDirection, isListActivationKey } from "../shared/list-keyboard";
-import { todayStartMs, toggleMyDayValue } from "../shared/task-filters";
+import {
+  BASE_SORT_DIR,
+  todayStartMs,
+  toggleMyDayValue,
+  type TaskSortDir,
+  type TaskSortKey,
+} from "../shared/task-filters";
 import { EmptyState } from "@/components/business/empty-state";
 import { Button } from "@/components/ui/button";
 import {
@@ -70,7 +78,20 @@ export interface TaskTableViewProps {
   onLoadMore?: () => void;
   /** 是否还有下一页 */
   hasMore?: boolean;
+  /** 当前排序档（与列表/工具栏同一口径；仅标题/截止/优先级三列可点） */
+  sortKey?: TaskSortKey;
+  sortDir?: TaskSortDir;
+  /** 点表头：同列切方向、换列用该列默认方向；缺省 = 表头只读 */
+  onSortChange?: (key: TaskSortKey, dir: TaskSortDir) => void;
 }
+
+/** 表头可排序列（项目/标签/时长不参与排序；manual 档也不会由表头产生） */
+type TableSortKey = "title" | "due" | "priority";
+const COLUMN_SORT_KEY: Partial<Record<TableColumn["key"], TableSortKey>> = {
+  title: "title",
+  due: "due",
+  priority: "priority",
+};
 
 export interface TableColumn {
   key: "done" | "title" | "project" | "labels" | "due" | "duration" | "priority";
@@ -116,6 +137,9 @@ export default function TaskTableView({
   error,
   onLoadMore,
   hasMore = false,
+  sortKey,
+  sortDir,
+  onSortChange,
 }: TaskTableViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const qc = useQueryClient();
@@ -249,7 +273,9 @@ export default function TaskTableView({
   const gridStyle = { gridTemplateColumns: gridTemplateOf(TABLE_COLUMNS) };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    // #107 窄窗（900–1023px）：七列 grid 在 680px 内容区里会被压到不可读，
+    // 低于最小可读宽度时整表横向滚动（表头与数据行同一滚动容器，滚动同步）。
+    <div className="flex min-h-0 flex-1 flex-col overflow-x-auto">
       {/* 批量工具条（与列表视图同款；Button/Select 原语保证主题与焦点环一致） */}
       {selected.size > 0 && (
         <div className="flex flex-wrap items-center gap-1 border-b bg-primary/5 px-4 py-2 text-sm">
@@ -370,18 +396,52 @@ export default function TaskTableView({
 
       {/* 表头 */}
       <div
-        className="grid items-center gap-3 border-b bg-muted/40 px-4 text-xs font-medium text-muted-foreground"
+        className="grid min-w-[860px] items-center gap-3 border-b bg-muted/40 px-4 text-xs font-medium text-muted-foreground"
         style={{ ...gridStyle, height: 36 }}
       >
-        {TABLE_COLUMNS.map((c) => (
-          <span key={c.key} className={c.key === "done" ? "w-5" : undefined}>
-            {c.label}
-          </span>
-        ))}
+        {TABLE_COLUMNS.map((c) => {
+          const key = COLUMN_SORT_KEY[c.key];
+          const active = key != null && sortKey === key;
+          return (
+            <span key={c.key} className={c.key === "done" ? "w-5" : undefined}>
+              {key == null || onSortChange == null ? (
+                c.label
+              ) : (
+                <button
+                  type="button"
+                  className={cn(
+                    "-mx-1 inline-flex items-center gap-1 rounded px-1 py-0.5 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                    active && "text-foreground",
+                  )}
+                  aria-label={`按${c.label}排序`}
+                  onClick={() =>
+                    onSortChange(
+                      key,
+                      active
+                        ? sortDir === "asc"
+                          ? "desc"
+                          : "asc"
+                        : BASE_SORT_DIR[key],
+                    )
+                  }
+                >
+                  {c.label}
+                  {active ? (
+                    sortDir === "asc" ? (
+                      <ArrowUp className="size-3" aria-hidden />
+                    ) : (
+                      <ArrowDown className="size-3" aria-hidden />
+                    )
+                  ) : null}
+                </button>
+              )}
+            </span>
+          );
+        })}
       </div>
 
-      {/* 数据行（虚拟化） */}
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
+      {/* 数据行（虚拟化）：min-w 与表头一致，横向滚动由外层容器统一承担 */}
+      <div ref={scrollRef} className="min-h-0 min-w-[860px] flex-1 overflow-y-auto">
         {/* 读屏位置播报（D13）：焦点变化时更新，滚动/渲染不碰 */}
         <div role="status" aria-live="polite" data-testid="task-pos-live" className="sr-only">
           {livePos}

@@ -97,9 +97,11 @@ import {
   repeatLabel,
 } from "../shared/repeat";
 import { completeTask } from "@/features/todo/shared/task-actions";
+import { pushUndo } from "@/features/todo/shared/undo-bridge";
 import { patchQueriesData } from "@/lib/query-patch";
 import {
   todoTaskDuplicate,
+  cloudSyncNow,
   globalSearch,
   taskAttachmentAddFromPath,
   taskAttachmentExport,
@@ -155,6 +157,18 @@ interface ProjectOption {
   hex_color: string;
 }
 
+/** 详情单字段编辑可撤销白名单（#107）。完成态/排序位置有独立编排，不入此栈 */
+const UNDOABLE_FIELDS = [
+  "title",
+  "description",
+  "priority",
+  "due_date",
+  "start_date",
+  "project_id",
+  "my_day_date",
+  "favorite",
+] as const;
+
 interface TaskDetailDrawerProps {
   projects: ProjectOption[];
 }
@@ -185,11 +199,32 @@ export function TaskDetailDrawer({ projects }: TaskDetailDrawerProps) {
 
   const updateTask = async (patch: Parameters<typeof todoTaskUpdate>[1]) => {
     if (selectedTaskId == null) return;
+    // #107：单字段编辑进 Ctrl+Z 撤销栈。快照只取本次 patch 涉及的字段，
+    // 从详情真值回填；文本类由各 Section 在 blur/Ctrl+Enter 时提交（不是逐键），
+    // 因此一次编辑 = 一条撤销。完成态/排序位置走各自编排，不在此入栈。
+    const before: Record<string, unknown> = {};
+    if (t != null) {
+      const source = t as unknown as Record<string, unknown>;
+      for (const key of UNDOABLE_FIELDS) {
+        if (key in patch) before[key] = source[key] ?? null;
+      }
+    }
     // 抽屉单字段乐观（D3）：列表与详情同时提前 paint，真值仍走失效重拉收敛
     patchQueriesData<TodoTask>(qc, ["todo_tasks"], [selectedTaskId], patch);
     patchQueriesData<TodoTask>(qc, ["todo-task-detail"], [selectedTaskId], patch);
     await todoTaskUpdate(selectedTaskId, patch);
     refetchDetail();
+    if (Object.keys(before).length > 0) {
+      const taskId = selectedTaskId;
+      pushUndo({
+        label: "编辑任务",
+        undo: async () => {
+          await todoTaskUpdate(taskId, before as Parameters<typeof todoTaskUpdate>[1]);
+          void qc.invalidateQueries({ queryKey: ["todo-task-detail", taskId] });
+          void qc.invalidateQueries({ queryKey: ["todo_tasks"] });
+        },
+      });
+    }
   };
 
   return (
@@ -2241,6 +2276,8 @@ function AttachmentsSection({ taskId }: { taskId: number }) {
     queryKey: ["task-attachments", taskId],
     queryFn: () => taskAttachmentsList(taskId),
   });
+  /** 正在手动拉取的附件链 id（同刻只允许一条，避免并发重复触发同步） */
+  const [syncingId, setSyncingId] = useState<number | null>(null);
 
   const handleAdd = async () => {
     if (busy) return;
@@ -2263,9 +2300,30 @@ function AttachmentsSection({ taskId }: { taskId: number }) {
     }
   };
 
+  // #107：未缓存附件给「立即同步」出口（此前只能等后台 tick，无手动触发）；
+  // 不新增单对象拉取原语，复用完整同步后失效附件清单。
+  const handleFetchNow = async (att: TaskAttachmentView) => {
+    setSyncingId(att.link_id);
+    try {
+      const result = await cloudSyncNow("manual");
+      if (result.skipped) {
+        toast.info("已有同步任务在进行中，请稍后再试");
+        return;
+      }
+      await refetch();
+      toast.success("已触发同步，附件清单已刷新");
+    } catch (e) {
+      toast.error(`同步失败：${e}`);
+    } finally {
+      setSyncingId(null);
+    }
+  };
+
   const handleOpen = async (att: TaskAttachmentView) => {
     if (att.is_local_cached === 0) {
-      toast.info("附件尚未从云端同步到本机，稍后自动拉取");
+      toast.info("附件尚未从云端同步到本机", {
+        description: "可点行尾「立即同步」手动拉取，或稍后等待后台同步。",
+      });
       return;
     }
     try {
@@ -2342,9 +2400,23 @@ function AttachmentsSection({ taskId }: { taskId: number }) {
             >
               <AttachmentThumb attachment={a} />
               <span className="min-w-0 flex-1 truncate text-[13px]">{a.original_name}</span>
-              <span className="shrink-0 text-[11px] text-muted-foreground">
-                {a.is_local_cached === 0 ? "待同步" : humanSize(a.size_bytes)}
-              </span>
+              {a.is_local_cached === 0 ? (
+                <button
+                  type="button"
+                  disabled={syncingId != null}
+                  className="shrink-0 text-[11px] text-primary hover:underline disabled:opacity-50"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void handleFetchNow(a);
+                  }}
+                >
+                  {syncingId === a.link_id ? "同步中…" : "立即同步"}
+                </button>
+              ) : (
+                <span className="shrink-0 text-[11px] text-muted-foreground">
+                  {humanSize(a.size_bytes)}
+                </span>
+              )}
               <button
                 type="button"
                 aria-label="移除附件"

@@ -110,6 +110,12 @@ interface KanbanViewProps {
    * 缺省 = 用已加载条数（全量通道，label 档等）。
    */
   groupTotals?: ReadonlyMap<string, number>;
+  /**
+   * 列满出口（#107）：列内只装前 N 条时，切到列表继续加载。
+   * 只对能在列表工具栏表达的列（优先级/状态）附带筛选；项目/标签/截止档
+   * 仅切视图（项目归属由壳层 props 控制，这里不越权改）。
+   */
+  onOpenColumnInList?: (colKey: string) => void;
 }
 
 export function KanbanView({
@@ -121,6 +127,7 @@ export function KanbanView({
   sortKey,
   loading,
   groupTotals,
+  onOpenColumnInList,
 }: KanbanViewProps) {
   const qc = useQueryClient();
   const setSelectedTaskId = useTodoStore((s) => s.setSelectedTaskId);
@@ -364,6 +371,7 @@ export function KanbanView({
               draggingId={draggingId}
               dragEndStamp={dragEndStamp}
               onOpenDetail={openDetail}
+              onOpenColumnInList={onOpenColumnInList}
               sortable={sortable}
               selected={selected}
               hasSelection={selected.size > 0}
@@ -511,6 +519,7 @@ const KanbanColumn = memo(function KanbanColumn({
   draggingId,
   dragEndStamp,
   onOpenDetail,
+  onOpenColumnInList,
   sortable,
   selected,
   hasSelection,
@@ -528,6 +537,8 @@ const KanbanColumn = memo(function KanbanColumn({
   /** 拖拽结束时间戳 ref（点击抑制用） */
   dragEndStamp: React.RefObject<number>;
   onOpenDetail: (id: number) => void;
+  /** 列满出口：切到列表继续加载（缺省 = 不渲染按钮） */
+  onOpenColumnInList?: (colKey: string) => void;
   /** 仅拖拽顺序档允许拖拽（#26）；跨列移动始终可用 */
   sortable: boolean;
   /** 多选态（P2 扩展：看板对齐列表/表格） */
@@ -561,8 +572,19 @@ const KanbanColumn = memo(function KanbanColumn({
         <span className="text-xs text-muted-foreground">{total ?? tasks.length}</span>
       </div>
       {total != null && total > tasks.length && (
-        <div className="border-b bg-muted/30 px-3 py-1 text-[11px] text-muted-foreground">
-          已显示前 {tasks.length} 条，还有 {total - tasks.length} 条未加载
+        <div className="flex items-center justify-between gap-2 border-b bg-muted/30 px-3 py-1 text-[11px] text-muted-foreground">
+          <span>
+            已显示前 {tasks.length} 条，还有 {total - tasks.length} 条未加载
+          </span>
+          {onOpenColumnInList ? (
+            <button
+              type="button"
+              className="shrink-0 rounded px-1 text-primary hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              onClick={() => onOpenColumnInList(column.key)}
+            >
+              在列表中查看
+            </button>
+          ) : null}
         </div>
       )}
 

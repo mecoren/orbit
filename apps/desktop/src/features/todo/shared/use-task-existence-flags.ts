@@ -9,7 +9,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import { taskAttachmentFlags, taskOpenSubtaskFlags } from "@/lib/tauri";
+import { taskAttachmentFlags, taskDescriptionFlags, taskOpenSubtaskFlags } from "@/lib/tauri";
 
 function useFlagSet(
   queryKey: string[],
@@ -38,4 +38,12 @@ export function useTaskAttachmentIds(): Set<number> {
 /** 有未完成子任务的任务 id 集（筛选器 has_open_subtask 数据源） */
 export function useTaskOpenSubtaskIds(): Set<number> {
   return useFlagSet(["todo_subtasks", "open-flags"], taskOpenSubtaskFlags);
+}
+
+/**
+ * 有描述的任务 id 集（列表通道裁剪 description 后的行内图标数据源）。
+ * 失效走 todo_tasks 前缀匹配（该键挂在 ["todo_tasks"] 下）。
+ */
+export function useTaskDescriptionIds(): Set<number> {
+  return useFlagSet(["todo_tasks", "description-flags"], taskDescriptionFlags);
 }

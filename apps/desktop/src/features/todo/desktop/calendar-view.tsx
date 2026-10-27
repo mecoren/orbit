@@ -43,6 +43,7 @@ import {
   Columns3,
   Hourglass,
   Inbox,
+  FileText,
   LocateFixed,
   Loader2,
   RefreshCw,
@@ -77,6 +78,7 @@ import {
 import { addDays, dayKey, dayLabel, formatYmd, relativeLabel, startOfDay, startOfWeek, weekRangeLabel } from "@/lib/date-utils";
 import { rescheduleDue } from "../shared/reschedule-due";
 import { useHolidayMarks } from "../shared/use-holiday-marks";
+import { useTaskDescriptionIds } from "../shared/use-task-existence-flags";
 import {
   holidaysUpdate,
   holidayMeta,
@@ -179,6 +181,8 @@ export function CalendarView({
   rangeEnabled = false,
 }: CalendarViewProps) {
   const setSelectedTaskId = useTodoStore((s) => s.setSelectedTaskId);
+  // 列表通道裁剪 description：行内「有描述」图标只取有无一位（#107，与移动端同投影）
+  const descriptionIds = useTaskDescriptionIds();
   const [subMode, setSubMode] = useState<CalendarSubMode>("month");
   /**
    * 日历日期口径（截止 / 开始）：格子与右栏统一按它分桶，跨会话持久化。
@@ -773,6 +777,7 @@ export function CalendarView({
                 projectById={projectById}
                 labelsByTask={labelsByTask}
                 remindersByTask={remindersByTask}
+                descriptionIds={descriptionIds}
                 onOpenDetail={openDetail}
               />
             )}
@@ -863,6 +868,7 @@ export function CalendarView({
                 projectById={projectById}
                 labelsByTask={labelsByTask}
                 remindersByTask={remindersByTask}
+                descriptionIds={descriptionIds}
                 onOpenDetail={openDetail}
               />
             )}
@@ -954,6 +960,7 @@ export function CalendarView({
                 projectById={projectById}
                 labelsByTask={labelsByTask}
                 remindersByTask={remindersByTask}
+                descriptionIds={descriptionIds}
                 onOpenDetail={openDetail}
               />
             )}
@@ -986,6 +993,7 @@ export function CalendarView({
           projectById={projectById}
           labelsByTask={labelsByTask}
           remindersByTask={remindersByTask}
+          descriptionIds={descriptionIds}
           onOpenDetail={openDetail}
         />
       )}
@@ -1015,6 +1023,7 @@ export function CalendarView({
                     project={t.project_id != null ? projectById.get(t.project_id) : undefined}
                     reminder={displayReminder(remindersByTask.get(t.id) ?? [], Date.now(), !!t.done)}
                     dateField={dateField}
+                    hasDescription={descriptionIds.has(t.id)}
                     onActivate={() => openDetail(t.id)}
                   />
                 </TaskContextMenu>
@@ -1136,6 +1145,9 @@ type FlatItem =
   | { kind: "day"; key: string; group: DayGroup }
   | { kind: "month"; key: string; month: number };
 
+/** 缺省空集：避免调用方每次渲染新建 Set 破坏 CalendarTaskRow 的 memo */
+const NO_DESCRIPTION_IDS: ReadonlySet<number> = new Set();
+
 interface VirtualGroupedListProps {
   /** 月/议程档：按日分组（可含月外溢出日）；与 sections 二选一 */
   groups?: DayGroup[];
@@ -1158,6 +1170,8 @@ interface VirtualGroupedListProps {
   labelsByTask: Map<number, ProjectedTaskLabel[]>;
   /** 任务→提醒映射（行内提醒徽标） */
   remindersByTask: Map<number, TaskReminderMeta[]>;
+  /** 有描述的任务 id 集（列表通道裁剪 description，行内只取有无） */
+  descriptionIds?: ReadonlySet<number>;
   onOpenDetail: (id: number) => void;
 }
 
@@ -1185,6 +1199,7 @@ function VirtualGroupedList({
   projectById,
   labelsByTask,
   remindersByTask,
+  descriptionIds = NO_DESCRIPTION_IDS,
   onOpenDetail,
 }: VirtualGroupedListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -1276,6 +1291,7 @@ function VirtualGroupedList({
                   projectById={projectById}
                   labelsByTask={labelsByTask}
                   remindersByTask={remindersByTask}
+                  descriptionIds={descriptionIds}
                   onOpenDetail={onOpenDetail}
                 />
               )}
@@ -1300,6 +1316,7 @@ function DayGroupBlock({
   projectById,
   labelsByTask,
   remindersByTask,
+  descriptionIds = NO_DESCRIPTION_IDS,
   onOpenDetail,
 }: {
   group: DayGroup;
@@ -1314,6 +1331,8 @@ function DayGroupBlock({
   labelsByTask: Map<number, ProjectedTaskLabel[]>;
   /** 任务→提醒映射（行内提醒徽标） */
   remindersByTask: Map<number, TaskReminderMeta[]>;
+  /** 有描述的任务 id 集（行内图标只取有无） */
+  descriptionIds?: ReadonlySet<number>;
   onOpenDetail: (id: number) => void;
 }) {
   const isToday = isSameDay(group.date, today);
@@ -1381,6 +1400,7 @@ function DayGroupBlock({
                 t.due_date < today.getTime()
               }
               reminder={displayReminder(remindersByTask.get(t.id) ?? [], Date.now(), !!t.done)}
+              hasDescription={descriptionIds.has(t.id)}
             />
           </TaskContextMenu>
         ))}
@@ -1401,6 +1421,8 @@ interface CalendarTaskRowProps {
   dateField?: CalendarDateField;
   /** 行内提醒徽标数据（displayReminder 产物；null = 无存活提醒行） */
   reminder?: DisplayReminder | null;
+  /** 有描述（列表通道裁剪 description，行内只取有无） */
+  hasDescription?: boolean;
 }
 
 /** 右栏/议程/弹层任务行：优先级左色条 + 标题 + 标签/项目元信息 + 截止时刻（逾期红）。
@@ -1416,8 +1438,9 @@ export const CalendarTaskRow = memo(function CalendarTaskRow({
   overdue = false,
   dateField = "due",
   reminder = null,
+  hasDescription = false,
 }: CalendarTaskRowProps) {
-  const hasMeta = labels.length > 0 || project != null || reminder != null;
+  const hasMeta = labels.length > 0 || project != null || reminder != null || hasDescription;
   // 行尾时刻跟随当前口径：按开始日期看时显示开始时刻（截止时刻仍可在详情里看）
   const timeMs = dateField === "start" ? t.start_date : t.due_date;
   return (
@@ -1459,6 +1482,16 @@ export const CalendarTaskRow = memo(function CalendarTaskRow({
               </span>
             )}
             <ReminderChip reminder={reminder} />
+            {hasDescription ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex shrink-0 items-center">
+                    <FileText className="size-3" aria-label="有描述" />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>有描述</TooltipContent>
+              </Tooltip>
+            ) : null}
           </div>
         )}
       </div>
