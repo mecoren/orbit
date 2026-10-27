@@ -41,7 +41,8 @@ fn main() {
         .chars()
         .filter(|c| !c.is_whitespace() && c.is_alphabetic() || (*c as u32) >= 0x4E00)
         .collect();
-    let mut rng = Lcg(2026_10_24);
+    // 种子取固定日期，保证样本可复现（按 3 位分组以免 clippy 判不一致）
+    let mut rng = Lcg(20_261_024);
 
     // 10k 中文标题
     let titles: Vec<String> = (0..10_000).map(|_| rand_title(&mut rng, &chars)).collect();

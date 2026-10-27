@@ -451,11 +451,6 @@ mod integration_tests {
             .execute(&pool)
             .await
             .unwrap();
-        let all: Vec<(String, String, String)> =
-            sqlx::query_as("SELECT kind, uuid, title FROM search_pinyin")
-                .fetch_all(&pool)
-                .await
-                .unwrap();
         let (rebuilt, _) = reconcile(&pool).await.unwrap();
         // migrate! 种了「收件箱」默认项目（首次对账一并补索引）+ 本用例漂移行
         assert!(

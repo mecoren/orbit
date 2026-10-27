@@ -384,9 +384,9 @@ fn strip_test_blocks(src: &str) -> String {
             }
             j += 1;
         }
-        for k in start..j.min(n) {
-            if out[k] != b'\n' {
-                out[k] = b' ';
+        for b in out.iter_mut().take(j.min(n)).skip(start) {
+            if *b != b'\n' {
+                *b = b' ';
             }
         }
     }

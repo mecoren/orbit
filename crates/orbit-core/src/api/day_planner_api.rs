@@ -153,7 +153,7 @@ pub fn plan_day_slots(
     let gran = prefs.granularity_minutes.max(1);
     let mut candidates: Vec<&PlannerTask> = tasks
         .iter()
-        .filter(|t| !(t.due_minute.is_some_and(|d| d < 0) && !prefs.include_overdue))
+        .filter(|t| prefs.include_overdue || t.due_minute.is_none_or(|d| d >= 0))
         .collect();
     candidates.sort_by(|a, b| {
         let (ba, bb) = (bucket_of(a), bucket_of(b));
@@ -201,10 +201,8 @@ pub fn plan_day_slots(
             if start >= *e || end > *e {
                 continue;
             }
-            if let Some(dl) = deadline {
-                if end > dl {
-                    continue;
-                }
+            if deadline.is_some_and(|dl| end > dl) {
+                continue;
             }
             placed = Some((start, end));
             break;
@@ -282,10 +280,13 @@ fn capacity_minutes(prefs: &DayPlanPrefs, now_minute: i64) -> i64 {
 /// 窗口与 my_day/时长谓词收敛（「今天相关」的任务，非全库；上界来源登记
 /// docs/14 C 档）。
 pub async fn plan_day(pool: &SqlitePool, prefs: &DayPlanPrefs, now_ms: i64) -> CoreResult<DayPlan> {
+    // 候选行投影：id / title / priority / due_date / my_day_date / duration_minutes
+    type PlannerRow = (i64, String, i32, Option<i64>, Option<i64>, Option<i64>);
+
     let day_start_ms = local_day_start(now_ms);
     let day_end_ms = day_start_ms + 86_400_000;
 
-    let rows: Vec<(i64, String, i32, Option<i64>, Option<i64>, Option<i64>)> = sqlx::query_as(
+    let rows: Vec<PlannerRow> = sqlx::query_as(
         "SELECT id, title, priority, due_date, my_day_date, duration_minutes FROM todo_tasks \
          WHERE is_deleted = 0 AND done = 0 AND ( \
            (due_date IS NOT NULL AND due_date >= ? AND due_date < ?) \
@@ -305,7 +306,7 @@ pub async fn plan_day(pool: &SqlitePool, prefs: &DayPlanPrefs, now_ms: i64) -> C
     let tasks: Vec<PlannerTask> = rows
         .into_iter()
         .filter(|(_, _, _, due, _, _)| {
-            !(due.is_some_and(|d| d < day_start_ms) && !prefs.include_overdue)
+            prefs.include_overdue || due.is_none_or(|d| d >= day_start_ms)
         })
         .map(
             |(id, title, priority, due_date, my_day_date, duration_minutes)| PlannerTask {
@@ -779,8 +780,10 @@ mod api_tests {
         .await;
 
         // include_overdue = false：候选为空
-        let mut p = DayPlanPrefs::default();
-        p.include_overdue = false;
+        let p = DayPlanPrefs {
+            include_overdue: false,
+            ..Default::default()
+        };
         let plan = plan_day(&pool, &p, now).await.unwrap();
         assert!(plan.slots.is_empty());
         assert!(!plan.overloaded);

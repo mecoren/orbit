@@ -910,7 +910,7 @@ mod tests {
             .unwrap();
         remove_task_attachment(&pool, v.link_id).await.unwrap();
 
-        let n = delete_unused_attachments(&pool, &dir, &[v.hash.clone()])
+        let n = delete_unused_attachments(&pool, &dir, std::slice::from_ref(&v.hash))
             .await
             .unwrap();
         assert_eq!(n, 1);
@@ -925,7 +925,7 @@ mod tests {
             !std::path::Path::new(&dir).join(&v.hash).exists(),
             "本地文件应删除"
         );
-        let again = delete_unused_attachments(&pool, &dir, &[v.hash.clone()])
+        let again = delete_unused_attachments(&pool, &dir, std::slice::from_ref(&v.hash))
             .await
             .unwrap();
         assert_eq!(again, 0, "重复清理幂等");
@@ -946,7 +946,7 @@ mod tests {
             .await
             .unwrap();
 
-        let n = delete_unused_attachments(&pool, &dir, &[v.hash.clone()])
+        let n = delete_unused_attachments(&pool, &dir, std::slice::from_ref(&v.hash))
             .await
             .unwrap();
         assert_eq!(n, 0, "复核发现已被重新引用，跳过不删");

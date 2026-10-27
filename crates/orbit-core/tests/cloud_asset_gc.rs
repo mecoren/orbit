@@ -258,7 +258,7 @@ async fn assert_scan_and_delete(cloud: &FakeCloud, config: &SyncConfig, prefix: 
         &*adapter,
         &KEY,
         EPOCH,
-        &[orphan_whole.clone()],
+        std::slice::from_ref(&orphan_whole),
         DEFAULT_CLOUD_ASSET_MIN_AGE_SECS,
         now,
     )
@@ -280,7 +280,7 @@ async fn assert_scan_and_delete(cloud: &FakeCloud, config: &SyncConfig, prefix: 
         &*adapter,
         &KEY,
         EPOCH,
-        &[tombstoned.clone()],
+        std::slice::from_ref(&tombstoned),
         DEFAULT_CLOUD_ASSET_MIN_AGE_SECS,
         now,
     )
