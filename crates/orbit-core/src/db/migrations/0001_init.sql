@@ -4,14 +4,22 @@
 --       0002_my_day（my_day_date）、0003_holidays（cfg_holidays/cfg_kv）、
 --       0004_remove_end_date（end_date 删列）已按 2026-09-07 决策并回本文件；
 --       0002_sync_conflicts（sync_conflicts 冲突败方副本）已按 2026-09-22 决策
---       并回本文件（该文件未随任何 release 发布 → 属「未发布可合并」档）。
--- 内容：sync 基础设施 3 表 + todo 业务 8 表 + cfg 必需表 + 节假日缓存 2 表
---       + 种子（模块行/收件箱/选项，选项用 category_key NOT EXISTS 幂等写法）
---       + uuid UNIQUE 索引治理段（原 0003 todo 8 表段并入）
+--       并回本文件（该文件未随任何 release 发布 → 属「未发布可合并」档）；
+--       0002_reminder_constant / 0003_project_parent / 0004_sync_session_token /
+--       0005_task_duration / 0006_repeat_monthly_nth / 0007_subtask_parent /
+--       0008_project_review / 0009_search_pinyin / 0010_search_pinyin_state /
+--       0011_task_keyset_indexes / 0012_task_done_at_index 共 11 个增量文件已按
+--       2026-10-27 决策全量并回本文件（均晚于 v0.1.1 tag，未随任何 release 发布）。
+-- 内容：sync 基础设施 3 表 + todo 业务 11 表 + cfg 4 表 + 本地日志/附件/拼音
+--       索引 5 表 + 种子（收件箱/选项/拼音对账哨兵，选项用 category_key
+--       NOT EXISTS 幂等写法）+ uuid UNIQUE 索引治理段 + FTS5 全文索引段
 -- 维护约定（2026-09-16 起增量口径）：本文件冻结，结构变更一律新增
 --       NNNN_xxx.sql（sqlx 按文件名顺序执行，老库只跑新增文件，不删库）；
 --       加列必须带 DEFAULT，加表/加索引用 IF NOT EXISTS，破坏性变更走重建表；
 --       未发布的多文件可合并为一个，已发布文件永不改/删（详见 03 文档 §二）。
+--       并回改写本文件会改变 _sqlx_migrations 里 version 1 的校验和，已有本地库
+--       再启动会被判 VersionMismatch（init_pool 无兜底），处置只有删库重建 +
+--       云同步 / .orsync 恢复——故只适用于「未发布 且 接受存量库重装」的场景。
 --       字段备注为建表语句行尾 -- 注释，随 DDL 原样落库 sqlite_master
 --       （GUI 工具打开库即见）；新增文件内同样补行尾备注。
 -- ============================================================================
@@ -71,7 +79,8 @@ CREATE TABLE IF NOT EXISTS sync_configs (
     sync_scope TEXT NOT NULL DEFAULT 'auto',  -- V3：同步范围（当前两端写 all）
     full_sync_interval INTEGER NOT NULL DEFAULT 7,  -- V3：全量同步间隔（天，0=每次全量）；当前两端写 0
     history_keep_count INTEGER NOT NULL DEFAULT 5,  -- V3：sync_history 保留条数（TTL 清理阈值）
-    notify_progress INTEGER NOT NULL DEFAULT 1  -- V3：同步进度通知开关：0 关 1 开（默认 1）
+    notify_progress INTEGER NOT NULL DEFAULT 1,  -- V3：同步进度通知开关：0 关 1 开（默认 1）
+    session_token TEXT NOT NULL DEFAULT ''  -- S3 STS 会话令牌（空 = 长期 AK/SK 凭据）
 );
 
 CREATE INDEX IF NOT EXISTS idx_sync_configs_is_active ON sync_configs(is_active);
@@ -128,7 +137,20 @@ CREATE TABLE IF NOT EXISTS todo_projects (
   created_at INTEGER NOT NULL DEFAULT 0,  -- 创建时间（ms 时间戳）
   updated_at INTEGER NOT NULL DEFAULT 0,  -- 更新时间（ms）——同步 LWW 合并的主依据
   deleted_at INTEGER,  -- 软删时间（ms，墓碑）；NULL = 未删
-  version INTEGER NOT NULL DEFAULT 1  -- 乐观锁版本号，每次写更新 +1；LWW 同毫秒平局时的大者胜
+  version INTEGER NOT NULL DEFAULT 1,  -- 乐观锁版本号，每次写更新 +1；LWW 同毫秒平局时的大者胜
+  -- 文件夹分组（M8，对标 TickTick 清单文件夹）：父引用存**同步主键 uuid** 而非
+  -- parent_id INTEGER——云同步的整数外键翻译只在「表间」成立（按父表先于子表
+  -- 定序 + 从本端已落库行建 uuid→id 映射），自引用同表两条前提都不成立，
+  -- 父行本轮未落库时整表 Err → 回滚 → 父行永不落库（永久合并死锁）。
+  -- 存 uuid 后只是普通 TEXT 列，随行原样同步，零同步引擎改动；也不声明自引用
+  -- 外键（落库顺序不保证父先行）——父行软删/清除时子行悬空，由双端树构建把
+  -- 「父不存在/父已软删」的行回落顶层渲染，父从回收站恢复后层级自动复现。
+  parent_uuid TEXT DEFAULT NULL,  -- 上级文件夹（父项目）的同步主键 uuid；NULL = 顶层
+  -- 回顾节奏（F1，对标 OmniFocus Review）：到期判定取 max(周期到期, 暂缓日)，
+  -- 「稍后一周」只推迟不重置周期；三列随整行同步，白名单零变更。
+  review_interval_days INTEGER DEFAULT NULL,  -- 回顾周期（天）；NULL/0 = 关闭
+  review_last_at INTEGER DEFAULT NULL,  -- 上次回顾时间（毫秒）；NULL = 从未回顾
+  review_snooze_until INTEGER DEFAULT NULL  -- 回顾暂缓截止（毫秒，本地零点口径）；NULL = 未暂缓
 );
 CREATE INDEX IF NOT EXISTS idx_todo_projects_is_deleted ON todo_projects(is_deleted);
 CREATE INDEX IF NOT EXISTS idx_todo_projects_uuid ON todo_projects(uuid);
@@ -174,6 +196,14 @@ CREATE TABLE IF NOT EXISTS todo_tasks (
   updated_at INTEGER NOT NULL DEFAULT 0,  -- 更新时间（ms）——同步 LWW 合并的主依据
   deleted_at INTEGER,  -- 软删时间（ms，墓碑）；NULL = 未删
   version INTEGER NOT NULL DEFAULT 1,  -- 乐观锁版本号，每次写更新 +1；LWW 同毫秒平局时的大者胜
+  -- 预计时长（M9 阶段一）：行内徽标 + 表单/详情编辑，日历时间轴/时间块视图的
+  -- 数据地基。可空而非 NOT NULL DEFAULT 0：同步 merge 对老版本设备载荷缺失字段
+  -- 绑 NULL，NULL = 未设置与「清空时长」语义一致，无回填歧义。
+  duration_minutes INTEGER DEFAULT NULL,  -- 预计时长（分钟）；NULL = 未设置
+  -- 月重复高级语义（docs/07 #72）：按日号推进之外支持「每月第 N 个星期 X」
+  -- （如每月第 2 个周二、每月最后一个周五），仅 MONTHLY 生效。
+  repeat_month_mode INTEGER NOT NULL DEFAULT 0,  -- 重复月模式：0 按日号 1 按第 N 个星期 X
+  repeat_nth_week INTEGER NOT NULL DEFAULT 0,  -- 月内第几个星期：1-5 / 6 = 末；0 = 未指定回落日号
   FOREIGN KEY (project_id) REFERENCES todo_projects(id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS idx_todo_tasks_is_deleted ON todo_tasks(is_deleted);
@@ -191,6 +221,23 @@ CREATE INDEX IF NOT EXISTS idx_todo_tasks_alive_favorite ON todo_tasks(is_delete
 CREATE INDEX IF NOT EXISTS idx_todo_tasks_my_day ON todo_tasks(my_day_date) WHERE my_day_date IS NOT NULL;
 -- 回收站墓碑过滤+排序（list_trashed 的 is_deleted+deleted_at DESC 与 TTL purge 的 deleted_at 谓词共用）
 CREATE INDEX IF NOT EXISTS idx_todo_tasks_trash ON todo_tasks(is_deleted, deleted_at DESC);
+-- 键集分页排序索引（P1 50k 规模档）：分页 SQL 恒带 is_deleted = 0 且
+-- ORDER BY <排序键>, id（id 为 rowid 别名，作 tiebreaker）；is_deleted 放首列让
+-- 「过滤 + 有序扫 + LIMIT 提前终止」走同一棵索引树，避免大表临时 B 树排序。
+-- manual 档复用 idx_todo_tasks_position（二级索引隐式带 rowid，position, id 序
+-- 无需另建）；档的默认方向 priority/created 降序、due 升序，反方向可反向扫。
+CREATE INDEX IF NOT EXISTS idx_todo_tasks_keyset_priority
+  ON todo_tasks(is_deleted, priority DESC, position, id);
+CREATE INDEX IF NOT EXISTS idx_todo_tasks_keyset_created
+  ON todo_tasks(is_deleted, created_at, id);
+-- 截止时间档：无截止恒沉底（表达式索引）
+CREATE INDEX IF NOT EXISTS idx_todo_tasks_keyset_due
+  ON todo_tasks(is_deleted, (due_date IS NULL), due_date, id);
+-- Logbook（已完成列表）键集分页：done_at 为空的历史行沉底（表达式索引）；
+-- done 列放 is_deleted 之后——Logbook 只查完成态、其余列表只查未完成，两档
+-- 都能命中该索引前缀。
+CREATE INDEX IF NOT EXISTS idx_todo_tasks_done_at
+  ON todo_tasks(is_deleted, done, (done_at IS NULL), done_at, id);
 
 -- 待办子任务表
 CREATE TABLE IF NOT EXISTS todo_subtasks (
@@ -206,10 +253,16 @@ CREATE TABLE IF NOT EXISTS todo_subtasks (
   updated_at INTEGER NOT NULL DEFAULT 0,  -- 更新时间（ms）——同步 LWW 合并的主依据
   deleted_at INTEGER,  -- 软删时间（ms，墓碑）；NULL = 未删
   version INTEGER NOT NULL DEFAULT 1,  -- 乐观锁版本号，每次写更新 +1；LWW 同毫秒平局时的大者胜
+  -- 多层嵌套（M10，对标 TickTick/Todoist 子任务层级）：父引用存同步主键 uuid
+  -- （与项目文件夹同论证——自引用整数外键会破坏云同步「父行先定序 + 从已落库行
+  -- 建映射」，整表 Err 后父行永不落库即永久合并失败）；不声明自引用外键，
+  -- 父行软删/清除时孤儿行由树构建回落顶层。限定同任务内嵌套（父须同 task_id）。
+  parent_uuid TEXT DEFAULT NULL,  -- 上级子任务（父）的同步主键 uuid；NULL = 顶层
   FOREIGN KEY (task_id) REFERENCES todo_tasks(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_todo_subtasks_task_id ON todo_subtasks(task_id);
 CREATE INDEX IF NOT EXISTS idx_todo_subtasks_uuid ON todo_subtasks(uuid);
+CREATE INDEX IF NOT EXISTS idx_todo_subtasks_parent ON todo_subtasks(parent_uuid);
 
 -- 待办标签表
 CREATE TABLE IF NOT EXISTS todo_labels (
@@ -289,6 +342,11 @@ CREATE TABLE IF NOT EXISTS todo_reminders (
   updated_at INTEGER NOT NULL DEFAULT 0,  -- 更新时间（ms）——同步 LWW 合并的主依据
   deleted_at INTEGER,  -- 软删时间（ms，墓碑）；NULL = 未删
   version INTEGER NOT NULL DEFAULT 1,  -- 乐观锁版本号，每次写更新 +1；LWW 同毫秒平局时的大者胜
+  -- 持续提醒（G2，对标 TickTick Constant Reminder）：「响到完成为止」——
+  -- 到期触发后任务仍未完成时，同一提醒行按固定间隔（core 常量 5 分钟）顺延
+  -- 重排直至任务完成或提醒被删；完成态由 list_due_reminders 的 done 过滤 +
+  -- 完成命令软删存活行双重收口。
+  is_constant INTEGER NOT NULL DEFAULT 0,  -- 持续提醒标记：1 = 未完成则按间隔顺延重排，0 = 一次性
   FOREIGN KEY (task_id) REFERENCES todo_tasks(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_todo_reminders_task_id ON todo_reminders(task_id);
@@ -465,6 +523,39 @@ CREATE TABLE IF NOT EXISTS sys_attachments (
   created_at INTEGER NOT NULL DEFAULT 0,  -- 入库时间（ms）
   last_accessed_at INTEGER NOT NULL DEFAULT 0  -- 最近访问时间（ms；LRU 逐出排序键，内容寻址不可变故入库/读即访问）
 );
+
+-- 拼音/首字母搜索索引（F5，docs/07 #101）：「gzs → 工作总结」「gz → 工作」。
+-- 本地派生索引（可整表重建，非业务数据）：**不同步、不备份**，不进
+-- SYNCABLE_TABLES / FULL_BACKUP_TABLES。uuid 为 PRIMARY KEY——task/project/
+-- comment 三类源行的同步主键全局唯一，一行一索引；title 存原文作对账基准
+-- （补缺失 / 清幽灵 / 更新不一致），无需比较拼音串。拼音由 pinyin crate 在
+-- Rust 侧计算，SQLite 内不引入自定义函数。
+-- 写入双通道：业务写路径（generic_repo create/update/软删 + trash restore）实时
+-- 维护；同步合并 / CSV 导入等直写路径由查询入口 reconcile 幂等兜底。
+CREATE TABLE IF NOT EXISTS search_pinyin (
+  uuid TEXT PRIMARY KEY,  -- 被索引源行的同步主键（task/project/comment）
+  kind TEXT NOT NULL,  -- 来源表：'task' | 'project' | 'comment'
+  title TEXT NOT NULL DEFAULT '',  -- 被索引文本原版（对账基准）
+  pinyin_full TEXT NOT NULL DEFAULT '',  -- 全拼串（无声调小写；非汉字原样保留）
+  initials TEXT NOT NULL DEFAULT '',  -- 首字母串（与 pinyin_full 逐字符对应）
+  updated_at INTEGER NOT NULL DEFAULT 0  -- 索引写入时间（毫秒；对账调试用）
+);
+CREATE INDEX IF NOT EXISTS idx_search_pinyin_kind ON search_pinyin(kind, uuid);
+
+-- 拼音索引对账状态（docs/07 #104，docs/13 §七 P3 50k 实测）：把全量对账搬离
+-- **只读查询路径**（原每次纯字母查询都白付 6 次全表扫描，50k 行下达 316ms）。
+-- 口径：①单行哨兵 id 恒为 1，dirty = 1 表示「存在绕过 generic_repo 钩子的直写
+-- 行」——业务写路径实时维护索引不置脏，直写路径（云同步合并 / 全量备份恢复 /
+-- 批量导入 / 冲突副本恢复 / 子任务转出等裸 INSERT）提交后置脏或直接补索引；
+-- ②gen 单调递增（每次置脏 +1），对账结束只清「gen 未变」的脏标记，并发置脏
+-- 不会被慢对账误清（宁可多对账一次，绝不少对账）；③不同步、不备份，**缺行
+-- 等价于「需对账」**——老库升级与备份恢复后的首查自动补一次。
+CREATE TABLE IF NOT EXISTS search_pinyin_state (
+  id INTEGER PRIMARY KEY,  -- 恒为 1（单行哨兵）
+  dirty INTEGER NOT NULL DEFAULT 1,  -- 1 = 索引需对账 0 = 索引新鲜
+  gen INTEGER NOT NULL DEFAULT 1,  -- 置脏代数（清零时的乐观锁）
+  reconciled_at INTEGER NOT NULL DEFAULT 0  -- 上次完成对账的时刻（毫秒）
+);
 -- ============================================================================
 -- 种子数据
 -- ============================================================================
@@ -538,6 +629,8 @@ WHERE c.category_key = 'todo_status'
   AND NOT EXISTS (SELECT 1 FROM cfg_option_items i JOIN cfg_option_categories c2 ON i.category_id = c2.id
                  WHERE c2.category_key = 'todo_status' AND i.value = 'done');
 
+-- 拼音对账哨兵（存量库升级后首次拼音查询对账一次，与迁移前「每查必对账」的首查等价）
+INSERT OR IGNORE INTO search_pinyin_state (id, dirty, gen, reconciled_at) VALUES (1, 1, 1, 0);
 
 -- ============================================================================
 -- uuid 唯一索引治理（平移自 0003_sync_uuid_unique.sql todo 8 表段）

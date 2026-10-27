@@ -268,9 +268,9 @@ pub struct TodoProject {
     ///
     /// 存 uuid 而非本表 id：云同步的整数外键翻译只支持表间引用（父表先于子表定序 +
     /// 从本端已落库行建映射），自引用会让父行未到即整表合并失败并永久卡住。
-    /// 详见 `db/migrations/0003_project_parent.sql` 头注释。
+    /// 详见 `db/migrations/0001_init.sql` 中 `todo_projects.parent_uuid` 列注释。
     pub parent_uuid: Option<String>,
-    /// 项目回顾节奏（F1，0008 迁移）：回顾周期天数；None/0 = 关闭
+    /// 项目回顾节奏（F1，随 0001 基线）：回顾周期天数；None/0 = 关闭
     /// （7=每周 14=每两周 30=每月；到期判定与归集见 project_review_api）
     pub review_interval_days: Option<i64>,
     /// 上次回顾时间（毫秒）；None = 从未回顾（开启周期即视为到期，最需要被看见）

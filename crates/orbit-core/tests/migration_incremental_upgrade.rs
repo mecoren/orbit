@@ -1,7 +1,9 @@
-//! 增量迁移守护：冻结基线 + 追加 NNNN 口径不伤老用户。
+//! 迁移守护：基线 schema 回归 + 增量口径（追加 NNNN 不伤老用户）。
 //!
-//! 约定见 03 文档 §二：0001 永不改，新增结构走 NNNN_xxx.sql（加列带 DEFAULT）。
-//! 本文件用“模拟 0002”验证该口径：老行先写 → ALTER 加列 → 老行保留 + 默认值回填。
+//! 约定见 03 文档 §二：0001 冻结，新增结构走 NNNN_xxx.sql（加列带 DEFAULT）。
+//! 2026-10-27 起 0002-0012 已全量并回 0001（均为 v0.1.0 后的未发布增量），
+//! 故现行基线本身就是完整 schema；本文件逐列回归这些结构，并用「模拟未来增量」
+//! 用例守住 ALTER 加列不丢老行 / 默认值回填的口径。
 
 use sqlx::SqlitePool;
 
@@ -37,13 +39,21 @@ async fn fresh_db_runs_all_migrations() {
         expected,
         "schema 版本应等于最大编号迁移文件（0001 基线 + 后续增量）"
     );
-    assert!(
-        files.len() >= 2,
-        "0002_reminder_constant.sql 起增量文件应独立成文件（并回 0001 会让存量库 VersionMismatch）"
+
+    // 迁移目录里每个文件都应被记录且成功（单文件基线时即为 1 条）
+    let (applied,): (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM _sqlx_migrations WHERE success = 1")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        applied as usize,
+        files.len(),
+        "迁移目录每个文件都应有成功的 _sqlx_migrations 记录"
     );
 }
 
-/// 0002 增量落地：todo_reminders.is_constant 带 DEFAULT，老行回填 0（一次性）
+/// 基线 schema：todo_reminders.is_constant 带 DEFAULT，未写该列的行回填 0（一次性）
 #[tokio::test]
 async fn reminder_constant_column_backfills_zero() {
     let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
@@ -76,7 +86,7 @@ async fn reminder_constant_column_backfills_zero() {
     assert_eq!(constant, 0, "存量提醒行应回填 0（一次性），语义零变化");
 }
 
-/// 0003 增量落地：todo_projects.parent_uuid 带 DEFAULT NULL，老项目行回落顶层
+/// 基线 schema：todo_projects.parent_uuid 带 DEFAULT NULL，未写该列的项目行回落顶层
 /// （父引用用同步主键 uuid 而非 parent_id：自引用外键会破坏云同步「父行先落库」定序）
 #[tokio::test]
 async fn project_parent_uuid_backfills_null() {
@@ -121,7 +131,7 @@ async fn project_parent_uuid_backfills_null() {
     assert_eq!(child_parent.as_deref(), Some("u-p1"));
 }
 
-/// 0007 增量落地：todo_subtasks.parent_uuid 带 DEFAULT NULL，老子任务行回落顶层
+/// 基线 schema：todo_subtasks.parent_uuid 带 DEFAULT NULL，未写该列的子任务行回落顶层
 /// （父引用用同步主键 uuid 而非 parent_id：自引用外键会破坏云同步「父行先落库」定序）
 #[tokio::test]
 async fn subtask_parent_uuid_backfills_null() {
@@ -220,9 +230,9 @@ async fn incremental_add_column_preserves_rows() {
     assert_eq!(n, 2);
 }
 
-/// 0005 增量落地：todo_tasks.duration_minutes 带 DEFAULT NULL，老任务行未设置时长
+/// 基线 schema：todo_tasks.duration_minutes 带 DEFAULT NULL，未写该列的任务行未设置时长
 /// （可空而非 NOT NULL DEFAULT 0：同步 merge 对老设备载荷缺失字段绑 NULL，NULL=未设置
-/// 与「清空时长」语义一致，见 0005 迁移文件头）
+/// 与「清空时长」语义一致）
 #[tokio::test]
 async fn task_duration_minutes_backfills_null() {
     let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();

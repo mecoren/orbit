@@ -7,7 +7,8 @@
 //!   `DateTime.now().millisecondsSinceEpoch`），写入时间戳走
 //!   [crate::db::clock::next_ms]（HLC 单调，LWW 同步裁决键）。
 //! - **同步面**：三列挂在 todo_projects（已在 SYNCABLE_TABLES），随整行同步，
-//!   白名单/模块计数零变更；NULL = 未设置的列驱动合并语义见 0008 迁移头注释。
+//!   白名单/模块计数零变更；NULL = 未设置的列驱动合并语义见 0001_init.sql
+//!   中 todo_projects 回顾三列的注释。
 //! - **只读归集不 emit 事件**（[list_projects_due_for_review] 纯查询）；
 //!   写路径（标记已回顾/设置周期/暂缓）经 generic_repo::update_todo_project，
 //!   由其统一 emit db-change（前端缓存失效链依赖它）。
