@@ -206,4 +206,42 @@ void main() {
     await tester.pumpAndSettle();
     expect(await cancelled, isFalse);
   });
+
+  // 冷静期口径对齐桌面 DangerousConfirmDialog：确认钮先禁用并倒数，
+  // 走完才可点；取消不受限（用户随时能退出）。
+  testWidgets('确认弹层：holdSeconds 冷静期内确认钮禁用，走完才可点', (tester) async {
+    final ctx = await pumpHost(tester);
+
+    final result = showConfirmBottomSheet(
+      ctx,
+      title: '再次确认生成',
+      message: '不可撤销',
+      confirmLabel: '确认生成',
+      holdSeconds: 3,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('请阅读后果（3s）'), findsOneWidget);
+    // 冷静期内点确认不生效：抽屉仍在
+    await tester.tap(find.text('请阅读后果（3s）'), warnIfMissed: false);
+    await tester.pump();
+    expect(find.text('再次确认生成'), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('请阅读后果（2s）'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('请阅读后果（1s）'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('确认生成'), findsOneWidget);
+
+    await tester.tap(find.text('确认生成'));
+    await tester.pumpAndSettle();
+    expect(await result, isTrue);
+  });
+
+  test('冷静期文案：未走完显示剩余秒数，走完回落确认文案', () {
+    expect(formatHoldConfirmLabel(3, '确认生成'), '请阅读后果（3s）');
+    expect(formatHoldConfirmLabel(1, '确认清除'), '请阅读后果（1s）');
+    expect(formatHoldConfirmLabel(0, '确认清除'), '确认清除');
+  });
 }

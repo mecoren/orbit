@@ -31,6 +31,8 @@
 /// 那里没有 `Navigator`，Material 路由式弹层唤不起来。
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -54,8 +56,18 @@ const AnimationStyle bottomSheetMotion = AnimationStyle(
   curve: AppMotion.sheetEnter,
 );
 
+/// 确认钮文案：冷静期未走完显示剩余秒数，走完显示正常确认文案。
+///
+/// 与桌面 `DangerousConfirmDialog.formatHoldLabel` 同口径（纯函数便于单测）。
+String formatHoldConfirmLabel(int remaining, String confirmLabel) =>
+    remaining > 0 ? '请阅读后果（${remaining}s）' : confirmLabel;
+
 /// 确认抽屉：返回 `true` = 用户点了确认按钮；点遮罩/下滑关闭/取消都是 `false`
 /// （调用方直接 `if (!await showConfirmBottomSheet(...)) return;` 即可，不必判 null）。
+///
+/// [holdSeconds] > 0 时开层即进入强制冷静期：确认钮禁用并显示剩余秒数，
+/// 倒计时归零后才可点（对应桌面 `DangerousConfirmDialog` 的 `holdSeconds`）。
+/// 默认 0 = 立即确认，存量调用行为不变。
 Future<bool> showConfirmBottomSheet(
   BuildContext context, {
   required String title,
@@ -64,6 +76,7 @@ Future<bool> showConfirmBottomSheet(
   String confirmLabel = '确定',
   String? cancelLabel = '取消',
   bool destructive = false,
+  int holdSeconds = 0,
 }) async {
   // 取值语义：确认 -> true；取消 / 下滑关闭 / 点遮罩 -> false（结果缺失按 false 处理）
   final result = await showModalBottomSheet<bool>(
@@ -80,6 +93,7 @@ Future<bool> showConfirmBottomSheet(
       confirmLabel: confirmLabel,
       cancelLabel: cancelLabel,
       destructive: destructive,
+      holdSeconds: holdSeconds,
       onCancel: () => Navigator.of(sheetContext).pop(false),
       onConfirm: () => Navigator.of(sheetContext).pop(true),
     ),
@@ -176,12 +190,13 @@ Future<void> showMoreActionsSheet(
   );
 }
 
-class _ConfirmSheet extends StatelessWidget {
+class _ConfirmSheet extends StatefulWidget {
   const _ConfirmSheet({
     required this.title,
     required this.confirmLabel,
     required this.cancelLabel,
     required this.destructive,
+    required this.holdSeconds,
     required this.onCancel,
     required this.onConfirm,
     this.message,
@@ -194,15 +209,52 @@ class _ConfirmSheet extends StatelessWidget {
   final String confirmLabel;
   final String? cancelLabel;
   final bool destructive;
+
+  /// 强制冷静期（秒）；0 = 立即确认
+  final int holdSeconds;
   final VoidCallback onCancel;
   final VoidCallback onConfirm;
+
+  @override
+  State<_ConfirmSheet> createState() => _ConfirmSheetState();
+}
+
+class _ConfirmSheetState extends State<_ConfirmSheet> {
+  /// 冷静期剩余秒数（0 = 确认钮已可点；负值按 0 处理）
+  late int _remaining = widget.holdSeconds > 0 ? widget.holdSeconds : 0;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.holdSeconds <= 0) return;
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      setState(() {
+        _remaining -= 1;
+        if (_remaining <= 0) {
+          _remaining = 0;
+          timer.cancel();
+        }
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
     // 正文可滚、按钮固定在骨架尾栏（内容再长也不会把确认钮顶出可视区）
     return OrbitSheetScaffold(
-      title: title,
+      title: widget.title,
       contentPadding: const EdgeInsets.fromLTRB(
         AppDimens.space16,
         0,
@@ -213,27 +265,29 @@ class _ConfirmSheet extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (message != null)
+          if (widget.message != null)
             Text(
-              message!,
+              widget.message!,
               style: TextStyle(
                 fontSize: 14,
                 height: 1.5,
                 color: colors.secondaryText,
               ),
             ),
-          if (content != null) ...[
-            if (message != null) const SizedBox(height: AppDimens.space12),
-            content!,
+          if (widget.content != null) ...[
+            if (widget.message != null) const SizedBox(height: AppDimens.space12),
+            widget.content!,
           ],
         ],
       ),
       actions: OrbitSheetActions(
-        cancelLabel: cancelLabel,
-        onCancel: onCancel,
-        confirmLabel: confirmLabel,
-        onConfirm: onConfirm,
-        destructive: destructive,
+        cancelLabel: widget.cancelLabel,
+        onCancel: widget.onCancel,
+        // 冷静期内确认钮禁用、文案走剩余秒数（取消始终可点）
+        confirmLabel:
+            formatHoldConfirmLabel(_remaining, widget.confirmLabel),
+        onConfirm: _remaining > 0 ? null : widget.onConfirm,
+        destructive: widget.destructive,
       ),
     );
   }
