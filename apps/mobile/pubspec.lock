@@ -876,6 +876,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "5.0.6"
+  progressive_background_blur:
+    dependency: "direct main"
+    description:
+      name: progressive_background_blur
+      sha256: "6f5b24fc06a7cc3e701e1888e23c715c176ffa85cdf7192e5373a3b183013869"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.1"
   pub_semver:
     dependency: transitive
     description:

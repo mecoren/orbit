@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_page_header.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_progressive_blur.dart';
 import 'support/orbit_test_app.dart';
 
 void main() {
@@ -49,6 +50,34 @@ void main() {
       tester.getSize(find.byType(OrbitPageHeader)).height,
       OrbitPageHeader.rowHeight,
     );
+  });
+
+  testWidgets('玻璃表面：铺满整栏的渐进模糊层，前景 Material 不再画实色底',
+      (tester) async {
+    await pumpHeader(tester, statusBar: 24);
+
+    final blurFinder = find.descendant(
+      of: find.byType(OrbitPageHeader),
+      matching: find.byType(OrbitProgressiveBlur),
+    );
+    expect(blurFinder, findsOneWidget);
+    expect(
+      tester.getSize(blurFinder),
+      tester.getSize(find.byType(OrbitPageHeader)),
+      reason: '模糊层铺满状态栏 + 标题行，标题栏与状态栏连成一片',
+    );
+
+    // 标题行只承载水波（透明 Material）：不透明底色会挡住下方模糊层，
+    // 表现为「页头永远是实色」。
+    final surface = tester.widget<Material>(
+      find
+          .descendant(
+            of: find.byType(OrbitPageHeader),
+            matching: find.byType(Material),
+          )
+          .first,
+    );
+    expect(surface.type, MaterialType.transparency);
   });
 
   testWidgets('进度线：传 progress 出 2px 主题色线，null 不渲染', (tester) async {

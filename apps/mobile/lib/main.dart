@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:progressive_background_blur/progressive_background_blur.dart';
 
 import 'app.dart';
 import 'data/api/rust_orbit_bridge.dart';
@@ -44,6 +47,11 @@ Future<void> main() async {
   PaintingBinding.instance.imageCache
     ..maximumSize = 300
     ..maximumSizeBytes = 60 << 20;
+
+  // 页头渐进磨砂的 shader 预编译（建议 runApp 前调用，避免首帧出现模糊时
+  // 同步编译卡顿）；Skia 后端内部自动跳过。加载失败静默降级为「不模糊」，
+  // 不能把资源异常抛到根 zone 拖垮启动。
+  unawaited(ProgressiveBlur.precache().catchError((_) {}));
 
   runApp(
     ProviderScope(

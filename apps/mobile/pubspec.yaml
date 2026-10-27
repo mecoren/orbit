@@ -25,6 +25,12 @@ dependencies:
   # 依赖 intl ^0.20.0 与现有一致，需在 main() 先 initializeDateFormatting）
   table_calendar: 3.2.1
 
+  # 真·渐进背景模糊（Impeller fragment shader 两遍高斯 + sigma 垂直插值）。
+  # 页头磨砂需要「顶强底弱」，纯 BackdropFilter 只能均匀模糊；Skia 后端由
+  # OrbitProgressiveBlur 内部降级为 BackdropFilter。精确锁版：shader 属
+  # 平台能力，0.0.x 式的 API 漂移会直接让页头变回实色。
+  progressive_background_blur: 1.0.1
+
 
 
   # 状态管理（wait-home/mobile 同款：Riverpod 3.x 手动声明，无 codegen）
