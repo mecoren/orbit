@@ -13,7 +13,8 @@
 # - Windows：无代码签名证书 → NSIS/MSI 未签名（SmartScreen 提示由 Release 说明缓解）
 # - macOS：signingIdentity=null → 未签名 DMG（Gatekeeper xattr 放行说明）
 # - Linux：deb/AppImage 无签名惯例，SHA256SUMS 校验
-# - Android：android/key.properties 缺失时回落 debug 签名（本文件不涉及）
+# - Android：CI 从四个 ANDROID_* Secrets 还原固定 release keystore；
+#            缺 key.properties 的 release 构建直接失败（不再回落 debug）
 # 但 **updater 产物签名密钥必填**：bundle.createUpdaterArtifacts=true 时缺
 # TAURI_SIGNING_PRIVATE_KEY 会直接构建失败（刻意的安全保护，audit job 提前拦截）。
 name: release
@@ -89,6 +90,26 @@ jobs:
             echo "      + TAURI_SIGNING_PRIVATE_KEY_PASSWORD（口令），公钥写入 tauri.conf.json 的 plugins.updater.pubkey。"
             exit 1
           fi
+
+      - name: Android 发布签名就位
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          missing=""
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!name:-}" ]; then missing="${missing} ${name}"; fi
+          done
+          if [ -n "${missing}" ]; then
+            echo "::error::缺少 Android 发布签名 Secrets:${missing}"
+            echo "生成：pnpm keystore:android"
+            echo "配置：Settings → Secrets → 上列四个名称。"
+            echo "APK 必须始终用同一把 release keystore 签名，否则跨版本覆盖安装会报签名冲突。"
+            exit 1
+          fi
+          echo "Android 发布签名 Secrets 就位：${ANDROID_KEY_ALIAS}"
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -231,15 +252,38 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
+          # 与 ci.yml 锁定同一版本：stable 滚动会改变产物与 FRB codegen 口径
+          flutter-version: 3.44.2
           channel: stable
           cache: true
 
       # cargokit 构建 crates/orbit-flutter 需要本仓库工具链版本
       - uses: dtolnay/rust-toolchain@stable
 
+      - name: 还原 Android 发布签名
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          # 工作目录是 apps/mobile；build.gradle.kts 的 storeFile 以 android/ 为根
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/ci-release.keystore
+          test -s android/app/ci-release.keystore
+          # 提前校验 base64/密码/alias 三者配套，别等 Gradle 构建到签名阶段才失败
+          keytool -list -keystore android/app/ci-release.keystore \
+            -storepass "${ANDROID_KEYSTORE_PASSWORD}" -alias "${ANDROID_KEY_ALIAS}" >/dev/null
+          printf '%s\n' \
+            'storeFile=app/ci-release.keystore' \
+            "storePassword=${ANDROID_KEYSTORE_PASSWORD}" \
+            "keyAlias=${ANDROID_KEY_ALIAS}" \
+            "keyPassword=${ANDROID_KEY_PASSWORD}" \
+            > android/key.properties
+          echo "Android 发布签名已还原（alias=${ANDROID_KEY_ALIAS}）"
+
       - name: 构建 release APK
-        # release 签名：自托管 runner 挂载 android/key.properties 后自动生效；
-        # 公共 runner 无该文件 → debug 签名（可安装，不可上架）
         run: flutter build apk --release
 
       - name: 按版本号重命名 APK

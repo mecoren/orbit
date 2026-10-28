@@ -58,7 +58,9 @@ flutter_rust_bridge_codegen generate \
   - 桌面：应用内 **设置 → 关于与更新 → 检查更新**（`tauri-plugin-updater`
     读取本仓库 Release 的 `latest.json`，发现新版本后下载 → 校验签名 →
     安装 → 重启）。按本地优先口径**不自动轮询**，更新时机归用户掌控；
-  - 移动端：APK 覆盖安装（同包名 `cn.wait.orbit`，本地数据目录不受影响）；
+  - 移动端：APK 覆盖安装（同包名 `cn.wait.orbit` + **同一 release keystore 签名**，
+    本地数据目录不受影响）。发布流水线用固定 keystore；本地 release 构建需先运行
+    `pnpm keystore:android` 生成 `apps/mobile/android/key.properties`，否则 Gradle 直接失败；
   - 任何安装包均可从 Release 页手动下载，未签名平台以 `SHA256SUMS` 校验。
 - **版本与变更记录**：版本号语义化（semver），每版本变更见
   [CHANGELOG.md](CHANGELOG.md) 与应用内「关于 → 更新日志」（同源双写）。

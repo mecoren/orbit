@@ -1,0 +1,7 @@
+# 复制为 key.properties 后填入正式 release keystore 信息（key.properties 已被 .gitignore 忽略）。
+# 推荐直接运行 `pnpm keystore:android`：默认在 ~/.orbit/ 生成 keystore 并自动写本文件。
+# storeFile 可写绝对路径（正斜杠）或相对 apps/mobile/android/ 的路径。
+storeFile=C:/Users/<用户名>/.orbit/orbit-release.keystore
+storePassword=CHANGE_ME
+keyAlias=orbit
+keyPassword=CHANGE_ME

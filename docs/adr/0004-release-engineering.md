@@ -155,7 +155,7 @@ MVP 发布（06 文档 §二 M5）要求五端产物签名/分发就绪。现状
 
 - [ ] Windows：决定是否购买 OV 代码签名证书（否 → 维持哈希校验过渡）
 - [ ] macOS：Apple Developer Program 账号（$99/年）→ Developer ID 证书
-- [ ] Android：`keytool` 生成 release keystore + `android/key.properties`
+- [ ] Android：运行 `pnpm keystore:android` 生成 release keystore + `apps/mobile/android/key.properties`，并配置 `ANDROID_KEYSTORE_BASE64` / `ANDROID_KEYSTORE_PASSWORD` / `ANDROID_KEY_ALIAS` / `ANDROID_KEY_PASSWORD` 四个 Secrets。release 构建缺 `key.properties` 时已改为硬失败（2026-10-28），禁止 debug keystore 兜底——随机签名会让跨版本覆盖安装报 `INSTALL_FAILED_UPDATE_INCOMPATIBLE`。keystore 丢失 = 存量用户卸载重装。
 - [x] tauri artifacts 签名密钥 + updater 公钥 —— 2026-09-13 落地（07 #20）：
   `plugins.updater.pubkey` 入库、`release.yml` 开 `includeUpdaterJson`；
   2026-09-15 进一步开 `bundle.createUpdaterArtifacts` 并把清单合成单点化。

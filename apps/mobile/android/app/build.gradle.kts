@@ -8,11 +8,21 @@ plugins {
 
 // release 签名密钥读取（ADR 0004）：android/key.properties 不入库
 // （.gitignore 已排除），含 storeFile/storePassword/keyAlias/keyPassword。
-// 未配置时 release 回落 debug 签名（本地真机可覆盖安装；上架/正式分发前须配置）。
+// release 任务缺 key.properties 时直接失败：随机 debug keystore 会让不同机器/不同
+// CI 运行产出的 APK 签名不一致，覆盖安装报「签名冲突」；debug 构建不受影响。
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
 if (keystorePropertiesFile.exists()) {
     keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
+}
+val isReleaseTask = gradle.startParameter.taskNames.any { it.contains("release", ignoreCase = true) }
+if (!keystorePropertiesFile.exists() && isReleaseTask) {
+    throw GradleException(
+        "[signing] 缺少 apps/mobile/android/key.properties，拒绝用 debug keystore 产出 release 包。" +
+            "随机 debug 签名会让后续版本无法覆盖安装（INSTALL_FAILED_UPDATE_INCOMPATIBLE）。" +
+            "本地请运行 `pnpm keystore:android` 生成正式 keystore；CI 请配置 " +
+            "ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS / ANDROID_KEY_PASSWORD 四个 Secrets。",
+    )
 }
 
 android {
@@ -50,11 +60,9 @@ android {
 
     buildTypes {
         release {
-            // key.properties 就绪走正式签名；否则 debug 签名回落
-            // （`flutter run --release` 真机可装；正式分发见 ADR 0004 物料清单）
-            signingConfig =
-                if (keystorePropertiesFile.exists()) signingConfigs.getByName("release")
-                else signingConfigs.getByName("debug")
+            // 只认正式 keystore；缺 key.properties 的 release 任务已在上面硬失败，
+            // 这里保留 null 是为了让 Gradle Sync / debug 任务不因缺签名配置而报错。
+            signingConfig = signingConfigs.findByName("release")
         }
     }
 }

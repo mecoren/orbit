@@ -17,6 +17,13 @@
 
 ## [Unreleased]
 
+### 构建：Android 发布签名固定化——禁止 debug 兜底，支持跨版本覆盖安装（2026-10-28）
+
+- **Gradle 硬失败**：`apps/mobile/android/app/build.gradle.kts` 在 release 任务缺 `key.properties` 时抛 `GradleException`，不再回落 debug keystore。随机 debug 签名会让不同机器/不同 CI 运行产出不同签名的 APK，覆盖安装报 `INSTALL_FAILED_UPDATE_INCOMPATIBLE`；debug 构建不受影响。
+- **CI 注入**：`release.yml` 的 audit job 校验 `ANDROID_KEYSTORE_BASE64` / `ANDROID_KEYSTORE_PASSWORD` / `ANDROID_KEY_ALIAS` / `ANDROID_KEY_PASSWORD` 四项 Secrets；android job 构建前还原 `android/app/ci-release.keystore` 并写 `key.properties`（`storeFile=app/ci-release.keystore`）。
+- **生成工具**：新增 `pnpm keystore:android`（`scripts/generate-android-keystore.mjs`）与 `apps/mobile/android/key.properties.sample`；脚本在 `~/.orbit/orbit-release.keystore` 生成 RSA-2048 keystore、写 `key.properties`，并打印四个 Secrets 与 base64 命令。keystore 与密码必须离线备份——丢失后存量用户只能卸载重装。
+- **文档**：ADR 0004 证书 TODO、`docs/08 §3.6/§6`、README 安装与更新口径同步。
+
 ### 功能：双端未完成缺口收口——筛选器下推 / 桌面零入口 / 移动存储与平板适配 / 检查更新（2026-10-27，docs/07 #107–#113）
 
 审查口径：`docs/07` 的 #1–#106 与 `docs/12` 的 G1–G16 已全部收口，真实缺口集中在「桥已就绪但 UI 零入口」「双端不对称」「注释明写留后续」「分页条件未下推」四处；本批按三类逐项补齐。
