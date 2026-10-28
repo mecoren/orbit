@@ -1166,9 +1166,9 @@ export interface CsvImportPreviewView {
 export const csvImportPreview = (content: string, preset: CsvImportPresetKey, previewLimit = 20) =>
   invoke<CsvImportPreviewView>("csv_import_preview", { content, preset, previewLimit });
 
-/** 执行导入（写库）：项目自动创建、逐行独立成败 */
-export const csvImportExecute = (content: string, preset: CsvImportPresetKey) =>
-  invoke<CsvImportStats>("csv_import_execute", { content, preset });
+// 旧的 `csvImportExecute`（一次性阻塞执行）包装已删除：现网只走下方可取消的
+// job 通道（进度 + 取消，docs/13 §6.2 M2）。保留包装只会诱导回退到「大文件
+// 静默卡住、用户无法中止」的老路径——Rust 命令本身仍在，删的是前端入口。
 
 /** 导入限额（字节 / 行数）：选文件后先比对大小，超限即拦（docs/13 §6.2 M2） */
 export interface ImportLimits {
@@ -1557,7 +1557,10 @@ export const taskAttachmentExport = (hash: string, targetPath: string) =>
   invoke<number>("task_attachment_export", { hash, targetPath });
 export const taskAttachmentRemove = (linkId: number) =>
   invoke<void>("task_attachment_remove", { linkId });
-export const attachmentsGc = () => invoke<number>("attachments_gc");
+// 旧的 `attachmentsGc`（无参数、无返回值语义的裸 GC）包装已删除：附件 GC 现由
+// `db_maintenance` 三件套统一承载（启动期 `spawn_idle_maintenance` 轻维护 + 手动
+// 「立即维护」+ 缓存上限），单独调它会让「账本/关联/缓存上限」这三步错拍。
+// Rust 命令本身保留（维护链内部调用），删的是前端旁路入口。
 /** 未使用附件（无任何存活任务引用的账本行；诊断页清理入口的清单行） */
 export interface UnusedAttachmentView {
   hash: string;
