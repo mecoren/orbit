@@ -12,7 +12,7 @@
  */
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, Cloud, Cpu, FileCog, HardDrive, RefreshCw, Trash2 } from "lucide-react";
+import { Activity, Cloud, Cpu, FileCog, FileText, FolderOpen, HardDrive, RefreshCw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -24,8 +24,10 @@ import {
   cloudSyncPushOnly,
   diagnosticsSnapshot,
   fullBackupDeviceInfo,
+  logOverview,
   micaDiagnostics,
   syncConfigGet,
+  type LogOverview,
   type MicaDiagnostics,
 } from "@/lib/tauri";
 import { formatBytes, formatCount } from "./diagnostics-format";
@@ -114,9 +116,57 @@ export function DiagnosticsSection() {
     queryFn: fullBackupDeviceInfo,
     staleTime: Infinity,
   });
+
+  // 日志目录读数：与诊断快照同口径（点刷新时重采；目录内容会随运行变化）
+  const { data: logs, refetch: refetchLogs } = useQuery<LogOverview>({
+    queryKey: ["log_overview"],
+    queryFn: logOverview,
+    staleTime: 0,
+    gcTime: 0,
+  });
+
+  /**
+   * 用系统默认程序打开日志目录 / 某个日志文件。
+   *
+   * 走 `plugin-shell` 的 `open`（与「非图片附件用系统程序打开」同一通道），
+   * 不新增插件与权限。路径全部由 Rust 侧给出，前端不拼路径——两处拼法
+   * 一旦分叉就会出现「打开的是 A、插件写的是 B」。
+   */
+  const openLogPath = async (target: string, what: string) => {
+    if (!target) {
+      toast.error(`未取到${what}路径`);
+      return;
+    }
+    try {
+      const { open } = await import("@tauri-apps/plugin-shell");
+      await open(target);
+    } catch (e) {
+      toast.error(`打开${what}失败`, {
+        description: e instanceof Error ? e.message : String(e),
+      });
+    }
+  };
+  const openLogDir = () => openLogPath(logs?.dir ?? "", "日志目录");
+  const openLatestLog = () => {
+    // files 已按修改时间倒序（Rust 侧排序），首个即最新
+    const latest = logs?.files[0];
+    if (!latest || !logs?.dir) {
+      toast.info("目录内暂无日志文件");
+      return;
+    }
+    const sep = logs.dir.includes("\\") ? "\\" : "/";
+    void openLogPath(`${logs.dir}${sep}${latest.name}`, "最新日志");
+  };
+  const openLogFile = (name: string) => {
+    if (!logs?.dir) return;
+    const sep = logs.dir.includes("\\") ? "\\" : "/";
+    void openLogPath(`${logs.dir}${sep}${name}`, "日志文件");
+  };
+
   const refresh = () => {
     setRuntime(readRuntime());
     void refetch();
+    void refetchLogs();
     void micaDiagnostics()
       .then(setMica)
       .catch(() => {
@@ -362,6 +412,66 @@ export function DiagnosticsSection() {
         </div>
         <p className="text-xs text-muted-foreground">
           Mica 链路读数来自 Rust 侧 DWM 直调（仅 Windows）；非 Windows 平台只显示平台名。
+        </p>
+      </div>
+
+      <div className="space-y-2 rounded-lg border p-5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <FileCog className="size-4 text-muted-foreground" />
+            <p className="text-sm font-medium">日志文件</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => void openLogDir()}>
+              <FolderOpen className="size-4" />
+              打开目录
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => void openLatestLog()}>
+              <FileText className="size-4" />
+              打开最新日志
+            </Button>
+          </div>
+        </div>
+        {logs == null ? (
+          <p className="text-xs text-muted-foreground">读取中…</p>
+        ) : !logs.readable ? (
+          <p className="text-xs text-destructive">
+            {logs.reason ?? "日志目录不可读"}
+            {logs.dir ? <span className="text-muted-foreground">（{logs.dir}）</span> : null}
+          </p>
+        ) : (
+          <>
+            <div className="divide-y">
+              {logs.files.length === 0 ? (
+                <p className="text-xs text-muted-foreground">目录内暂无日志文件。</p>
+              ) : (
+                logs.files.map((f) => (
+                  <div key={f.name} className="flex items-center justify-between gap-3 py-1.5">
+                    <button
+                      type="button"
+                      className="truncate text-left text-xs text-foreground underline-offset-2 hover:underline"
+                      onClick={() => void openLogFile(f.name)}
+                      title="用系统默认程序打开"
+                    >
+                      {f.name}
+                    </button>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {formatBytes(f.size_bytes)}
+                      {f.modified_ms > 0
+                        ? ` · ${new Date(f.modified_ms).toLocaleString("zh-CN")}`
+                        : ""}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+            <p className="break-all font-mono text-xs text-muted-foreground">{logs.dir}</p>
+          </>
+        )}
+        <p className="text-xs text-muted-foreground">
+          日志落盘位置由系统决定（Windows 在 AppData\Local，macOS 在 ~/Library/Logs），
+          不受「数据目录」设置影响。报障时点「打开最新日志」即可取到当前这份；
+          日志不含主密码、同步密码与云端凭据（脱敏红线见 docs/02 §九）。
         </p>
       </div>
 

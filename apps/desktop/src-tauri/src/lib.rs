@@ -556,6 +556,8 @@ pub fn run() {
             commands::db_maintenance_cmd::db_maintenance,
             // 应用内诊断分区（只读读数：库体积 / 各表行数 / 附件缓存占用）
             commands::diagnostics_cmd::diagnostics_snapshot,
+            // 日志目录读数（docs/02 §九 的 M6+ 入口；只报路径与文件清单，不读内容）
+            commands::log_cmd::log_overview,
             // 测试数据（仅 debug 构建可执行；前端入口同样只在 DEV 下渲染）
             commands::dev_cmd::dev_seed_demo_data,
             commands::dev_cmd::dev_seed_clear,

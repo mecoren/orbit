@@ -314,4 +314,31 @@ describe("mock IPC 契约", () => {
     expect(b.groups[0].total).toBe(10);
     expect(b.groups[0].items).toHaveLength(10);
   });
+
+  it("⑤ 日志读数形状：目录 + 可读位 + 文件清单按修改时间倒序（docs/02 §九 入口）", () => {
+    type LogFile = { name: string; size_bytes: number; modified_ms: number };
+    type Overview = {
+      dir: string;
+      readable: boolean;
+      reason: string | null;
+      files: LogFile[];
+    };
+    const impl = mockCommands.log_overview as (args: unknown, ctx: unknown) => Overview;
+    const logs = impl({}, {});
+
+    // Rust 侧 `log_cmd::LogOverview` 是 serde 默认 snake_case：键名漂移即契约破裂
+    expect(typeof logs.dir).toBe("string");
+    expect(logs.dir.length).toBeGreaterThan(0);
+    expect(logs.readable).toBe(true);
+    expect(logs.reason).toBeNull();
+    expect(logs.files.length).toBeGreaterThan(0);
+    for (const f of logs.files) {
+      expect(typeof f.name).toBe("string");
+      expect(typeof f.size_bytes).toBe("number");
+      expect(typeof f.modified_ms).toBe("number");
+    }
+    // 「打开最新日志」依赖 files[0] 即最新——倒序是 UI 契约而非展示偏好
+    const times = logs.files.map((f) => f.modified_ms);
+    expect([...times].sort((a, b) => b - a)).toEqual(times);
+  });
 });

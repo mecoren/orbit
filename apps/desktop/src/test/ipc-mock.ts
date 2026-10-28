@@ -2497,6 +2497,19 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   // 启动形态探针（自启 --hidden 判定）：纯浏览器无自启概念，恒非隐藏
   startup_launched_hidden: (): boolean => false,
 
+  // ---- 日志目录读数（docs/02 §九 的 M6+ 入口）----
+  // 浏览器里没有真实日志目录，给一份形状对齐 LogOverview 的假清单：
+  // 契约测试只断言「字段齐全 + 倒序 + 条数上限」，不对具体路径下断言。
+  log_overview: () => ({
+    dir: "/mock/logs",
+    readable: true,
+    reason: null,
+    files: [
+      { name: "app_log.log", size_bytes: 4096, modified_ms: 1_700_000_002_000 },
+      { name: "app_log.1.log", size_bytes: 2048, modified_ms: 1_700_000_001_000 },
+    ],
+  }),
+
   // ---- 保存的筛选器（#35；条件 JSON 白名单键同 Rust）----
   saved_filters_list: (_a: unknown, { db }: Ctx) => ipcClone(db.savedFilters),
   saved_filter_create: (

@@ -1795,6 +1795,33 @@ export const diagnosticsSnapshot = () =>
   invoke<DiagnosticsSnapshot>("diagnostics_snapshot");
 
 /**
+ * 日志目录读数（镜像 `log_cmd::LogOverview`）。
+ *
+ * 只报目录路径与文件清单，**不读日志内容**——日志可达数十 MB，整份读进前端
+ * 只会让设置页变卡；用户真正要做的是「找到它、发给我」。打开动作由前端用
+ * `plugin-shell` 的 `open` 完成（与「非图片附件用系统程序打开」同一通道）。
+ */
+export interface LogFileView {
+  name: string;
+  /** 字节数（读取失败为 0，不阻断整份清单） */
+  size_bytes: number;
+  /** 最后修改时间（Unix 毫秒；不可得为 0） */
+  modified_ms: number;
+}
+
+export interface LogOverview {
+  /** 日志目录绝对路径 */
+  dir: string;
+  /** 目录是否可读；false 时 files 恒空、reason 说明原因 */
+  readable: boolean;
+  reason: string | null;
+  /** 按修改时间倒序，最多 20 条 */
+  files: LogFileView[];
+}
+
+export const logOverview = () => invoke<LogOverview>("log_overview");
+
+/**
  * Mica 云母材质诊断读数（镜像 `mica_cmd::MicaDiagnostics`，serde camelCase）。
  *
  * 命令本身会顺带重新断言一次材质（幂等），故只在诊断分区挂载/点刷新时调用。
