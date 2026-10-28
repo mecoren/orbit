@@ -895,14 +895,32 @@ const SYNC_TYPE_LABELS: Record<string, string> = {
   pull_only: "启动同步",
 };
 
+/**
+ * 同步历史筛选档（对齐移动端 `_SyncHistoryCard._scopes` 四档）
+ *
+ * 键即 core `incremental_history(scope)` 的入参真值：`all` 不加类型谓词，
+ * 其余三档按 `sync_type` 过滤。`pull_only` 的展示名与上方 `SYNC_TYPE_LABELS`
+ * 保持同一口径（「启动同步」），避免同一类记录在筛选条与行内标签上叫两个名。
+ */
+type SyncHistoryScope = "all" | "incremental" | "push_only" | "pull_only";
+
+const SYNC_SCOPE_LABELS: Record<SyncHistoryScope, string> = {
+  all: "全部",
+  incremental: "完整同步",
+  push_only: "即时推送",
+  pull_only: "启动同步",
+};
+
 function SyncHistoryCard() {
   const [open, setOpen] = useState(false);
   const [entries, setEntries] = useState<SyncHistoryEntry[] | null>(null);
   const [loading, setLoading] = useState(false);
+  /** 同步类型筛选（对齐移动端 `_SyncHistoryCard._scopes`；缺省 all） */
+  const [scope, setScope] = useState<SyncHistoryScope>("all");
 
-  const load = () => {
+  const load = (nextScope: SyncHistoryScope = scope) => {
     setLoading(true);
-    cloudSyncHistory("all", 50)
+    cloudSyncHistory(nextScope, 50)
       .then(setEntries)
       .catch(() => setEntries([]))
       .finally(() => setLoading(false));
@@ -921,6 +939,19 @@ function SyncHistoryCard() {
     };
   }, [open]);
 
+  /**
+   * 切档重新拉取。
+   *
+   * 先置 `null` 让「加载中」占位出来：不清空旧列表的话，切档瞬间会继续显示
+   * 上一个 scope 的行，读起来像「筛选没生效」。
+   */
+  const switchScope = (next: SyncHistoryScope) => {
+    if (next === scope) return;
+    setScope(next);
+    setEntries(null);
+    load(next);
+  };
+
   return (
     <div className="rounded-lg border">
       <button
@@ -934,7 +965,7 @@ function SyncHistoryCard() {
           同步历史
           {entries !== null && (
             <span className="ml-2 text-xs text-muted-foreground">
-              最近 {entries.length} 次增量同步
+              最近 {entries.length} 次{scope === "all" ? "增量同步" : SYNC_SCOPE_LABELS[scope]}
             </span>
           )}
         </p>
@@ -943,47 +974,71 @@ function SyncHistoryCard() {
         />
       </button>
       {open && (
-        <div className="max-h-72 space-y-1 overflow-auto border-t p-3">
-          {loading && entries === null && (
-            <p className="py-4 text-center text-xs text-muted-foreground">加载中…</p>
-          )}
-          {entries !== null && entries.length === 0 && (
-            <p className="py-4 text-center text-xs text-muted-foreground">
-              暂无同步记录——首次同步后此处可回看每次成败与耗时
-            </p>
-          )}
-          {entries?.map((h) => (
-            <div key={h.id} className="flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted/50">
-              <span
+        <div className="border-t p-3">
+          {/* 类型筛选（对齐移动端四档）：历史里混着完整同步/仅推送/先拉后推，
+              排障时常要先看「只看失败的仅推送」这一类 */}
+          <div className="mb-2 flex flex-wrap gap-1">
+            {(Object.keys(SYNC_SCOPE_LABELS) as SyncHistoryScope[]).map((key) => (
+              <button
+                key={key}
+                type="button"
+                aria-pressed={scope === key}
                 className={cn(
-                  "size-1.5 shrink-0 rounded-full",
-                  h.status === "success" ? "bg-emerald-500" : "bg-destructive",
+                  "rounded-full px-2.5 py-1 text-xs transition-colors",
+                  scope === key
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-muted",
                 )}
-                aria-label={h.status === "success" ? "成功" : "失败"}
-              />
-              <span className="w-16 shrink-0 text-xs text-muted-foreground">
-                {SYNC_TYPE_LABELS[h.sync_type] ?? h.sync_type}
-              </span>
-              <span className="min-w-0 flex-1 truncate text-xs">
-                {new Date(h.started_at).toLocaleString()}
-                {h.finished_at != null && h.finished_at > h.started_at && (
-                  <span className="ml-2 text-muted-foreground">
-                    耗时 {((h.finished_at - h.started_at) / 1000).toFixed(1)}s
+                onClick={() => switchScope(key)}
+              >
+                {SYNC_SCOPE_LABELS[key]}
+              </button>
+            ))}
+          </div>
+          <div className="max-h-72 space-y-1 overflow-auto">
+            {loading && entries === null && (
+              <p className="py-4 text-center text-xs text-muted-foreground">加载中…</p>
+            )}
+            {entries !== null && entries.length === 0 && (
+              <p className="py-4 text-center text-xs text-muted-foreground">
+                {scope === "all"
+                  ? "暂无同步记录——首次同步后此处可回看每次成败与耗时"
+                  : `暂无${SYNC_SCOPE_LABELS[scope]}记录`}
+              </p>
+            )}
+            {entries?.map((h) => (
+              <div key={h.id} className="flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted/50">
+                <span
+                  className={cn(
+                    "size-1.5 shrink-0 rounded-full",
+                    h.status === "success" ? "bg-emerald-500" : "bg-destructive",
+                  )}
+                  aria-label={h.status === "success" ? "成功" : "失败"}
+                />
+                <span className="w-16 shrink-0 text-xs text-muted-foreground">
+                  {SYNC_TYPE_LABELS[h.sync_type] ?? h.sync_type}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-xs">
+                  {new Date(h.started_at).toLocaleString()}
+                  {h.finished_at != null && h.finished_at > h.started_at && (
+                    <span className="ml-2 text-muted-foreground">
+                      耗时 {((h.finished_at - h.started_at) / 1000).toFixed(1)}s
+                    </span>
+                  )}
+                </span>
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  拉 {h.pulled_count} / 推 {h.pushed_count}
+                  {/* S28：冲突裁决数——多设备并发编辑被 LWW 裁决的记录数 */}
+                  {h.conflict_count > 0 && ` / 冲突 ${h.conflict_count}`}
+                </span>
+                {h.error_message && (
+                  <span className="max-w-40 shrink-0 truncate text-xs text-destructive" title={h.error_message}>
+                    {h.error_message}
                   </span>
                 )}
-              </span>
-              <span className="shrink-0 text-xs text-muted-foreground">
-                拉 {h.pulled_count} / 推 {h.pushed_count}
-                {/* S28：冲突裁决数——多设备并发编辑被 LWW 裁决的记录数 */}
-                {h.conflict_count > 0 && ` / 冲突 ${h.conflict_count}`}
-              </span>
-              {h.error_message && (
-                <span className="max-w-40 shrink-0 truncate text-xs text-destructive" title={h.error_message}>
-                  {h.error_message}
-                </span>
-              )}
-            </div>
-          ))}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
