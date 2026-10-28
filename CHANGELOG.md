@@ -17,6 +17,16 @@
 
 ## [Unreleased]
 
+### 功能：移动端同步进度流接通 + 桌面同步历史类型筛选（2026-10-28，docs/07 #117）
+
+两处都是「桌面已有、移动端或反向缺失」的双端不对称，且都在同步域——最需要可观测性的地方。
+
+- **移动 · 同步进度流**：移动端引擎此前用 `NoopProgressSender`（模块注释自陈「sync-progress 尚无 StreamSink 消费方」），同步期间只有一个不动的转环。大附件同步（分片上传可跑数十秒）时用户无法判断是在推进还是卡住。落地：FRB 新增 `FrboProgressSender`（`SyncProgress` → 有界 broadcast 通道，容量 64）+ `subscribe_sync_progress(sink)`；`SyncStatusButton` 信息面板在「立即同步」期间显示进度条 + 阶段文案。**core 侧零改动**——`ProgressSender` trait 本就是为「Tauri Event / FRB StreamSink」两种壳抽象的，桌面 `TauriProgressSender` 已实现前半。**按 origin 过滤只认 manual**：后台自动同步的进度不该在用户点开的面板里闪。
+- **桌面 · 同步历史类型筛选**：`SyncHistoryCard` 此前固定 `cloudSyncHistory("all", 50)`，排障时想「只看失败的那几次即时推送」只能自己在上百行里翻；移动端早有四档筛选。补齐 all / 完整同步 / 即时推送 / 启动同步四档，切档先置空列表再拉取（否则切档瞬间仍显示上一个 scope 的行，像「筛选没生效」），副标题随档改口、空态点名当前档位。零协议改动——`scope` 入参与 `ipc-mock` 的过滤本就支持四档。
+- **设计要点（同步进度）**：①**有界是硬约束**——进度按模块/附件条数产生，一次大附件同步可达数百条，无界通道在 UI 来不及消费时会累积；超出容量丢最旧事件（订阅方收 `Lagged`），正是「最新值有意义」该有的语义。②通道独立于 `SyncRuntime` 槽位：`send` 在同步主流程中同步调用，sender 反向去锁 `SYNC_RUNTIME` 会在持锁同步期间自锁。③DTO 压平成 `SyncProgressDto`（phase 判别 + 其余字段可空）而非 enum 家族——core 是内部标签 enum，FRB 不能镜像变体；压平后与桌面 `SyncProgressEvent` 逐字段同形。④**不引入 `serde_json::Value`**：进度是高频流，动态 JSON 只会让 UI 线程多做一次解析。⑤文案直接用 core `display_text` 单点产出，Dart 侧不另拼一套（双端各拼一份必然漂移）。
+- **回归锚点**：`flutter analyze` 零问题、`flutter test` **1100 绿**（新增 2 例：推 manual 进度 → 进度条 value=0.3 且文案为 core 产出的「正在上传任务...」；推 background 进度 → 面板不显示）；桌面 `tsc --noEmit` 零错误、`vitest` **764 绿**、`e2e` **74 绿**（新增 `sync-history-scope.spec.ts` 3 例）；桥门禁与无界审计双绿（有界通道标记被正确识别）。
+- **已知非本批问题**：`calendar_screen_test`「长按日格」一例、smoke 两例（读屏 j 键播报 / 更多菜单视图切换）在 HEAD 上即红——已分别 stash 掉本批改动复跑确认。
+
 ### 功能：「桥已就绪但 UI 零入口」收口三件——移动云端存储补孤儿数据桶、移动同步排障、桌面日志入口（2026-10-28，docs/07 #114）
 
 全仓普查后确认「账面功能缺口已清空」，剩余真实缺口集中在「core/命令就绪、壳层零入口」。本批按三处补齐，另清两处已被替代的前端包装。
