@@ -8,8 +8,8 @@ import 'dto.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `active_config`, `attach_password_to_runtime`, `attachments_dir`, `auto_sync_flag`, `base_path_normalized`, `bucket_trimmed`, `detach_password_from_runtime`, `engine_config_of_record`, `err_tagged_cloud`, `err_tagged_crypto`, `from_record`, `interval_clamped`, `parse_origin`, `password_str`, `region_trimmed`, `run_sync`, `runtime_crypto`, `runtime_engine`, `session_token_str`, `skip_tls_flag`, `sync_on_change_flag`, `timeout_clamped`, `username_str`, `with_runtime`
-// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `SyncAction`, `SyncRuntime`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `FrboProgressSender`, `SyncAction`, `SyncRuntime`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `send`
 
 /// 读取当前激活配置（未配置返回 null）
 ///
@@ -104,6 +104,17 @@ Future<CloudUnusedDeleteResult> cloudUnusedAttachmentsDelete({
 /// 移动端此前无此桥位（core 原语与桌面命令早已就绪，docs/07 #96 尾款）。
 Future<OrphanChunkGcResult> cloudOrphanChunksGc() =>
     RustLib.instance.api.crateApiSyncCloudOrphanChunksGc();
+
+/// 订阅同步进度流（对齐桌面 `emit("sync-progress")`）
+///
+/// 每次调用新建一条 Rust→Dart 流；Dart 取消订阅后 `sink.add` 失败即自行退出。
+/// 与 `subscribe_db_changes` 的「进程级单播 + once-guard」不同：进度流是
+/// 多播语义（`broadcast` 通道），允许设置页与状态按钮各订阅一份互不影响。
+///
+/// 通道无事件时 `recv` 挂起等待，不产生空转；`Lagged` 只丢帧不终止——
+/// 进度是「最新值有意义」的流，落后就该跳到最新而不是补播历史。
+Stream<SyncProgressDto> subscribeSyncProgress() =>
+    RustLib.instance.api.crateApiSyncSubscribeSyncProgress();
 
 /// 查询增量同步历史（P1-17 展示面；设置页「同步历史」卡数据源）
 ///

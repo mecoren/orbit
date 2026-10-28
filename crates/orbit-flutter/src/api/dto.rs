@@ -75,6 +75,10 @@ pub struct ListFilter {
     pub created_from: Option<i64>,
     /// 完成时间下界（毫秒，含；隐含只看已完成）
     pub done_from: Option<i64>,
+    /// 状态**集合**（工具栏多选档）：派生状态口径（脏值回落 pending），
+    /// `done` 档兼容「done = 1 或 status = 'done'」。与 [Self::status] 等值
+    /// 互斥、集合优先；空集合 = 不过滤。
+    pub status_in: Option<Vec<String>>,
 }
 
 impl From<orbit_core::models::business::ListFilter> for ListFilter {
@@ -106,6 +110,7 @@ impl From<orbit_core::models::business::ListFilter> for ListFilter {
             has_open_subtask: f.has_open_subtask,
             created_from: f.created_from,
             done_from: f.done_from,
+            status_in: f.status_in,
         }
     }
 }
@@ -139,6 +144,7 @@ impl From<ListFilter> for orbit_core::models::business::ListFilter {
             has_open_subtask: f.has_open_subtask,
             created_from: f.created_from,
             done_from: f.done_from,
+            status_in: f.status_in,
         }
     }
 }
@@ -1614,6 +1620,122 @@ impl From<orbit_core::api::cloud_sync_api::OrphanChunkGcResult> for OrphanChunkG
         Self {
             deleted_buckets: v.deleted_buckets as i64,
             errors: v.errors,
+        }
+    }
+}
+
+/// 同步进度事件（镜像 core `cloud_sync::progress::SyncProgress`）
+///
+/// core 侧是 `#[serde(tag = "phase")]` 的内部标签 enum，FRB 不能直接镜像 enum
+/// 变体，故压平成「`phase` 判别 + 全部变体字段可空」的单一 struct——与桌面
+/// `SyncProgressEvent`（TS 接口）逐字段同形，双端 UI 文案可共用一套判据。
+///
+/// **不引入 `serde_json::Value`**：进度是高频流，每次序列化/反序列化一个
+/// 动态 JSON 只会让 UI 线程多做一次解析；压平 struct 的字段全是基本类型，
+/// FRB 走的是零解析的字段级传递。
+#[derive(Debug, Clone, Serialize)]
+pub struct SyncProgressDto {
+    /// starting / pushing / pulling / merging / local_data_applied / attachments / done / error
+    pub phase: String,
+    /// background / manual / exit（UI 按来源过滤：设置页只认 manual）
+    pub origin: String,
+    /// 模块显示名（pushing/pulling/merging 有值）
+    pub display_name: Option<String>,
+    /// 当前序号（pushing/pulling/attachments 有值，1-based）
+    pub current: Option<i64>,
+    /// 总数（同上有值）
+    pub total: Option<i64>,
+    /// 错误消息（error 有值）
+    pub message: Option<String>,
+    /// 估算百分比 0-100（core `SyncProgress::percent` 同口径）
+    pub percent: i64,
+    /// 可直接展示的整句文案（core `SyncProgress::display_text` 同口径）
+    ///
+    /// 双端共用同一句中文：文案口径在 core 单点维护，避免 Dart 侧再抄一份
+    /// 而与桌面漂移（桌面 `syncProgressText` 有自己的措辞，属既有实现，不动）。
+    pub display_text: String,
+}
+
+impl From<orbit_core::cloud_sync::progress::SyncProgress> for SyncProgressDto {
+    fn from(p: orbit_core::cloud_sync::progress::SyncProgress) -> Self {
+        use orbit_core::cloud_sync::progress::SyncProgress as P;
+        let origin = match &p {
+            P::Starting { origin, .. }
+            | P::Pushing { origin, .. }
+            | P::Pulling { origin, .. }
+            | P::Merging { origin, .. }
+            | P::LocalDataApplied { origin, .. }
+            | P::Attachments { origin, .. }
+            | P::Done { origin, .. }
+            | P::Error { origin, .. } => match origin {
+                orbit_core::cloud_sync::progress::SyncOrigin::Background => "background",
+                orbit_core::cloud_sync::progress::SyncOrigin::Manual => "manual",
+                orbit_core::cloud_sync::progress::SyncOrigin::Exit => "exit",
+            },
+        };
+        let (phase, display_name, current, total, message) = match &p {
+            P::Starting { .. } => ("starting", None, None, None, None),
+            P::Pushing {
+                display_name,
+                current,
+                total,
+                ..
+            } => (
+                "pushing",
+                Some(display_name.clone()),
+                Some(*current as i64),
+                Some(*total as i64),
+                None,
+            ),
+            P::Pulling {
+                display_name,
+                current,
+                total,
+                ..
+            } => (
+                "pulling",
+                Some(display_name.clone()),
+                Some(*current as i64),
+                Some(*total as i64),
+                None,
+            ),
+            P::Merging { display_name, .. } => {
+                ("merging", Some(display_name.clone()), None, None, None)
+            }
+            P::LocalDataApplied { .. } => ("local_data_applied", None, None, None, None),
+            P::Attachments {
+                action,
+                current,
+                total,
+                ..
+            } => {
+                // 附件档的 display_name 位借来放动作（upload/download），
+                // 让 Dart 侧不必再判一次 phase 就能区分方向
+                let name = if action == "upload" {
+                    "upload"
+                } else {
+                    "download"
+                };
+                (
+                    "attachments",
+                    Some(name.to_string()),
+                    Some(*current as i64),
+                    Some(*total as i64),
+                    None,
+                )
+            }
+            P::Done { .. } => ("done", None, None, None, None),
+            P::Error { message, .. } => ("error", None, None, None, Some(message.clone())),
+        };
+        Self {
+            phase: phase.to_string(),
+            origin: origin.to_string(),
+            display_name,
+            current,
+            total,
+            message,
+            percent: p.percent() as i64,
+            display_text: p.display_text(),
         }
     }
 }

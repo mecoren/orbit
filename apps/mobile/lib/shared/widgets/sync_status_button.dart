@@ -4,10 +4,13 @@
 ///   经 [OrbitPageHeader.leading] 插槽挂载）
 /// - 未配置 / 未解锁 → 点击直达云同步配置页（/settings/sync）引导；
 ///   已就绪 → 点击弹出底部信息面板（状态 / 上次 / 下次同步 / 失败原因 + 立即同步）
-/// - 移动端无 sync-progress / sync-finished 事件流（ADR 0003）：状态只能用
-///   「await cloudSyncNow 期间本地置同步中 → 返回值落定成败」的本地态实现，
-///   成功对勾短暂展示后自动回落待命
-/// - 与备份无关：自动备份 / 全量备份入口仍在设置页
+/// - **同步进度（2026-10-28）**：core 的 `SyncProgress` 经 FRB `StreamSink` 到
+///   [syncProgressProvider]，面板在 `_runSync` 期间订阅它显示阶段文案 + 进度条。
+///   此前只有「await cloudSyncNow 期间置同步中」的本地态——大附件同步时用户
+///   看到的是一个不动的转环，无法判断是在推进还是卡住。
+///   图标本身仍用本地态驱动（它挂在标题栏、不在面板里，跨页面存活）；
+///   进度只影响面板内文案，两者不互相等待。
+/// - 成功对勾短暂展示后自动回落待命；与备份无关（自动备份入口在设置页）
 library;
 
 import 'dart:async';
@@ -250,13 +253,23 @@ class _SyncInfoSheet extends ConsumerStatefulWidget {
 class _SyncInfoSheetState extends ConsumerState<_SyncInfoSheet> {
   bool _busy = false;
 
+  /// 本次手动同步的最后一条进度（null = 尚未收到任何进度事件）
+  ///
+  /// 只认 `origin == 'manual'`：后台自动同步（定时 / 改后即同步）的进度不该
+  /// 出现在用户点开的面板里——用户点「立即同步」看到的应当是**这一次**的推进。
+  SyncProgress? _progress;
+
   /// 错误消息去 `[tag] ` 前缀（Rust 侧 `[category] message` 约定）
   String _errMsg(Object err) =>
       err.toString().replaceFirst(RegExp(r'^\[\w+\]\s*'), '');
 
   Future<void> _runSync() async {
     if (_busy) return;
-    setState(() => _busy = true);
+    setState(() {
+      _busy = true;
+      // 清掉上一轮残留：新一次同步从「准备同步」重新开始推进
+      _progress = null;
+    });
     widget.onStatusChanged(SyncUiStatus.syncing);
     try {
       final result = await ref
@@ -315,6 +328,21 @@ class _SyncInfoSheetState extends ConsumerState<_SyncInfoSheet> {
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
     final config = ref.watch(syncConfigProvider).value;
+    // 订阅进度流并把 manual 档的最新一条收进本地态。
+    //
+    // 用 `ref.listen` 而不是在 build 里直接读值：`StreamProvider` 的 `value`
+    // 只反映「最后一条」，`listen` 才能在到达时 `setState` 并区分 origin。
+    // 订阅本身由 provider 持有，面板关闭（本 State dispose）后自动取消。
+    ref.listen<AsyncValue<SyncProgress>>(syncProgressProvider, (_, next) {
+      final p = next.value;
+      if (p == null || !p.isManual) return;
+      // 同步已结束（终态）时不再刷 UI：终态由 `_runSync` 的返回值落定，
+      // 进度只负责「进行中」这一段
+      if (!_busy || p.isTerminal) return;
+      if (!mounted) return;
+      setState(() => _progress = p);
+    });
+    final progress = _progress;
     final nextAt = config == null
         ? null
         : estimateNextSyncAt(
@@ -357,6 +385,31 @@ class _SyncInfoSheetState extends ConsumerState<_SyncInfoSheet> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _infoRow(colors, '状态', syncStatusLabel(widget.status)),
+          // 进行中才显示进度：没有事件时退回「正在同步…」的既有文案（不占位）
+          if (_busy && progress != null) ...[
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppDimens.space8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(2),
+                    child: LinearProgressIndicator(
+                      value: progress.percent / 100,
+                      minHeight: 4,
+                      backgroundColor: colors.surfaceSecondary,
+                      color: OrbitAccents.themeAccent,
+                    ),
+                  ),
+                  const SizedBox(height: AppDimens.space6),
+                  Text(
+                    progress.displayText,
+                    style: TextStyle(fontSize: 12, color: colors.secondaryText),
+                  ),
+                ],
+              ),
+            ),
+          ],
           _infoRow(colors, '上次同步', formatLastSynced(config?.lastSyncedAt)),
           _infoRow(colors, '下次自动同步', formatNextSync(nextAt)),
           if (widget.errorMessage != null)

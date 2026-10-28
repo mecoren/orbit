@@ -1927,6 +1927,21 @@ class MockOrbitBridge implements OrbitBridge {
   Future<OrphanChunkGcResult> cloudOrphanChunksGc() =>
       _delay(() => const OrphanChunkGcResult(deletedBuckets: 0, errors: []));
 
+  /// 同步进度流（broadcast：测试可多次订阅、可主动推事件）
+  ///
+  /// 与真桥的差异：真桥由 core 在同步过程中推事件，mock 没有真同步链路，
+  /// 故暴露 [emitSyncProgress] 供用例推构造好的一串事件（含后台 origin 的
+  /// 过滤场景）。真桥是「每次订阅新建一条流」，mock 用 broadcast 近似多播语义。
+  final _syncProgressCtrl = StreamController<SyncProgress>.broadcast();
+
+  @override
+  Stream<SyncProgress> get syncProgress => _syncProgressCtrl.stream;
+
+  /// 测试专用：推一条同步进度事件（真桥不存在此入口）
+  void emitSyncProgress(SyncProgress progress) {
+    if (!_syncProgressCtrl.isClosed) _syncProgressCtrl.add(progress);
+  }
+
   // ── 任务活动日志（历史区块；排序/截断口径同桌面 ipc-mock task_activity_list）──
 
   @override

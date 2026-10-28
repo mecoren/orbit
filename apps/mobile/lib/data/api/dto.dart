@@ -2076,6 +2076,52 @@ class OrphanChunkGcResult {
   });
 }
 
+/// 同步进度事件（镜像 core `SyncProgress`；与桌面 `SyncProgressEvent` 同形）
+///
+/// 压平成「`phase` 判别 + 其余字段可空」而非 sealed class 家族：FRB 侧的
+/// `SyncProgressDto` 就是单一 struct（core 的内部标签 enum 不能直接镜像），
+/// 手写镜像照抄同一形状才能零转换直连。判据全在 `phase` 上。
+///
+/// **文案直接用 `displayText`**（core `SyncProgress::display_text` 单点产出），
+/// 不在 Dart 侧再拼一套——双端各拼一份必然漂移（桌面 `syncProgressText`
+/// 是既有实现，不动它，但移动端不重复造）。
+class SyncProgress {
+  /// starting / pushing / pulling / merging / local_data_applied / attachments / done / error
+  final String phase;
+
+  /// background / manual / exit
+  final String origin;
+
+  /// 模块显示名（pushing/pulling/merging）；attachments 档借来放 upload/download
+  final String? displayName;
+  final int? current;
+  final int? total;
+  final String? message;
+
+  /// 估算百分比 0–100
+  final int percent;
+
+  /// 可直接展示的整句文案（core 同口径）
+  final String displayText;
+
+  const SyncProgress({
+    required this.phase,
+    required this.origin,
+    this.displayName,
+    this.current,
+    this.total,
+    this.message,
+    required this.percent,
+    required this.displayText,
+  });
+
+  /// 终态：done / error（订阅方据此收进度条）
+  bool get isTerminal => phase == 'done' || phase == 'error';
+
+  /// 手动触发的同步（设置页只关心这一档；后台自动同步不该在页面上闪进度）
+  bool get isManual => origin == 'manual';
+}
+
 /// 人类可读大小（移动端附件行展示；与桌面 humanSize 同口径）
 String humanFileSize(int bytes) {
   if (bytes < 1024) return '$bytes B';

@@ -600,6 +600,16 @@ abstract class OrbitBridge {
   /// 且同步密钥已解锁（读清单要解 manifest）。
   Future<OrphanChunkGcResult> cloudOrphanChunksGc();
 
+  /// 同步进度流（对齐桌面 `sync-progress` 事件）
+  ///
+  /// 每次访问新建一条 Rust→Dart 流，**多播语义**（设置页与状态组件各订阅一份
+  /// 互不影响）。进度是「最新值有意义」的流：UI 来不及时跳帧而非补播历史。
+  ///
+  /// 消费约定见 `modules/todo/providers/todo_providers.dart` 的
+  /// `syncProgressProvider`——单点订阅后按 `origin` 过滤（设置页只认 `manual`，
+  /// 后台自动同步不该在用户正看着的页面上闪进度）。
+  Stream<SyncProgress> get syncProgress;
+
   // ── 任务活动日志（详情页「历史」区块：只读轨迹）──
 
   /// 单任务活动历史（时间倒序；limit 缺省 30、上限 100 由 core 收口）

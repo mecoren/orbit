@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `as_core`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 /// 活动日志行（todo_activity_log 为本地轨迹表，不进同步白名单）
 class ActivityLogRow {
@@ -702,6 +702,11 @@ class ListFilter {
   /// 完成时间下界（毫秒，含；隐含只看已完成）
   final PlatformInt64? doneFrom;
 
+  /// 状态**集合**（工具栏多选档）：派生状态口径（脏值回落 pending），
+  /// `done` 档兼容「done = 1 或 status = 'done'」。与 [Self::status] 等值
+  /// 互斥、集合优先；空集合 = 不过滤。
+  final List<String>? statusIn;
+
   const ListFilter({
     this.keyword,
     required this.page,
@@ -729,6 +734,7 @@ class ListFilter {
     this.hasOpenSubtask,
     this.createdFrom,
     this.doneFrom,
+    this.statusIn,
   });
 
   @override
@@ -758,7 +764,8 @@ class ListFilter {
       hasAttachment.hashCode ^
       hasOpenSubtask.hashCode ^
       createdFrom.hashCode ^
-      doneFrom.hashCode;
+      doneFrom.hashCode ^
+      statusIn.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -790,7 +797,8 @@ class ListFilter {
           hasAttachment == other.hasAttachment &&
           hasOpenSubtask == other.hasOpenSubtask &&
           createdFrom == other.createdFrom &&
-          doneFrom == other.doneFrom;
+          doneFrom == other.doneFrom &&
+          statusIn == other.statusIn;
 }
 
 /// 孤儿数据分桶回收结果（镜像 core `OrphanChunkGcResult`；docs/07 #96 尾款）
@@ -976,6 +984,80 @@ class SyncConflict {
           resolution == other.resolution &&
           createdAt == other.createdAt &&
           resolvedAt == other.resolvedAt;
+}
+
+/// 同步进度事件（镜像 core `cloud_sync::progress::SyncProgress`）
+///
+/// core 侧是 `#[serde(tag = "phase")]` 的内部标签 enum，FRB 不能直接镜像 enum
+/// 变体，故压平成「`phase` 判别 + 全部变体字段可空」的单一 struct——与桌面
+/// `SyncProgressEvent`（TS 接口）逐字段同形，双端 UI 文案可共用一套判据。
+///
+/// **不引入 `serde_json::Value`**：进度是高频流，每次序列化/反序列化一个
+/// 动态 JSON 只会让 UI 线程多做一次解析；压平 struct 的字段全是基本类型，
+/// FRB 走的是零解析的字段级传递。
+class SyncProgressDto {
+  /// starting / pushing / pulling / merging / local_data_applied / attachments / done / error
+  final String phase;
+
+  /// background / manual / exit（UI 按来源过滤：设置页只认 manual）
+  final String origin;
+
+  /// 模块显示名（pushing/pulling/merging 有值）
+  final String? displayName;
+
+  /// 当前序号（pushing/pulling/attachments 有值，1-based）
+  final PlatformInt64? current;
+
+  /// 总数（同上有值）
+  final PlatformInt64? total;
+
+  /// 错误消息（error 有值）
+  final String? message;
+
+  /// 估算百分比 0-100（core `SyncProgress::percent` 同口径）
+  final PlatformInt64 percent;
+
+  /// 可直接展示的整句文案（core `SyncProgress::display_text` 同口径）
+  ///
+  /// 双端共用同一句中文：文案口径在 core 单点维护，避免 Dart 侧再抄一份
+  /// 而与桌面漂移（桌面 `syncProgressText` 有自己的措辞，属既有实现，不动）。
+  final String displayText;
+
+  const SyncProgressDto({
+    required this.phase,
+    required this.origin,
+    this.displayName,
+    this.current,
+    this.total,
+    this.message,
+    required this.percent,
+    required this.displayText,
+  });
+
+  @override
+  int get hashCode =>
+      phase.hashCode ^
+      origin.hashCode ^
+      displayName.hashCode ^
+      current.hashCode ^
+      total.hashCode ^
+      message.hashCode ^
+      percent.hashCode ^
+      displayText.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SyncProgressDto &&
+          runtimeType == other.runtimeType &&
+          phase == other.phase &&
+          origin == other.origin &&
+          displayName == other.displayName &&
+          current == other.current &&
+          total == other.total &&
+          message == other.message &&
+          percent == other.percent &&
+          displayText == other.displayText;
 }
 
 class TaskAttachmentView {

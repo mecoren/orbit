@@ -33,19 +33,23 @@
 //! ## 其他与桌面的差异
 //! - 桌面 run_sync 成功后 emit("sync-finished")、配置变更 emit("sync-config-changed")；
 //!   移动端结果 JSON 直接经返回值交给调用方，广播事件待 events 模块接线后补。
-//! - 引擎进度发送器用 NoopProgressSender（sync-progress 尚无 StreamSink 消费方），
-//!   同步执行路径与桌面完全一致，仅 UI 实时进度暂缺。
+//! - 引擎进度发送器走 [FrboProgressSender]（对齐桌面 `TauriProgressSender`）：
+//!   core 的 `SyncProgress` 经有界 `broadcast` 通道转成 FRB `StreamSink`，
+//!   Dart 侧 `syncProgressProvider` 单点消费后驱动设置页进度条（2026-10-28）。
+//!   此前是 `NoopProgressSender`——「同步中…」是唯一可见状态，大附件同步期间
+//!   用户看不到阶段、也无法判断是卡住还是在推进。
 //! - 云同步执行命令返回 Result<String,String>（JSON 字符串），Dart 自行 parse，
 //!   与桌面 TS 侧契约一致，Dart DTO 无需镜像 SyncResult。
 //! - 时间戳用 std::time 计算（本 crate 不直接依赖 chrono）。
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use once_cell::sync::Lazy;
 use orbit_core::api::cloud_sync_api;
 use orbit_core::cloud_sync::engine::SyncEngine;
 use orbit_core::cloud_sync::error::CloudSyncError;
-use orbit_core::cloud_sync::progress::SyncOrigin;
+use orbit_core::cloud_sync::progress::{ProgressSender, SyncOrigin, SyncProgress};
 use orbit_core::cloud_sync::state::SyncStateStore;
 use orbit_core::context;
 use orbit_core::db::repository::sync_config_repo::SyncConfigRepo;
@@ -56,9 +60,47 @@ use orbit_core::sync_crypto::error::SyncCryptoError;
 use orbit_core::sync_crypto::meta_store::SyncCryptoMeta;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
+use tokio::sync::broadcast;
 
-use super::dto::{CloudUnusedDeleteResult, CloudUnusedScanResult, OrphanChunkGcResult};
+use crate::frb_generated::StreamSink;
+
+use super::dto::{CloudUnusedDeleteResult, CloudUnusedScanResult, OrphanChunkGcResult, SyncProgressDto};
 use super::state::with_state;
+
+// ============================================================================
+// 同步进度广播（对齐桌面 `TauriProgressSender` → emit("sync-progress")）
+// ============================================================================
+
+/// 进度通道容量
+///
+/// 有界是硬约束：进度事件按模块/附件条数产生，一次大附件同步可达数百条；
+/// 无界通道在「Dart 侧 UI 来不及消费」时会持续累积。超出容量时 `broadcast`
+/// 会丢弃**最旧**的未消费事件（订阅方收到 `Lagged`），这正是想要的语义——
+/// 进度是「最新值有意义」的流，落后就该跳帧而不是补播历史。
+const SYNC_PROGRESS_CHANNEL_CAPACITY: usize = 64;
+
+/// 同步进度广播通道（进程级单例，`SyncEngine` 与其共享）
+///
+/// 为什么不放进 `SyncRuntime`：引擎在 `SyncRuntime` 的 `Mutex` 内构造，而
+/// `ProgressSender::send` 在同步主流程中同步调用；若 sender 反向去锁
+/// `SYNC_RUNTIME` 就会在「持锁同步」期间自锁。通道独立于运行时槽位，
+/// sender 只做 `send`（非阻塞），订阅方独立读。
+// bounded-by-lifecycle: 有界 broadcast（容量 64），订阅方取消即断开；无跨调用累积
+static SYNC_PROGRESS_TX: Lazy<broadcast::Sender<SyncProgress>> =
+    Lazy::new(|| broadcast::channel(SYNC_PROGRESS_CHANNEL_CAPACITY).0);
+
+/// 进度发送器：把 core 的 `SyncProgress` 推进广播通道
+///
+/// 契约同桌面：**发送失败静默忽略**——进度是旁路观测，不该让同步主流程失败
+/// 或等待（`broadcast::send` 在无订阅者时返回 Err，此处直接丢弃）。
+struct FrboProgressSender;
+
+impl ProgressSender for FrboProgressSender {
+    fn send(&self, progress: SyncProgress) {
+        let _ = SYNC_PROGRESS_TX.send(progress);
+    }
+}
+
 
 // ============================================================================
 // 同步域进程级单例（替代桌面 app.manage(SyncRuntime::default())）
@@ -107,15 +149,20 @@ pub(crate) fn runtime_crypto() -> Result<SyncCryptoService, String> {
 
 /// 取同步引擎单例，懒创建（对齐桌面 sync_runtime::sync_engine）
 ///
-/// 差异：进度发送器用 NoopProgressSender（见模块注释）；引擎懒创建晚于解锁时，
-/// 从会话缓存回填同步密码（桌面从钥匙串读缓存，移动端无持久凭据库）。
+/// 进度发送器走 [FrboProgressSender]（对齐桌面 `TauriProgressSender`）；引擎懒创建
+/// 晚于解锁时，从会话缓存回填同步密码（桌面从钥匙串读缓存，移动端无持久凭据库）。
 fn runtime_engine() -> Result<SyncEngine, String> {
     let (pool, base_dir) = with_state(|s| Ok((s.pool.clone(), s.base_dir.clone())))?;
     with_runtime(move |rt| {
         if let Some(engine) = rt.engine.as_ref() {
             return Ok(engine.clone());
         }
-        let engine = cloud_sync_api::create_engine_noop(pool, rt.crypto.clone(), &base_dir);
+        let engine = cloud_sync_api::create_engine(
+            pool,
+            rt.crypto.clone(),
+            &base_dir,
+            Arc::new(FrboProgressSender),
+        );
         if rt.crypto.is_unlocked()
             && let Some(password) = &rt.session_password
         {
@@ -704,6 +751,33 @@ impl From<orbit_core::models::business::SyncHistory> for SyncHistoryView {
             error_message: h.error_message,
         }
     }
+}
+
+/// 订阅同步进度流（对齐桌面 `emit("sync-progress")`）
+///
+/// 每次调用新建一条 Rust→Dart 流；Dart 取消订阅后 `sink.add` 失败即自行退出。
+/// 与 `subscribe_db_changes` 的「进程级单播 + once-guard」不同：进度流是
+/// 多播语义（`broadcast` 通道），允许设置页与状态按钮各订阅一份互不影响。
+///
+/// 通道无事件时 `recv` 挂起等待，不产生空转；`Lagged` 只丢帧不终止——
+/// 进度是「最新值有意义」的流，落后就该跳到最新而不是补播历史。
+pub fn subscribe_sync_progress(sink: StreamSink<SyncProgressDto>) {
+    super::events::spawn_on_bridge_runtime(async move {
+        let mut rx = SYNC_PROGRESS_TX.subscribe();
+        loop {
+            match rx.recv().await {
+                Ok(p) => {
+                    if sink.add(SyncProgressDto::from(p)).is_err() {
+                        break; // Dart 侧已取消订阅
+                    }
+                }
+                Err(broadcast::error::RecvError::Lagged(skipped)) => {
+                    eprintln!("[sync-progress] 落后 {skipped} 条，继续转发");
+                }
+                Err(broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    });
 }
 
 /// 查询增量同步历史（P1-17 展示面；设置页「同步历史」卡数据源）

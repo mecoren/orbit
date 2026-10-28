@@ -63,6 +63,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RustStreamSink<SyncProgressDto> dco_decode_StreamSink_sync_progress_dto_Sse(
+    dynamic raw,
+  );
+
+  @protected
   String dco_decode_String(dynamic raw);
 
   @protected
@@ -530,6 +535,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt? dco_decode_opt_box_autoadd_usize(dynamic raw);
 
   @protected
+  List<String>? dco_decode_opt_list_String(dynamic raw);
+
+  @protected
   Int64List? dco_decode_opt_list_prim_i_64_strict(dynamic raw);
 
   @protected
@@ -591,6 +599,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SyncHistoryView dco_decode_sync_history_view(dynamic raw);
+
+  @protected
+  SyncProgressDto dco_decode_sync_progress_dto(dynamic raw);
 
   @protected
   TableCount dco_decode_table_count(dynamic raw);
@@ -759,6 +770,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RustStreamSink<ReminderDueDto> sse_decode_StreamSink_reminder_due_dto_Sse(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RustStreamSink<SyncProgressDto> sse_decode_StreamSink_sync_progress_dto_Sse(
     SseDeserializer deserializer,
   );
 
@@ -1364,6 +1380,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt? sse_decode_opt_box_autoadd_usize(SseDeserializer deserializer);
 
   @protected
+  List<String>? sse_decode_opt_list_String(SseDeserializer deserializer);
+
+  @protected
   Int64List? sse_decode_opt_list_prim_i_64_strict(SseDeserializer deserializer);
 
   @protected
@@ -1433,6 +1452,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SyncHistoryView sse_decode_sync_history_view(SseDeserializer deserializer);
+
+  @protected
+  SyncProgressDto sse_decode_sync_progress_dto(SseDeserializer deserializer);
 
   @protected
   TableCount sse_decode_table_count(SseDeserializer deserializer);
@@ -1644,6 +1666,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_StreamSink_reminder_due_dto_Sse(
     RustStreamSink<ReminderDueDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_StreamSink_sync_progress_dto_Sse(
+    RustStreamSink<SyncProgressDto> self,
     SseSerializer serializer,
   );
 
@@ -2407,6 +2435,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_opt_box_autoadd_usize(BigInt? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_list_String(List<String>? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_list_prim_i_64_strict(
     Int64List? self,
     SseSerializer serializer,
@@ -2514,6 +2545,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_sync_history_view(
     SyncHistoryView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_sync_progress_dto(
+    SyncProgressDto self,
     SseSerializer serializer,
   );
 

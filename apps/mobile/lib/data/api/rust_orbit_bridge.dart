@@ -1190,6 +1190,21 @@ class RustOrbitBridge implements OrbitBridge {
     );
   }
 
+  /// 同步进度流：FRB 每次订阅新建一条 Rust→Dart 流（多播语义，各自独立）
+  @override
+  Stream<SyncProgress> get syncProgress => gen_sync.subscribeSyncProgress().map(
+    (p) => SyncProgress(
+      phase: p.phase,
+      origin: p.origin,
+      displayName: p.displayName,
+      current: p.current?.toInt(),
+      total: p.total?.toInt(),
+      message: p.message,
+      percent: p.percent.toInt(),
+      displayText: p.displayText,
+    ),
+  );
+
   // ── 任务活动日志（历史区块只读轨迹）──
 
   @override

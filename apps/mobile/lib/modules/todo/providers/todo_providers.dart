@@ -292,6 +292,17 @@ final holidayProgressProvider = StreamProvider<HolidayProgress>((ref) {
   return ref.watch(orbitBridgeProvider).holidayProgress;
 });
 
+/// 同步进度流（设置页「云同步配置」进度条消费；对齐桌面 `sync-progress` 事件）
+///
+/// 与 [holidayProgressProvider] 同构：单点 watch，不要在多处重复订阅。
+/// 进度事件按 `origin` 分流——设置页只显示 `manual`（用户自己点的那次），
+/// 后台自动同步（定时 / 改后即同步）在页面上闪进度只会造成困惑。过滤放在
+/// 消费端（[SyncProgress.isManual]）而不是 provider：将来状态组件要看后台
+/// 进度时不必改这里。
+final syncProgressProvider = StreamProvider<SyncProgress>((ref) {
+  return ref.watch(orbitBridgeProvider).syncProgress;
+});
+
 /// 回收站任务列表（React queryKey ["trash","tasks"]；最近删除排最前）
 final trashTasksProvider = FutureProvider<List<TodoTask>>((ref) async {
   return ref.watch(orbitBridgeProvider).trashTasksList();

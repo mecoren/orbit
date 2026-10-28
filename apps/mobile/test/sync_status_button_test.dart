@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:orbit/data/api/dto.dart' show SyncProgress;
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/shared/widgets/sync_status_button.dart';
@@ -114,5 +115,85 @@ void main() {
       tester.widget<IconButton>(find.byType(IconButton)).tooltip,
       '已就绪',
     );
+  });
+  testWidgets('面板内立即同步：订阅进度流并显示阶段文案与进度条', (tester) async {
+    final bridge = MockOrbitBridge();
+    final presetConfig = bridge.syncConfigSave(_presetConfig);
+    final presetCrypto = bridge.syncCryptoInit('123456');
+    await tester.pumpWidget(_wrap(bridge));
+    await _flush(tester);
+    await presetConfig;
+    await presetCrypto;
+    await _flush(tester);
+
+    await tester.tap(find.byType(IconButton));
+    await _flush(tester);
+    expect(find.text('立即同步'), findsOneWidget);
+    // 未开始同步时不该有进度条（进度只覆盖「进行中」这一段）
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+
+    await tester.tap(find.text('立即同步'));
+    await tester.pump(); // 让 _busy 置位、订阅生效（不越过 120ms 的桥延迟）
+
+    // 推一条 manual 进度：面板应出现进度条与 core 产出的阶段文案
+    bridge.emitSyncProgress(
+      const SyncProgress(
+        phase: 'pushing',
+        origin: 'manual',
+        displayName: '任务',
+        current: 3,
+        total: 10,
+        percent: 30,
+        displayText: '正在上传任务...',
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    expect(find.text('正在上传任务...'), findsOneWidget);
+    final bar = tester.widget<LinearProgressIndicator>(
+      find.byType(LinearProgressIndicator),
+    );
+    expect(bar.value, closeTo(0.3, 0.001));
+
+    await _flush(tester);
+    await _drainTimers(tester);
+  });
+
+  testWidgets('进度流按 origin 过滤：后台自动同步的进度不写进面板', (tester) async {
+    final bridge = MockOrbitBridge();
+    final presetConfig = bridge.syncConfigSave(_presetConfig);
+    final presetCrypto = bridge.syncCryptoInit('123456');
+    await tester.pumpWidget(_wrap(bridge));
+    await _flush(tester);
+    await presetConfig;
+    await presetCrypto;
+    await _flush(tester);
+
+    await tester.tap(find.byType(IconButton));
+    await _flush(tester);
+
+    await tester.tap(find.text('立即同步'));
+    await tester.pump();
+
+    // background 档：定时/改后即同步产生的事件，不该在用户点开的面板里闪
+    bridge.emitSyncProgress(
+      const SyncProgress(
+        phase: 'pulling',
+        origin: 'background',
+        displayName: '项目',
+        current: 1,
+        total: 4,
+        percent: 25,
+        displayText: '正在下载项目...',
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('正在下载项目...'), findsNothing);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+
+    await _flush(tester);
+    await _drainTimers(tester);
   });
 }
