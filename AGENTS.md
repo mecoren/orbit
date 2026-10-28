@@ -136,6 +136,10 @@ node perf-metrics/operation-probe.mjs --record # 只回写 operation-baselines.j
 node perf-metrics/memory3.mjs --gate           # 真机 Tauri exe 口径（Windows 本地，不入 CI；缺 exe/dist 时 exit 2）
 node perf-metrics/memory3.mjs --record         # 回写 baselines.json#desktopExe.measured
 
+# 双端一致性门禁（入 CI perf-gate job；零依赖，秒级）
+node perf-metrics/mobile-bridge-audit.mjs      # 禁止新增「整文件 List<int> 跨桥」的桥接口
+node perf-metrics/bridge-parity.mjs            # 桌面 Tauri 命令 vs 移动 FRB 函数：禁止单端能力未登记
+
 # 发版（详见 docs/08_发布与更新流程.md）
 pnpm bump 0.2.0           # 升版：写源 + 同步五处清单 + 两个 Cargo.lock
 pnpm bump:check           # 只校验一致性（零写入，CI/本地通用）

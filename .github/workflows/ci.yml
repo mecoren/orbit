@@ -83,6 +83,13 @@ jobs:
       - name: 移动端桥接口整包过桥审计
         run: node perf-metrics/mobile-bridge-audit.mjs
 
+      # 双端桥一致性：桌面 Tauri 命令 vs 移动 FRB 函数。
+      # 「某能力只接了一端」不会让任何测试变红（桌面有、移动端摸不到），
+      # 只能靠人工普查发现——docs/07 #114/#117 就是这么找出来的。白名单
+      # 里每条都写明「为什么单端合理」，新增单端命令即拦停。
+      - name: 双端桥一致性审计
+        run: node perf-metrics/bridge-parity.mjs
+
   rust-core:
     runs-on: ubuntu-latest
     steps:
