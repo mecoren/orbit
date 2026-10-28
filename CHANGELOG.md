@@ -17,6 +17,25 @@
 
 ## [Unreleased]
 
+### 功能：「桥已就绪但 UI 零入口」收口三件——移动云端存储补孤儿数据桶、移动同步排障、桌面日志入口（2026-10-28，docs/07 #114）
+
+全仓普查后确认「账面功能缺口已清空」，剩余真实缺口集中在「core/命令就绪、壳层零入口」。本批按三处补齐，另清两处已被替代的前端包装。
+
+- **移动 · 孤儿数据桶回收**（#96 尾款）：`cloud_sync_api::cloud_orphan_chunks_gc` 与 Tauri 命令早已就绪，但 `crates/orbit-flutter` 零 `orphan` 命中，移动端完全不可达。新增 FRB `cloud_orphan_chunks_gc` + DTO 镜像 `OrphanChunkGcResult` + Rust/Mock 两实现（mock 恒 0，与桌面 `ipc-mock` 同口径）；设置页「云端清理」卡改名「云端存储」，两行并列——附件清 `assets/`、数据桶清 `tables/`，判据分别是云端引用集与清单索引，卡片说明写清两者目录互不相交。**不做二次确认**：删的桶按定义不可达，core 侧另有 24h 窗口 + 服务端不回 mtime 一律跳过两道兜底，桌面入口同样一键执行。
+- **移动 · 单向同步排障**：桌面 #107 已有「仅推送 / 先拉后推」两钮，移动端只有同步历史里的类型文案而无触发入口。新增「同步排障」卡，两钮走既有 `cloudSyncPushOnly` / `cloudSyncPullThenPush`（零新协议）；文案写明只用于判断卡在哪一侧、连续点会让对端改动晚一轮可见——与桌面把它放在诊断分区而非同步主路径同口径。
+- **桌面 · 日志文件入口**（`docs/02 §九` 的 M6+ 项）：插件自 2026-09-13 就把日志落到 `{app_log_dir}/app_log.log`，但用户侧无任何入口。新增只读命令 `log_overview`（目录绝对路径 + 文件清单名字/大小/mtime，按修改时间倒序上限 20 条，**不读日志内容**——日志可达数十 MB，整份读进前端只会让设置页变卡）+ 诊断页「日志文件」卡（打开目录 / 打开最新日志 / 逐文件可点），打开走既有 `plugin-shell` open 通道，零新插件零新权限。路径口径与 `lib.rs::log_dir_writable` 逐字一致（含用发布标识、不跟随 `data_dir_override.json`）——两处一旦分叉就会出现「显示 A、写 B」；目录不可读时如实回报 `readable:false` + 原因，不用空清单冒充「没有日志」。
+- **清理**：删除 `tauri.ts` 两处已被替代的前端包装——`csvImportExecute`（旧阻塞入口，保留等于留一条回退到「大文件静默卡住」的路）与 `attachmentsGc`（附件回收现由 `db_maintenance` 三件套统一承载，单独调用会让账本/关联/缓存上限三步错拍）。其余 16 个零引用包装**有意保留**（`docs/10 §A-5` 已登记的桌面命令平价遗留，且部分被 `ipc-contract` 的 `MOCK_ALLOWLIST` 按命令名分类）。
+- **回归锚点**：`flutter analyze` 零问题、`flutter test` 1098 绿（新增 4 例：仅推送/先拉后推的成功 toast 各报对应模块数、孤儿附件扫描空态、孤儿数据桶回收空态）；桌面 `tsc --noEmit` 零错误、`vitest` 753 绿（`ipc-contract` 新增 ⑤ 锁 `LogOverview` 字段与「按 mtime 倒序」这条 UI 契约）、`e2e` 73 绿；壳 `cargo check` 通过，新增文件 clippy 零告警。
+- **已知非本批问题**：`calendar_screen_test`「长按日格」一例在 HEAD 上即红（已 stash 复跑确认）；壳 clippy 仍有 21 处 `doc_lazy_continuation`（`db_cmd` / `notification_scheduler` / `saved_filter_cmd` / `template_cmd` / `sync_scheduler` / `aumid_registry`），同样在 HEAD 上即存在。
+
+### 文档：勘误四处——修 #90 重复行、重写一页结论、撤回倒数日待评估、更新强调色口径（2026-10-28，docs/07 #115）
+
+- **`docs/07` #90 行尾粘连了一整段 #89 正文**（2072 字符），表格结构损坏、按行检索会重复命中；截断回状态列为止。
+- **`docs/07 §六「一页结论」重写**：原文「最大的三个洞 = 捕捉效率 / 规模化渲染 / 工程护栏」是 2026-08-25 v0.1.0 快照，三项均已收口（#7/#32 NLP、#5/#105 虚拟化与键集分页、#6 CI + #19 e2e），「P0 六项一个迭代做完」的判断前提不复存在。新结论：账面已无功能缺口，剩余为同步域两个产品概念（N33 同步取消 / N15 设备注销）、桥已就绪但 UI 零入口的三处、以及真机/规模化验收欠账；性价比判断从「补功能」反转为「接线 + 补验收线」。
+- **`docs/10` C-2 倒数日**仍写「待评估（低优先）」，与 `docs/07 #76` 的 ⛔ 撤回冲突（生活记录域；蓝本 wait-home 本就有更完整的 `important_events`）。改为已撤回并给出判据与出处。
+- **`docs/05 §2.1` 强调色**仍写「自定义入口记 M6+」，实际 #112（2026-10-27）已落地外观页 10 色 + 自定义 HEX。更新为现状。
+- **`docs/07 #81` 表述修正**：原记「移动端对称项待补」，核实 `sub_list_screen.dart` 早有完整实现（`_postponeOverdue` 18:00 归一、已过则越到明天、区块头入口、manual 档横幅卡、多选态不挂、反向补丁入撤销栈），改为已闭环并新增 #116 记录该核实结论。
+
 ### 构建：Android 发布签名固定化——禁止 debug 兜底，支持跨版本覆盖安装（2026-10-28）
 
 - **Gradle 硬失败**：`apps/mobile/android/app/build.gradle.kts` 在 release 任务缺 `key.properties` 时抛 `GradleException`，不再回落 debug keystore。随机 debug 签名会让不同机器/不同 CI 运行产出不同签名的 APK，覆盖安装报 `INSTALL_FAILED_UPDATE_INCOMPATIBLE`；debug 构建不受影响。
