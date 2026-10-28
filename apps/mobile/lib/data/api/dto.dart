@@ -2062,6 +2062,20 @@ class CloudUnusedDeleteResult {
   });
 }
 
+/// 孤儿数据分桶回收结果（docs/07 #96 尾款；镜像 core `OrphanChunkGcResult`）
+///
+/// `deletedBuckets` 含「原本已不存在」的对象——云端删除对不存在的键按成功计，
+/// 故它读作「本轮确认无引用的桶数」而不是「本次真正删掉的字节数」。
+class OrphanChunkGcResult {
+  final int deletedBuckets;
+  final List<String> errors;
+
+  const OrphanChunkGcResult({
+    required this.deletedBuckets,
+    required this.errors,
+  });
+}
+
 /// 人类可读大小（移动端附件行展示；与桌面 humanSize 同口径）
 String humanFileSize(int bytes) {
   if (bytes < 1024) return '$bytes B';

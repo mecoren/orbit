@@ -1600,6 +1600,24 @@ impl From<orbit_core::api::cloud_sync_api::CloudUnusedDeleteResult> for CloudUnu
     }
 }
 
+/// 孤儿数据分桶回收结果（镜像 core `OrphanChunkGcResult`；docs/07 #96 尾款）
+#[derive(Debug, Clone, Serialize)]
+pub struct OrphanChunkGcResult {
+    /// 删除成功（含原本已不存在）的分桶对象数
+    pub deleted_buckets: i64,
+    /// 单对象失败明细（不中断整轮）
+    pub errors: Vec<String>,
+}
+
+impl From<orbit_core::api::cloud_sync_api::OrphanChunkGcResult> for OrphanChunkGcResult {
+    fn from(v: orbit_core::api::cloud_sync_api::OrphanChunkGcResult) -> Self {
+        Self {
+            deleted_buckets: v.deleted_buckets as i64,
+            errors: v.errors,
+        }
+    }
+}
+
 // ---------- todo_saved_filters（保存的筛选器，#35）----------
 #[derive(Debug, Clone, Serialize)]
 pub struct TodoSavedFilter {

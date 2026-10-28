@@ -57,7 +57,7 @@ use orbit_core::sync_crypto::meta_store::SyncCryptoMeta;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 
-use super::dto::{CloudUnusedDeleteResult, CloudUnusedScanResult};
+use super::dto::{CloudUnusedDeleteResult, CloudUnusedScanResult, OrphanChunkGcResult};
 use super::state::with_state;
 
 // ============================================================================
@@ -645,6 +645,31 @@ pub async fn cloud_unused_attachments_delete(
     )
     .await
     .map(CloudUnusedDeleteResult::from)
+}
+
+/// 回收孤儿数据分桶（清单已无引用 + mtime 早于 24h；对齐桌面 `cloud_orphan_chunks_gc`）
+///
+/// 与 [cloud_unused_attachments_scan] 同一张「云端存储」卡片，但**只动 `tables/`**，
+/// 不碰附件对象；判据是云端清单索引（无引用即不可达），不是桶内容里的墓碑行。
+///
+/// 前置同孤儿附件：需已配置云同步 + 同步密钥已解锁（读清单要解 `manifest`）。
+/// 移动端此前无此桥位（core 原语与桌面命令早已就绪，docs/07 #96 尾款）。
+pub async fn cloud_orphan_chunks_gc() -> Result<OrphanChunkGcResult, String> {
+    let record = active_config()
+        .await?
+        .ok_or_else(|| "[config] 尚未配置同步，请先在设置中填写连接信息".to_string())?;
+    let config = engine_config_of_record(&record)
+        .ok_or_else(|| "[config] 当前为本地同步配置，不参与云同步".to_string())?;
+
+    let crypto = runtime_crypto()?;
+    if !crypto.is_unlocked() {
+        return Err("[not_unlocked] 同步加密未解锁，请先输入同步密码".to_string());
+    }
+
+    let engine = runtime_engine()?;
+    cloud_sync_api::cloud_orphan_chunks_gc(&engine, &config)
+        .await
+        .map(OrphanChunkGcResult::from)
 }
 
 /// 增量同步历史行（镜像 orbit_core::models::business::SyncHistory）

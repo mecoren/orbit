@@ -592,6 +592,14 @@ abstract class OrbitBridge {
     required int expectedEpoch,
   });
 
+  /// 回收孤儿数据分桶（清单已无引用 + mtime 早于 24h；docs/07 #96 尾款）
+  ///
+  /// 与 [cloudUnusedAttachmentsScan] 同一张「云端存储」卡片，但**只动 `tables/`**，
+  /// 不碰附件对象。判据是云端清单索引——清单不再引用的桶即不可达，删除前
+  /// 24h 保留窗口防误删他端上传中的新桶。前置条件同孤儿附件：已配置云同步
+  /// 且同步密钥已解锁（读清单要解 manifest）。
+  Future<OrphanChunkGcResult> cloudOrphanChunksGc();
+
   // ── 任务活动日志（详情页「历史」区块：只读轨迹）──
 
   /// 单任务活动历史（时间倒序；limit 缺省 30、上限 100 由 core 收口）

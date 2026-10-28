@@ -344,4 +344,64 @@ void main() {
     expect(find.textContaining('重置失败'), findsOneWidget);
     await drainToastTimers(tester);
   });
+  testWidgets('同步排障：仅推送 → 成功 toast（走 core push_only，不动拉取侧）', (tester) async {
+    final bridge = MockOrbitBridge()
+      ..store.syncPasswordSet = true
+      ..store.syncUnlocked = true
+      ..store.syncPassword = '123456';
+    await tester.pumpWidget(_wrap(bridge));
+    await _flush(tester);
+
+    await _tapAt(tester, find.widgetWithText(OutlinedButton, '仅推送'));
+    await _flush(tester);
+
+    // mock push_only：pushedModules = 2、pulledModules = 0
+    expect(find.text('仅推送完成：2 个模块'), findsOneWidget);
+    await drainToastTimers(tester);
+  });
+
+  testWidgets('同步排障：先拉后推 → 成功 toast 报拉取模块数', (tester) async {
+    final bridge = MockOrbitBridge()
+      ..store.syncPasswordSet = true
+      ..store.syncUnlocked = true
+      ..store.syncPassword = '123456';
+    await tester.pumpWidget(_wrap(bridge));
+    await _flush(tester);
+
+    await _tapAt(tester, find.widgetWithText(OutlinedButton, '先拉后推'));
+    await _flush(tester);
+
+    expect(find.text('先拉后推完成：拉取 2 个模块'), findsOneWidget);
+    await drainToastTimers(tester);
+  });
+
+  testWidgets('云端存储：孤儿附件扫描为空 → 提示没有可清理项', (tester) async {
+    final bridge = MockOrbitBridge()
+      ..store.syncPasswordSet = true
+      ..store.syncUnlocked = true
+      ..store.syncPassword = '123456';
+    await tester.pumpWidget(_wrap(bridge));
+    await _flush(tester);
+
+    await _tapAt(tester, find.widgetWithText(OutlinedButton, '清理云端孤儿附件'));
+    await _flush(tester);
+
+    expect(find.text('没有可清理的云端附件'), findsOneWidget);
+    await drainToastTimers(tester);
+  });
+
+  testWidgets('云端存储：回收孤儿数据桶 → mock 恒 0，提示没有可回收项', (tester) async {
+    final bridge = MockOrbitBridge()
+      ..store.syncPasswordSet = true
+      ..store.syncUnlocked = true
+      ..store.syncPassword = '123456';
+    await tester.pumpWidget(_wrap(bridge));
+    await _flush(tester);
+
+    await _tapAt(tester, find.widgetWithText(OutlinedButton, '回收孤儿数据桶'));
+    await _flush(tester);
+
+    expect(find.text('没有可回收的孤儿数据桶'), findsOneWidget);
+    await drainToastTimers(tester);
+  });
 }

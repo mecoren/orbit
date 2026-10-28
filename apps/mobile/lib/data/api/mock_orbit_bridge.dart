@@ -1921,6 +1921,12 @@ class MockOrbitBridge implements OrbitBridge {
     ),
   );
 
+  /// 孤儿数据分桶回收：mock 无云端，恒 0 个可回收（与桌面 ipc-mock
+  /// `cloud_orphan_chunks_gc: () => ({ deleted_buckets: 0, errors: [] })` 同口径）。
+  @override
+  Future<OrphanChunkGcResult> cloudOrphanChunksGc() =>
+      _delay(() => const OrphanChunkGcResult(deletedBuckets: 0, errors: []));
+
   // ── 任务活动日志（历史区块；排序/截断口径同桌面 ipc-mock task_activity_list）──
 
   @override

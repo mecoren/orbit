@@ -251,6 +251,8 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
                 const SizedBox(height: AppDimens.space12),
                 const _SyncLedgerCard(),
                 const SizedBox(height: AppDimens.space12),
+                const _SyncDiagnosticCard(),
+                const SizedBox(height: AppDimens.space12),
                 const _CloudCleanupCard(),
               ],
             ),
@@ -1510,13 +1512,17 @@ class _SyncLedgerCardState extends ConsumerState<_SyncLedgerCard> {
 
 // ── 云端清理卡（docs/15）────────────────────────────────────────────
 
-/// 云端孤儿附件清理（设置 → 云同步配置 → 云端清理）
+/// 云端存储清理（设置 → 云同步配置 → 云端清理）
 ///
 /// 判据与兜底全在 core：云端对象集 − 云端引用集（`todo_task_attachments`
 /// 云端分桶 `is_deleted = 0`）、30 天 mtime 窗口、删除前 epoch 复核。
 /// 移动端只做清单勾选与确认，与桌面诊断页「云端存储」卡片同口径。
 ///
-/// mock 桥没有云端后端，扫描恒返回空清单（点击只会提示没有可清理项）。
+/// 两行两类对象，**目录互不相交**：孤儿附件清 `assets/`+`assets_parts/`，
+/// 孤儿数据桶清 `tables/`（判据是清单索引，不是桶内容墓碑）。桌面把两者
+/// 放同一张卡的第二、三行（#96 尾款 + #97），本页同形制。
+///
+/// mock 桥没有云端后端，两行都恒返回「没有可清理项」。
 class _CloudCleanupCard extends ConsumerStatefulWidget {
   const _CloudCleanupCard();
 
@@ -1526,6 +1532,7 @@ class _CloudCleanupCard extends ConsumerStatefulWidget {
 
 class _CloudCleanupCardState extends ConsumerState<_CloudCleanupCard> {
   bool _scanning = false;
+  bool _chunkGcBusy = false;
 
   String _errMsg(Object e) => e
       .toString()
@@ -1742,19 +1749,46 @@ class _CloudCleanupCardState extends ConsumerState<_CloudCleanupCard> {
     );
   }
 
+  /// 孤儿数据分桶回收（#96 尾款；桌面同款在诊断页「云端存储」卡第二行）
+  ///
+  /// 破坏性但**无需二次确认**：删除的桶按定义不可达（清单不再引用），且 core 侧
+  /// 另有 24h 保留窗口与「服务端不回 mtime 一律跳过」两道兜底。桌面入口同样
+  /// 是一键执行 + 结果 toast，移动端保持同口径（多一层确认只会让排障变慢）。
+  Future<void> _chunkGc() async {
+    setState(() => _chunkGcBusy = true);
+    try {
+      final r = await ref.read(orbitBridgeProvider).cloudOrphanChunksGc();
+      if (!mounted) return;
+      if (r.deletedBuckets == 0) {
+        WaitToast.success('没有可回收的孤儿数据桶');
+      } else if (r.errors.isNotEmpty) {
+        WaitToast.destructive(
+          '已回收 ${r.deletedBuckets} 个分桶（部分失败：${r.errors.first}）',
+        );
+      } else {
+        WaitToast.success('已回收 ${r.deletedBuckets} 个孤儿数据分桶');
+      }
+    } catch (e) {
+      WaitToast.destructive('回收孤儿数据桶失败：${_errMsg(e)}');
+    } finally {
+      if (mounted) setState(() => _chunkGcBusy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
     return SectionCard(
-      title: '云端清理',
-      subtitle: '孤儿附件（无任何设备引用）',
+      title: '云端存储',
+      subtitle: '孤儿附件与孤儿数据桶',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            '云端附件对象不会被自动回收（删除任务/卸载附件后仍留在网盘）。'
-            '这里只扫描 30 天前、且无任何设备引用的对象；服务端不提供时间的对象'
-            '一律跳过。需同步密钥已解锁。',
+            '云端对象不会被自动回收（删除任务/卸载附件后仍留在网盘）。'
+            '「清理孤儿附件」只扫 30 天前、无任何设备引用的 `assets/` 对象；'
+            '「回收孤儿数据桶」清清单已不再引用的 `tables/` 分桶（24 小时窗口，'
+            '刚写入的桶留给下一轮）。两处都需同步密钥已解锁，且只在你手动点击时执行。',
             style: TextStyle(fontSize: 12, color: colors.secondaryText),
           ),
           const SizedBox(height: AppDimens.space12),
@@ -1767,6 +1801,119 @@ class _CloudCleanupCardState extends ConsumerState<_CloudCleanupCard> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Text('清理云端孤儿附件'),
+          ),
+          const SizedBox(height: AppDimens.space8),
+          OutlinedButton(
+            onPressed: _chunkGcBusy ? null : _chunkGc,
+            child: _chunkGcBusy
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('回收孤儿数据桶'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 单向同步排障（对齐桌面诊断页「仅推送 / 先拉后推」两钮，#107）
+///
+/// **只用于排障**：单向同步会跳过多端合并的一侧，连续点可能让对端改动晚一轮
+/// 才可见——桌面同样把它藏在诊断分区而非同步主路径，移动端也单列一卡并写明
+/// 「排障用」。两个动作都走 core 既有入口（`cloud_sync_push_only` /
+/// `cloud_sync_pull_then_push`），零新协议。
+class _SyncDiagnosticCard extends ConsumerStatefulWidget {
+  const _SyncDiagnosticCard();
+
+  @override
+  ConsumerState<_SyncDiagnosticCard> createState() =>
+      _SyncDiagnosticCardState();
+}
+
+class _SyncDiagnosticCardState extends ConsumerState<_SyncDiagnosticCard> {
+  /// 'push' | 'pull' | null（null = 空闲）
+  String? _busy;
+
+  String _errMsg(Object e) => e
+      .toString()
+      .replaceFirst('Exception: ', '')
+      .replaceFirst(RegExp(r'^\[\w+\]\s*'), '');
+
+  Future<void> _run(String mode) async {
+    setState(() => _busy = mode);
+    final bridge = ref.read(orbitBridgeProvider);
+    try {
+      final r = mode == 'push'
+          ? await bridge.cloudSyncPushOnly(origin: 'manual')
+          : await bridge.cloudSyncPullThenPush(origin: 'manual');
+      if (!mounted) return;
+      if (r.skipped) {
+        WaitToast.info('已有同步任务在进行中');
+      } else if (r.errors.isNotEmpty) {
+        WaitToast.destructive('同步完成但有 ${r.errors.length} 条错误：${r.errors.first}');
+      } else {
+        WaitToast.success(
+          mode == 'push'
+              ? '仅推送完成：${r.pushedModules} 个模块'
+              : '先拉后推完成：拉取 ${r.pulledModules} 个模块',
+        );
+      }
+      // 单向同步同样会改云端账本与「上次同步」，回读本页与设置页角标
+      ref.invalidate(syncConfigProvider);
+    } catch (e) {
+      WaitToast.destructive('诊断同步失败：${_errMsg(e)}');
+    } finally {
+      if (mounted) setState(() => _busy = null);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.ofContext(context);
+    return SectionCard(
+      title: '同步排障',
+      subtitle: '单向同步（排障用）',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            '常规同步「立即同步」已包含拉取与推送两侧。这里把两侧拆开单独跑，'
+            '用于判断是拉取侧还是推送侧卡住——单向同步会跳过多端合并的一侧，'
+            '连续点击可能让对端改动晚一轮才可见，故不放在同步主路径。',
+            style: TextStyle(fontSize: 12, color: colors.secondaryText),
+          ),
+          const SizedBox(height: AppDimens.space12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _busy == null ? () => _run('push') : null,
+                  child: _busy == 'push'
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('仅推送'),
+                ),
+              ),
+              const SizedBox(width: AppDimens.space12),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _busy == null ? () => _run('pull') : null,
+                  child: _busy == 'pull'
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('先拉后推'),
+                ),
+              ),
+            ],
           ),
         ],
       ),

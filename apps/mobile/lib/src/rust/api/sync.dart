@@ -95,6 +95,16 @@ Future<CloudUnusedDeleteResult> cloudUnusedAttachmentsDelete({
   expectedEpoch: expectedEpoch,
 );
 
+/// 回收孤儿数据分桶（清单已无引用 + mtime 早于 24h；对齐桌面 `cloud_orphan_chunks_gc`）
+///
+/// 与 [cloud_unused_attachments_scan] 同一张「云端存储」卡片，但**只动 `tables/`**，
+/// 不碰附件对象；判据是云端清单索引（无引用即不可达），不是桶内容里的墓碑行。
+///
+/// 前置同孤儿附件：需已配置云同步 + 同步密钥已解锁（读清单要解 `manifest`）。
+/// 移动端此前无此桥位（core 原语与桌面命令早已就绪，docs/07 #96 尾款）。
+Future<OrphanChunkGcResult> cloudOrphanChunksGc() =>
+    RustLib.instance.api.crateApiSyncCloudOrphanChunksGc();
+
 /// 查询增量同步历史（P1-17 展示面；设置页「同步历史」卡数据源）
 ///
 /// `scope`：all | incremental | push_only | pull_only（口径见 core API 文档）；

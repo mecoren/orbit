@@ -533,6 +533,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Int64List? dco_decode_opt_list_prim_i_64_strict(dynamic raw);
 
   @protected
+  OrphanChunkGcResult dco_decode_orphan_chunk_gc_result(dynamic raw);
+
+  @protected
   PlaintextExportView dco_decode_plaintext_export_view(dynamic raw);
 
   @protected
@@ -1362,6 +1365,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Int64List? sse_decode_opt_list_prim_i_64_strict(SseDeserializer deserializer);
+
+  @protected
+  OrphanChunkGcResult sse_decode_orphan_chunk_gc_result(
+    SseDeserializer deserializer,
+  );
 
   @protected
   PlaintextExportView sse_decode_plaintext_export_view(
@@ -2401,6 +2409,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_list_prim_i_64_strict(
     Int64List? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_orphan_chunk_gc_result(
+    OrphanChunkGcResult self,
     SseSerializer serializer,
   );
 

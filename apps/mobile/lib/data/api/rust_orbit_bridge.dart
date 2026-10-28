@@ -1181,6 +1181,15 @@ class RustOrbitBridge implements OrbitBridge {
     );
   }
 
+  @override
+  Future<OrphanChunkGcResult> cloudOrphanChunksGc() async {
+    final r = await gen_sync.cloudOrphanChunksGc();
+    return OrphanChunkGcResult(
+      deletedBuckets: r.deletedBuckets.toInt(),
+      errors: r.errors,
+    );
+  }
+
   // ── 任务活动日志（历史区块只读轨迹）──
 
   @override
