@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { type TodoTask } from "@/lib/tauri";
-import { BASE_SORT_DIR, buildPagedFilter, filterTasks, groupDoneByDay, groupEisenhower, groupOverdueFirst, sortTasks, todayStartMs, toggleMyDayValue } from "./task-filters";
+import { BASE_SORT_DIR, buildPagedFilter, filterTasks, groupDoneByDay, groupEisenhower, groupOverdueFirst, sortTasks, statusFilterOf, todayStartMs, toggleMyDayValue } from "./task-filters";
 
 /** 补齐 TodoTask 全部必填字段的工厂 */
 function mk(partial: Partial<TodoTask>): TodoTask {
@@ -185,26 +185,53 @@ describe("filterTasks - keyword 大小写不敏感包含 title+description", () 
   });
 });
 
-describe("filterTasks - statusFilter / priorityFilter", () => {
-  it("statusFilter=done：done 标记或 status==='done' 均命中", () => {
+describe("filterTasks - statusFilters 多选 / priorityFilter", () => {
+  it("单选 done：done 标记或 status==='done' 均命中", () => {
     const tasks = [
       mk({ id: 1, done: 1, status: "pending" }),
       mk({ id: 2, done: 0, status: "done" }),
       mk({ id: 3, done: 0, status: "pending" }),
     ];
-    const out = filterTasks(tasks, { statusFilter: "done" });
+    const out = filterTasks(tasks, { statusFilters: ["done"] });
     expect(out.map((t) => t.id)).toEqual([1, 2]);
   });
 
-  it("statusFilter=pending / doing / undone", () => {
+  it("单选 pending / doing", () => {
     const tasks = [
       mk({ id: 1, done: 0, status: "pending" }),
       mk({ id: 2, done: 0, status: "doing" }),
       mk({ id: 3, done: 1, status: "done" }),
     ];
-    expect(filterTasks(tasks, { statusFilter: "pending" }).map((t) => t.id)).toEqual([1]);
-    expect(filterTasks(tasks, { statusFilter: "doing" }).map((t) => t.id)).toEqual([2]);
-    expect(filterTasks(tasks, { statusFilter: "undone" }).map((t) => t.id)).toEqual([1, 2]);
+    expect(filterTasks(tasks, { statusFilters: ["pending"] }).map((t) => t.id)).toEqual([1]);
+    expect(filterTasks(tasks, { statusFilters: ["doing"] }).map((t) => t.id)).toEqual([2]);
+  });
+
+  it("多选待办 + 进行中 = 未完成（不串档、不重复）", () => {
+    const tasks = [
+      mk({ id: 1, done: 0, status: "pending" }),
+      mk({ id: 2, done: 0, status: "doing" }),
+      mk({ id: 3, done: 1, status: "done" }),
+    ];
+    expect(
+      filterTasks(tasks, { statusFilters: ["pending", "doing"] }).map((t) => t.id),
+    ).toEqual([1, 2]);
+  });
+
+  it("多选待办 + 已完成（跨完成态的组合也成立）", () => {
+    const tasks = [
+      mk({ id: 1, done: 0, status: "pending" }),
+      mk({ id: 2, done: 0, status: "doing" }),
+      mk({ id: 3, done: 1, status: "done" }),
+    ];
+    expect(
+      filterTasks(tasks, { statusFilters: ["pending", "done"] }).map((t) => t.id),
+    ).toEqual([1, 3]);
+  });
+
+  it("空集合 = 全部状态（不过滤）", () => {
+    const tasks = [mk({ id: 1 }), mk({ id: 2, done: 1, status: "done" })];
+    expect(filterTasks(tasks, { statusFilters: [] }).map((t) => t.id)).toEqual([1, 2]);
+    expect(filterTasks(tasks, {}).map((t) => t.id)).toEqual([1, 2]);
   });
 
   it("priorityFilter 精确匹配数值", () => {
@@ -353,7 +380,7 @@ describe("工具栏筛选门控（桌面等价不变量锁定）", () => {
       mk({ id: 1, project_id: 3, done: 0, priority: 5 }),
       mk({ id: 2, project_id: 3, done: 1, priority: 1 }),
     ];
-    const out = filterTasks(tasks, { projectId: 3, statusFilter: "done", priorityFilter: 1 });
+    const out = filterTasks(tasks, { projectId: 3, statusFilters: ["done"], priorityFilter: 1 });
     expect(out.map((t) => t.id).sort()).toEqual([1, 2]);
   });
 
@@ -362,7 +389,7 @@ describe("工具栏筛选门控（桌面等价不变量锁定）", () => {
       mk({ id: 1, project_id: null, done: 0, priority: 5 }),
       mk({ id: 2, project_id: null, done: 1, priority: 1 }),
     ];
-    const out = filterTasks(tasks, { ungrouped: true, statusFilter: "done", priorityFilter: 1 });
+    const out = filterTasks(tasks, { ungrouped: true, statusFilters: ["done"], priorityFilter: 1 });
     expect(out.map((t) => t.id).sort()).toEqual([1, 2]);
   });
 });
@@ -402,7 +429,7 @@ describe("filterTasks - quickView my_day（我的一天）", () => {
       mk({ id: 2, my_day_date: todayStart(), done: 1 }),
     ];
     expect(
-      filterTasks(tasks, { quickView: "my_day", statusFilter: "undone" }).map((t) => t.id),
+      filterTasks(tasks, { quickView: "my_day", statusFilters: ["pending", "doing"] }).map((t) => t.id),
     ).toEqual([1]);
   });
 });
@@ -432,6 +459,19 @@ describe("todayStartMs / toggleMyDayValue 我的一天零点口径", () => {
   it("toggleMyDayValue：拒绝非零点残留值（Date.now() 类脏数据不匹配判定，重新对齐零点）", () => {
     const dirty = new Date(2026, 8, 11, 15, 30, 0, 0).getTime();
     expect(toggleMyDayValue(dirty, base)).toBe(zeroPoint);
+  });
+});
+
+describe("statusFilterOf 多选集合 → 单档兼容出口", () => {
+  it("空集 = all；单档原样；待办+进行中 = undone", () => {
+    expect(statusFilterOf([])).toBe("all");
+    expect(statusFilterOf(["doing"])).toBe("doing");
+    expect(statusFilterOf(["pending", "doing"])).toBe("undone");
+  });
+
+  it("跨完成态的多选回落 all（调用点只关心「是否明确只看完成集」）", () => {
+    expect(statusFilterOf(["pending", "done"])).toBe("all");
+    expect(statusFilterOf(["pending", "doing", "done"])).toBe("all");
   });
 });
 
@@ -500,7 +540,7 @@ describe("filterTasks - hideDone 隐藏已完成（Logbook 治理）", () => {
 
   it("statusFilter=done 下 hideDone 不生效（明确要看完成集的筛选档）", () => {
     const tasks = [mk({ id: 1, done: 1, done_at: T0 })];
-    const out = filterTasks(tasks, { statusFilter: "done", hideDone: true });
+    const out = filterTasks(tasks, { statusFilters: ["done"], hideDone: true });
     expect(out.map((t) => t.id)).toEqual([1]);
   });
 
@@ -606,7 +646,7 @@ describe("buildPagedFilter（分页通道下推，P1）", () => {
     ungrouped: false,
     hasProjectView: false,
     quickView: null,
-    statusFilter: "all" as const,
+    statusFilters: [] as ("pending" | "doing" | "done")[],
     priorityFilter: null,
     hideDone: false,
     sortKey: "manual" as const,
@@ -624,22 +664,24 @@ describe("buildPagedFilter（分页通道下推，P1）", () => {
     expect(f.keyword).toBe(null);
   });
 
-  it("hideDone 落成 done=false；done 快捷视图与 done 状态筛选不剔除", () => {
+  it("hideDone 落成 done=false；done 快捷视图与只选 done 档不剔除", () => {
     expect(buildPagedFilter({ ...base, hideDone: true }).done).toBe(false);
     expect(
       buildPagedFilter({ ...base, hideDone: true, quickView: "done", predicate: { done: true } })
         .done,
     ).toBe(true);
-    expect(
-      buildPagedFilter({ ...base, hideDone: true, statusFilter: "done" }).done,
-    ).toBe(true);
+    // 只选 done 档：完成态交给 status_in 判（老数据 done=1 / status=done 双形态），
+    // 故 done 谓词不再置 true，而是 status_in = ["done"]
+    const doneOnly = buildPagedFilter({ ...base, hideDone: true, statusFilters: ["done"] });
+    expect(doneOnly.status_in).toEqual(["done"]);
+    expect(doneOnly.done ?? null).toBe(null);
   });
 
   it("项目视图下工具栏状态/优先级不生效（与 filterTasks 分支一致）", () => {
     const f = buildPagedFilter({
       ...base,
       hasProjectView: true,
-      statusFilter: "doing",
+      statusFilters: ["doing"],
       priorityFilter: 3,
     });
     expect(f.status ?? null).toBe(null);
@@ -650,7 +692,7 @@ describe("buildPagedFilter（分页通道下推，P1）", () => {
     const f = buildPagedFilter({
       ...base,
       ungrouped: true,
-      statusFilter: "pending",
+      statusFilters: ["pending"],
       priorityFilter: 2,
     });
     expect(f.ungrouped).toBe(true);
@@ -786,14 +828,14 @@ describe("buildPagedFilter（分页通道下推，P1）", () => {
   it("status 与工具栏冲突 → 空结果；一致则原样保留", () => {
     const conflict = buildPagedFilter({
       ...base,
-      statusFilter: "doing",
+      statusFilters: ["doing"],
       savedConditions: JSON.stringify({ status: "pending" }),
     });
     expect(conflict.project_ids).toEqual([]);
 
     const same = buildPagedFilter({
       ...base,
-      statusFilter: "doing",
+      statusFilters: ["doing"],
       savedConditions: JSON.stringify({ status: "doing" }),
     });
     expect(same.status).toBe("doing");

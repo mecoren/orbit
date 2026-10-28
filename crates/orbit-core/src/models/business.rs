@@ -160,6 +160,15 @@ pub struct ListFilter {
     /// 与主窗口的 `done = Some(false)` 同时给出时结果必空（AND 语义）。
     #[serde(default)]
     pub done_from: Option<i64>,
+    /// 状态**集合**（`status IN (...)`）：工具栏状态筛选多选档（2026-10-28，
+    /// 对齐 TickTick 多状态筛选）。与 [Self::status] 等值**互斥**，同时给出时
+    /// 只认集合。判定用「派生状态」口径（`CASE WHEN status IN ('doing',
+    /// 'done') THEN status ELSE 'pending' END`，与看板 status 列同源）：
+    /// `done` 档命中「status = 'done' **或** done = 1」两种完成形态——
+    /// 老数据勾选完成后 status 仍是 pending 也能被筛到，避免漏行。
+    /// 空集合 = 不过滤（与 label_ids 同语义，工具栏「全部状态」）。
+    #[serde(default)]
+    pub status_in: Option<Vec<String>>,
 }
 
 /// 键集分页游标（P1 50k 规模档）。

@@ -727,9 +727,52 @@ fn build_task_predicate_clause(table: &str, filter: &ListFilter) -> TaskPredicat
             " AND done = 0"
         });
     }
-    if let Some(status) = filter.status.clone() {
-        clause.push_str(" AND status = ?");
-        status_binding = Some(status);
+    // 状态集合（工具栏多选档，2026-10-28）：集合优先于等值，与 project_ids
+    // 同一优先级规则。判定口径 = 派生状态（脏值回落 pending，与看板 status
+    // 列同源）：拖拽/导入留下的未知 status 在「待办」档也要能被筛到，否则
+    // 那些行在任何档位都不可见。`done` 档额外放行 done = 1（完成态老数据兼容）。
+    //
+    // 值域白名单（pending/doing/done）过滤后**字面量内联**：派生状态只可能是
+    // 这三档，未知名本来就命中不到任何行；内联免掉一条文本绑定通道。
+    let has_status_in = filter.status_in.as_deref().is_some_and(|s| !s.is_empty());
+    if has_status_in {
+        let states = filter.status_in.as_deref().unwrap_or_default();
+        let mut plain: Vec<&str> = Vec::new();
+        let mut wants_done = false;
+        for s in states {
+            match s.as_str() {
+                "done" => wants_done = true,
+                "pending" | "doing" => {
+                    if !plain.contains(&s.as_str()) {
+                        plain.push(s.as_str());
+                    }
+                }
+                _ => {}
+            }
+        }
+        let mut terms: Vec<String> = Vec::new();
+        if !plain.is_empty() {
+            let list = plain
+                .iter()
+                .map(|s| format!("'{s}'"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            terms.push(format!(
+                "(CASE WHEN status IN ('doing', 'done') THEN status ELSE 'pending' END) IN ({list})"
+            ));
+        }
+        if wants_done {
+            terms.push("(done = 1 OR status = 'done')".to_string());
+        }
+        if !terms.is_empty() {
+            clause.push_str(&format!(" AND ({})", terms.join(" OR ")));
+        }
+    }
+    if !has_status_in {
+        if let Some(status) = filter.status.clone() {
+            clause.push_str(" AND status = ?");
+            status_binding = Some(status);
+        }
     }
     if let Some(min) = filter.priority_min {
         clause.push_str(" AND priority >= ?");
@@ -2209,6 +2252,75 @@ mod task_predicate_tests {
         assert_eq!(c.status_binding.as_deref(), Some("doing"));
         // 数值绑定序 = 子句声明序（priority_min 在 status 后声明）
         assert_eq!(c.bindings, vec![4]);
+    }
+
+    /// 状态集合（工具栏多选档）：pending/doing 字面量内联、done 转完成态放行
+    #[test]
+    fn status_in_renders_derived_status_clause() {
+        let c = build_task_predicate_clause(
+            "todo_tasks",
+            &filter_with(|f| {
+                f.status_in = Some(vec!["pending".into(), "doing".into()]);
+            }),
+        );
+        assert!(
+            c.clause
+                .contains("(CASE WHEN status IN ('doing', 'done') THEN status ELSE 'pending' END) IN ('pending', 'doing')")
+        );
+        assert!(c.bindings.is_empty() && c.status_binding.is_none());
+    }
+
+    /// done 档 = 「status='done' 或 done=1」完成态（老数据勾选完成不写 status）
+    #[test]
+    fn status_in_done_matches_completed_flag() {
+        let c = build_task_predicate_clause(
+            "todo_tasks",
+            &filter_with(|f| {
+                f.status_in = Some(vec!["done".into()]);
+            }),
+        );
+        assert!(c.clause.contains("(done = 1 OR status = 'done')"));
+        assert!(!c.clause.contains("IN ('done')"));
+    }
+
+    /// 空集合 = 不过滤（工具栏「全部状态」，与 label_ids 同语义）
+    #[test]
+    fn empty_status_in_is_noop() {
+        let c = build_task_predicate_clause(
+            "todo_tasks",
+            &filter_with(|f| {
+                f.status_in = Some(vec![]);
+            }),
+        );
+        assert_eq!(c.clause, "");
+    }
+
+    /// 脏值静默剔除（派生状态只可能是 pending/doing/done 三档）
+    #[test]
+    fn status_in_drops_unknown_values() {
+        let c = build_task_predicate_clause(
+            "todo_tasks",
+            &filter_with(|f| {
+                f.status_in = Some(vec!["weird".into(), "pending".into()]);
+            }),
+        );
+        assert!(!c.clause.contains("weird"));
+        assert!(c.clause.contains("'pending'"));
+    }
+
+    /// 集合优先于等值：同时给出只认集合（不叠加、不重复绑定）
+    #[test]
+    fn status_in_wins_over_status() {
+        let c = build_task_predicate_clause(
+            "todo_tasks",
+            &filter_with(|f| {
+                f.status = Some("doing".into());
+                f.status_in = Some(vec!["pending".into()]);
+            }),
+        );
+        assert!(c.clause.contains("'pending'"));
+        assert!(c.status_binding.is_none());
+        assert!(!c.clause.contains("status = ?"));
     }
 
     /// project_id / my_day_today / favorite_only 组合

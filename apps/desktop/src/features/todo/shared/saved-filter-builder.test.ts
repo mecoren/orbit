@@ -124,12 +124,23 @@ describe("parse ⇄ build 往返", () => {
 });
 
 describe("toolbarToForm（存为视图预填）", () => {
-  it("状态/优先级/收藏三档映射；all 与 undone 丢弃", () => {
-    const f = toolbarToForm({ statusFilter: "pending", priorityFilter: 3, favoriteOnly: false });
+  it("状态/优先级/收藏三档映射；空集与未完成档丢弃", () => {
+    const f = toolbarToForm({ statusFilters: ["pending"], priorityFilter: 3, favoriteOnly: false });
     expect(f.status).toBe("pending");
     expect(f.priorityMin).toBe(3);
     expect(f.favoriteOnly).toBe(false);
-    expect(toolbarToForm({ statusFilter: "all", priorityFilter: null, favoriteOnly: true }).status).toBeNull();
-    expect(toolbarToForm({ statusFilter: "undone", priorityFilter: null, favoriteOnly: false }).status).toBeNull();
+    expect(toolbarToForm({ statusFilters: [], priorityFilter: null, favoriteOnly: true }).status).toBeNull();
+    // 待办+进行中 = 未完成档，条件白名单没有对应键 → 丢弃（提示层说明）
+    expect(
+      toolbarToForm({ statusFilters: ["pending", "doing"], priorityFilter: null, favoriteOnly: false })
+        .status,
+    ).toBeNull();
+  });
+
+  it("多选跨完成态时也只取单一状态档（条件 JSON 的 status 是等值键）", () => {
+    expect(
+      toolbarToForm({ statusFilters: ["pending", "done"], priorityFilter: null, favoriteOnly: false })
+        .status,
+    ).toBeNull();
   });
 });

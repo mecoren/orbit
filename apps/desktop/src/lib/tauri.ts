@@ -70,6 +70,12 @@ export interface ListFilter {
   created_from?: number | null;
   /** 完成时间下界（毫秒，含；隐含只看已完成）：保存筛选器 done_from */
   done_from?: number | null;
+  /**
+   * 状态**集合**（工具栏状态多选档，2026-10-28）：按派生状态判定
+   * （脏值回落 pending），`done` 档兼容「done = 1 或 status = 'done'」。
+   * 与 [status] 等值互斥，集合优先；空集合 = 不过滤。
+   */
+  status_in?: string[] | null;
 }
 
 /** 键集分页支持的排序档（title 档走旧的全量通道） */

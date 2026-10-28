@@ -37,9 +37,11 @@ import {
   sortTasks,
   BASE_SORT_DIR,
   buildPagedFilter,
+  statusFilterOf,
   type PagedSortKey,
   type TaskSortDir,
   type TaskSortKey,
+  type TaskStatusFilterSet,
 } from "../shared/task-filters";
 import { applySavedFilter } from "../shared/saved-filter";
 import {
@@ -68,14 +70,15 @@ import { WeeklyReviewDialog } from "./weekly-review-dialog";
 import { TriageDialog } from "./triage-dialog";
 import { PlanDayDialog } from "./plan-day-dialog";
 
-type StatusFilter = "all" | "undone" | "pending" | "doing" | "done";
 type PriorityFilter = "all" | "0" | "1" | "2" | "3" | "4" | "5";
+/** 状态多选档（2026-10-28，对齐 TickTick 多状态筛选）：空数组 = 全部状态 */
+type StatusFilterSet = TaskStatusFilterSet;
 /** 五档视图（矩阵 = 四象限 Eisenhower Matrix，TickTick 同款；2026-09-25 与移动端对齐） */
 export type ViewMode = "list" | "kanban" | "calendar" | "table" | "matrix";
 
 /** 看板/矩阵每列首屏条数（列内「还有 N 条」由组总数给，不再拉全量） */
 const BOARD_PAGE_LIMIT = 60;
-export type { StatusFilter, PriorityFilter };
+export type { StatusFilterSet, PriorityFilter };
 
 /** 视图切换状态持久化（04 §二；07-P2#14 增 calendar 档；2026-09-25 增 matrix 档） */
 function loadViewMode(): ViewMode {
@@ -182,7 +185,7 @@ export default function TaskPanel() {
   // 取数中且从未有过命中集时，先用全量集合按标题匹配兜一帧（等价于修复前的
   // 可见行为），服务端结果落地后再换——中间态只少不多，不会出假的「无结果」
   const sourceTasks = searching ? (taskSearchQuery.data ?? tasks) : tasks;
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [statusFilters, setStatusFilters] = useState<StatusFilterSet>([]);
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("all");
   const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode);
   const [sortKey, setSortKey] = useState<TaskSortKey>(loadSortKey);
@@ -314,7 +317,7 @@ export default function TaskPanel() {
         hasProjectView: activeProjectIds != null || projectId != null,
         // 快捷视图只在非项目/未分组目标下生效（与 filterTasks 分支同义）
         quickView: projectId == null && !ungrouped && savedFilterId == null ? quickView : null,
-        statusFilter,
+        statusFilters,
         priorityFilter: priorityFilter === "all" ? null : Number(priorityFilter),
         hideDone,
         sortKey: (sortKey === "title" ? "manual" : sortKey) as PagedSortKey,
@@ -334,7 +337,7 @@ export default function TaskPanel() {
       savedFilterId,
       activeSavedFilter?.conditions,
       quickView,
-      statusFilter,
+      statusFilters,
       priorityFilter,
       hideDone,
       sortKey,
@@ -364,7 +367,7 @@ export default function TaskPanel() {
         ungrouped,
         hasProjectView: activeProjectIds != null || projectId != null,
         quickView: projectId == null && !ungrouped && savedFilterId == null ? quickView : null,
-        statusFilter,
+        statusFilters,
         priorityFilter: priorityFilter === "all" ? null : Number(priorityFilter),
         // 逾期段只装未完成行；完成行不可能逾期
         hideDone: true,
@@ -383,7 +386,7 @@ export default function TaskPanel() {
       savedFilterId,
       activeSavedFilter?.conditions,
       quickView,
-      statusFilter,
+      statusFilters,
       priorityFilter,
       nowTick,
     ],
@@ -393,7 +396,7 @@ export default function TaskPanel() {
     queryKey: ["todo_tasks", "overdue", overdueFilter, nowTick],
     queryFn: () =>
       todoTaskPage(
-        // 强制未完成：逾期段不该混进已完成行（statusFilter=done 时 hideDone 不生效）。
+        // 强制未完成：逾期段不该混进已完成行（只选 done 档时 hideDone 不生效）。
         // 截止上界取 min——保存筛选器的 due_until 可能比 now 更窄，直接覆盖会放宽条件。
         {
           ...overdueFilter,
@@ -558,7 +561,7 @@ export default function TaskPanel() {
           projectId,
           projectIds: activeProjectIds,
           ungrouped,
-          statusFilter,
+          statusFilters,
           priorityFilter: priorityFilter === "all" ? null : Number(priorityFilter),
           hideDone,
         }),
@@ -580,7 +583,7 @@ export default function TaskPanel() {
           // 清单聚合：父清单视图含全部后代清单的直接任务（口径与壳层谓词下推同源）
           projectIds: activeProjectIds,
           ungrouped,
-          statusFilter,
+          statusFilters,
           priorityFilter: priorityFilter === "all" ? null : Number(priorityFilter),
           hideDone,
         },
@@ -602,7 +605,7 @@ export default function TaskPanel() {
     projectId,
     activeProjectIds,
     ungrouped,
-    statusFilter,
+    statusFilters,
     priorityFilter,
     sortKey,
     sortDir,
@@ -687,8 +690,8 @@ export default function TaskPanel() {
             onSortDirChange={setSortDir}
             kanbanGroupBy={kanbanGroupBy}
             onKanbanGroupByChange={setKanbanGroupBy}
-            statusFilter={statusFilter}
-            onStatusFilterChange={setStatusFilter}
+            statusFilters={statusFilters}
+            onStatusFiltersChange={setStatusFilters}
             priorityFilter={priorityFilter}
             onPriorityFilterChange={setPriorityFilter}
           />
@@ -697,12 +700,12 @@ export default function TaskPanel() {
             onViewModeChange={setViewMode}
             hideDone={hideDone}
             onHideDoneChange={setHideDone}
-            hideDoneDisabled={isLogbook || statusFilter === "done"}
+            hideDoneDisabled={isLogbook || statusFilterOf(statusFilters) === "done"}
             onSaveAsView={() =>
               createSavedFilterWith(
                 buildConditions(
                   toolbarToForm({
-                    statusFilter,
+                    statusFilters,
                     priorityFilter: priorityFilter === "all" ? null : Number(priorityFilter),
                     favoriteOnly: quickView === "favorite",
                   }),
@@ -829,7 +832,7 @@ export default function TaskPanel() {
                 kanbanGroupBy === "status" &&
                 (colKey === "pending" || colKey === "doing" || colKey === "done")
               ) {
-                setStatusFilter(colKey);
+                setStatusFilters([colKey]);
               }
               setViewMode("list");
             }}

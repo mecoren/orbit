@@ -40,11 +40,12 @@ import { cn } from "@/lib/utils";
 import {
   type TaskSortDir,
   type TaskSortKey,
+  type TaskStatusFilterSet,
 } from "../shared/task-filters";
 import { type KanbanGroupBy } from "./kanban-view";
 import { KANBAN_GROUP_LABEL } from "../shared/kanban-group";
 // 仅类型反向引用（inline type 擦除，无运行时环）：三态类型真源在 task-panel
-import { type PriorityFilter, type StatusFilter, type ViewMode } from "./task-panel";
+import { type PriorityFilter, type ViewMode } from "./task-panel";
 
 /** 视图图标排元数据（与原五联钮同序同 icon；aria-label 原样保留供 e2e 复用） */
 const VIEW_TABS: { key: ViewMode; label: string; icon: typeof ListTodo }[] = [
@@ -63,13 +64,18 @@ const SORT_LABEL: Record<TaskSortKey, string> = {
   created: "创建时间",
 };
 
-const STATUS_LABEL: Record<StatusFilter, string> = {
-  all: "全部状态",
-  undone: "未完成",
-  pending: "待办",
-  doing: "进行中",
-  done: "已完成",
-};
+const STATUS_ITEMS: { value: TaskStatusFilterSet[number]; label: string }[] = [
+  { value: "pending", label: "待办" },
+  { value: "doing", label: "进行中" },
+  { value: "done", label: "已完成" },
+];
+
+/** 状态档回显：空集 = 全部状态；全选 = 全部状态；待办+进行中 = 未完成 */
+function statusSummary(set: TaskStatusFilterSet): string {
+  if (set.length === 0 || set.length === STATUS_ITEMS.length) return "全部状态";
+  if (set.length === 2 && set.includes("pending") && set.includes("doing")) return "未完成";
+  return set.map((v) => STATUS_ITEMS.find((i) => i.value === v)?.label ?? v).join(" + ");
+}
 
 const PRIORITY_ITEMS: { value: PriorityFilter; label: string }[] = [
   { value: "all", label: "全部优先级" },
@@ -107,8 +113,8 @@ interface SortMenuButtonProps {
   onSortDirChange: (d: TaskSortDir) => void;
   kanbanGroupBy: KanbanGroupBy;
   onKanbanGroupByChange: (g: KanbanGroupBy) => void;
-  statusFilter: StatusFilter;
-  onStatusFilterChange: (s: StatusFilter) => void;
+  statusFilters: TaskStatusFilterSet;
+  onStatusFiltersChange: (s: TaskStatusFilterSet) => void;
   priorityFilter: PriorityFilter;
   onPriorityFilterChange: (p: PriorityFilter) => void;
 }
@@ -123,8 +129,8 @@ export function SortMenuButton(props: SortMenuButtonProps) {
     onSortDirChange,
     kanbanGroupBy,
     onKanbanGroupByChange,
-    statusFilter,
-    onStatusFilterChange,
+    statusFilters,
+    onStatusFiltersChange,
     priorityFilter,
     onPriorityFilterChange,
   } = props;
@@ -202,23 +208,41 @@ export function SortMenuButton(props: SortMenuButtonProps) {
 
         <DropdownMenuSeparator />
 
-        {/* 状态/优先级筛选（与排序同属「行怎么呈现」语义，收在「↑↓」下） */}
+        {/* 状态筛选（2026-10-28 改多选，对齐 TickTick 多状态筛选）：
+            checkbox 多选、空集 = 全部状态；「全部状态」一键清空便于回到默认。
+            条目不用 radio——多档并选是这个菜单的核心用法（如待办+进行中）。
+            Radix 的 checkbox 条目默认 onSelect 关层，这里必须 preventDefault：
+            否则每勾一档菜单就收起，多选无法一次完成（TickTick 面板常驻同款）。 */}
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <span className="flex-1">状态</span>
-            <span className="text-xs text-muted-foreground">{STATUS_LABEL[statusFilter]}</span>
+            <span className="text-xs text-muted-foreground">{statusSummary(statusFilters)}</span>
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent>
-            <DropdownMenuRadioGroup
-              value={statusFilter}
-              onValueChange={(v) => onStatusFilterChange(v as StatusFilter)}
+            <DropdownMenuCheckboxItem
+              checked={statusFilters.length === 0}
+              onCheckedChange={() => onStatusFiltersChange([])}
+              onSelect={(e) => e.preventDefault()}
             >
-              {(Object.keys(STATUS_LABEL) as StatusFilter[]).map((k) => (
-                <DropdownMenuRadioItem key={k} value={k}>
-                  {STATUS_LABEL[k]}
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
+              全部状态
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuSeparator />
+            {STATUS_ITEMS.map((i) => (
+              <DropdownMenuCheckboxItem
+                key={i.value}
+                checked={statusFilters.includes(i.value)}
+                onCheckedChange={(checked) =>
+                  onStatusFiltersChange(
+                    checked
+                      ? [...statusFilters, i.value]
+                      : statusFilters.filter((v) => v !== i.value),
+                  )
+                }
+                onSelect={(e) => e.preventDefault()}
+              >
+                {i.label}
+              </DropdownMenuCheckboxItem>
+            ))}
           </DropdownMenuSubContent>
         </DropdownMenuSub>
 

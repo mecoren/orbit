@@ -6,6 +6,7 @@
  * 纯函数无 React 依赖，可单测；对话框组件消费产出 conditions 字符串。
  */
 import type { SavedFilterConditions } from "./saved-filter";
+import { statusFilterOf, type TaskStatusFilterSet } from "./task-filters";
 
 /**
  * 存在三态：null = 不过滤，true = 仅有，false = 仅无
@@ -110,16 +111,17 @@ export function buildConditions(f: FilterFormState): string {
 
 /** 工具栏筛选状态 → 表单态（「存为视图」预填：面板当前筛选一键固化） */
 export function toolbarToForm(input: {
-  statusFilter: string | null;
+  /** 状态多选档（空集 = 全部状态） */
+  statusFilters: TaskStatusFilterSet;
   priorityFilter: number | null;
   favoriteOnly: boolean;
 }): FilterFormState {
+  // 条件 JSON 的 `status` 是**等值键**（白名单如此），多选装不进去：
+  // 只在恰好单档且非「未完成派生档」时固化，其余丢弃（对话框提示层说明）。
+  const single = statusFilterOf(input.statusFilters);
   return {
     ...EMPTY_FILTER_FORM,
-    // 工具栏状态档 all → null（不过滤）；undone 档无对应白名单键，丢弃（提示层说明）
-    status: input.statusFilter && input.statusFilter !== "all" && input.statusFilter !== "undone"
-      ? input.statusFilter
-      : null,
+    status: single === "pending" || single === "doing" || single === "done" ? single : null,
     priorityMin: input.priorityFilter,
     favoriteOnly: input.favoriteOnly,
   };

@@ -806,6 +806,7 @@ interface MockTaskFilter {
   due_to?: number | null;
   start_from?: number | null;
   start_to?: number | null;
+  status_in?: string[] | null;
   page?: number;
   page_size?: number;
 }
@@ -826,6 +827,15 @@ function filterTaskRows(db: MockDb, filter?: MockTaskFilter | null): MockTask[] 
   if (filter?.done === true) rows = rows.filter((t) => t.done === 1);
   if (filter?.done === false) rows = rows.filter((t) => t.done !== 1);
   if (filter?.status != null) rows = rows.filter((t) => t.status === filter.status);
+  // 状态集合（工具栏多选档）：派生状态口径，脏值回落 pending；done 档兼容
+  // 「done = 1 或 status = 'done'」——与 Rust build_task_predicate_clause 同义
+  if (filter?.status_in != null && filter.status_in.length > 0) {
+    const states = new Set(filter.status_in);
+    rows = rows.filter((t) => {
+      if (t.done === 1 || t.status === "done") return states.has("done");
+      return states.has(t.status === "doing" ? "doing" : "pending");
+    });
+  }
   if (filter?.priority_min != null) {
     const minPriority = filter.priority_min;
     rows = rows.filter((t) => t.priority >= minPriority);

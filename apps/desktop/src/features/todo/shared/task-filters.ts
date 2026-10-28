@@ -12,6 +12,20 @@ import { type SavedFilterConditions } from "./saved-filter";
 
 export type TaskStatusFilter = "all" | "pending" | "doing" | "done" | "undone";
 
+/** 状态多选档（工具栏「状态」筛选，2026-10-28 对齐 TickTick 多状态筛选）。
+ *  空数组 = 全部状态；`undone` 是派生档（待办 + 进行中），不落进多选集合。 */
+export type TaskStatusFilterSet = Exclude<TaskStatusFilter, "all" | "undone">[];
+
+/** 多选集合 → 单档（旧单选语义的兼容出口：Logbook/看板列等按单档判断的地方用）。
+ *  多于一档时回落 "all"（那些调用点只关心「是否明确只看已完成」这类判断）。 */
+export function statusFilterOf(set: TaskStatusFilterSet): TaskStatusFilter {
+  if (set.length === 0) return "all";
+  if (set.length === 1) return set[0];
+  // 待办 + 进行中 = 未完成档（语义等价，不是「混合档」）
+  if (set.length === 2 && set.includes("pending") && set.includes("doing")) return "undone";
+  return "all";
+}
+
 /** 排序档位（manual = position 拖拽顺序，唯一允许拖拽重排的档位） */
 export type TaskSortKey = "manual" | "due" | "priority" | "title" | "created";
 
@@ -41,11 +55,28 @@ export interface TaskFilterInput {
   projectIds?: number[] | null;
   ungrouped?: boolean;
   keyword?: string | null; // title+description 大小写不敏感包含
-  statusFilter?: TaskStatusFilter;
+  /** 状态多选档（2026-10-28）：空数组 = 全部状态；多档之间是「或」 */
+  statusFilters?: TaskStatusFilterSet;
   priorityFilter?: number | null;
   /** 隐藏已完成（Logbook 治理）：true 时剔除 done 任务；
-   *  quickView=done / statusFilter=done 已完成语义下不生效（要看完成集就明确去 done 入口） */
+   *  quickView=done / 明确只看完成集（只选了 done 档）时不生效——要看完成集
+   *  就明确去 done 入口 */
   hideDone?: boolean;
+}
+
+/**
+ * 状态多选匹配（派生状态口径，与 core `status_in` 同源）：
+ * 脏 status 回落 pending（看板 status 列同口径），`done` 档兼容「勾选完成但
+ * status 未改写」的老数据（done = 1 也算完成）。
+ */
+function statusMatches(t: TodoTaskListItem, filters: TaskStatusFilterSet): boolean {
+  if (t.done || t.status === "done") return filters.includes("done");
+  return filters.includes(t.status === "doing" ? "doing" : "pending");
+}
+
+/** 是否「只看完成集」：多选里只有 done 一档时，hideDone 不剔除 */
+function isDoneOnly(filters: TaskStatusFilterSet): boolean {
+  return filters.length === 1 && filters[0] === "done";
 }
 
 /** 「今天」本地零点毫秒（我的一天判定/写入单一口径：
@@ -70,7 +101,7 @@ export function filterTasks(tasks: TodoTaskListItem[], input: TaskFilterInput): 
     projectIds = null,
     ungrouped = false,
     keyword = null,
-    statusFilter = "all",
+    statusFilters = [],
     priorityFilter = null,
     hideDone = false,
   } = input;
@@ -124,18 +155,16 @@ export function filterTasks(tasks: TodoTaskListItem[], input: TaskFilterInput): 
     }
 
     // 快捷视图下的状态筛选仍生效；项目视图沿用现版无工具栏语义
-    if (statusFilter === "undone") list = list.filter((t) => !t.done);
-    if (statusFilter === "pending") list = list.filter((t) => t.status === "pending");
-    if (statusFilter === "doing") list = list.filter((t) => t.status === "doing");
-    if (statusFilter === "done") list = list.filter((t) => !!t.done || t.status === "done");
+    if (statusFilters.length > 0) {
+      list = list.filter((t) => statusMatches(t, statusFilters));
+    }
     if (priorityFilter != null) {
       list = list.filter((t) => t.priority === priorityFilter);
     }
   }
 
-  // 隐藏已完成（Logbook 治理）：done 快捷视图 / done 状态筛选是明确要看完成集的入口，
-  // 此处不剔除（否则开关会把它们清成永久空列表）
-  if (hideDone && quickView !== "done" && statusFilter !== "done") {
+  // 隐藏已完成（Logbook 治理）：done 快捷视图 / 明确只看完成集时不剔除
+  if (hideDone && quickView !== "done" && !isDoneOnly(statusFilters)) {
     list = list.filter((t) => !t.done);
   }
 
@@ -245,7 +274,8 @@ export interface PagedFilterInput {
   /** 是否处于项目视图（含清单聚合）：工具栏状态/优先级在其中不生效（04 §四） */
   hasProjectView: boolean;
   quickView: QuickViewKey | null;
-  statusFilter: TaskStatusFilter;
+  /** 状态多选档（2026-10-28）：空数组 = 全部状态；多档之间是「或」 */
+  statusFilters: TaskStatusFilterSet;
   priorityFilter: number | null;
   hideDone: boolean;
   sortKey: PagedSortKey;
@@ -290,14 +320,31 @@ export function buildPagedFilter(input: PagedFilterInput): ListFilter {
   if (toolbarApplies) {
     if (input.quickView === "today") dueTo = todayEnd;
     if (input.quickView === "week") dueTo = weekEnd;
-
-    if (input.statusFilter === "undone") done = false;
-    if (input.statusFilter === "pending") status = "pending";
-    if (input.statusFilter === "doing") status = "doing";
-    if (input.statusFilter === "done") done = true;
   }
 
-  if (input.hideDone && input.quickView !== "done" && input.statusFilter !== "done") {
+  // 状态多选档下推（2026-10-28）：单档且非 done 仍走原有 status 等值谓词
+  // （SQL 更省、与旧路径逐字一致）；其余情况交给 status_in 集合。
+  //
+  // 集合档**不**同时给 done=true：status_in 的 done 项已含「done = 1 或
+  // status = 'done'」，再叠 done=true 会把「勾选完成但 status 未改写」的
+  // 老数据漏掉（与本地 statusMatches 同口径）。
+  const statusSet = input.statusFilters;
+  let statusIn: string[] | null = null;
+  if (toolbarApplies && statusSet.length > 0) {
+    if (statusSet.length === 1 && statusSet[0] !== "done") {
+      status = statusSet[0];
+    } else {
+      done = null; // 完成态由 status_in 判（见上）
+      statusIn = [...statusSet];
+    }
+  }
+
+  if (
+    input.hideDone &&
+    input.quickView !== "done" &&
+    !isDoneOnly(statusSet) &&
+    statusSet.length === 0
+  ) {
     done = false;
   }
 
@@ -310,6 +357,7 @@ export function buildPagedFilter(input: PagedFilterInput): ListFilter {
     priority_eq: toolbarApplies ? (input.priorityFilter ?? null) : null,
     done,
     status,
+    status_in: statusIn,
     due_to: dueTo,
     exclude_due_before: input.excludeOverdueBefore ?? null,
     sort_key: input.sortKey,

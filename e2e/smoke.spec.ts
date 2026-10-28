@@ -1155,14 +1155,27 @@ test("「···」更多菜单：视图图标排点按即切且菜单不关（20
   await page.keyboard.press("Escape");
   await expect(page.getByText("重要且紧急")).toBeVisible();
 
-  // 状态筛选子菜单仍可走通（收拢后等价性抽验：已完成档，入口在「↑↓」排序与筛选菜单）——
-  // 子菜单 radio 用 evaluate 直点（仓库惯例：Radix 弹层内合成点击被 html 拦截）
+  // 切回列表视图：状态筛选的断言要看任务行，矩阵视图没有列表行
+  await openMoreMenu(page);
+  await menu.getByRole("button", { name: "列表视图" }).click();
+  await page.keyboard.press("Escape");
+
+  // 状态筛选子菜单仍可走通（2026-10-28 改 checkbox 多选：空集 = 全部状态）——
+  // 子菜单条目用 evaluate 直点（仓库惯例：Radix 弹层内合成点击被 html 拦截）
   await page.getByRole("button", { name: "排序与筛选" }).click();
   await expect(page.getByRole("menu")).toBeVisible();
   await page.getByRole("menuitem", { name: "状态" }).click();
-  await page.getByRole("menuitemradio", { name: "已完成" }).evaluate((el) => (el as HTMLElement).click());
-  // seed 任务是待办：切「已完成」档后从列表消失
+  await page.getByRole("menuitemcheckbox", { name: "已完成" }).evaluate((el) => (el as HTMLElement).click());
+  // seed 任务是待办：只选「已完成」档后从列表消失
   await expect(
     page.getByRole("button", { name: "未完成任务：既有任务-今天截止" }),
   ).toHaveCount(0);
+  // 多档并选：再勾「待办」→ 与已完成并集，待办行回归
+  await page.getByRole("menuitemcheckbox", { name: "待办" }).evaluate((el) => (el as HTMLElement).click());
+  await expect(
+    page.getByRole("button", { name: "未完成任务：既有任务-今天截止" }),
+  ).toBeVisible();
+  // 「全部状态」一键清空集合
+  await page.getByRole("menuitemcheckbox", { name: "全部状态" }).evaluate((el) => (el as HTMLElement).click());
+  await page.keyboard.press("Escape");
 });
