@@ -17,6 +17,16 @@
 
 ## [Unreleased]
 
+### 功能：同步取消（N33，协作式分片取消）——双端（2026-10-28）
+
+大附件分片上传可持续数十秒，此前双端都只有「转环」没有「停下」的出口。本批按 ADR 0010 的建议做**协作式取消**（边界检查，不做在途请求强杀）：最坏再等一片（~5MiB）。
+
+- **core**：新增 `sync::cancel::SyncCancelToken`（`AtomicBool`）；`CloudSyncError::Cancelled` + `category_tag()` 新增 `cancelled`（主动取消不是故障，不并入网络错误）；`SyncAdapter` 增加 `attach_cancel`/`is_cancelled` 两个默认方法，`BasePathAdapter` 在**每次**远端调用前检查，S3/WebDAV 的分片循环**逐片**检查——S3 命中即 `AbortMultipartUpload` 清理会话，WebDAV 不写 `head.json`（完成信号缺席 → 下轮 prepare 判定不可续传并整体清理），下载半截的目标文件删除。
+- **引擎**：`SyncEngine::request_cancel()` 只在运行中置位（空闲返回 false 且**不置位**，否则下一轮一开跑就自杀），取消标记只在 `acquire_lock` **成功之后**复位；`sync_now`/`push_only`/`pull_then_push` 在阶段边界（备份后 / pull 后 / push 后 / 附件拉取后）各查一次；退避等待改为 200ms 分段探测（限流档最长 120s，睡满再查等于让用户干等）；**取消不落 Error 进度帧**（否则双端指示器被染成红色故障态）；历史记 `cancelled`（不算失败率），`last_synced_at` **不推进**（回收站守卫线只认完整轮次）。
+- **双端**：Tauri `cloud_sync_cancel` 与 FRB `cloud_sync_cancel` 同名同参（桥门禁自动配对）；桌面设置页同步卡运行中把「同步」换成「取消」，取消中保持「取消中」直到命令 reject 回到 finally；移动端设置页「立即同步」与同步面板主按钮同样在运行中换「取消同步」。取消回包按 `[cancelled]` tag 特判为中性提示（「已取消同步」），历史行用灰点 / 「已取消」，不再显示错误文本。
+- **回归锚点**：core `sync_cancel` 集成 **3 绿**（已取消入口零请求；S3 中段取消发起 Abort 且不 Complete 不落对象；WebDAV 中段取消不传后续分片不写 head.json——用假服务 `slow_first_put_ms` 把「首片在途」做成确定窗口，不靠睡眠竞速）、引擎取消语义 **6 绿**、`cargo test -p orbit-core --lib` **930 绿**、`sync_fault_matrix` **14 绿**；桌面 `tsc` 零错误、`vitest` **766 绿**；`flutter analyze` 零问题、`flutter test` **1100 绿**；桥门禁 `bridge-parity`（桌面 184 / 移动 198）与无界审计双绿。
+- **已知非本批问题**：`calendar_screen_test`「长按日格」一例在 HEAD 上即红（与本批无关）。
+
 ### 功能：桌面列表多状态筛选 + 日期状态分节折叠（2026-10-28，docs/07 #118）
 
 对齐 TickTick 主列表的「多状态筛选 + 分节收起」心智，截图口径的五档状态按本仓模型落成。
