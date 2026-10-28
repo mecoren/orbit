@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use bytes::Bytes;
 use reqwest::header::HeaderMap;
@@ -6,6 +8,7 @@ use crate::s3::{
     build_url, format_amz_date, format_date_stamp, get_signature_key, hmac_sha256, infer_service,
     parse_list_objects_xml, sha256_hex,
 };
+use crate::sync::cancel::SyncCancelToken;
 use crate::sync::error::{SyncError, transport_message};
 use crate::sync_adapters::http_client::HttpClient;
 use crate::sync_adapters::traits::{
@@ -37,9 +40,19 @@ pub struct S3Config {
 pub struct S3Adapter {
     http: HttpClient,
     config: S3Config,
+    /// N33 协作式取消令牌（仅增量同步链路绑定；备份/GC 不绑）
+    cancel: std::sync::OnceLock<Arc<SyncCancelToken>>,
 }
 
 impl S3Adapter {
+    /// 当前是否已被请求取消（未绑定令牌 = 永不取消）
+    fn cancel_check(&self) -> Result<(), SyncError> {
+        match self.cancel.get() {
+            Some(token) => token.check(),
+            None => Ok(()),
+        }
+    }
+
     /// 单对象 PUT（签名 + 重试），入参是已归一的 `Bytes`（A13）
     ///
     /// `upload`（借用）与 `upload_owned`（移交所有权）共用这一段，
@@ -106,7 +119,11 @@ impl S3Adapter {
             config.timeout_secs
         };
         let http = HttpClient::new(timeout, 3, config.skip_tls_verify)?;
-        Ok(Self { http, config })
+        Ok(Self {
+            http,
+            config,
+            cancel: std::sync::OnceLock::new(),
+        })
     }
 
     /// 构建 S3 对象 URL
@@ -394,12 +411,19 @@ x-amz-date:{}
     /// 任一步失败尝试 Abort（尽力而为，失败仅记日志——未 Abort 的分片由
     /// S3 生命周期规则/存储桶清理策略兜底，不影响数据正确性）。
     async fn multipart_upload(&self, path: &str, data: &[u8]) -> Result<(), SyncError> {
+        // N33：预取消时连 Create 都不发，避免凭空多出一个待清理的 uploadId
+        self.cancel_check()?;
         let upload_id = self.create_multipart_upload(path).await?;
 
         // 2. 逐片 UploadPart（分片级重试：失败重传单片而非整文件）
         let mut part_etags: Vec<String> = Vec::new();
         for (idx, chunk) in data.chunks(Self::MULTIPART_PART_SIZE).enumerate() {
             let part_number = idx + 1;
+            // N33：每片前检查取消——最坏等待 = 单片请求返回（约 5MiB）
+            if let Err(e) = self.cancel_check() {
+                self.abort_multipart(path, &upload_id).await;
+                return Err(e);
+            }
             match self
                 .upload_part_with_retry(&upload_id, path, part_number, chunk)
                 .await
@@ -460,6 +484,11 @@ x-amz-date:{}
             }
             if filled == 0 {
                 break;
+            }
+            // N33：每片前检查取消；命中即 Abort 本次 multipart 会话
+            if let Err(e) = self.cancel_check() {
+                self.abort_multipart(path, &upload_id).await;
+                return Err(e);
             }
             match self
                 .upload_part_with_retry(&upload_id, path, part_number, &buf[..filled])
@@ -646,7 +675,20 @@ x-amz-date:{}
 
 #[async_trait]
 impl SyncAdapter for S3Adapter {
+    fn attach_cancel(&self, token: Arc<SyncCancelToken>) {
+        // 每次同步都会构造新适配器，绑一次即可；忽略重复绑定
+        let _ = self.cancel.set(token);
+    }
+
+    fn is_cancelled(&self) -> bool {
+        self.cancel
+            .get()
+            .map(|token| token.is_cancelled())
+            .unwrap_or(false)
+    }
+
     async fn list_all_files(&self, base_path: &str) -> Result<Vec<RemoteFile>, SyncError> {
+        self.cancel_check()?;
         // 分页列举（P0-3）：>1000 对象不再静默截断
         //
         // F82：空 prefix 是**连通性探测**（双壳连接测试的唯一调用形态），不是
@@ -685,12 +727,14 @@ impl SyncAdapter for S3Adapter {
     }
 
     async fn download(&self, path: &str) -> Result<Bytes, SyncError> {
+        self.cancel_check()?;
         let url = self.build_object_url(path);
         let headers = self.sign_request("GET", &url, &sha256_hex(b""))?;
         self.http.get_with_retry(&url, headers).await
     }
 
     async fn upload(&self, path: &str, data: &[u8]) -> Result<(), SyncError> {
+        self.cancel_check()?;
         // S4：大对象走 multipart 分片（服务端拼装，产物与单 PUT 一致）；
         // 小对象保持单 PUT（Create/Complete 两次额外请求在小对象上是纯开销）
         if data.len() >= Self::MULTIPART_THRESHOLD {
@@ -703,6 +747,7 @@ impl SyncAdapter for S3Adapter {
 
     /// A13：所有权移交版本——`Bytes::from(Vec)` 对独占 `Vec` 是**零拷贝**
     async fn upload_owned(&self, path: &str, data: Vec<u8>) -> Result<(), SyncError> {
+        self.cancel_check()?;
         if data.len() >= Self::MULTIPART_THRESHOLD {
             return self.multipart_upload(path, &data).await;
         }
@@ -719,6 +764,7 @@ impl SyncAdapter for S3Adapter {
         local_path: &std::path::Path,
         total_len: u64,
     ) -> Result<(), SyncError> {
+        self.cancel_check()?;
         if total_len >= Self::MULTIPART_THRESHOLD as u64 {
             return self.multipart_upload_file(path, local_path).await;
         }
@@ -735,6 +781,7 @@ impl SyncAdapter for S3Adapter {
         local_path: &std::path::Path,
         total_len: u64,
     ) -> Result<(), SyncError> {
+        self.cancel_check()?;
         let path = crate::cloud_sync::paths::asset_path(hash);
         if total_len >= Self::MULTIPART_THRESHOLD as u64 {
             return self.multipart_upload_file(&path, local_path).await;
@@ -760,6 +807,7 @@ impl SyncAdapter for S3Adapter {
         path: &str,
         target: &std::path::Path,
     ) -> Result<u64, SyncError> {
+        self.cancel_check()?;
         let url = self.build_object_url(path);
         let headers = self.sign_request("GET", &url, &sha256_hex(b""))?;
         self.http
@@ -768,6 +816,7 @@ impl SyncAdapter for S3Adapter {
     }
 
     async fn delete(&self, path: &str) -> Result<(), SyncError> {
+        self.cancel_check()?;
         // S3 DELETE 请求
         let url = self.build_object_url(path);
         let headers = self.sign_request("DELETE", &url, &sha256_hex(b""))?;
@@ -791,6 +840,7 @@ impl SyncAdapter for S3Adapter {
     // 这里不再保留生产不可达的重复实现。
 
     async fn list_assets(&self, assets_dir: &str) -> Result<Vec<String>, SyncError> {
+        self.cancel_check()?;
         // 分页列举（P0-3）：附件超过 1000 个不再静默截断
         // keys 已由 parse_list_objects_xml 剥掉 `{assets_dir}/` 前缀（P0-10 口径），
         // 与 WebDAV 侧的 basename 同域，故 assets_dir 带不带 base_path 都只需剥后缀。
@@ -821,6 +871,7 @@ impl SyncAdapter for S3Adapter {
     ) -> Result<Vec<RemoteAssetObject>, SyncError> {
         use crate::cloud_sync::paths::strip_sync_extension;
 
+        self.cancel_check()?;
         let mut merged: std::collections::BTreeMap<String, RemoteAssetObject> =
             std::collections::BTreeMap::new();
 
@@ -905,6 +956,7 @@ impl SyncAdapter for S3Adapter {
         &self,
         path: &str,
     ) -> Result<Option<(Bytes, Option<String>)>, SyncError> {
+        self.cancel_check()?;
         let url = self.build_object_url(path);
         let headers = self.sign_request("GET", &url, &sha256_hex(b""))?;
         match self.http.get_with_token(&url, headers).await {
@@ -923,6 +975,7 @@ impl SyncAdapter for S3Adapter {
         data: &[u8],
         precondition: UploadPrecondition,
     ) -> Result<UploadOutcome, SyncError> {
+        self.cancel_check()?;
         let url = self.build_object_url(path);
         let payload_hash = sha256_hex(data);
         let headers = self.sign_request("PUT", &url, &payload_hash)?;

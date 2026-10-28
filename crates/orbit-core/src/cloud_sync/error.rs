@@ -48,6 +48,14 @@ pub enum CloudSyncError {
     #[error("请求时间偏差过大: {message}")]
     ClockSkew { message: String },
 
+    /// 用户主动取消（N33）
+    ///
+    /// **不是故障**：不重试、不推进 `last_synced_at`、历史状态记 `cancelled`。
+    /// 独立成变体是为了让桥层能给出 `cancelled` tag，双端 UI 据此显示中性
+    /// 提示而不是红色失败（取消是用户的正常操作）。
+    #[error("同步已取消: {message}")]
+    Cancelled { message: String },
+
     /// 远端资源不存在（HTTP 404 / 坚果云 409 AncestorsNotFound）。
     ///
     /// Fix-09：适配器层已按状态码构造类型化错误，此处保留类型穿透，
@@ -130,6 +138,11 @@ impl From<crate::sync::error::SyncError> for CloudSyncError {
             // 使「校时」被当网络错误白等重试、tag 报 network（见变体文档）
             crate::sync::error::SyncError::ClockSkew { message } => {
                 CloudSyncError::ClockSkew { message }
+            }
+            // N33：取消语义必须透传——塌进 Adapter 会被当作网络错误重试，
+            // 且 UI 会展示红色失败而非「已取消」
+            crate::sync::error::SyncError::Cancelled { message } => {
+                CloudSyncError::Cancelled { message }
             }
             other => CloudSyncError::Adapter {
                 message: other.to_string(),
@@ -235,6 +248,14 @@ impl CloudSyncError {
         )
     }
 
+    /// 是否为用户主动取消（N33）
+    ///
+    /// 取消既不是网络故障也不是密码问题：`with_retry` 据此不重试，
+    /// 引擎据此不推进同步账本、历史状态记 `cancelled`。
+    pub fn is_cancelled(&self) -> bool {
+        matches!(self, CloudSyncError::Cancelled { .. })
+    }
+
     /// 是否为限流错误（429 或坚果云等服务的 503 限流）
     ///
     /// S6：优先类型判断（`RateLimited` 变体，适配器按状态码构造）；
@@ -311,6 +332,9 @@ impl CloudSyncError {
             // 落 network 会让 UI 引导重试/离线进入（重试必然同错），
             // 落 auth 会让用户去改 AccessKey（改多少次都不解决）
             "clock_skew"
+        } else if self.is_cancelled() {
+            // N33：取消是用户操作，不是故障——双端 UI 据此走中性提示
+            "cancelled"
         } else if self.is_auth_error() {
             // S6：认证错误单独归类——引导用户检查凭据/权限而非泛化网络重试
             "auth"
@@ -490,5 +514,25 @@ mod tests {
             text.contains("不是 AccessKey"),
             "文案须排除错误排查方向: {text}"
         );
+    }
+
+    // ========================================================================
+    // N33：取消不是故障
+    // ========================================================================
+
+    #[test]
+    fn cancelled_stays_typed_and_is_not_network() {
+        let src = crate::sync::error::SyncError::Cancelled {
+            message: "用户取消同步".to_string(),
+        };
+        let err: CloudSyncError = src.into();
+        assert!(err.is_cancelled(), "取消必须保持类型，不得塌进 Adapter");
+        assert!(
+            !err.is_network_error(),
+            "取消不得归网络类（否则 with_retry 白等重试）"
+        );
+        assert!(!err.is_password_error());
+        assert_eq!(err.category_tag(), "cancelled");
+        assert!(err.to_string().contains("取消"));
     }
 }

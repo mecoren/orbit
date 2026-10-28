@@ -1,7 +1,10 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 
+use crate::sync::cancel::SyncCancelToken;
 use crate::sync::error::SyncError;
 
 /// 远程文件信息
@@ -104,6 +107,24 @@ pub enum UploadOutcome {
 /// 无令牌读取），使既有 mock 适配器无需改动即可编译；生产适配器覆盖实现。
 #[async_trait]
 pub trait SyncAdapter: Send + Sync {
+    /// 绑定协作式取消令牌（N33）
+    ///
+    /// 默认 no-op：测试桩与不参与长传的适配器无需实现。生产适配器
+    /// （S3 / WebDAV）在分片循环每片前检查它，以便大附件上传能在
+    /// 一片（约 5MiB）内停下；`BasePathAdapter` 在每次转发前检查。
+    ///
+    /// 只应绑定一次（`create_adapters` 在每次同步开跑前构造新实例），
+    /// 适配器实现用 `OnceLock` 保存即可。
+    fn attach_cancel(&self, _token: Arc<SyncCancelToken>) {}
+
+    /// 当前是否已被请求取消（N33）
+    ///
+    /// 供附件流这类「先做本地加密、再逐项上传」的编排在排队阶段就收手——
+    /// 否则取消后仍会把剩余附件逐个加密一遍。默认 false。
+    fn is_cancelled(&self) -> bool {
+        false
+    }
+
     /// 列出远程目录下的所有文件（不过滤后缀，供备份列举使用）
     ///
     /// **两协议的「列出」深度不同，实现者须知道自己在承诺什么**（F32）：

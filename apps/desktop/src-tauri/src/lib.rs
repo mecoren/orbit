@@ -465,6 +465,8 @@ pub fn run() {
             commands::cloud_sync_cmd::cloud_sync_now,
             commands::cloud_sync_cmd::cloud_sync_push_only,
             commands::cloud_sync_cmd::cloud_sync_pull_then_push,
+            // 取消进行中的增量同步（N33 协作式分片取消）
+            commands::cloud_sync_cmd::cloud_sync_cancel,
             // 强制同步（进入/退出应用生命周期钩子专用）
             commands::cloud_sync_cmd::cloud_sync_force,
             // 增量同步历史（P1-17：设置页同步历史卡数据源）

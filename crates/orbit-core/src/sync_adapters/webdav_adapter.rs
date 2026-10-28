@@ -1,9 +1,10 @@
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use bytes::Bytes;
 use reqwest::header::{AUTHORIZATION, HeaderMap};
 
+use crate::sync::cancel::SyncCancelToken;
 use crate::sync::error::{SyncError, transport_message};
 use crate::sync_adapters::http_client::HttpClient;
 use crate::sync_adapters::traits::{
@@ -40,6 +41,8 @@ pub struct WebDavAdapter {
     // bounded: MAX_CACHED_DIRS=512 条 FIFO 淘汰（F81；旧实现是无界 HashSet，
     // 随「≥8MiB 附件个数」单调增长且进程生命周期内永不回收）
     dir_cache: Mutex<DirCache>,
+    /// N33 协作式取消令牌（仅增量同步链路绑定；备份/GC 不绑）
+    cancel: std::sync::OnceLock<Arc<SyncCancelToken>>,
 }
 
 /// 目录存在性缓存的条目上界（F81）
@@ -185,7 +188,16 @@ impl WebDavAdapter {
             http,
             config,
             dir_cache: Mutex::new(DirCache::default()),
+            cancel: std::sync::OnceLock::new(),
         })
+    }
+
+    /// N33：已取消则返回 `SyncError::Cancelled`（未绑定令牌 = 永不取消）
+    fn cancel_check(&self) -> Result<(), SyncError> {
+        match self.cancel.get() {
+            Some(token) => token.check(),
+            None => Ok(()),
+        }
     }
 
     /// 构建 Basic Auth 头
@@ -664,6 +676,7 @@ impl WebDavAdapter {
         asset_path: &str,
         encrypted: &[u8],
     ) -> Result<(), SyncError> {
+        self.cancel_check()?;
         let total = encrypted.len().div_ceil(Self::PARTS_SIZE);
         let head = AssetPartsHead {
             v: 1,
@@ -675,6 +688,9 @@ impl WebDavAdapter {
 
         // 逐片上传：已存在且大小一致 → 跳过（断点续传核心）
         for index in 0..total {
+            // N33：每片前检查取消。未写 head.json 的半成品目录下轮
+            // prepare 判定为不可续传并整体清理，无需在这里删片
+            self.cancel_check()?;
             let start = index * Self::PARTS_SIZE;
             let end = std::cmp::min(start + Self::PARTS_SIZE, encrypted.len());
             let chunk = &encrypted[start..end];
@@ -721,6 +737,7 @@ impl WebDavAdapter {
     ) -> Result<(), SyncError> {
         use tokio::io::AsyncReadExt;
 
+        self.cancel_check()?;
         let total = total_len.div_ceil(Self::PARTS_SIZE as u64) as usize;
         let (size, sha256) = file_size_and_sha256(local_path).await?;
         let head = AssetPartsHead {
@@ -739,6 +756,8 @@ impl WebDavAdapter {
             })?;
         let mut remaining = size;
         for index in 0..total {
+            // N33：每片前检查取消（读取/加密之前），避免取消后仍逐片读盘
+            self.cancel_check()?;
             let expected = remaining.min(Self::PARTS_SIZE as u64) as usize;
             let mut chunk = vec![0u8; expected];
             file.read_exact(&mut chunk)
@@ -898,6 +917,7 @@ impl WebDavAdapter {
 
     /// 分片拼装下载：读 head.json → 逐片下载 → 拼接 + 大小/sha256 校验
     async fn download_asset_parts(&self, hash: &str, parts_root: &str) -> Result<Bytes, SyncError> {
+        self.cancel_check()?;
         let head_path = Self::parts_head_path(parts_root, hash);
         let head_bytes = self.download(&head_path).await?;
         let head: AssetPartsHead =
@@ -920,6 +940,8 @@ impl WebDavAdapter {
         // head.size 不符本来就会被下面的校验拒掉
         let mut assembled = Vec::new();
         for index in 0..head.total {
+            // N33：每片前检查取消，避免取消后仍把剩余分片全下完
+            self.cancel_check()?;
             let part_path = Self::part_bin_path(parts_root, hash, index);
             // A13：分片下载返回 `Bytes`，拼装是分片协议固有的一次复制
             // （拼装结果与分片大小同量级，而单对象路径已无复制）
@@ -959,6 +981,7 @@ impl WebDavAdapter {
         parts_root: &str,
         target: &std::path::Path,
     ) -> Result<u64, SyncError> {
+        self.cancel_check()?;
         let head_path = Self::parts_head_path(parts_root, hash);
         let head_bytes = self.download(&head_path).await?;
         let head: AssetPartsHead =
@@ -984,6 +1007,11 @@ impl WebDavAdapter {
             });
         }
         for index in 0..head.total {
+            // N33：每片前检查取消；命中即删除半截目标文件（否则会被当成缓存）
+            if let Err(e) = self.cancel_check() {
+                let _ = tokio::fs::remove_file(target).await;
+                return Err(e);
+            }
             let part_path = Self::part_bin_path(parts_root, hash, index);
             let url = self.build_url(&part_path);
             let headers = self.auth_headers();
@@ -1182,6 +1210,17 @@ impl WebDavAdapter {
 
 #[async_trait]
 impl SyncAdapter for WebDavAdapter {
+    fn attach_cancel(&self, token: Arc<SyncCancelToken>) {
+        // 每次同步都会构造新适配器，绑一次即可；忽略重复绑定
+        let _ = self.cancel.set(token);
+    }
+
+    fn is_cancelled(&self) -> bool {
+        self.cancel
+            .get()
+            .map(|token| token.is_cancelled())
+            .unwrap_or(false)
+    }
     /// 列举 `base_path` 下的文件，**递归**（F82）
     ///
     /// ## 为什么改成递归（F32 收口）
@@ -1218,6 +1257,7 @@ impl SyncAdapter for WebDavAdapter {
     /// 「`IsTruncated=true` 却无游标 → 拒绝返回不完整列表」同一口径：
     /// 宁可让用户看到「云端结构异常」，也不要一份短列表冒充完整结果。
     async fn list_all_files(&self, base_path: &str) -> Result<Vec<RemoteFile>, SyncError> {
+        self.cancel_check()?;
         let mut headers = self.auth_headers();
         headers.insert("Depth", "1".parse().unwrap());
         headers.insert("Content-Type", "application/xml".parse().unwrap());
@@ -1388,6 +1428,7 @@ impl SyncAdapter for WebDavAdapter {
     }
 
     async fn upload(&self, path: &str, data: &[u8]) -> Result<(), SyncError> {
+        self.cancel_check()?;
         // S4：大密文走分片协议（assets_parts/{hash}/ 布局），小数据单 PUT。
         // 分派点在 upload 层而非 upload_asset：BasePathAdapter 的
         // upload_asset 直接转发 inner.upload，分派若只在 upload_asset
@@ -1414,6 +1455,7 @@ impl SyncAdapter for WebDavAdapter {
     /// A13：所有权移交版本——`Bytes::from(Vec)` 对独占 `Vec` 是**零拷贝**
     /// （不再有 `to_vec()` 那次整包复制），分派口径与 `upload` 完全一致。
     async fn upload_owned(&self, path: &str, data: Vec<u8>) -> Result<(), SyncError> {
+        self.cancel_check()?;
         if data.len() >= Self::PARTS_THRESHOLD
             && let Some((hash, parts_root)) = asset_parts_target(path)
         {
@@ -1435,6 +1477,7 @@ impl SyncAdapter for WebDavAdapter {
         local_path: &std::path::Path,
         total_len: u64,
     ) -> Result<(), SyncError> {
+        self.cancel_check()?;
         if total_len >= Self::PARTS_THRESHOLD as u64
             && let Some((hash, parts_root)) = asset_parts_target(path)
         {
@@ -1456,6 +1499,7 @@ impl SyncAdapter for WebDavAdapter {
         local_path: &std::path::Path,
         total_len: u64,
     ) -> Result<(), SyncError> {
+        self.cancel_check()?;
         let path = crate::cloud_sync::paths::asset_path(hash);
         if total_len >= Self::PARTS_THRESHOLD as u64
             && let Some((h, parts_root)) = asset_parts_target(&path)
@@ -1485,6 +1529,7 @@ impl SyncAdapter for WebDavAdapter {
         path: &str,
         target: &std::path::Path,
     ) -> Result<u64, SyncError> {
+        self.cancel_check()?;
         let url = self.build_url(path);
         let headers = self.auth_headers();
         match self
@@ -1505,6 +1550,7 @@ impl SyncAdapter for WebDavAdapter {
     }
 
     async fn delete(&self, path: &str) -> Result<(), SyncError> {
+        self.cancel_check()?;
         let url = self.build_url(path);
         let headers = self.auth_headers();
 
@@ -1526,6 +1572,7 @@ impl SyncAdapter for WebDavAdapter {
     // 的 upload/download/exists 按路径形态承担，不受影响。
 
     async fn list_assets(&self, assets_dir: &str) -> Result<Vec<String>, SyncError> {
+        self.cancel_check()?;
         // 404 = 目录不存在（首次使用时 assets 尚未创建），视为空列表。
         // 但不得提前 return：大附件只落在 assets_parts/ 下，此时 assets/ 恒 404，
         // 提前返回会让下面的分片并集永远跑不到——push 侧 S7 空列表防御误报
@@ -1592,6 +1639,7 @@ impl SyncAdapter for WebDavAdapter {
     ) -> Result<Vec<RemoteAssetObject>, SyncError> {
         use crate::cloud_sync::paths::strip_sync_extension;
 
+        self.cancel_check()?;
         fn rfc2822_to_unix(raw: Option<&str>) -> i64 {
             raw.and_then(|s| chrono::DateTime::parse_from_rfc2822(s).ok())
                 .map(|dt| dt.timestamp())
@@ -1698,6 +1746,7 @@ impl SyncAdapter for WebDavAdapter {
         &self,
         path: &str,
     ) -> Result<Option<(Bytes, Option<String>)>, SyncError> {
+        self.cancel_check()?;
         let url = self.build_url(path);
         let headers = self.auth_headers();
         match self.http.get_with_token(&url, headers).await {
@@ -1735,6 +1784,7 @@ impl SyncAdapter for WebDavAdapter {
         data: &[u8],
         precondition: UploadPrecondition,
     ) -> Result<UploadOutcome, SyncError> {
+        self.cancel_check()?;
         // 与 `upload` 同口径：先确保父目录存在，避免 409 AncestorsNotFound
         if let Some(parent) = path.rsplit_once('/').map(|(p, _)| p)
             && !parent.is_empty()

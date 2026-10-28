@@ -91,6 +91,22 @@ pub async fn cloud_sync_push_only(app: AppHandle, origin: String) -> Result<Stri
     run_sync(&app, parse_origin(&origin), SyncAction::PushOnly).await
 }
 
+/// 请求取消正在进行的增量同步（N33 协作式分片取消）
+///
+/// 返回 `true` = 已向运行中的同步下达取消；`false` = 当前没有同步在跑。
+/// 语义是「不再发起新的远端调用」：在途的那一片会自然完成（最坏 ~5MiB），
+/// 之后引擎在下一个边界返回 `Cancelled`——历史记 cancelled、账本不推进。
+/// 这里**不创建**引擎（`engine_get` 而非 `sync_engine`）：懒初始化会顺带
+/// 起进度发送器与备份钩子，而没有引擎就必然没有同步在跑。
+#[tauri::command]
+pub fn cloud_sync_cancel(app: AppHandle) -> Result<bool, String> {
+    let runtime = app.state::<sync_runtime::SyncRuntime>();
+    Ok(match runtime.engine_get() {
+        Some(engine) => engine.request_cancel(),
+        None => false,
+    })
+}
+
 /// 先 Pull 再 Push（启动场景预留）
 #[tauri::command]
 pub async fn cloud_sync_pull_then_push(app: AppHandle, origin: String) -> Result<String, String> {

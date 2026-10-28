@@ -900,6 +900,15 @@ export const cloudSyncForce = (
   invoke<string>("cloud_sync_force", { origin, waitForIdleMs }).then(parseResult);
 export const cloudSyncIsRunning = () => invoke<boolean>("cloud_sync_is_running");
 /**
+ * 请求取消正在进行的增量同步（N33 协作式分片取消）
+ *
+ * 返回 true = 已向运行中的同步下达取消；false = 当前没有同步在跑。
+ * 取消是「不再发起新的远端调用」：在途的那一片会自然完成（最坏 ~5MiB），
+ * 随后 `cloudSyncNow` 以 `[cancelled]` 错误 reject——调用方应特判为中性
+ * 提示（「已取消同步」），而不是红色故障。
+ */
+export const cloudSyncCancel = () => invoke<boolean>("cloud_sync_cancel");
+/**
  * rekey 全量重传：以本机为准，用当前 Data Key 重加密覆盖云端全部数据。
  * 危险操作（恢复页「以本机为准」），UI 二次确认后调用。
  */

@@ -76,6 +76,19 @@ Future<String> cloudSyncGetState() =>
 Future<bool> cloudSyncIsRunning() =>
     RustLib.instance.api.crateApiSyncCloudSyncIsRunning();
 
+/// 请求取消正在进行的增量同步（N33 协作式分片取消）
+///
+/// 对齐桌面 `cloud_sync_cancel`。返回 `true` = 已向运行中的同步下达取消；
+/// `false` = 当前没有同步在跑。语义是「不再发起新的远端调用」：在途的那一片
+/// 会自然完成（最坏 ~5MiB），随后 `cloud_sync_now` 以 `[cancelled]` 拒绝，
+/// 调用方应特判为中性提示（「已取消同步」）而非红色故障。
+///
+/// 引擎懒创建路径与 `cloud_sync_is_running` 完全一致（同一单例口径）；
+/// 空闲时 `request_cancel` 返回 false 且**不置位**——不会给下一轮埋下
+/// 「一开跑就自杀」的取消标记。
+Future<bool> cloudSyncCancel() =>
+    RustLib.instance.api.crateApiSyncCloudSyncCancel();
+
 /// 云端孤儿附件扫描（只读；docs/15）
 ///
 /// 对齐桌面 `cloud_unused_attachments_scan`。需已配置云同步且密钥已解锁——

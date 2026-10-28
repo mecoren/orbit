@@ -26,7 +26,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 /// 假服务协议形态：决定 PROPFIND/ListObjects 的应答方言与错误体
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Protocol {
     WebDav,
     S3,
@@ -74,6 +74,16 @@ pub struct Faults {
     pub conflict: AtomicU64,
     /// 忽略 If-Match / If-None-Match（部分兼容服务的真实行为）
     pub ignore_conditional: AtomicBool,
+    /// 首个数据面 PUT 的响应延迟毫秒数（一次性，0 = 不延迟）
+    ///
+    /// 取消类用例需要「首片仍在途」的确定窗口：测试线程在此窗口内取消，
+    /// 客户端返回后必然在下一片边界看到取消标记——不看运气，也不依赖轮询。
+    pub slow_first_put_ms: AtomicU64,
+    /// 已到达服务端的数据面 PUT 计数
+    ///
+    /// 配合 `slow_first_put_ms`：测试等它 ≥1（首片已到服务端、响应仍被扣住）
+    /// 再置取消，落点完全确定，不靠睡眠竞速。
+    pub put_started: AtomicU64,
 }
 
 impl Faults {
@@ -405,6 +415,15 @@ fn dispatch(
     let f = &svc.faults;
     let is_list = query.contains("list-type") || method == "PROPFIND";
     let data_plane = matches!(method, "GET" | "PUT" | "DELETE") && !is_list;
+
+    // 取消类用例的一次性慢响应：让首个在途分片成为确定的取消落点
+    if method == "PUT" && data_plane {
+        f.put_started.fetch_add(1, Ordering::SeqCst);
+        let ms = f.slow_first_put_ms.swap(0, Ordering::SeqCst);
+        if ms > 0 {
+            std::thread::sleep(Duration::from_millis(ms));
+        }
+    }
 
     if data_plane && f.take(&f.flaky) {
         return Reply::text(503, "Service Unavailable");

@@ -138,7 +138,7 @@ export function SyncStatusButton() {
 
   const handleClick = async () => {
     if (runPhase === "syncing") {
-      toast.info("已有同步任务在进行中");
+      toast.info("已有同步任务在进行中（可在设置页取消）");
       return;
     }
     if (config == null) {
@@ -169,8 +169,18 @@ export function SyncStatusButton() {
       }
       void qc.invalidateQueries({ queryKey: ["sync-config"] });
     } catch (err) {
+      const tag = syncErrorTag(err);
+      // N33：用户主动取消不是故障——回待命态 + 中性提示，不留红色错误点
+      if (tag === "cancelled") {
+        clearHideTimer();
+        setRunPhase("idle");
+        setProgress("");
+        setErrorMessage(null);
+        toast.info("已取消同步");
+        return;
+      }
       // F44：只有 key_mismatch 跳恢复页；payload_version 走错误态 + 原因提示
-      if (syncErrorAction(syncErrorTag(err)) === "recovery") {
+      if (syncErrorAction(tag) === "recovery") {
         setRunPhase("idle");
         setProgress("");
         navigate("/sync-recovery");

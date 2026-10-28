@@ -55,6 +55,8 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _scrollController = ScrollController();
   bool _syncing = false;
+  /// N33：已下达取消、正在等在途分片收尾
+  bool _cancellingSync = false;
 
   /// 数据库维护进行中（性能批次；防重复点击）
   bool _maintaining = false;
@@ -462,6 +464,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       // 需升级应用）不得塌进恢复流程，按原文提示即可
       final msg = e.toString();
       final action = syncErrorAction(syncErrorTag(msg));
+      // N33：用户主动取消不是故障——中性提示，不落红色错误
+      if (syncErrorTag(msg) == 'cancelled') {
+        WaitToast.info('已取消同步');
+        return;
+      }
       if (action == SyncErrorAction.recovery) {
         WaitToast.global(
           '同步密钥与云端数据不匹配',
@@ -488,7 +495,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             : '同步失败：${_shortErr(msg)}',
       );
     } finally {
-      if (mounted) setState(() => _syncing = false);
+      if (mounted) {
+        setState(() {
+          _syncing = false;
+          _cancellingSync = false;
+        });
+      }
+    }
+  }
+
+  /// 取消同步（N33 协作式分片取消）
+  ///
+  /// 只在边界停下：在途那一片会自然收尾（最坏 ~5MiB），随后 cloudSyncNow
+  /// 以 `[cancelled]` 拒绝并回到 [_syncNow] 的 finally。命中后保持「取消中」
+  /// 直到那一刻，不把按钮弹回「立即同步」——收尾窗口里再点一次会立刻重跑。
+  Future<void> _cancelSync() async {
+    if (!_syncing || _cancellingSync) return;
+    setState(() => _cancellingSync = true);
+    try {
+      final hit = await ref.read(orbitBridgeProvider).cloudSyncCancel();
+      if (!mounted) return;
+      if (!hit) {
+        setState(() => _cancellingSync = false);
+        WaitToast.info('当前没有进行中的同步');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _cancellingSync = false);
+      WaitToast.destructive('取消失败：${_shortErr(e.toString())}');
     }
   }
 
@@ -1010,25 +1044,38 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       const SizedBox(height: AppDimens.space4),
                       SizedBox(
                         width: double.infinity,
-                        child: FilledButton.icon(
-                          onPressed: (config == null || _syncing)
-                              ? null
-                              : _syncNow,
-                          icon: _syncing
-                              ? SizedBox(
-                                  width: AppDimens.iconSizeSm,
-                                  height: AppDimens.iconSizeSm,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white.withValues(alpha: 0.9),
-                                  ),
-                                )
-                              : const Icon(
+                        // N33：运行中把「立即同步」换成「取消同步」——大附件
+                        // 分片上传可持续数十秒，只留转环等于让用户干等
+                        child: _syncing
+                            ? OutlinedButton.icon(
+                                onPressed: _cancellingSync
+                                    ? null
+                                    : () => _cancelSync(),
+                                icon: _cancellingSync
+                                    ? SizedBox(
+                                        width: AppDimens.iconSizeSm,
+                                        height: AppDimens.iconSizeSm,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: OrbitAccents.themeAccent,
+                                        ),
+                                      )
+                                    : const Icon(
+                                        OrbitIcons.close,
+                                        size: AppDimens.iconSizeSm + 2,
+                                      ),
+                                label: Text(
+                                  _cancellingSync ? '取消中…' : '取消同步',
+                                ),
+                              )
+                            : FilledButton.icon(
+                                onPressed: config == null ? null : _syncNow,
+                                icon: const Icon(
                                   OrbitIcons.refresh,
                                   size: AppDimens.iconSizeSm + 2,
                                 ),
-                          label: Text(_syncing ? '同步中…' : '立即同步'),
-                        ),
+                                label: const Text('立即同步'),
+                              ),
                       ),
                     ],
                   ),

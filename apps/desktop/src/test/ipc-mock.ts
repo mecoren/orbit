@@ -1987,6 +1987,8 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       changed_tables: [],
     }),
   cloud_sync_is_running: () => false,
+  // N33：取消同步——mock 同步是瞬时完成的，恒「没有在跑的同步」
+  cloud_sync_cancel: () => false,
   // 同步账本（core SyncState 镜像）：种一份「已同步过一轮」的账本，
   // 设置页账本卡可渲染水位线与桶指纹（此前误返回 {phase:"idle"}，与结构不符）
   cloud_sync_get_state: () => {

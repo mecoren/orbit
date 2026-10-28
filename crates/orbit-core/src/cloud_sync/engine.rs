@@ -30,6 +30,7 @@ use crate::cloud_sync::push::{push_all, push_all_force_full};
 use crate::cloud_sync::state::{SyncState, SyncStateStore};
 use crate::db::repository::sync_config_repo::SyncConfigRepo;
 use crate::db::repository::sync_history_repo;
+use crate::sync::cancel::SyncCancelToken;
 use crate::sync_adapters::traits::SyncAdapter;
 use crate::sync_crypto::SyncCryptoService;
 
@@ -76,6 +77,9 @@ fn summarize_partial_failures(errors: &[String]) -> String {
 /// - 拉取/推送计数映射：模块数 + 附件数合并计入
 ///   （pushed = pushed_modules + uploaded_attachments，行级计数引擎不产出）
 /// - `errors` 非空按 failed 记（整体 Ok 但模块级有错属于"部分失败"）
+/// - `Err(Cancelled)` 按 cancelled 记（N33：用户主动取消不是故障，不算失败率）
+/// - 取消不推进账本：`advances_ledger()` 只在 Ok 干净轮次成立，Err 分支
+///   恒不置 clean——回收站守卫线必须停在最后一次完整同步
 /// - 历史写入失败静默（`let _`）——观测数据不得阻塞同步主链
 ///
 /// 本函数同时是 `sync_configs.last_synced_at` 的**唯一**回写点（F24）：
@@ -106,7 +110,16 @@ async fn record_incremental_history(
             let error = (!r.errors.is_empty()).then(|| r.errors.join("；"));
             (status, pulled, pushed, r.conflicts as i64, error)
         }
-        Err(e) => ("failed", 0, 0, 0, Some(e.to_string())),
+        Err(e) => {
+            // N33：取消是用户操作而非故障，历史记 cancelled（中性色展示），
+            // 「失败」只留给真正的错误，避免把主动取消算进失败率
+            let status = if e.is_cancelled() {
+                "cancelled"
+            } else {
+                "failed"
+            };
+            (status, 0, 0, 0, Some(e.to_string()))
+        }
     };
     if clean {
         advance_last_synced_at(pool, now_ms).await;
@@ -313,6 +326,8 @@ pub struct SyncEngine {
     progress_sender: Arc<dyn ProgressSender>,
     /// 同步互斥锁：Some(()) 表示同步进行中，None 表示空闲
     sync_lock: Arc<Mutex<Option<()>>>,
+    /// N33 协作式取消令牌：每次成功拿到运行槽位后复位，壳层可并发置位
+    cancel: Arc<SyncCancelToken>,
     /// 应用数据目录（同步前自动备份使用）
     app_data_dir: PathBuf,
     /// 同步密码缓存（解锁时由桥接层设置，同步前自动备份使用）
@@ -338,6 +353,7 @@ impl SyncEngine {
             state_store: Arc::new(SyncStateStore::new(app_data_dir)),
             progress_sender,
             sync_lock: Arc::new(Mutex::new(None)),
+            cancel: Arc::new(SyncCancelToken::new()),
             app_data_dir: app_data_dir.to_path_buf(),
             sync_password: Arc::new(std::sync::Mutex::new(None)),
         }
@@ -409,6 +425,58 @@ impl SyncEngine {
         }
     }
 
+    /// 当前运行的取消令牌（N33）
+    ///
+    /// 供 api 层构造适配器时绑定；令牌本身可并发读写，壳层只能通过
+    /// [`Self::request_cancel`] 置位。
+    pub fn cancel_token(&self) -> &Arc<SyncCancelToken> {
+        &self.cancel
+    }
+
+    /// 请求取消正在运行的同步（N33）
+    ///
+    /// 返回是否命中运行中的同步：空闲时返回 `false` 且**不置位**，
+    /// 否则下一次同步会一开跑就自杀。
+    ///
+    /// 命中后各检查点会在一次远端请求 / 一片上传内返回
+    /// `CloudSyncError::Cancelled`，不推进 `last_synced_at`，历史记
+    /// `cancelled`。已完成的部分保持原样（pull 按表事务、push 按桶条件写）。
+    pub fn request_cancel(&self) -> bool {
+        if !self.is_running() {
+            return false;
+        }
+        self.cancel.cancel();
+        true
+    }
+
+    /// N33：阶段边界取消检查
+    ///
+    /// 适配器层已在每次远端调用前检查（`BasePathAdapter`）并在分片循环内
+    /// 逐片检查（S3/WebDAV）；这里补的是「阶段之间」——上一阶段正常收尾
+    /// （如纯本地备份、差集为空）而用户恰在此刻点了取消时，不再启动下一
+    /// 阶段的云端读写。
+    fn check_cancel(&self) -> Result<(), CloudSyncError> {
+        self.cancel.check().map_err(CloudSyncError::from)
+    }
+
+    /// N33：取消感知的退避等待（分段探测）
+    ///
+    /// 限流长退避单档可达 120s，睡满再检查意味着用户点「取消」后要等两分钟
+    /// 才落地——取消必须尽快可见。按 200ms 分段，命中取消立即返回。
+    async fn sleep_unless_cancelled(&self, total: Duration) -> Result<(), CloudSyncError> {
+        const SLICE: Duration = Duration::from_millis(200);
+        let mut left = total;
+        loop {
+            self.check_cancel()?;
+            if left.is_zero() {
+                return Ok(());
+            }
+            let slice = left.min(SLICE);
+            tokio::time::sleep(slice).await;
+            left -= slice;
+        }
+    }
+
     /// 等待引擎空闲（供强制同步使用）
     ///
     /// `max_wait_ms` 内每 200ms 探测一次；超时返回 `false`（调用方据此
@@ -469,6 +537,11 @@ impl SyncEngine {
     /// `Error` 让指示器落到失败态并给出可读原因。
     fn emit_result_events(&self, origin: SyncOrigin, result: &Result<SyncResult, CloudSyncError>) {
         match result {
+            // N33：取消是用户主动操作，不是故障——落 Error 帧会把双端指示器
+            // 染成红色错误态。壳层靠命令 reject 的 catch 特判为中性提示
+            Err(e) if e.is_cancelled() => {
+                log::info!("[sync] 用户取消同步（{origin:?}），不发 Error 进度帧");
+            }
             Err(e) => {
                 self.progress_sender.send(SyncProgress::Error {
                     origin,
@@ -537,6 +610,9 @@ impl SyncEngine {
         // 0. 同步前自动备份（宽松模式：失败不阻塞同步）
         self.backup_before_sync(&mut result).await;
 
+        // N33：进入下一阶段（云端拉取）前检查取消
+        self.check_cancel()?;
+
         // 1. Pull（业务级网络重试）：拉取远端变更 → LWW 合并 → 本地存储
         let pull_result = self
             .with_retry("pull_all", 3, || {
@@ -556,6 +632,9 @@ impl SyncEngine {
         result.errors.extend(pull_result.errors);
         // F42：真正写入的表集合透传（前端按表精确失效缓存）
         result.changed_tables.extend(pull_result.changed_tables);
+
+        // N33：Pull 已收尾（未抛错即代表远端调用都走完了），进 Push 前再查一次
+        self.check_cancel()?;
 
         // 2. Push（业务级网络重试）：合并后的本地数据上传云端
         // P0-6：Pull 失败的模块本地仍是旧快照，跳过其 push 防陈旧数据覆盖云端
@@ -577,6 +656,9 @@ impl SyncEngine {
         // S8：push 模块间错误隔离后失败信息经 errors 透传（对齐 pull 侧口径）
         result.errors.extend(push_result.errors);
 
+        // N33：进附件拉取前检查取消（模块数据已落盘，附件阶段可安全停在边界）
+        self.check_cancel()?;
+
         // 3. 附件同步：先 Pull 附件（下载远端新增），再 Push 附件（上传本地新增）
         // S7（2026-09-13 探查，基线 P1-23）：附件流程包入 with_retry——此前仅在
         // 模块数据两侧有业务级长退避，附件遇限流/瞬态错误只有 HTTP 级 3 次短退避。
@@ -594,6 +676,9 @@ impl SyncEngine {
             .await?;
         result.downloaded_attachments = att_pull.downloaded;
         result.errors.extend(att_pull.errors);
+
+        // N33：进附件推送前最后检查一次（下载半截已由内层清理）
+        self.check_cancel()?;
 
         let att_push = self
             .with_retry("attachments_push", 3, || {
@@ -676,6 +761,9 @@ impl SyncEngine {
         self.sync_data_key_from_cloud(raw_adapter, base_path, &mut result)
             .await?;
 
+        // N33：进推送前检查取消
+        self.check_cancel()?;
+
         // Push 数据（业务级网络重试，与 sync_now 同口径——此前裸调用让
         // 「修改后立即同步」在瞬断时零退避直接失败）
         let push_result = self
@@ -696,6 +784,9 @@ impl SyncEngine {
         result.pushed_modules = push_result.pushed_modules;
         // S8：模块间错误隔离后的失败信息透传
         result.errors.extend(push_result.errors);
+
+        // N33：进附件推送前检查取消
+        self.check_cancel()?;
 
         // Push 附件（S7：包入 with_retry，与 sync_now/pull_then_push 同口径）
         let att_push = self
@@ -787,6 +878,9 @@ impl SyncEngine {
         // 0. 同步前自动备份（宽松模式：失败不阻塞同步）
         self.backup_before_sync(&mut result).await;
 
+        // N33：进入下一阶段（云端拉取）前检查取消
+        self.check_cancel()?;
+
         // 1. Pull 数据（业务级网络重试）
         let pull_result = self
             .with_retry("pull_all", 3, || {
@@ -807,6 +901,9 @@ impl SyncEngine {
         // F42：真正写入的表集合透传（前端按表精确失效缓存）
         result.changed_tables.extend(pull_result.changed_tables);
 
+        // N33：进附件拉取前检查取消
+        self.check_cancel()?;
+
         // 2. Pull 附件（S7：包入 with_retry，与模块数据同口径）
         let att_pull = self
             .with_retry("attachments_pull", 3, || {
@@ -822,6 +919,9 @@ impl SyncEngine {
             .await?;
         result.downloaded_attachments = att_pull.downloaded;
         result.errors.extend(att_pull.errors);
+
+        // N33：进模块推送前检查取消
+        self.check_cancel()?;
 
         // 3. Push 数据（合并后可能有新指纹需要推送，业务级网络重试）
         // P0-6：Pull 失败的模块本地仍是旧快照，跳过其 push 防陈旧数据覆盖云端
@@ -842,6 +942,9 @@ impl SyncEngine {
         result.pushed_modules = push_result.pushed_modules;
         // S8：模块间错误隔离后的失败信息透传（对齐 pull 侧口径）
         result.errors.extend(push_result.errors);
+
+        // N33：进附件推送前检查取消
+        self.check_cancel()?;
 
         // 4. Push 附件（S7：包入 with_retry）
         let att_push = self
@@ -1101,6 +1204,9 @@ impl SyncEngine {
             return Ok(None);
         }
         *guard = Some(());
+        // N33：新一轮开始复位取消标记。放在拿到槽位之后——若先复位再 try_lock，
+        // 并发失败的那次会误清掉用户刚发给运行中同步的取消请求
+        self.cancel.reset();
         Ok(Some(SyncGuard { guard }))
     }
 
@@ -1511,9 +1617,11 @@ impl SyncEngine {
                     // 时钟偏差靠 `is_network_error()` 为假已能短路，这里再显式
                     // 判一次是为让意图在代码里自解释，也防住将来有人把
                     // ClockSkew 顺手并进网络类的改动。
+                    // N33：取消绝不重试——用户已明确要求停止。
                     let retryable = (e.is_network_error() || e.is_rate_limited())
                         && !e.is_auth_error()
-                        && !e.is_clock_skew();
+                        && !e.is_clock_skew()
+                        && !e.is_cancelled();
                     if !retryable || attempt == max_retries {
                         return Err(e);
                     }
@@ -1539,7 +1647,10 @@ impl SyncEngine {
                         },
                         e
                     );
-                    tokio::time::sleep(Duration::from_secs(delay_secs)).await;
+                    // N33：退避期间用户可能已点取消（限流档最长 120s），
+                    // 分段探测、命中即返回，不睡满
+                    self.sleep_unless_cancelled(Duration::from_secs(delay_secs))
+                        .await?;
                     last_err = Some(e);
                 }
             }
@@ -2409,6 +2520,172 @@ mod tests {
             .await
             .unwrap();
         assert!(rows.is_empty(), "防重入跳过不是一次同步，不得记历史");
+    }
+
+    // ========================================================================
+    // N33（2026-10-28）：协作式取消语义
+    //
+    // 取消必须「用户点了就停」：空闲时的请求不得置位（否则下一轮一开跑就
+    // 自杀）；运行中置位后各检查点返回 Cancelled；历史记 cancelled 而非
+    // failed（主动取消不算失败率）；账本不推进（回收站守卫线只认完整轮次）；
+    // 取消不发 Error 进度帧（否则双端指示器被染成红色故障态）。
+    // ========================================================================
+
+    #[tokio::test]
+    async fn n33_request_cancel_is_noop_when_idle() {
+        let engine = history_engine().await;
+        assert!(!engine.request_cancel(), "空闲时不应命中");
+        assert!(
+            !engine.cancel_token().is_cancelled(),
+            "空闲时请求取消不得置位——否则下一次同步一开跑就自杀"
+        );
+    }
+
+    #[tokio::test]
+    async fn n33_request_cancel_sets_token_while_running() {
+        let engine = history_engine().await;
+        let guard = engine
+            .acquire_lock()
+            .await
+            .unwrap()
+            .expect("空闲引擎应成功获取锁");
+        assert!(engine.request_cancel(), "运行中应命中");
+        assert!(engine.cancel_token().is_cancelled(), "命中后令牌必须置位");
+        drop(guard);
+    }
+
+    #[tokio::test]
+    async fn n33_acquire_lock_resets_cancel_for_next_run() {
+        let engine = history_engine().await;
+        let guard = engine.acquire_lock().await.unwrap().unwrap();
+        engine.request_cancel();
+        drop(guard);
+
+        let guard2 = engine.acquire_lock().await.unwrap().unwrap();
+        assert!(
+            !engine.cancel_token().is_cancelled(),
+            "新一轮拿锁成功后必须复位取消标记"
+        );
+        drop(guard2);
+    }
+
+    #[tokio::test]
+    async fn n33_cancelled_history_is_cancelled_and_ledger_frozen() {
+        let engine = history_engine().await;
+        sqlx::query(
+            "INSERT INTO sync_configs (protocol, endpoint, bucket, region, path, device_id, \
+             credential, is_active, last_synced_at, created_at, updated_at) \
+             VALUES ('webdav', 'http://x', '', '', '', 'dev', '', 1, NULL, 1, 1)",
+        )
+        .execute(&engine.db_pool)
+        .await
+        .unwrap();
+
+        let r = Err::<SyncResult, _>(CloudSyncError::Cancelled {
+            message: "用户取消同步".to_string(),
+        });
+        record_incremental_history(&engine.db_pool, SYNC_TYPE_SYNC_NOW, &r).await;
+
+        let rows = sync_history_repo::get_recent_by_types(&engine.db_pool, &["incremental"], 10)
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(
+            rows[0].status, "cancelled",
+            "主动取消不是故障，历史记 cancelled 而非 failed"
+        );
+
+        let ledger: (Option<i64>,) =
+            sqlx::query_as("SELECT last_synced_at FROM sync_configs WHERE is_active = 1")
+                .fetch_one(&engine.db_pool)
+                .await
+                .unwrap();
+        assert!(
+            ledger.0.is_none(),
+            "取消轮次不得推进 last_synced_at（回收站守卫线）"
+        );
+    }
+
+    #[tokio::test]
+    async fn n33_with_retry_does_not_retry_cancelled() {
+        let engine = history_engine().await;
+        let calls = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let calls_c = calls.clone();
+        let result: Result<(), CloudSyncError> = engine
+            .with_retry("test_cancel", 3, move || {
+                let calls = calls_c.clone();
+                async move {
+                    calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    Err(CloudSyncError::Cancelled {
+                        message: "用户取消同步".to_string(),
+                    })
+                }
+            })
+            .await;
+        assert!(result.unwrap_err().is_cancelled());
+        assert_eq!(
+            calls.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "取消必须首错即返回，不得进入退避重试"
+        );
+    }
+
+    /// 记录发送过的进度帧（断言取消不发 Error 帧）
+    struct RecordingSender {
+        frames: StdMutex<Vec<SyncProgress>>,
+    }
+
+    impl RecordingSender {
+        fn new() -> Self {
+            Self {
+                frames: StdMutex::new(Vec::new()),
+            }
+        }
+
+        fn error_frames(&self) -> usize {
+            self.frames
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|f| matches!(f, SyncProgress::Error { .. }))
+                .count()
+        }
+    }
+
+    impl ProgressSender for RecordingSender {
+        fn send(&self, progress: SyncProgress) {
+            self.frames.lock().unwrap().push(progress);
+        }
+    }
+
+    #[tokio::test]
+    async fn n33_cancel_does_not_emit_error_progress_frame() {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        let tmp = tempfile::TempDir::new().unwrap();
+        let sender = std::sync::Arc::new(RecordingSender::new());
+        let engine = SyncEngine::new(
+            pool,
+            crate::sync_crypto::SyncCryptoService::new(tmp.path()),
+            tmp.path(),
+            sender.clone(),
+        );
+
+        engine.emit_result_events(
+            SyncOrigin::Manual,
+            &Err(CloudSyncError::Cancelled {
+                message: "用户取消同步".to_string(),
+            }),
+        );
+        assert_eq!(sender.error_frames(), 0, "取消不得落 Error 帧");
+
+        // 对照：真实故障仍必须落 Error 帧
+        engine.emit_result_events(
+            SyncOrigin::Manual,
+            &Err(CloudSyncError::Adapter {
+                message: "连接超时".to_string(),
+            }),
+        );
+        assert_eq!(sender.error_frames(), 1, "真实故障仍必须落 Error 帧");
     }
 
     #[test]

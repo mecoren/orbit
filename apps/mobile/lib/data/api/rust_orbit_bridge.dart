@@ -892,6 +892,9 @@ class RustOrbitBridge implements OrbitBridge {
   Future<bool> cloudSyncIsRunning() => gen_sync.cloudSyncIsRunning();
 
   @override
+  Future<bool> cloudSyncCancel() => gen_sync.cloudSyncCancel();
+
+  @override
   Future<SyncResultJson> cloudSyncForce({
     String origin = 'manual',
     int waitForIdleMs = 3000,

@@ -2393,6 +2393,10 @@ class MockOrbitBridge implements OrbitBridge {
   @override
   Future<bool> cloudSyncIsRunning() async => false;
 
+  /// N33：mock 同步是瞬时完成的，恒「没有在跑的同步」
+  @override
+  Future<bool> cloudSyncCancel() async => false;
+
   @override
   Future<SyncResultJson> cloudSyncForce({
     String origin = 'manual',

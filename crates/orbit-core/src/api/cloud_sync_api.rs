@@ -27,6 +27,7 @@ use crate::cloud_sync::engine::{
 use crate::cloud_sync::error::CloudSyncError;
 use crate::cloud_sync::progress::{ProgressSender, SyncOrigin};
 use crate::cloud_sync::state::SyncState;
+use crate::sync::cancel::SyncCancelToken;
 use crate::sync::engine::{SyncConfig, create_adapter, validate_config};
 use crate::sync::error::SyncError;
 use crate::sync_adapters::traits::{
@@ -58,10 +59,21 @@ struct BasePathAdapter {
     /// 每轮两个全新 Client，phase 间无热连接）
     inner: Arc<dyn SyncAdapter>,
     base_path: String,
+    /// N33 协作式取消令牌：每次转发前检查，数据桶 / 附件 / 清单请求之间
+    /// 都能在毫秒级停下；分片循环内部的逐片检查由内层适配器负责
+    cancel: Arc<SyncCancelToken>,
 }
 
 impl BasePathAdapter {
     fn new(inner: Arc<dyn SyncAdapter>, base_path: &str) -> Self {
+        Self::with_cancel(inner, base_path, Arc::new(SyncCancelToken::new()))
+    }
+
+    fn with_cancel(
+        inner: Arc<dyn SyncAdapter>,
+        base_path: &str,
+        cancel: Arc<SyncCancelToken>,
+    ) -> Self {
         let trimmed = base_path.trim_matches('/');
         Self {
             inner,
@@ -70,7 +82,13 @@ impl BasePathAdapter {
             } else {
                 trimmed.to_string()
             },
+            cancel,
         }
+    }
+
+    /// N33：已取消则立即返回，不再发起下一次远端调用
+    fn check_cancel(&self) -> Result<(), SyncError> {
+        self.cancel.check()
     }
 
     /// 将相对路径拼接为 `{base_path}/{path}`，base_path 为空时原样返回
@@ -89,28 +107,44 @@ impl BasePathAdapter {
 
 #[async_trait]
 impl SyncAdapter for BasePathAdapter {
+    fn attach_cancel(&self, token: Arc<SyncCancelToken>) {
+        // 包装器自身在构造时已绑定同一个令牌；这里只负责把令牌传给内层，
+        // 让 S3/WebDAV 的分片循环也能逐片检查
+        self.inner.attach_cancel(token);
+    }
+
+    fn is_cancelled(&self) -> bool {
+        self.cancel.is_cancelled()
+    }
+
     async fn list_all_files(&self, prefix: &str) -> Result<Vec<RemoteFile>, SyncError> {
+        self.check_cancel()?;
         self.inner.list_all_files(&self.join(prefix)).await
     }
 
     async fn download(&self, path: &str) -> Result<Bytes, SyncError> {
+        self.check_cancel()?;
         self.inner.download(&self.join(path)).await
     }
 
     async fn upload(&self, path: &str, data: &[u8]) -> Result<(), SyncError> {
+        self.check_cancel()?;
         self.inner.upload(&self.join(path), data).await
     }
 
     async fn upload_owned(&self, path: &str, data: Vec<u8>) -> Result<(), SyncError> {
+        self.check_cancel()?;
         // A13：所有权透传给内层，避免包装层复制
         self.inner.upload_owned(&self.join(path), data).await
     }
 
     async fn delete(&self, path: &str) -> Result<(), SyncError> {
+        self.check_cancel()?;
         self.inner.delete(&self.join(path)).await
     }
 
     async fn upload_asset(&self, hash: &str, data: Vec<u8>) -> Result<(), SyncError> {
+        self.check_cancel()?;
         // S1（2026-09-13 探查）：统一附件命名口径为 paths::asset_path
         // （`assets/{hash}.orsync`，默认格式）。此前三套口径分裂曾致死循环，
         // 现写侧统一新后缀，读侧多级回退。
@@ -124,6 +158,7 @@ impl SyncAdapter for BasePathAdapter {
     }
 
     async fn download_asset(&self, hash: &str) -> Result<Bytes, SyncError> {
+        self.check_cancel()?;
         // 附件单一路径（无历史数据，不再回退遗留命名）。
         // 「单对象 → 分片拼装」的形态回退由内层适配器负责。
         // F75：同 upload_asset——包装器必须自己拼 base_path。
@@ -137,6 +172,7 @@ impl SyncAdapter for BasePathAdapter {
         local_path: &std::path::Path,
         total_len: u64,
     ) -> Result<(), SyncError> {
+        self.check_cancel()?;
         // M3：必须转发——内层 `upload_file` 才有流式/分片能力；
         // 默认实现会把加密容器整包读回来，等于白做流式化。
         let path = crate::cloud_sync::paths::asset_path(hash);
@@ -150,12 +186,14 @@ impl SyncAdapter for BasePathAdapter {
         hash: &str,
         target: &std::path::Path,
     ) -> Result<u64, SyncError> {
+        self.check_cancel()?;
         // M3：路径级转发，保留内层「单对象 → 分片拼装」回退。
         let path = crate::cloud_sync::paths::asset_path(hash);
         self.inner.download_to_file(&self.join(&path), target).await
     }
 
     async fn asset_exists(&self, hash: &str) -> Result<bool, SyncError> {
+        self.check_cancel()?;
         // 内层适配器自带「单对象 → 分片清单」两段探测（HEAD 实现）
         // F75：同 upload_asset——包装器必须自己拼 base_path。
         let path = crate::cloud_sync::paths::asset_path(hash);
@@ -163,6 +201,7 @@ impl SyncAdapter for BasePathAdapter {
     }
 
     async fn list_assets(&self, assets_dir: &str) -> Result<Vec<String>, SyncError> {
+        self.check_cancel()?;
         // F23：委托内层适配器列举，包装器只负责把 base_path 拼进目录。
         // 此前这里是自行「list assets 目录 + 剥后缀」的复制品：看不见
         // assets_parts 下的分片附件（差集每轮缺席 → 空跑重传、云端孤儿
@@ -174,6 +213,7 @@ impl SyncAdapter for BasePathAdapter {
         &self,
         assets_dir: &str,
     ) -> Result<Vec<RemoteAssetObject>, SyncError> {
+        self.check_cancel()?;
         // F22 口径：包装器的每个方法都必须显式转发并拼 base_path。漏转发会
         // 退化为默认实现（list_assets + 全零元数据）——扫描结果看起来正常，
         // 但年龄窗口判定因 mtime=0 全部跳过，清理按钮永远筛不出东西。
@@ -183,6 +223,7 @@ impl SyncAdapter for BasePathAdapter {
     }
 
     async fn exists(&self, path: &str) -> Result<bool, SyncError> {
+        self.check_cancel()?;
         // 必须转发：默认实现会整对象下载来判存在（HEAD 优化随之失效）
         self.inner.exists(&self.join(path)).await
     }
@@ -191,6 +232,7 @@ impl SyncAdapter for BasePathAdapter {
         &self,
         path: &str,
     ) -> Result<Option<(Bytes, Option<String>)>, SyncError> {
+        self.check_cancel()?;
         // 必须转发：默认实现把令牌钉死为 None，清单 CAS 随之退化为裸覆盖
         self.inner.download_with_token(&self.join(path)).await
     }
@@ -201,6 +243,7 @@ impl SyncAdapter for BasePathAdapter {
         data: &[u8],
         precondition: UploadPrecondition,
     ) -> Result<UploadOutcome, SyncError> {
+        self.check_cancel()?;
         // 必须转发：默认实现丢弃前置条件直接覆盖上传，
         // `If-Match`/`If-None-Match` 一个都不会发到网络上
         self.inner
@@ -252,6 +295,18 @@ pub fn create_engine_noop(
 fn create_adapters(
     config: &SyncConfig,
 ) -> Result<(Arc<dyn SyncAdapter>, BasePathAdapter), CloudSyncError> {
+    create_adapters_with_cancel(config, None)
+}
+
+/// 同上，但把引擎的取消令牌同时绑到包装器与底层适配器（N33）
+///
+/// 包装器负责「每次远端调用前」检查（数据桶 / 附件 / 清单边界），
+/// 底层 S3/WebDAV 负责「分片循环每片」检查。备份 / GC / 连通性探测
+/// 不传令牌（`None`），行为与改前一致。
+fn create_adapters_with_cancel(
+    config: &SyncConfig,
+    cancel: Option<&Arc<SyncCancelToken>>,
+) -> Result<(Arc<dyn SyncAdapter>, BasePathAdapter), CloudSyncError> {
     validate_config(config).map_err(|e| CloudSyncError::Adapter {
         message: e.to_string(),
     })?;
@@ -259,7 +314,14 @@ fn create_adapters(
         Arc::from(create_adapter(config).map_err(|e| CloudSyncError::Adapter {
             message: e.to_string(),
         })?);
-    let adapter = BasePathAdapter::new(inner.clone(), &config.base_path);
+    let adapter = match cancel {
+        Some(token) => {
+            // 底层适配器只用于分片循环的逐片检查；包装器持有同一令牌
+            inner.attach_cancel(token.clone());
+            BasePathAdapter::with_cancel(inner.clone(), &config.base_path, token.clone())
+        }
+        None => BasePathAdapter::new(inner.clone(), &config.base_path),
+    };
     Ok((inner, adapter))
 }
 
@@ -282,7 +344,7 @@ pub async fn sync_now(
 ) -> Result<SyncResult, CloudSyncError> {
     // Fix-08：Data Key 同步已移入 engine.sync_now 互斥锁内，
     // 此处仅需构造两种适配器（带/不带 base_path 前缀）。
-    let (raw_adapter, adapter) = create_adapters(config)?;
+    let (raw_adapter, adapter) = create_adapters_with_cancel(config, Some(engine.cancel_token()))?;
     engine
         .sync_now(
             &adapter,
@@ -310,7 +372,7 @@ pub async fn push_only(
 ) -> Result<SyncResult, CloudSyncError> {
     // Fix-08：Data Key 同步在 engine.push_only 锁内执行
     // （用错误的 Data Key 加密上传会导致云端数据无法被其他设备解密）。
-    let (raw_adapter, adapter) = create_adapters(config)?;
+    let (raw_adapter, adapter) = create_adapters_with_cancel(config, Some(engine.cancel_token()))?;
     engine
         .push_only(
             &adapter,
@@ -339,7 +401,7 @@ pub async fn pull_then_push(
 ) -> Result<SyncResult, CloudSyncError> {
     // Fix-08：Data Key 同步在 engine.pull_then_push 锁内执行
     // （pull 前必须导入云端 Data Key，否则解密失败）。
-    let (raw_adapter, adapter) = create_adapters(config)?;
+    let (raw_adapter, adapter) = create_adapters_with_cancel(config, Some(engine.cancel_token()))?;
     engine
         .pull_then_push(
             &adapter,

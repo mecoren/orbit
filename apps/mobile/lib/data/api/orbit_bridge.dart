@@ -460,6 +460,13 @@ abstract class OrbitBridge {
 
   Future<bool> cloudSyncIsRunning();
 
+  /// 请求取消正在进行的增量同步（N33 协作式分片取消）
+  ///
+  /// 返回 true = 已向运行中的同步下达取消；false = 当前没有同步在跑。
+  /// 在途分片会自然收尾（最坏 ~5MiB），随后 [cloudSyncNow] 以
+  /// `[cancelled]` 拒绝，UI 应按中性提示处理而非红色故障。
+  Future<bool> cloudSyncCancel();
+
   /// 强制同步（进入/退出应用专用，对齐桌面 cloud_sync_force；
   /// 不检查自动开关/间隔，忙时最多等待 [waitForIdleMs] 毫秒）
   Future<SyncResultJson> cloudSyncForce({

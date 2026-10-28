@@ -120,6 +120,14 @@ impl SyncError {
         matches!(self, SyncError::Auth { .. })
     }
 
+    /// 是否为用户主动取消（N33）
+    ///
+    /// 取消不是故障：调用方不得重试、不得归类为网络/认证错误，
+    /// 也不得据此推进同步账本。
+    pub fn is_cancelled(&self) -> bool {
+        matches!(self, SyncError::Cancelled { .. })
+    }
+
     /// 是否为「本机时钟与服务器偏差过大」（F78）
     ///
     /// 与 [`Self::is_auth_error`] 互斥：两者都是 403，但处置动作不同

@@ -6,8 +6,11 @@
 //! 模块结构：
 //! - engine: 适配器构造 + 配置校验（SyncConfig/create_adapter/validate_config）
 //! - error: SyncError（供 sync_adapters / sync_crypto / full_sync_backup 复用）
+//! - cancel: 协作式取消令牌（N33，同步主链在边界检查）
 
+pub mod cancel;
 pub mod engine;
 pub mod error;
 
+pub use cancel::SyncCancelToken;
 pub use error::SyncError;

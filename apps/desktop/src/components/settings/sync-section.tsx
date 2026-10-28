@@ -76,6 +76,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   backupPrefsGet,
   backupPrefsSave,
+  cloudSyncCancel,
   cloudSyncGetState,
   cloudSyncHistory,
   cloudSyncNow,
@@ -799,6 +800,8 @@ function SyncRunCard() {
   const navigate = useNavigate();
   const [config, setConfig] = useState<SyncConfigView | null>(null);
   const [running, setRunning] = useState(false);
+  /** N33：已下达取消、正在等在途分片收尾（最长约一片 ~5MiB） */
+  const [cancelling, setCancelling] = useState(false);
   const [progressText, setProgressText] = useState<string | null>(null);
 
   useEffect(() => {
@@ -849,19 +852,47 @@ function SyncRunCard() {
         toast.success(syncResultSummary(result));
       }
     } catch (err) {
+      const tag = syncErrorTag(err);
+      // N33：用户主动取消不是故障——中性提示，不落红色错误
+      if (tag === "cancelled") {
+        toast.info("已取消同步");
+        return;
+      }
       // KeyMismatch → 引导恢复页（与后台调度器行为对齐）。
       // F44：payload_version（需升级应用）不在此列——后端 message 已含指引，
       // 落到 `toast.error(errMsg(err))` 展示，绝不跳恢复页误导用户
-      if (syncErrorAction(syncErrorTag(err)) === "recovery") {
+      if (syncErrorAction(tag) === "recovery") {
         navigate("/sync-recovery");
         return;
       }
       toast.error(errMsg(err));
     } finally {
       setRunning(false);
+      setCancelling(false);
       setProgressText(null);
       void qc.invalidateQueries();
       syncConfigGet().then(setConfig).catch(() => {});
+    }
+  };
+
+  /**
+   * N33：协作式取消——只在边界停下，最多再等一片（~5MiB）在途分片收尾。
+   * 取消请求发出后保持「取消中…」直到 `cloudSyncNow` reject 回到
+   * `handleSyncNow` 的 finally（`running` 归位），不把按钮恢复成「同步」
+   * 以免用户在收尾窗口内又点一次。
+   */
+  const handleCancel = async () => {
+    setCancelling(true);
+    setProgressText("正在取消…");
+    try {
+      const hit = await cloudSyncCancel();
+      if (!hit) {
+        toast.info("当前没有进行中的同步");
+        setCancelling(false);
+      }
+    } catch (err) {
+      toast.error(errMsg(err));
+      setCancelling(false);
     }
   };
 
@@ -878,10 +909,23 @@ function SyncRunCard() {
               : "从未同步"}
         </p>
       </div>
-      <Button size="sm" disabled={running} onClick={() => void handleSyncNow()}>
-        {running ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
-        同步
-      </Button>
+      {running ? (
+        // N33：运行中把「同步」换成「取消」——大附件分片上传可持续数十秒，
+        // 无取消入口时用户只能干等（进度条只说明在推进，不提供处置）
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={cancelling}
+          onClick={() => void handleCancel()}
+        >
+          {cancelling && <Loader2 className="mr-1 size-3 animate-spin" />}
+          {cancelling ? "取消中" : "取消"}
+        </Button>
+      ) : (
+        <Button size="sm" onClick={() => void handleSyncNow()}>
+          同步
+        </Button>
+      )}
     </div>
   );
 }
@@ -1011,9 +1055,16 @@ function SyncHistoryCard() {
                 <span
                   className={cn(
                     "size-1.5 shrink-0 rounded-full",
-                    h.status === "success" ? "bg-emerald-500" : "bg-destructive",
+                    h.status === "success"
+                      ? "bg-emerald-500"
+                      : h.status === "cancelled"
+                        ? // N33：主动取消不是故障，用中性灰点区分「失败」的红点
+                          "bg-muted-foreground"
+                        : "bg-destructive",
                   )}
-                  aria-label={h.status === "success" ? "成功" : "失败"}
+                  aria-label={
+                    h.status === "success" ? "成功" : h.status === "cancelled" ? "已取消" : "失败"
+                  }
                 />
                 <span className="w-16 shrink-0 text-xs text-muted-foreground">
                   {SYNC_TYPE_LABELS[h.sync_type] ?? h.sync_type}
@@ -1031,7 +1082,7 @@ function SyncHistoryCard() {
                   {/* S28：冲突裁决数——多设备并发编辑被 LWW 裁决的记录数 */}
                   {h.conflict_count > 0 && ` / 冲突 ${h.conflict_count}`}
                 </span>
-                {h.error_message && (
+                {h.error_message && h.status !== "cancelled" && (
                   <span className="max-w-40 shrink-0 truncate text-xs text-destructive" title={h.error_message}>
                     {h.error_message}
                   </span>

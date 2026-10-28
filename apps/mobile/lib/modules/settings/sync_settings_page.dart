@@ -1263,6 +1263,8 @@ class _SyncHistoryCardState extends ConsumerState<_SyncHistoryCard> {
 
   Widget _row(AppColorSet colors, SyncHistoryRow r) {
     final ok = r.status == 'success';
+    // N33：主动取消不是故障——灰色「已取消」，不落红色「失败」
+    final cancelled = r.status == 'cancelled';
     return Padding(
       padding: const EdgeInsets.only(top: AppDimens.space12),
       child: Column(
@@ -1280,10 +1282,12 @@ class _SyncHistoryCardState extends ConsumerState<_SyncHistoryCard> {
               ),
               const SizedBox(width: AppDimens.space8),
               Text(
-                ok ? '成功' : r.status,
+                ok ? '成功' : (cancelled ? '已取消' : r.status),
                 style: TextStyle(
                   fontSize: 11,
-                  color: ok ? colors.success : colors.destructive,
+                  color: ok
+                      ? colors.success
+                      : (cancelled ? colors.secondaryText : colors.destructive),
                 ),
               ),
               const Spacer(),
@@ -1299,7 +1303,9 @@ class _SyncHistoryCardState extends ConsumerState<_SyncHistoryCard> {
             '冲突 ${r.conflictCount} · 耗时 ${(r.elapsedMs / 1000).toStringAsFixed(1)}s',
             style: TextStyle(fontSize: 11, color: colors.secondaryText),
           ),
-          if (r.errorMessage != null && r.errorMessage!.isNotEmpty)
+          if (r.errorMessage != null &&
+              r.errorMessage!.isNotEmpty &&
+              !cancelled)
             Padding(
               padding: const EdgeInsets.only(top: AppDimens.space2),
               child: Text(

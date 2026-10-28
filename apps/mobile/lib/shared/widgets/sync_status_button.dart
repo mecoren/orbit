@@ -253,6 +253,9 @@ class _SyncInfoSheet extends ConsumerStatefulWidget {
 class _SyncInfoSheetState extends ConsumerState<_SyncInfoSheet> {
   bool _busy = false;
 
+  /// N33：已下达取消、正在等在途分片收尾（最长约一片 ~5MiB）
+  bool _cancelling = false;
+
   /// 本次手动同步的最后一条进度（null = 尚未收到任何进度事件）
   ///
   /// 只认 `origin == 'manual'`：后台自动同步（定时 / 改后即同步）的进度不该
@@ -293,10 +296,42 @@ class _SyncInfoSheetState extends ConsumerState<_SyncInfoSheet> {
       if (mounted && !result.skipped) Navigator.of(context).pop();
     } catch (e) {
       final msg = _errMsg(e);
+      // N33：用户主动取消不是故障——回待命态 + 中性提示，不留红色错误
+      if (syncErrorTag(e.toString()) == 'cancelled') {
+        widget.onStatusChanged(SyncUiStatus.idle);
+        WaitToast.info('已取消同步');
+        return;
+      }
       widget.onStatusChanged(SyncUiStatus.error, error: msg);
       WaitToast.destructive(msg);
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _cancelling = false;
+        });
+      }
+    }
+  }
+
+  /// 取消同步（N33 协作式分片取消）
+  ///
+  /// 命中后保持「取消中」直到 `_runSync` 的 `cloudSyncNow` 拒绝返回；
+  /// 命中失败（当前没有在跑的同步）才把按钮弹回「立即同步」。
+  Future<void> _cancelSync() async {
+    if (!_busy || _cancelling) return;
+    setState(() => _cancelling = true);
+    try {
+      final hit = await ref.read(orbitBridgeProvider).cloudSyncCancel();
+      if (!mounted) return;
+      if (!hit) {
+        setState(() => _cancelling = false);
+        WaitToast.info('当前没有进行中的同步');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _cancelling = false);
+      WaitToast.destructive('取消失败：${_errMsg(e)}');
     }
   }
 
@@ -417,9 +452,15 @@ class _SyncInfoSheetState extends ConsumerState<_SyncInfoSheet> {
         ],
       ),
       actions: OrbitSheetActions(
-        confirmLabel: '立即同步',
-        onConfirm: _busy ? null : () => unawaited(_runSync()),
-        confirmChild: _busy
+        // N33：运行中把主按钮换成「取消同步」——进度条只说明在推进，
+        // 大附件分片上传时用户仍需要一个「停下」的出口
+        confirmLabel: _busy
+            ? (_cancelling ? '取消中…' : '取消同步')
+            : '立即同步',
+        onConfirm: _busy
+            ? (_cancelling ? null : () => unawaited(_cancelSync()))
+            : () => unawaited(_runSync()),
+        confirmChild: _cancelling
             ? const SizedBox(
                 width: AppDimens.iconSizeSm,
                 height: AppDimens.iconSizeSm,
