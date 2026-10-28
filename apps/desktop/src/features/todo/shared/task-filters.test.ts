@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { type TodoTask } from "@/lib/tauri";
-import { BASE_SORT_DIR, buildPagedFilter, filterTasks, groupDoneByDay, groupEisenhower, groupOverdueFirst, sortTasks, statusFilterOf, todayStartMs, toggleMyDayValue } from "./task-filters";
+import { BASE_SORT_DIR, buildPagedFilter, filterTasks, groupByDueSection, groupDoneByDay, groupEisenhower, groupOverdueFirst, sortTasks, statusFilterOf, todayStartMs, toggleMyDayValue } from "./task-filters";
 
 /** 补齐 TodoTask 全部必填字段的工厂 */
 function mk(partial: Partial<TodoTask>): TodoTask {
@@ -459,6 +459,52 @@ describe("todayStartMs / toggleMyDayValue 我的一天零点口径", () => {
   it("toggleMyDayValue：拒绝非零点残留值（Date.now() 类脏数据不匹配判定，重新对齐零点）", () => {
     const dirty = new Date(2026, 8, 11, 15, 30, 0, 0).getTime();
     expect(toggleMyDayValue(dirty, base)).toBe(zeroPoint);
+  });
+});
+
+describe("groupByDueSection 日期状态分节（2026-10-28，对齐 TickTick 分节折叠）", () => {
+  const NOW = new Date("2026-10-28T15:00:00");
+  const DAY = 86_400_000;
+  const dayStart = new Date(NOW);
+  dayStart.setHours(0, 0, 0, 0);
+  const T0 = dayStart.getTime();
+
+  it("未完成按截止日分 逾期 / 今天 / 以后 / 无日期；完成行进「已完成」节", () => {
+    const tasks = [
+      mk({ id: 1, done: 0, due_date: NOW.getTime() - 1000 }), // 逾期
+      mk({ id: 2, done: 0, due_date: NOW.getTime() + 1000 }), // 今天
+      mk({ id: 3, done: 0, due_date: T0 + 3 * DAY }), // 以后
+      mk({ id: 4, done: 0, due_date: null }), // 无日期
+      mk({ id: 5, done: 1, status: "done", due_date: NOW.getTime() - 5000 }), // 已完成（逾期也不进逾期节）
+    ];
+    const s = groupByDueSection(tasks, NOW);
+    expect(s.overdue.map((t) => t.id)).toEqual([1]);
+    expect(s.today.map((t) => t.id)).toEqual([2]);
+    expect(s.later.map((t) => t.id)).toEqual([3]);
+    expect(s.undated.map((t) => t.id)).toEqual([4]);
+    expect(s.done.map((t) => t.id)).toEqual([5]);
+  });
+
+  it("节内保持入参顺序（排序在调用方做）", () => {
+    const tasks = [
+      mk({ id: 3, due_date: T0 + 5 * DAY }),
+      mk({ id: 1, due_date: T0 + 2 * DAY }),
+      mk({ id: 2, due_date: T0 + 9 * DAY }),
+    ];
+    expect(groupByDueSection(tasks, NOW).later.map((t) => t.id)).toEqual([3, 1, 2]);
+  });
+
+  it("今天到期但已过时刻 → 逾期节（与行内红字 due < now 逐字同源，不出现两套判定）", () => {
+    const tasks = [mk({ id: 1, done: 0, due_date: T0 + 9 * 3600_000 })];
+    // NOW 是 15:00，9:00 已过 —— 行内标红，故分节也归逾期
+    expect(groupByDueSection(tasks, NOW).overdue.map((t) => t.id)).toEqual([1]);
+    expect(groupByDueSection(tasks, NOW).today).toEqual([]);
+  });
+
+  it("空输入返回五个空节（视图可无条件按节渲染）", () => {
+    const s = groupByDueSection([], NOW);
+    expect(Object.keys(s)).toHaveLength(5);
+    expect(Object.values(s).every((l) => l.length === 0)).toBe(true);
   });
 });
 

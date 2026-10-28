@@ -32,7 +32,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import {
-  ListChecks, Check, CircleCheck, CalendarClock, Clock, Flag, FolderInput, GripVertical, Inbox, Link2, Plus, Star, StarOff, Sunrise, Timer, Trash2, TriangleAlert, X } from "lucide-react";
+  ListChecks, Check, CircleCheck, CalendarClock, Clock, Flag, FolderInput, GripVertical, Inbox, Link2, Plus, Star, StarOff, Sunrise, Timer, Trash2, TriangleAlert, X, ChevronRight } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { toast } from "sonner";
 
@@ -61,7 +61,14 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { ErrorState } from "@/components/business/error-state";
 import { EmptyState } from "@/components/business/empty-state";
 import { completeTask } from "../shared/task-actions";
-import { groupOverdueFirst, todayStartMs, toggleMyDayValue } from "../shared/task-filters";
+import {
+  DUE_SECTION_META,
+  DUE_SECTION_ORDER,
+  groupByDueSection,
+  todayStartMs,
+  toggleMyDayValue,
+  type DueSectionKey,
+} from "../shared/task-filters";
 import { isListActivationKey, listNavDirection } from "../shared/list-keyboard";
 import { midpoint } from "../shared/position";
 import { formatDuration } from "../shared/time";
@@ -129,13 +136,37 @@ const rowsFirstCollision: CollisionDetection = (args) => {
   return rowHits.length > 0 ? rowHits : collisions;
 };
 
+/** 分节折叠态持久化键（04 §七 新增：按节键存，逗号分隔） */
+const LS_SECTION_COLLAPSED = "todo_section_collapsed";
+
+function loadCollapsedSections(): Set<DueSectionKey> {
+  const raw = localStorage.getItem(LS_SECTION_COLLAPSED) ?? "";
+  const valid = new Set<string>(DUE_SECTION_ORDER);
+  return new Set(
+    raw
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => valid.has(s)) as DueSectionKey[],
+  );
+}
+
+/** 虚拟流条目：节头 + 任务行（两者同一条虚拟流，节头也过虚拟窗） */
+type SectionRow =
+  | { kind: "section"; key: string; section: DueSectionKey; count: number }
+  | { kind: "task"; key: string; task: TodoTaskListItem; taskIndex: number; section: DueSectionKey };
+
 export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, dependenciesByTask, loading, error, onCreateClick, onOpenDetail, sortable = true, onLoadMore, hasMore = false }: TaskListViewProps) {
   const qc = useQueryClient();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [collapsed, setCollapsed] = useState<Set<DueSectionKey>>(loadCollapsedSections);
+
+  useEffect(() => {
+    localStorage.setItem(LS_SECTION_COLLAPSED, [...collapsed].join(","));
+  }, [collapsed]);
 
   // 键盘导航（P1#8）：行 DOM 注册表 + 焦点移动（scrollToIndex 跟随）。
-  // 索引口径必须是 stream 而非 tasks：渲染顺序 = 逾期置顶 + 其余，
-  // 按 tasks 取 id 会在存在逾期行时聚焦到错位的那一条
+  // 索引口径是 **stream（任务序列）** 而非虚拟流 rows：节头不是焦点目标，
+  // j/k 只在任务之间走；focusRow 的 scrollToIndex 再用 rowIndexByTaskId 换算回含节头的虚拟行号。
   const rowRefs = useRef(new Map<number, HTMLDivElement>());
   // 读屏位置播报（D13 虚拟列表品类基线）：role=status 的 live 节点只在焦点
   // 变化时更新，绝不在 render 中更新（虚拟化滚动每帧打断朗读比不播报更糟）；
@@ -145,10 +176,49 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, d
     if (index < 0 || index >= total) return;
     setLivePos(`第 ${index + 1} 项，共 ${total} 项`);
   };
+
+  // 日期状态分节（2026-10-28，对齐 TickTick）：逾期 / 今天 / 以后 / 无日期 /
+  // 已完成五节，节头带计数、点击折叠。节头与任务行合成**同一条虚拟流**
+  // （节头也过虚拟窗）——旧「逾期置顶段裸渲染」曾把 DOM 节点抬到近万。
+  //
+  // 时间基准随数据变（跨零点拉新数据即换）——不能每渲染帧重建 now，
+  // 否则 useMemo 失效：拖拽/选中态每次 set 都全量重跑分组
+  const { rows, stream, overdueTasks, rowIndexByTaskId, sectionOfTask } = useMemo(() => {
+    const secs = groupByDueSection(tasks, new Date());
+    const rows: SectionRow[] = [];
+    const stream: TodoTaskListItem[] = [];
+    // 虚拟行号（含节头占位）只用于 scrollToIndex，不能当任务序号用
+    const rowIndexByTaskId = new Map<number, number>();
+    const sectionOfTask = new Map<number, DueSectionKey>();
+    const overdueTasks: TodoTaskListItem[] = [];
+    for (const section of DUE_SECTION_ORDER) {
+      const items = secs[section];
+      if (items.length === 0) continue;
+      // 逾期集始终全收（折叠态也要给「顺延」用），与渲染是否收起无关
+      if (section === "overdue") overdueTasks.push(...items);
+      rows.push({ kind: "section", key: `s-${section}`, section, count: items.length });
+      for (const t of items) sectionOfTask.set(t.id, section);
+      if (collapsed.has(section)) continue;
+      for (const t of items) {
+        rowIndexByTaskId.set(t.id, rows.length);
+        stream.push(t);
+        rows.push({
+          kind: "task",
+          key: `t-${t.id}`,
+          task: t,
+          taskIndex: stream.length - 1,
+          section,
+        });
+      }
+    }
+    return { rows, stream, overdueTasks, rowIndexByTaskId, sectionOfTask };
+  }, [tasks, collapsed]);
+
   const focusRow = (index: number) => {
     if (index < 0 || index >= stream.length) return;
     announcePos(index, stream.length);
-    virtualizer.scrollToIndex(index, { align: "auto" });
+    const rowIndex = rowIndexByTaskId.get(stream[index].id);
+    if (rowIndex != null) virtualizer.scrollToIndex(rowIndex, { align: "auto" });
     // 动态 measureElement 下，目标行可能晚一帧才挂载：rAF 重试至多 5 帧
     // （评审 I2 修复，与 Task 3 落地版保持一致）
     let tries = 0;
@@ -163,50 +233,34 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, d
     requestAnimationFrame(tryFocus);
   };
 
-  // 逾期置顶（A14）：置顶段与常规段合成**同一条虚拟流**（pinned 长度即分界），
-  // 不再单独裸渲染。上一轮口径把逾期区留在虚拟化之外，理由是「逾期集天然有限」，
-  // 实测证伪：10k 档 334 条逾期行未过虚拟窗，DOM 节点 955→9980、常驻堆 37→76MB、
-  // 每次写重渲染多产生 ~12MB 垃圾（growth-curve 的 domNodes_10k / usedJSHeapMB_10k
-  // / peakMB_duringChurn 三项指标同源）。索引语义统一后键盘导航覆盖置顶段。
-  // 时间基准随数据变（跨零点拉新数据即换）——不能每渲染帧重建 now，
-  // 否则 useMemo 失效：拖拽/选中态每次 set 都全量重跑分组
-  const { pinned, stream, overdueTasks } = useMemo(() => {
-    const { overdue, rest } = groupOverdueFirst(tasks, Date.now());
-    return {
-      pinned: overdue.length,
-      stream: overdue.length > 0 ? [...overdue, ...rest] : rest,
-      overdueTasks: overdue,
-    };
-  }, [tasks]);
-
-  // P0 虚拟化：仅渲染可视窗 ± overscan。行高固定 57px（TaskRow h-[57px]），
+  // P0 虚拟化：仅渲染可视窗 ± overscan。任务行高固定 57px（TaskRow h-[57px]），
   // 元信息有无不改变行高——固定尺寸让 estimateSize 与实测恒一致，
-  // 消除动态 measure 下滚动/增删行时的高度重排抖动
+  // 消除动态 measure 下滚动/增删行时的高度重排抖动；节头 33px 同口径固定。
   const virtualizer = useVirtualizer({
-    count: stream.length,
+    count: rows.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => 57,
+    estimateSize: (i) => (rows[i]?.kind === "section" ? 33 : 57),
     overscan: 8,
-    getItemKey: (i) => stream[i].id,
+    getItemKey: (i) => rows[i].key,
   });
 
   // 触底预取（P1 窗口化）：最后可见行进入末尾 5 行内即请求下一页。
   // loadMoreRef 防同一窗口内重复触发（effect 会随滚动反复重跑）；
-  // stream.length 变化（新一页到账）后解锁。
+  // rows.length 变化（新一页到账）后解锁。
   const virtualItems = virtualizer.getVirtualItems();
   const lastVirtualIndex =
     virtualItems.length > 0 ? virtualItems[virtualItems.length - 1].index : -1;
   const loadMoreLock = useRef(false);
   useEffect(() => {
     loadMoreLock.current = false;
-  }, [stream.length]);
+  }, [rows.length]);
   useEffect(() => {
     if (!hasMore || !onLoadMore || lastVirtualIndex < 0) return;
-    if (lastVirtualIndex < stream.length - 5) return;
+    if (lastVirtualIndex < rows.length - 5) return;
     if (loadMoreLock.current) return;
     loadMoreLock.current = true;
     onLoadMore();
-  }, [lastVirtualIndex, stream.length, hasMore, onLoadMore]);
+  }, [lastVirtualIndex, rows.length, hasMore, onLoadMore]);
 
   // 拖拽（P1#11）：PointerSensor distance:6 —— 小位移不算拖拽，保证行点击；
   // hooks 全部集中在早退分支之前，保证无条件执行
@@ -419,13 +473,12 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, d
   };
   const draggingTask = draggingId != null ? tasks.find((t) => t.id === draggingId) : undefined;
 
-  const renderRow = (t: TodoTaskListItem, vi: { index: number; start: number }) => {
+  /** taskIndex = stream（任务序列）序号：键盘导航与播报口径，节头不占号 */
+  const renderRow = (t: TodoTaskListItem, taskIndex: number, vi: { index: number; start: number }) => {
     // 每帧一次 nowMs 供行内 overdue/reminder 判定（此前每行 2 次 Date.now()，
     // 虚拟窗 ~25 行 = 50 次分配/帧）
     const nowMs = Date.now();
     const overdue = !!t.due_date && !t.done && t.due_date < nowMs;
-    // 置顶段只换外观与拖拽能力，行为与常规段一致（可点/可勾选/可键盘到达）
-    const isPinned = vi.index < pinned;
     const due = dueText(t.due_date);
     const project = t.project_id != null ? projectById.get(t.project_id) : undefined;
     const reminder = displayReminder(remindersByTask.get(t.id) ?? [], nowMs, !!t.done);
@@ -433,13 +486,9 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, d
       // 绝对定位行容器：divide-y 在脱离文档流的兄弟间不生效，改每行自带 border-b。
       // 用 top 而非 transform 定位（见文件头注释）
       <div
-        key={t.id}
+        key={`t-${t.id}`}
         data-index={vi.index}
         ref={virtualizer.measureElement}
-        className={cn(
-          isPinned && "bg-destructive/5",
-          !isPinned && pinned > 0 && vi.index === pinned && "border-t border-border/30",
-        )}
         style={{ position: "absolute", top: vi.start, left: 0, width: "100%" }}
       >
         <TaskContextMenu
@@ -450,7 +499,7 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, d
         >
           <TaskRow
             task={t}
-            index={vi.index}
+            index={taskIndex}
             count={stream.length}
             labels={labelsByTask.get(t.id) ?? []}
             project={project}
@@ -472,14 +521,76 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, d
             }}
             onToggleSelect={(shift) => toggleSelect(t.id, shift)}
             onClearSelection={clearSelection}
-            onFocusMove={(dir) => focusRow(vi.index + (dir === "down" ? 1 : -1))}
+            onFocusMove={(dir) => focusRow(taskIndex + (dir === "down" ? 1 : -1))}
             onFocusRow={(i) => announcePos(i, stream.length)}
             onToggleDone={() => void completeTask(t, qc)}
             onToggleFavorite={() => toggleFavorite(t)}
             onToggleMyDay={() => toggleMyDay(t)}
-            sortable={sortable && !isPinned}
+            // 逾期节不给拖拽把手（与旧口径一致：置顶段不参与重排）
+            sortable={sortable && sectionOfTask.get(t.id) !== "overdue"}
           />
         </TaskContextMenu>
+      </div>
+    );
+  };
+
+  const renderSectionHead = (row: Extract<SectionRow, { kind: "section" }>, vi: { index: number; start: number }) => {
+    const meta = DUE_SECTION_META[row.section];
+    const isCollapsed = collapsed.has(row.section);
+    const Icon = row.section === "overdue" ? TriangleAlert : row.section === "done" ? CircleCheck : CalendarClock;
+    return (
+      <div
+        key={row.key}
+        data-index={vi.index}
+        style={{ position: "absolute", top: vi.start, left: 0, width: "100%" }}
+        className={cn("flex h-[33px] items-center", row.section === "overdue" && "bg-destructive/5")}
+      >
+        {/* 节头整行即折叠开关（TickTick 同款）：箭头随折叠态翻转，计数徽标 */}
+        <button
+          type="button"
+          aria-expanded={!isCollapsed}
+          aria-label={`${meta.title} ${row.count} 条`}
+          onClick={() =>
+            setCollapsed((prev) => {
+              const next = new Set(prev);
+              if (next.has(row.section)) next.delete(row.section);
+              else next.add(row.section);
+              return next;
+            })
+          }
+          className="flex h-full min-w-0 flex-1 items-center gap-1.5 px-4 text-left hover:bg-accent/30"
+        >
+          <ChevronRight
+            size={14}
+            className={cn("shrink-0 text-muted-foreground transition-transform", !isCollapsed && "rotate-90")}
+          />
+          <Icon size={13} style={{ color: meta.color }} className="shrink-0" />
+          <span className="text-xs font-medium" style={{ color: meta.color }}>
+            {meta.title}
+          </span>
+          <span className="text-xs text-muted-foreground/70 tabular-nums">{row.count}</span>
+        </button>
+        {/* 逾期节头的「顺延」（G1）：免逐条改期。下拉两档（今天/明天），
+            语义与 batchSetDueDate 同源（保时刻/零点归 18:00），执行即 toast + Ctrl+Z */}
+        {row.section === "overdue" && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={batchBusy}
+                className="mr-2 h-6 shrink-0 gap-1 px-2 text-xs text-destructive hover:text-destructive"
+              >
+                <CalendarClock className="size-3.5" />
+                顺延
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => void runRollover("today")}>顺延到今天</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => void runRollover("tomorrow")}>顺延到明天</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
     );
   };
@@ -497,37 +608,15 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, d
         <div role="status" aria-live="polite" data-testid="task-pos-live" className="sr-only">
           {livePos}
         </div>
-        {/* 逾期段标题（常驻小节点）：段内任务行本身进虚拟流。留在文档流里
-            会让虚拟窗整体下偏一个标题高（~29px），远小于 overscan 的 8 行
-            （456px），故不出空白；置顶段行进流前该偏移是 N×57px，滚动到
-            中段即整屏空白——这也是本轮把两段合一的附带修正 */}
-        {pinned > 0 && (
-          <div className="flex items-center gap-1.5 bg-destructive/5 px-4 py-1.5">
-            <TriangleAlert className="size-3.5 text-destructive" />
-            <span className="text-xs font-medium text-destructive">逾期 · {pinned}</span>
-            {/* 一键顺延（G1）：免逐条改期。下拉两档（今天/明天），语义与
-                batchSetDueDate 同源（保时刻/零点归 18:00），执行即 toast + Ctrl+Z */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={batchBusy}
-                  className="ml-auto h-6 gap-1 px-2 text-xs text-destructive hover:text-destructive"
-                >
-                  <CalendarClock className="size-3.5" />
-                  顺延
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => void runRollover("today")}>顺延到今天</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => void runRollover("tomorrow")}>顺延到明天</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        )}
+        {/* 节头与任务行合成**同一条虚拟流**（2026-10-28 分节化）：节头也过
+            虚拟窗，避免旧「逾期段标题常驻节点 + 裸渲染」造成的偏移与节点膨胀 */}
         <RowContainerDropZone totalSize={virtualizer.getTotalSize()}>
-          {virtualItems.map((vi) => renderRow(stream[vi.index], vi))}
+          {virtualItems.map((vi) => {
+            const row = rows[vi.index];
+            return row.kind === "section"
+              ? renderSectionHead(row, vi)
+              : renderRow(row.task, row.taskIndex, vi);
+          })}
         </RowContainerDropZone>
       </div>
 

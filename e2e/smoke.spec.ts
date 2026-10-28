@@ -1118,6 +1118,72 @@ test("「↑↓」排序菜单：创建时间档 + 升/降序切换（2026-09-29
   expect(savedDir).toBe("asc");
 });
 
+test("列表日期状态分节：节头计数 + 点击折叠/展开（2026-10-28 对齐 TickTick）", async ({ page }) => {
+  // 默认隐藏已完成：先切到显示，否则「已完成」节不渲染
+  await showDoneTasks(page);
+  // 补造四档日期任务（seed 任务今天 10:00 截止，已过 10 点即落逾期节，计数不写死）
+  await page.evaluate(() => {
+    const now = Date.now();
+    const db = (window as any).__orbitMock.db;
+    const base = {
+      description: null,
+      project_id: db.projects[0]?.id ?? null,
+      priority: 0,
+      start_date: null,
+      repeat_after: 0,
+      repeat_mode: 0,
+      repeat_month_mode: 0,
+      repeat_nth_week: 0,
+      percent_done: 0,
+      is_favorite: 0,
+      my_day_date: null,
+      duration_minutes: null,
+      is_deleted: 0,
+      created_at: now,
+      updated_at: now,
+      deleted_at: null,
+      version: 1,
+    };
+    const mk = (id: number, title: string, due: number | null, status = "pending", done = 0) => ({
+      ...base,
+      id,
+      uuid: `sec-${id}`,
+      title,
+      status,
+      done,
+      done_at: done ? now : null,
+      due_date: due,
+      position: 9000 + id,
+    });
+    db.tasks.push(
+      mk(901, "分节-逾期", now - 3_600_000),
+      mk(902, "分节-以后", now + 3 * 86_400_000, "doing"),
+      mk(903, "分节-无日期", null),
+      mk(904, "分节-已完成", null, "done", 1),
+    );
+    (window as any).__orbitMock.emitDbChange();
+  });
+
+  const section = (name: string) =>
+    page.getByRole("button", { name: new RegExp(`^${name} \\d+ 条$`) });
+  await expect(section("已逾期")).toBeVisible();
+  await expect(section("以后")).toBeVisible();
+  await expect(section("无日期")).toHaveAccessibleName(/^无日期 1 条$/);
+  await expect(section("已完成")).toBeVisible();
+  await expect(page.getByRole("button", { name: "未完成任务：分节-无日期" })).toBeVisible();
+
+  // 整行点击折叠：该节任务隐藏，折叠态落 localStorage
+  await section("无日期").click();
+  await expect(page.getByRole("button", { name: "未完成任务：分节-无日期" })).toHaveCount(0);
+  await expect(section("以后")).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem("todo_section_collapsed"))).toContain("undated");
+
+  // 再次点击展开：任务回归、折叠态清空
+  await section("无日期").click();
+  await expect(page.getByRole("button", { name: "未完成任务：分节-无日期" })).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem("todo_section_collapsed"))).not.toContain("undated");
+});
+
 test("「···」更多菜单：视图图标排点按即切且菜单不关（2026-09-29 工具栏收拢）", async ({ page }) => {
   await openMoreMenu(page);
   const menu = page.getByRole("menu");
