@@ -4,7 +4,9 @@
  * 六列概览：完成/标题/项目/标签/截止/优先级——批量整理与全字段一览刚需
  * （Vikunja 四视图口径）。数据/字段组件全部复用列表视图管线：
  * visibleTasks 注入 + PRIORITY_COLOR 竖条 + LabelChips + dueText 同口径。
- * 多选批量语义与列表视图一致（selected Set + shift 区间 + runBatch）。
+ * 多选批量语义与列表视图一致（selected Set + shift 区间 + runBatch）：
+ * 入口为右键菜单「多选」或 x 键；进入多选后「完成」列圆钮就地变多选框
+ * （2026-10-29，行首不再额外多一个勾选框），退出多选即恢复完成语义。
  * 列头排序（#107）：标题/截止/优先级三列可点，写回 task-panel 的 sortKey/sortDir
  * 单一口径（标题档自动回退万行全量，与列表视图同约束）；表内编辑仍不做（YAGNI）。
  * manual 档不可拖（与看板一致）。
@@ -64,6 +66,7 @@ import {
 } from "../shared/constants";
 import type { TaskReminderMeta } from "../shared/reminder-meta";
 import { CheckSvg } from "./task-list-view";
+import { TaskContextMenu } from "./task-context-menu";
 
 export interface TaskTableViewProps {
   tasks: TodoTaskListItem[];
@@ -467,200 +470,215 @@ export default function TaskTableView({
                 ref={virtualizer.measureElement}
                 style={{ position: "absolute", top: vi.start, left: 0, width: "100%" }}
               >
-                <div
-                  ref={(el) => {
-                    if (el) rowRefs.current.set(t.id, el);
-                    else rowRefs.current.delete(t.id);
-                  }}
-                  role="button"
-                  tabIndex={0}
-                  aria-label={`${t.done ? "已完成" : "未完成"}任务：${t.title}`}
-                  onFocus={() => announcePos(vi.index)}
-                  className={cn(
-                    "group relative grid h-[52px] cursor-default items-center gap-3 border-b border-border/30 px-4 hover:bg-accent/30",
-                    "focus-visible:bg-accent/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring",
-                    selected.has(t.id) && "bg-primary/5 ring-1 ring-inset ring-primary/30",
-                  )}
-                  style={gridStyle}
-                  onClick={() => onOpenDetail(t.id)}
-                  onKeyDown={(e) => {
-                    if (e.nativeEvent.isComposing) return;
-                    // x 键切选中（Linear 同款，三视图一致）；Esc 选中态退选全部
-                    if (e.target === e.currentTarget && (e.key === "x" || e.key === "X")) {
-                      e.preventDefault();
-                      toggleSelect(t.id, false);
-                      return;
-                    }
-                    if (e.target === e.currentTarget && e.key === "Escape" && selected.size > 0) {
-                      e.preventDefault();
-                      clearSelection();
-                      return;
-                    }
-                    if (e.target === e.currentTarget && isListActivationKey(e.key)) {
-                      e.preventDefault();
-                      onOpenDetail(t.id);
-                      return;
-                    }
-                    const dir = listNavDirection(e.key);
-                    if (!dir) return;
-                    if (vi.index === 0 && dir === "up") return;
-                    if (vi.index === tasks.length - 1 && dir === "down") return;
-                    e.preventDefault();
-                    focusRow(dir === "up" ? vi.index - 1 : vi.index + 1);
-                  }}
+                {/* 右键菜单与列表/看板同口径：hover 多选框移除后，这里是鼠标进入
+                    多选态的唯一入口（x 键仍可直接选中焦点行） */}
+                <TaskContextMenu
+                  task={t}
+                  projects={projects}
+                  onOpenDetail={() => onOpenDetail(t.id)}
+                  onStartSelect={() => toggleSelect(t.id, false)}
                 >
-                  {/* 优先级左缘竖条（列表行同形制） */}
-                  <span
-                    aria-hidden
-                    className="pointer-events-none absolute inset-y-1.5 left-0 w-1 rounded-full"
-                    style={{ background: PRIORITY_COLOR[t.priority] }}
-                  />
-
-                  {/* 完成列：勾选 + 多选框 hover 显现 */}
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      aria-label={selected.has(t.id) ? "取消选中" : "选中"}
-                      aria-pressed={selected.has(t.id)}
-                      className={cn(
-                        "flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] border transition-colors",
-                        selected.has(t.id)
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-muted-foreground/30 hover:border-primary",
-                        selected.size > 0
-                          ? "opacity-100"
-                          : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
-                      )}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleSelect(t.id, e.shiftKey);
-                      }}
-                    >
-                      {selected.has(t.id) ? (
-                        <CheckSvg className="size-3.5" stroke={3} />
-                      ) : null}
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={t.done ? "标记未完成" : "标记完成"}
-                      className={cn(
-                        "h-5 w-5 shrink-0 rounded-full border-2 transition-colors",
-                        t.done
-                          ? "border-muted-foreground bg-muted-foreground"
-                          : "border-muted-foreground/30 hover:border-primary",
-                      )}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void completeTask(t, qc);
-                      }}
-                    >
-                      {t.done ? <CheckSvg /> : null}
-                    </button>
-                  </div>
-
-                  {/* 标题列：星标/我的一天/提醒徽标 + 标题 + 子任务进度 */}
-                  <div className="flex min-w-0 items-center gap-1.5">
-                    <button
-                      type="button"
-                      aria-label={t.is_favorite ? "取消收藏" : "收藏"}
-                      className={cn(
-                        "shrink-0",
-                        t.is_favorite
-                          ? "opacity-100"
-                          : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
-                      )}
-                      style={{ color: FAVORITE_COLOR }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void todoTaskUpdate(t.id, {
-                          is_favorite: t.is_favorite ? 0 : 1,
-                        });
-                      }}
-                    >
-                      <Star size={14} fill={t.is_favorite ? "currentColor" : "none"} />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={inMyDay ? "移出我的一天" : "加入我的一天"}
-                      className={cn(
-                        "shrink-0",
-                        inMyDay
-                          ? "opacity-100"
-                          : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
-                      )}
-                      style={inMyDay ? { color: MY_DAY_COLOR } : undefined}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        // 写入口径与列表/详情/右键菜单一致：本地零点（toggleMyDayValue 单口径）
-                        void todoTaskUpdate(t.id, {
-                          my_day_date: toggleMyDayValue(t.my_day_date),
-                        });
-                      }}
-                    >
-                      <Sunrise size={14} fill={inMyDay ? "currentColor" : "none"} />
-                    </button>
-                    <span
-                      className={cn(
-                        "truncate text-sm leading-5",
-                        t.done && "text-muted-foreground line-through",
-                      )}
-                    >
-                      {t.title}
-                    </span>
-                    {t.percent_done > 0 && t.percent_done < 100 && (
-                      <span className="inline-flex shrink-0 items-center gap-0.5 text-xs text-muted-foreground tabular-nums">
-                        <ListChecks size={11} />
-                        {Math.round(t.percent_done)}%
-                      </span>
-                    )}
-                  </div>
-
-                  {/* 项目列 */}
-                  <span
-                    className="truncate text-sm"
-                    style={{ color: project?.hex_color || TODO_ACCENT }}
-                  >
-                    {project ? project.title : "—"}
-                  </span>
-
-                  {/* 标签列 */}
-                  <LabelChips labels={labels} max={2} />
-
-                  {/* 截止列 */}
-                  <span
+                  <div
+                    ref={(el) => {
+                      if (el) rowRefs.current.set(t.id, el);
+                      else rowRefs.current.delete(t.id);
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`${t.done ? "已完成" : "未完成"}任务：${t.title}`}
+                    onFocus={() => announcePos(vi.index)}
                     className={cn(
-                      "inline-flex items-center gap-0.5 truncate text-sm text-muted-foreground",
-                      overdue && OVERDUE_COLOR_CLASS,
+                      "group relative grid h-[52px] cursor-default items-center gap-3 border-b border-border/30 px-4 hover:bg-accent/30",
+                      "focus-visible:bg-accent/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring",
+                      selected.has(t.id) && "bg-primary/5 ring-1 ring-inset ring-primary/30",
                     )}
+                    style={gridStyle}
+                    onClick={() => {
+                      // 多选态下点击行 = 切换勾选（与列表视图一致），否则打开详情
+                      if (selected.size > 0) toggleSelect(t.id, false);
+                      else onOpenDetail(t.id);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.nativeEvent.isComposing) return;
+                      // x 键切选中（Linear 同款，三视图一致）；Esc 选中态退选全部
+                      if (e.target === e.currentTarget && (e.key === "x" || e.key === "X")) {
+                        e.preventDefault();
+                        toggleSelect(t.id, false);
+                        return;
+                      }
+                      if (e.target === e.currentTarget && e.key === "Escape" && selected.size > 0) {
+                        e.preventDefault();
+                        clearSelection();
+                        return;
+                      }
+                      if (e.target === e.currentTarget && isListActivationKey(e.key)) {
+                        e.preventDefault();
+                        onOpenDetail(t.id);
+                        return;
+                      }
+                      const dir = listNavDirection(e.key);
+                      if (!dir) return;
+                      if (vi.index === 0 && dir === "up") return;
+                      if (vi.index === tasks.length - 1 && dir === "down") return;
+                      e.preventDefault();
+                      focusRow(dir === "up" ? vi.index - 1 : vi.index + 1);
+                    }}
                   >
-                    {due ? (
-                      <>
-                        <Clock size={11} />
-                        {due}
-                      </>
-                    ) : (
-                      "—"
-                    )}
-                    <ReminderChip reminder={reminder} />
-                  </span>
-
-                  {/* 时长列（M9 阶段一；未设置显示占位保持列对齐） */}
-                  <span className="inline-flex items-center gap-0.5 truncate text-sm text-muted-foreground tabular-nums">
-                    {formatDuration(t.duration_minutes) ?? "—"}
-                  </span>
-
-                  {/* 优先级列 */}
-                  <span className="flex items-center gap-1.5 text-sm">
+                    {/* 优先级左缘竖条（列表行同形制） */}
                     <span
                       aria-hidden
-                      className="h-3 w-1 shrink-0 rounded-full"
+                      className="pointer-events-none absolute inset-y-1.5 left-0 w-1 rounded-full"
                       style={{ background: PRIORITY_COLOR[t.priority] }}
                     />
-                    <span className="text-muted-foreground">
-                      {PRIORITY_LABELS[t.priority]}
+
+                    {/* 完成列：完成钮与多选勾选框共用同一位置——进入多选态后
+                        完成钮直接变多选框，行首不再多出一个框（2026-10-29）；
+                        hover 多选框已移除，多选入口 = 右键菜单「多选」/ x 键 */}
+                    <div className="flex items-center">
+                      {selected.size > 0 ? (
+                        <button
+                          type="button"
+                          aria-label={selected.has(t.id) ? "取消选中" : "选中"}
+                          aria-pressed={selected.has(t.id)}
+                          className={cn(
+                            "flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] border transition-colors",
+                            selected.has(t.id)
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : "border-muted-foreground/30 hover:border-primary",
+                          )}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleSelect(t.id, e.shiftKey);
+                          }}
+                        >
+                          {selected.has(t.id) ? (
+                            <CheckSvg className="size-3.5" stroke={3} />
+                          ) : null}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          aria-label={t.done ? "标记未完成" : "标记完成"}
+                          className={cn(
+                            "h-5 w-5 shrink-0 rounded-full border-2 transition-colors",
+                            t.done
+                              ? "border-muted-foreground bg-muted-foreground"
+                              : "border-muted-foreground/30 hover:border-primary",
+                          )}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void completeTask(t, qc);
+                          }}
+                        >
+                          {t.done ? <CheckSvg /> : null}
+                        </button>
+                      )}
+                    </div>
+
+                    {/* 标题列：星标/我的一天/提醒徽标 + 标题 + 子任务进度 */}
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <button
+                        type="button"
+                        aria-label={t.is_favorite ? "取消收藏" : "收藏"}
+                        className={cn(
+                          "shrink-0",
+                          t.is_favorite
+                            ? "opacity-100"
+                            : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
+                        )}
+                        style={{ color: FAVORITE_COLOR }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void todoTaskUpdate(t.id, {
+                            is_favorite: t.is_favorite ? 0 : 1,
+                          });
+                        }}
+                      >
+                        <Star size={14} fill={t.is_favorite ? "currentColor" : "none"} />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={inMyDay ? "移出我的一天" : "加入我的一天"}
+                        className={cn(
+                          "shrink-0",
+                          inMyDay
+                            ? "opacity-100"
+                            : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
+                        )}
+                        style={inMyDay ? { color: MY_DAY_COLOR } : undefined}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // 写入口径与列表/详情/右键菜单一致：本地零点（toggleMyDayValue 单口径）
+                          void todoTaskUpdate(t.id, {
+                            my_day_date: toggleMyDayValue(t.my_day_date),
+                          });
+                        }}
+                      >
+                        <Sunrise size={14} fill={inMyDay ? "currentColor" : "none"} />
+                      </button>
+                      <span
+                        className={cn(
+                          "truncate text-sm leading-5",
+                          t.done && "text-muted-foreground line-through",
+                        )}
+                      >
+                        {t.title}
+                      </span>
+                      {t.percent_done > 0 && t.percent_done < 100 && (
+                        <span className="inline-flex shrink-0 items-center gap-0.5 text-xs text-muted-foreground tabular-nums">
+                          <ListChecks size={11} />
+                          {Math.round(t.percent_done)}%
+                        </span>
+                      )}
+                    </div>
+
+                    {/* 项目列 */}
+                    <span
+                      className="truncate text-sm"
+                      style={{ color: project?.hex_color || TODO_ACCENT }}
+                    >
+                      {project ? project.title : "—"}
                     </span>
-                  </span>
-                </div>
+
+                    {/* 标签列 */}
+                    <LabelChips labels={labels} max={2} />
+
+                    {/* 截止列 */}
+                    <span
+                      className={cn(
+                        "inline-flex items-center gap-0.5 truncate text-sm text-muted-foreground",
+                        overdue && OVERDUE_COLOR_CLASS,
+                      )}
+                    >
+                      {due ? (
+                        <>
+                          <Clock size={11} />
+                          {due}
+                        </>
+                      ) : (
+                        "—"
+                      )}
+                      <ReminderChip reminder={reminder} />
+                    </span>
+
+                    {/* 时长列（M9 阶段一；未设置显示占位保持列对齐） */}
+                    <span className="inline-flex items-center gap-0.5 truncate text-sm text-muted-foreground tabular-nums">
+                      {formatDuration(t.duration_minutes) ?? "—"}
+                    </span>
+
+                    {/* 优先级列 */}
+                    <span className="flex items-center gap-1.5 text-sm">
+                      <span
+                        aria-hidden
+                        className="h-3 w-1 shrink-0 rounded-full"
+                        style={{ background: PRIORITY_COLOR[t.priority] }}
+                      />
+                      <span className="text-muted-foreground">
+                        {PRIORITY_LABELS[t.priority]}
+                      </span>
+                    </span>
+                  </div>
+                </TaskContextMenu>
               </div>
             );
           })}

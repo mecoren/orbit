@@ -1,18 +1,19 @@
 /**
  * TaskListView — 任务列表行（04 文档 §3.2 复刻）
  *
- * 行规格：圆形 checkbox（done 联动 status/done_at）+ 标题（划线）+
- * 元信息行（标签/项目名/截止时间，逾期整段红）+ 优先级左缘竖条（P1–P5）+ hover 星标。
+ * 行规格：方角完成 checkbox（done 联动 status/done_at，未完成描边取优先级色）+
+ * 标题（划线）+ 元信息行（标签/项目名/截止时间，逾期整段红）+ hover 星标；
+ * 多选态额外渲染行左缘优先级竖条（完成框变多选框后由竖条承接优先级色）。
  * P1 增强：
  * - 虚拟化（P0）：仅渲染可视窗 ± overscan；绝对定位行必须用 top 定位，
  *   transform 会成为 fixed 后代（ContextMenuBase 哨兵）的 containing block。
  * - 键盘可达（P1#8）：行 role=button/tabIndex，Enter/Space 打开详情，j/k 移动焦点。
  * - 拖拽排序（P1#11）：GripVertical 手柄发起（行点击仍是打开详情），
  *   落在某行 → 插其前；落容器空白 → 尾部追加；position 中值写入后失效任务缓存。
- * - 多选批量（P2#17）：入口 = 右键菜单「多选」（2026-10-10 起勾选框默认隐藏，
- *   去 hover 显现）或 x 键；shift 勾选做区间选择；选中后弹出批量工具条
- *   （完成/未完成/收藏/项目移动/删除，项目移动带中值落位）。详情抽屉仍由
- *   未选中行打开，选中行点击仅切换勾选（与多数竞品一致）。
+ * - 多选批量（P2#17）：入口 = 右键菜单「多选」或 x 键；进入多选态后行首完成框
+ *   就地变多选框（2026-10-29，不再额外多出一个勾选框），shift 勾选做区间选择；
+ *   选中后弹出批量工具条（完成/未完成/收藏/项目移动/删除，项目移动带中值落位）。
+ *   详情抽屉仍由未选中行打开，选中行点击仅切换勾选（与多数竞品一致）。
  */
 import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { formatDistanceToNow } from "date-fns";
@@ -973,29 +974,16 @@ const TaskRow = memo(function TaskRow({
         onFocusMove(dir);
       }}
     >
-      {/* 多选勾选框（P2#17）：默认隐藏，经右键菜单「多选」进入多选态后显现
-          （2026-10-10 去 hover 显现）；shift 点击 = 以最近一次勾选为锚做区间选择。
-          隐藏时同步 pointer-events-none，避免透明按钮拦截行首区域误触 */}
-      <button
-        type="button"
-        aria-label={selected ? "取消选中" : "选中"}
-        aria-pressed={selected}
-        className={cn(
-          "flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] border transition-colors",
-          selected
-            ? "border-primary bg-primary text-primary-foreground"
-            : "border-muted-foreground/30 hover:border-primary",
-          hasSelection ? "opacity-100" : "pointer-events-none opacity-0",
-        )}
-        onClick={(e) => {
-          e.stopPropagation();
-          onToggleSelect(e.shiftKey);
-        }}
-      >
-        {selected ? (
-          <CheckSvg className="size-3.5" stroke={3} />
-        ) : null}
-      </button>
+      {/* 优先级左缘竖条（04 §3.2）：**仅多选态渲染**——默认由完成框描边表达
+          优先级（行内不上两处颜色）；进入多选后完成框变多选框、颜色无处可附，
+          优先级改由最左缘竖条承载，信息不丢。六档全显，P0「无」浅灰也参与 */}
+      {hasSelection && (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-y-1.5 left-0 w-1 rounded-full"
+          style={{ background: PRIORITY_COLOR[t.priority] }}
+        />
+      )}
 
       {/* 拖拽手柄：hover 显现；点击不冒泡（避免误触打开详情） */}
       {/* 拖拽把手：仅 manual 排序档显示（#26；拖拽源已禁用时同时隐藏） */}
@@ -1016,30 +1004,54 @@ const TaskRow = memo(function TaskRow({
         </button>
       )}
 
-      {/* 完成 checkbox：方角（TickTick 同款，4px 圆角与移动端跨端同源）；
-          未完成描边 = 优先级色（P0「无」回落中性灰）——紧急度以完成按钮
-          颜色为准（原左缘竖条移除，颜色移交此处；日历行无钮保留竖条）。
-          完成态改弱化灰实底（与移动端 OrbitCheckbox 的 deactivatedText 同口径，
-          与已完成行的灰色划线标题同调，不再保留待办蓝强调） */}
-      <button
-        type="button"
-        aria-label={t.done ? "标记未完成" : "标记完成"}
-        className={cn(
-          "h-5 w-5 shrink-0 rounded-[4px] border-2 transition-colors",
-          t.done ? "border-muted-foreground bg-muted-foreground" : "border-muted-foreground/30 hover:border-primary",
-        )}
-        style={
-          !t.done && t.priority > 0
-            ? { borderColor: PRIORITY_COLOR[t.priority] }
-            : undefined
-        }
-        onClick={(e) => {
-          e.stopPropagation();
-          onToggleDone();
-        }}
-      >
-        {t.done ? <CheckSvg /> : null}
-      </button>
+      {/* 勾选框：完成语义与多选语义共用**同一个位置**（2026-10-29）——
+          只在多选态才切换成多选框，行首不再多出一个勾选框；
+          退出多选（清空选中）即恢复完成语义。shift 点击 = 以上次勾选为锚做区间选择。
+          默认态：方角完成框（TickTick 同款，4px 圆角与移动端跨端同源），
+          未完成描边 = 优先级色（P0「无」回落中性灰），完成态弱化灰实底
+          （与移动端 OrbitCheckbox 的 deactivatedText 同口径，不保留待办蓝）；
+          多选态：多选框不承载优先级，颜色交给上面的左缘竖条 */}
+      {hasSelection ? (
+        <button
+          type="button"
+          aria-label={selected ? "取消选中" : "选中"}
+          aria-pressed={selected}
+          className={cn(
+            "flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] border transition-colors",
+            selected
+              ? "border-primary bg-primary text-primary-foreground"
+              : "border-muted-foreground/30 hover:border-primary",
+          )}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleSelect(e.shiftKey);
+          }}
+        >
+          {selected ? <CheckSvg className="size-3.5" stroke={3} /> : null}
+        </button>
+      ) : (
+        <button
+          type="button"
+          aria-label={t.done ? "标记未完成" : "标记完成"}
+          className={cn(
+            "h-5 w-5 shrink-0 rounded-[4px] border-2 transition-colors",
+            t.done
+              ? "border-muted-foreground bg-muted-foreground"
+              : "border-muted-foreground/30 hover:border-primary",
+          )}
+          style={
+            !t.done && t.priority > 0
+              ? { borderColor: PRIORITY_COLOR[t.priority] }
+              : undefined
+          }
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleDone();
+          }}
+        >
+          {t.done ? <CheckSvg /> : null}
+        </button>
+      )}
 
       {/* 标题 + 元信息（行高固定 57px：元信息有无不影响行高，
           多行内容整体垂直居中；无元信息时标题独占也居中） */}
