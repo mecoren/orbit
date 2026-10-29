@@ -48,6 +48,7 @@ import {
   savedFiltersList,
   todoTaskBoard,
   todoTaskList,
+  todoTaskOverview,
   todoTaskPage,
   type BoardGroupBy,
   type ListCursor,
@@ -134,7 +135,6 @@ export default function TaskPanel() {
     tasksError,
     taskPredicate,
     setNeedsFullTasks,
-    overview,
     openCreateForm,
     openCreateFormOnDate,
     openCreateFormFromTemplate,
@@ -467,6 +467,20 @@ export default function TaskPanel() {
     [logbookQuery.data],
   );
 
+  // 当前列表的「真实总数」（窗口化通道）：页头计数与「共 N 条」共用。
+  // COUNT 必须按**当前谓词**下推（与移动端 taskWindowTotalProvider 同口径）：
+  // 壳层那份 overview 不带 done/视图谓词，当「共 N 条」用会在「今天」「某项目」
+  // 等视图显示全库总数；而 visibleTasks 只是已加载窗口，更不能当总数
+  // ——页头曾因此显示 360，而条幅显示 1177。
+  const listTotalFilter = logbookPagedMode ? logbookFilter : pagedMode ? pageFilter : null;
+  const listTotalQuery = useQuery({
+    queryKey: ["todo_tasks", "list-total", listTotalFilter],
+    queryFn: () => todoTaskOverview(listTotalFilter as ListFilter),
+    enabled: listTotalFilter != null,
+    staleTime: 2 * 60 * 1000,
+  });
+  const listTotal = listTotalFilter == null ? undefined : listTotalQuery.data?.total;
+
   // 分页模式下两个弹窗仍需「整份集合」：打开时才拉，关闭即不占缓存
   // （周回顾要跨全部逾期/无日期/停滞；分诊要全部未分组）
   const reviewTasksQuery = useQuery({
@@ -635,10 +649,11 @@ export default function TaskPanel() {
       : tasksError;
   const boardLoading = boardGroupBy != null ? boardQuery.isLoading : tasksLoading;
   const boardError = boardGroupBy != null ? errorText(boardQuery.error) : tasksError;
-  // 「已加载 X / 共 Y」：Y 由独立聚合给（分页接口不逐页 COUNT）；
-  // Logbook 的总数不可复用 overview（它不含 done 谓词），只报已加载条数
+  // 「已加载 X / 共 Y」：Y 由独立 COUNT 给（分页接口不逐页 COUNT）；
+  // 页头计数与条幅同源，窗口化时都不再读已加载数组长度
   const pagedLoaded = pagedMode ? pagedTasks.length : logbookPagedMode ? logbookTasks.length : 0;
-  const pagedTotal = pagedMode ? overview?.total : undefined;
+  const pagedTotal = pagedMode ? listTotal : undefined;
+  const headerCount = listTotal ?? visibleTasks.length;
 
   // 完成进度线（TickTick 列表页头语义；移动端 2026-09-25 先落地，本端对齐）：
   // 只在「既有未完成又有已完成」时出现——看板/表格随隐藏开关剔除完成行、
@@ -664,7 +679,7 @@ export default function TaskPanel() {
         <div className="flex items-baseline gap-2">
           <h1 className="text-lg font-semibold">{title}</h1>
           <span className="text-sm text-muted-foreground">
-            {visibleTasks.length}
+            {headerCount}
             {countCapped && "+"}
           </span>
         </div>
@@ -786,12 +801,14 @@ export default function TaskPanel() {
               }`}
         </div>
       )}
-      {/* Logbook 通道的总数不可复用 overview（后者不含 done 谓词），只报已加载 */}
+      {/* Logbook 通道同样按 done 谓词 COUNT 给出终点（listTotal 的 filter 即 logbookFilter） */}
       {logbookPagedMode && logbookQuery.hasNextPage && (
         <div className="flex items-center gap-1.5 border-b bg-muted/40 px-4 py-1.5 text-xs text-muted-foreground">
           {logbookQuery.isFetchingNextPage
             ? "正在加载更多…"
-            : `向下滚动加载更早的完成记录 · 已加载 ${logbookTasks.length} 条`}
+            : `向下滚动加载更早的完成记录 · 已加载 ${logbookTasks.length} 条${
+                listTotal != null ? ` / 共 ${listTotal} 条` : ""
+              }`}
         </div>
       )}
 
