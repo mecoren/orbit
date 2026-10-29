@@ -9,7 +9,7 @@ import { Suspense, lazy, type ReactNode } from "react";
 import { Navigate, createBrowserRouter } from "react-router";
 
 import { AppShell } from "@/components/layout/app-shell";
-import { EqualizerLoader } from "@/components/EqualizerLoader";
+import { Spinner } from "@/components/ui/spinner";
 import { RouteError } from "@/components/layout/route-error";
 
 const TodoShell = lazy(() => import("@/features/todo/desktop/todo-shell"));
@@ -37,7 +37,7 @@ const SyncRecoveryPage = lazy(() =>
 function LazyFallback() {
   return (
     <div className="grid h-full place-items-center">
-      <EqualizerLoader />
+      <Spinner size={32} />
     </div>
   );
 }

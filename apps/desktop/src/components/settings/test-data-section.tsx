@@ -14,11 +14,12 @@
  * `【示例】` 前缀；手工数据不受影响，重复点击不会叠数据。
  */
 import { useState } from "react";
-import { Database, FlaskConical, Loader2, Trash2 } from "lucide-react";
+import { Database, FlaskConical, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { DangerousConfirmDialog } from "@/components/ui/dangerous-confirm-dialog";
+import { Spinner } from "@/components/ui/spinner";
 import {
   devSeedClear,
   devSeedDemoData,
@@ -199,7 +200,7 @@ export function TestDataSection() {
             disabled={busy != null}
           >
             {busy === "seed" ? (
-              <Loader2 className="size-4 animate-spin" />
+              <Spinner className="size-4" />
             ) : (
               <Database className="size-4" />
             )}
@@ -212,7 +213,7 @@ export function TestDataSection() {
             disabled={busy != null}
           >
             {busy === "clear" ? (
-              <Loader2 className="size-4 animate-spin" />
+              <Spinner className="size-4" />
             ) : (
               <Trash2 className="size-4" />
             )}

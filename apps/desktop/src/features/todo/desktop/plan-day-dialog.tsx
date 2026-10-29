@@ -43,7 +43,7 @@ import {
   type ApplySlotInput,
   type DayPlanPrefs,
 } from "@/lib/tauri";
-import { EqualizerLoader } from "@/components/EqualizerLoader";
+import { Spinner } from "@/components/ui/spinner";
 import { EmptyState } from "@/components/business/empty-state";
 import { pushUndo } from "../shared/undo-bridge";
 
@@ -194,7 +194,7 @@ export function PlanDayDialog({ open, onOpenChange }: PlanDayDialogProps) {
 
         {planQuery.isPending || plan == null ? (
           <div className="grid place-items-center py-10">
-            <EqualizerLoader />
+            <Spinner size={28} />
           </div>
         ) : plan.slots.length === 0 && plan.unscheduled.length === 0 ? (
           <div className="py-6">

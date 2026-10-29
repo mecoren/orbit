@@ -380,6 +380,8 @@
   --transition-duration-slow: var(--duration-slow);
   /* 鈹€鈹€ 娣″叆鍔ㄧ敾锛堜緵 sync-overlay 绛夌洿鎺ユ寕杞界粍浠朵娇鐢級鈹€鈹€ */
   --animate-fade-in: fade-in var(--duration-base) ease-out;
+  /* 加载指示器环内点绕行一圈（ui/spinner 原语；与移动端 OrbitSpinner 同周期） */
+  --animate-orbit-spin: orbit-spin 1.2s linear infinite;
   /* 同步成功对勾徽标一次性回弹（云图标 SyncStatusButton 用） */
   --animate-sync-pop: sync-pop var(--duration-base) cubic-bezier(0.34, 1.2, 0.64, 1);
 }
@@ -408,6 +410,13 @@
   }
   to {
     opacity: 1;
+  }
+}
+
+/* 加载指示器：整圆匀速旋转（环为均匀描边看不出转动，视觉上只有环内点在绕行） */
+@keyframes orbit-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 

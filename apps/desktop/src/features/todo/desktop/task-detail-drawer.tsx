@@ -28,7 +28,6 @@ import {
   History,
   Link2,
   ListChecks,
-  Loader2,
   Paperclip,
   Plus,
   Repeat,
@@ -46,6 +45,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
@@ -2365,7 +2365,7 @@ function AttachmentsSection({ taskId }: { taskId: number }) {
           className="text-muted-foreground hover:text-foreground disabled:opacity-50"
           onClick={() => void handleAdd()}
         >
-          {busy ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
+          {busy ? <Spinner size={13} /> : <Plus size={13} />}
         </button>
       }
     >

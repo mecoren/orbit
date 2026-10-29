@@ -20,6 +20,7 @@ import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { type SyncFinishedEvent } from "@/lib/events";
 import {
@@ -241,11 +242,8 @@ export function SyncStatusButton() {
           aria-label="云同步"
           onClick={() => void handleClick()}
         >
-          <Cloud className="size-4" />
-          {/* 同步中：主题色旋转环绕（终态与待命态不渲染，避免常驻 RAF） */}
-          {syncing && (
-            <span className="pointer-events-none absolute inset-0 m-auto size-[22px] animate-spin rounded-full border-2 border-primary/70 border-t-transparent" />
-          )}
+          {/* 同步中：云图标就地换成加载转圈（终态与待命态不渲染，避免常驻动画） */}
+          {syncing ? <Spinner size={22} /> : <Cloud className="size-4" />}
           {/* 成功：对勾徽标一次性回弹（tailwindcss-animate 的 keyframes 在 v4 下不可靠，用自绘 keyframes） */}
           {status === "success" && (
             <span className="animate-sync-pop absolute -top-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full bg-success text-white">

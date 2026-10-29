@@ -11,10 +11,11 @@
  * try/catch 兜底文案。
  */
 import { useState } from "react";
-import { Download, Loader2, RotateCcw } from "lucide-react";
+import { Download, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { resolveReleaseFallbackUrl } from "@/lib/update-fallback";
 
 /** 点击时加载的插件模块类型（编译期无浏览器 fallback 报错） */
@@ -111,7 +112,7 @@ export function UpdaterSection() {
       <div className="flex items-center gap-3">
         <Button onClick={() => void checkForUpdate()} disabled={checking || downloading}>
           {checking ? (
-            <Loader2 className="size-4 animate-spin" />
+            <Spinner className="size-4" />
           ) : (
             <Download className="size-4" />
           )}
@@ -124,7 +125,7 @@ export function UpdaterSection() {
             disabled={downloading}
           >
             {downloading ? (
-              <Loader2 className="size-4 animate-spin" />
+              <Spinner className="size-4" />
             ) : (
               <RotateCcw className="size-4" />
             )}

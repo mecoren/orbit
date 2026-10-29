@@ -15,7 +15,7 @@ import { CalendarCheck, CheckCheck, Clock3 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/business/empty-state";
-import { EqualizerLoader } from "@/components/EqualizerLoader";
+import { Spinner } from "@/components/ui/spinner";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import {
@@ -109,7 +109,7 @@ export function ReviewPanel() {
 
       {dueQuery.isPending ? (
         <div className="grid h-full place-items-center">
-          <EqualizerLoader />
+          <Spinner size={32} />
         </div>
       ) : due == null || due.length === 0 ? (
         <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto">

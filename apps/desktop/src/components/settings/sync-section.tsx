@@ -30,7 +30,6 @@ import {
   HardDrive,
   History,
   KeyRound,
-  Loader2,
   Lock,
   LockOpen,
   RefreshCw,
@@ -50,6 +49,7 @@ import {
 } from "@/lib/sync-status";
 import { Button } from "@/components/ui/button";
 import { DangerousConfirmDialog } from "@/components/ui/dangerous-confirm-dialog";
+import { Spinner } from "@/components/ui/spinner";
 import { BackupPreviewBody, type BackupPreviewState } from "./backup-preview-body";
 import { TimeHMSelect as SharedTimeHMSelect } from "@/components/business/time-hm-select";
 import { formatBackupSize, formatBackupTime } from "./backup-list-format";
@@ -439,11 +439,11 @@ function ConnectionCard() {
           </Button>
         )}
         <Button variant="outline" disabled={testing || busy || !endpoint.trim()} onClick={() => void handleTest()}>
-          {testing ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+          {testing ? <Spinner className="mr-1 size-3" /> : null}
           测试连接
         </Button>
         <Button disabled={busy || !endpoint.trim()} onClick={() => void handleSave()}>
-          {busy ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+          {busy ? <Spinner className="mr-1 size-3" /> : null}
           保存
         </Button>
       </div>
@@ -464,7 +464,7 @@ function ConnectionCard() {
               disabled={busy}
               onClick={() => void handleDisconnect()}
             >
-              {busy ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+              {busy ? <Spinner className="mr-1 size-3" /> : null}
               断开
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -624,7 +624,7 @@ function SyncPasswordCard() {
           </div>
           <div className="flex justify-end">
             <Button size="sm" disabled={busy || !pw} onClick={() => void handleSetup()}>
-              {busy ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+              {busy ? <Spinner className="mr-1 size-3" /> : null}
               设置并解锁
             </Button>
           </div>
@@ -668,7 +668,7 @@ function SyncPasswordCard() {
                 }}
               />
               <Button size="sm" variant="outline" disabled={busy || !unlockPw} onClick={() => void handleUnlock()}>
-                {busy ? <Loader2 className="mr-1 size-3 animate-spin" /> : <LockOpen className="mr-1 size-3" />}
+                {busy ? <Spinner className="mr-1 size-3" /> : <LockOpen className="mr-1 size-3" />}
                 解锁
               </Button>
             </div>
@@ -898,7 +898,11 @@ function SyncRunCard() {
 
   return (
     <div className="flex items-center gap-4 rounded-lg border p-5">
-      <RefreshCw className={cn("size-4 shrink-0 text-muted-foreground", running && "animate-spin")} />
+      {running ? (
+        <Spinner className="size-4 shrink-0 text-muted-foreground" />
+      ) : (
+        <RefreshCw className="size-4 shrink-0 text-muted-foreground" />
+      )}
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium">立即同步</p>
         <p className="truncate text-xs text-muted-foreground">
@@ -918,7 +922,7 @@ function SyncRunCard() {
           disabled={cancelling}
           onClick={() => void handleCancel()}
         >
-          {cancelling && <Loader2 className="mr-1 size-3 animate-spin" />}
+          {cancelling && <Spinner className="mr-1 size-3" />}
           {cancelling ? "取消中" : "取消"}
         </Button>
       ) : (
@@ -1564,7 +1568,7 @@ function AutoBackupCard() {
 
       <div className="flex justify-end border-t pt-3">
         <Button size="sm" disabled={busy} onClick={() => void handleSave()}>
-          {busy ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+          {busy ? <Spinner className="mr-1 size-3" /> : null}
           保存设置
         </Button>
       </div>
@@ -1831,16 +1835,16 @@ function BackupCard() {
       ) : null}
       <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" variant="outline" disabled={!!busy} onClick={() => void handleExportCloud()}>
-          {busy === "export" ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+          {busy === "export" ? <Spinner className="mr-1 size-3" /> : null}
           <CloudUpload className="mr-1 size-3" />
           备份到云端
         </Button>
         <Button size="sm" variant="outline" disabled={!!busy} onClick={() => void handleExportLocal()}>
-          {busy === "export" ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+          {busy === "export" ? <Spinner className="mr-1 size-3" /> : null}
           导出本地备份
         </Button>
         <Button size="sm" variant="outline" disabled={!!busy} onClick={() => void handleImportFile()}>
-          {busy === "import" ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+          {busy === "import" ? <Spinner className="mr-1 size-3" /> : null}
           导入本地文件
         </Button>
       </div>
@@ -2130,11 +2134,11 @@ function PlaintextExportCard() {
             disabled={!!busy}
             onClick={() => confirmExport("json")}
           >
-            {busy === "json" ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+            {busy === "json" ? <Spinner className="mr-1 size-3" /> : null}
             导出 JSON
           </Button>
           <Button size="sm" variant="outline" disabled={!!busy} onClick={() => confirmExport("csv")}>
-            {busy === "csv" ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+            {busy === "csv" ? <Spinner className="mr-1 size-3" /> : null}
             导出 CSV
           </Button>
           <Button
@@ -2146,7 +2150,7 @@ function PlaintextExportCard() {
               void doIcsExport();
             }}
           >
-            {busy === "ics" ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+            {busy === "ics" ? <Spinner className="mr-1 size-3" /> : null}
             导出日历
           </Button>
         </div>
@@ -2359,7 +2363,7 @@ function CsvImportCard() {
           disabled={content == null || busy != null}
           onClick={() => void doPreview()}
         >
-          {busy === "preview" ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+          {busy === "preview" ? <Spinner className="mr-1 size-3" /> : null}
           预览
         </Button>
         {preview && preview.stats.success > 0 ? (
@@ -2368,7 +2372,7 @@ function CsvImportCard() {
             disabled={busy != null}
             onClick={() => setImportConfirmOpen(true)}
           >
-            {busy === "execute" ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+            {busy === "execute" ? <Spinner className="mr-1 size-3" /> : null}
             导入
           </Button>
         ) : null}
@@ -2547,7 +2551,7 @@ function DbMaintenanceCard() {
           <span className="text-xs text-muted-foreground">上次维护结果将在此显示</span>
         )}
         <Button size="sm" variant="outline" disabled={busy} onClick={() => void runMaintenance()}>
-          {busy ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+          {busy ? <Spinner className="mr-1 size-3" /> : null}
           立即维护
         </Button>
       </div>

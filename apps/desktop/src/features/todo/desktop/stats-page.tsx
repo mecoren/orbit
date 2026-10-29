@@ -15,7 +15,7 @@ import { useQuery } from "@tanstack/react-query";
 import { BarChart3, Flame } from "lucide-react";
 
 import { EmptyState } from "@/components/business/empty-state";
-import { EqualizerLoader } from "@/components/EqualizerLoader";
+import { Spinner } from "@/components/ui/spinner";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { statsAggregate } from "@/lib/tauri";
@@ -101,7 +101,7 @@ export function StatsPanel() {
   if (!agg) {
     return (
       <div className="grid h-full place-items-center">
-        <EqualizerLoader />
+        <Spinner size={32} />
       </div>
     );
   }

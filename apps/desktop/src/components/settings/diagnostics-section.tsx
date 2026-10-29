@@ -17,7 +17,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { DangerousConfirmDialog } from "@/components/ui/dangerous-confirm-dialog";
-import { cn } from "@/lib/utils";
+import { Spinner } from "@/components/ui/spinner";
 import {
   cloudOrphanChunksGc,
   cloudSyncPullThenPush,
@@ -245,7 +245,7 @@ export function DiagnosticsSection() {
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={refresh} disabled={isFetching}>
-          <RefreshCw className={cn("size-4", isFetching && "animate-spin")} />
+          {isFetching ? <Spinner className="size-4" /> : <RefreshCw className="size-4" />}
           刷新
         </Button>
       </div>

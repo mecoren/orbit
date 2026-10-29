@@ -8,8 +8,9 @@
  * 预览失败不阻塞确认——预览只是决策辅助）/ ready（统计 + 前 10 条任务）。
  */
 
-import { AlertTriangle, Loader2 } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 
+import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import type { BackupPreviewView } from "@/lib/tauri";
 
@@ -100,7 +101,7 @@ export function BackupPreviewBody({ state }: { state: BackupPreviewState }) {
   if (state.status === "loading") {
     return (
       <div className="flex items-center gap-2 rounded-md border bg-muted/20 px-3 py-4 text-xs text-muted-foreground">
-        <Loader2 className="size-3.5 animate-spin" />
+        <Spinner className="size-3.5" />
         正在解密并读取备份预览…
       </div>
     );

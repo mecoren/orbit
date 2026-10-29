@@ -4,7 +4,7 @@ import { RouterProvider } from "react-router";
 import { router } from "@/router";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
-import { EqualizerLoader } from "@/components/EqualizerLoader";
+import { Spinner } from "@/components/ui/spinner";
 import { UnlockPage } from "@/pages/unlock-page";
 import { useDbInvalidation, useSyncInvalidation } from "@/lib/events";
 import { useTodoReminderListener } from "@/hooks/use-todo-reminder-listener";
@@ -60,7 +60,7 @@ function ReadyShell() {
       {/* 退出同步遮罩：进程即将结束，展示进度并阻止用户继续操作 */}
       {exiting ? (
         <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-3 bg-background/80 backdrop-blur-sm">
-          <EqualizerLoader />
+          <Spinner size={32} />
           <p className="text-sm text-muted-foreground">正在同步云端数据…</p>
         </div>
       ) : null}
@@ -139,7 +139,7 @@ export default function App() {
         {bootError ? (
           <p className="text-sm text-destructive">{bootError}</p>
         ) : (
-          <EqualizerLoader />
+          <Spinner size={32} />
         )}
       </div>
     );

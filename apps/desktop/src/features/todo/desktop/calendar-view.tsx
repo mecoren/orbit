@@ -45,7 +45,6 @@ import {
   Inbox,
   FileText,
   LocateFixed,
-  Loader2,
   RefreshCw,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
@@ -54,6 +53,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Dialog,
@@ -499,7 +499,7 @@ export function CalendarView({
             disabled={updatingHolidays}
             aria-label="更新节假日数据"
           >
-            {updatingHolidays ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+            {updatingHolidays ? <Spinner className="size-4" /> : <RefreshCw className="size-4" />}
           </Button>
         </TooltipTrigger>
         <TooltipContent>
@@ -670,7 +670,7 @@ export function CalendarView({
                     disabled={updatingHolidays}
                     onClick={refreshHolidays}
                   >
-                    <RefreshCw size={13} className={cn(updatingHolidays && "animate-spin")} />
+                    {updatingHolidays ? <Spinner size={13} /> : <RefreshCw size={13} />}
                     节假日
                   </Button>
                 </TooltipTrigger>

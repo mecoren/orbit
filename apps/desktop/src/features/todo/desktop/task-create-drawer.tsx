@@ -41,7 +41,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
-import { EqualizerLoader } from "@/components/EqualizerLoader";
+import { Spinner } from "@/components/ui/spinner";
 import { ErrorState } from "@/components/business/error-state";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -589,7 +589,7 @@ export function TaskCreateDrawer({
             <Button onClick={() => void handleCreate()} disabled={submitting}>
               {submitting ? (
                 <>
-                  <EqualizerLoader size={16} inline />
+                  <Spinner size={16} className="mr-1" />
                   创建中…
                 </>
               ) : (

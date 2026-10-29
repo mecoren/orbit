@@ -13,7 +13,7 @@
  * 每日更新时刻（`holiday_set_fixed_hour`）已随每月口径下线。
  */
 import { useMemo, useState } from "react";
-import { CalendarDays, Database, Loader2, RefreshCw, X } from "lucide-react";
+import { CalendarDays, Database, RefreshCw, X } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -24,6 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import {
   HOLIDAY_FETCH_YEAR_MIN,
@@ -256,7 +257,7 @@ export function CalendarSection() {
             className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-accent disabled:opacity-50"
           >
             {updatingCache ? (
-              <Loader2 className="size-3.5 animate-spin" />
+              <Spinner className="size-3.5" />
             ) : (
               <RefreshCw className="size-3.5" />
             )}
@@ -306,7 +307,7 @@ export function CalendarSection() {
             className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
             {rangeBusy ? (
-              <Loader2 className="size-3.5 animate-spin" />
+              <Spinner className="size-3.5" />
             ) : (
               <CalendarDays className="size-3.5" />
             )}
@@ -339,15 +340,17 @@ export function CalendarSection() {
                 </button>
               )}
             </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-              <div
-                className={
-                  "h-full rounded-full bg-primary transition-all duration-slow ease-out" +
-                  (pct === null ? " animate-pulse" : "")
-                }
-                style={{ width: pct === null ? "100%" : `${pct}%` }}
-              />
-            </div>
+            {/* 总量未知（pct null）走不定态转圈；拿到确切比例才画进度条 */}
+            {pct === null ? (
+              <Spinner className="size-3.5" />
+            ) : (
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-primary transition-all duration-slow ease-out"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            )}
           </div>
         )}
 
@@ -371,7 +374,7 @@ export function CalendarSection() {
                     className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-normal text-muted-foreground hover:bg-accent disabled:opacity-50"
                   >
                     {fetchingYear === g.year ? (
-                      <Loader2 className="size-3 animate-spin" />
+                      <Spinner className="size-3" />
                     ) : (
                       <RefreshCw className="size-3" />
                     )}
