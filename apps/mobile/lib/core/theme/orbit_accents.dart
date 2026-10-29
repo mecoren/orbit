@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 /// 与 React 版 `features/todo/shared/constants.ts` 的数值一一对应，
 /// Flutter 端为唯一消费方（桌面端仍由 React 维护自己的常量）。
 abstract final class OrbitAccents {
-  /// 主题强调色默认值（OrbitFab / EqSpinner / 链接等）
+  /// 主题强调色默认值（OrbitFab / OrbitSpinner / 链接等）
   /// 对应 React 版 themeAccent = #4E8CFF
   static const Color defaultThemeAccent = Color(0xFF4E8CFF);
 

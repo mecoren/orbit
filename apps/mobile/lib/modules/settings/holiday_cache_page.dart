@@ -14,6 +14,7 @@ import '../../shared/widgets/shadcn/orbit_month_calendar.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../todo/logic/task_logic.dart' show formatDateTime;
 import '../todo/providers/todo_providers.dart';
@@ -230,7 +231,7 @@ class _HolidayCachePageState extends ConsumerState<HolidayCachePage> {
             children: [
               holidaysAsync.when(
                 loading: () =>
-                    const Center(child: CircularProgressIndicator()),
+                    const Center(child: OrbitSpinner(size: AppDimens.iconSizeLg)),
                 error: (e, _) => const EmptyState(
                   message: '节假日缓存加载失败',
                 ),
@@ -351,11 +352,7 @@ class _HolidayCachePageState extends ConsumerState<HolidayCachePage> {
             child: FilledButton.icon(
               onPressed: _updating ? null : _update,
               icon: _updating
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
+                  ? const OrbitSpinner(size: 16)
                   : const Icon(OrbitIcons.refresh, size: 16),
               label: Text(_updating ? '更新中…' : '立即更新'),
             ),
@@ -389,11 +386,7 @@ class _HolidayCachePageState extends ConsumerState<HolidayCachePage> {
         onPressed:
             (_yearBusy != null || _rangeBusy) ? null : () => _updateYear(year),
         child: _yearBusy == year
-            ? const SizedBox(
-                width: 14,
-                height: 14,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
+            ? const OrbitSpinner(size: 14)
             : const Text('更新该年'),
       ),
       child: Column(
@@ -502,14 +495,18 @@ class _HolidayProgressDialog extends ConsumerWidget {
               style: TextStyle(fontSize: 13, color: colors.bodyText),
             ),
             const SizedBox(height: AppDimens.space12),
-            ClipRRect(
-              borderRadius: AppShapes.full,
-              child: LinearProgressIndicator(
-                value: phase == 'starting' ? null : ratio,
-                minHeight: 6,
-                backgroundColor: colors.surfaceSecondary,
+            // 未拿到总数（starting / total=0）时走不定态转圈，有确切比例才画进度条
+            if (phase == 'starting' || ratio == null)
+              const Center(child: OrbitSpinner(size: AppDimens.iconSizeLg))
+            else
+              ClipRRect(
+                borderRadius: AppShapes.full,
+                child: LinearProgressIndicator(
+                  value: ratio,
+                  minHeight: 6,
+                  backgroundColor: colors.surfaceSecondary,
+                ),
               ),
-            ),
             const SizedBox(height: AppDimens.space16),
             Align(
               alignment: Alignment.centerRight,

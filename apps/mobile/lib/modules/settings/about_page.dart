@@ -12,6 +12,7 @@ import '../../shared/widgets/shadcn/orbit_card.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
+import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import 'update_check.dart';
 
@@ -160,11 +161,7 @@ class _AboutPageState extends ConsumerState<AboutPage> {
                     TextButton.icon(
                       onPressed: _checking ? null : _checkUpdate,
                       icon: _checking
-                          ? const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
+                          ? const OrbitSpinner(size: 14)
                           : const Icon(OrbitIcons.refresh, size: 16),
                       label: Text(_checking ? '检查中…' : '检查更新'),
                     ),

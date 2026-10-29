@@ -15,6 +15,7 @@ import '../../shared/widgets/shadcn/orbit_actions_sheet.dart'
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_date_picker.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 // as rep：规避 Flutter widgets 自带 RepeatMode 类名冲突
@@ -966,13 +967,9 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                             IconButton(
                               tooltip: '保存',
                               icon: _saving
-                                  ? SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: OrbitAccents.themeAccent,
-                                      ),
+                                  ? OrbitSpinner(
+                                      size: 20,
+                                      color: OrbitAccents.themeAccent,
                                     )
                                   : Icon(
                                       OrbitIcons.check,
@@ -1561,12 +1558,11 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
   }
 
   Widget _loadingView() => Padding(
-    padding: EdgeInsets.all(AppDimens.space32),
+    padding: const EdgeInsets.all(AppDimens.space32),
     child: Center(
-      child: SizedBox(
-        width: 24,
-        height: 24,
-        child: CircularProgressIndicator(color: OrbitAccents.themeAccent),
+      child: OrbitSpinner(
+        size: AppDimens.iconSizeLg,
+        color: OrbitAccents.themeAccent,
       ),
     ),
   );

@@ -38,6 +38,7 @@ import '../../shared/widgets/shadcn/orbit_date_picker.dart';
 import '../../shared/widgets/shadcn/orbit_dropdown_panel.dart';
 import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import 'form_bottom_sheet.dart';
 import 'logic/parse_quick_input.dart';
@@ -1005,14 +1006,7 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
           onTap: canSend ? _submit : null,
           child: Center(
             child: _saving
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
+                ? const OrbitSpinner(size: 16, color: Colors.white)
                 : Icon(
                     OrbitIcons.send,
                     size: AppDimens.iconSizeSm,

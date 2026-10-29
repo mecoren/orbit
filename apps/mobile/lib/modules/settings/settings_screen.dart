@@ -25,6 +25,7 @@ import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/utils/sync_status_text.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../shell/db_invalidation.dart';
 import '../todo/logic/task_logic.dart' show formatDateTime;
@@ -1052,13 +1053,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                     ? null
                                     : () => _cancelSync(),
                                 icon: _cancellingSync
-                                    ? SizedBox(
-                                        width: AppDimens.iconSizeSm,
-                                        height: AppDimens.iconSizeSm,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: OrbitAccents.themeAccent,
-                                        ),
+                                    ? OrbitSpinner(
+                                        size: AppDimens.iconSizeSm,
+                                        color: OrbitAccents.themeAccent,
                                       )
                                     : const Icon(
                                         OrbitIcons.close,
@@ -1401,13 +1398,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                   ? null
                                   : () => _exportData('json'),
                               icon: _exporting == 'json'
-                                  ? SizedBox(
-                                      width: AppDimens.iconSizeSm,
-                                      height: AppDimens.iconSizeSm,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: colors.secondaryText,
-                                      ),
+                                  ? OrbitSpinner(
+                                      size: AppDimens.iconSizeSm,
+                                      color: colors.secondaryText,
                                     )
                                   : const Icon(
                                       OrbitIcons.braces,
@@ -1423,13 +1416,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                   ? null
                                   : () => _exportData('csv'),
                               icon: _exporting == 'csv'
-                                  ? SizedBox(
-                                      width: AppDimens.iconSizeSm,
-                                      height: AppDimens.iconSizeSm,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: colors.secondaryText,
-                                      ),
+                                  ? OrbitSpinner(
+                                      size: AppDimens.iconSizeSm,
+                                      color: colors.secondaryText,
                                     )
                                   : const Icon(
                                       OrbitIcons.table,
@@ -1448,13 +1437,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               ? null
                               : () => _exportData('ics'),
                           icon: _exporting == 'ics'
-                              ? SizedBox(
-                                  width: AppDimens.iconSizeSm,
-                                  height: AppDimens.iconSizeSm,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: colors.secondaryText,
-                                  ),
+                              ? OrbitSpinner(
+                                  size: AppDimens.iconSizeSm,
+                                  color: colors.secondaryText,
                                 )
                               : const Icon(
                                   OrbitIcons.calendarDays,
@@ -1505,13 +1490,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         child: OutlinedButton.icon(
                           onPressed: _maintaining ? null : _runMaintenance,
                           icon: _maintaining
-                              ? SizedBox(
-                                  width: AppDimens.iconSizeSm,
-                                  height: AppDimens.iconSizeSm,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: colors.secondaryText,
-                                  ),
+                              ? OrbitSpinner(
+                                  size: AppDimens.iconSizeSm,
+                                  color: colors.secondaryText,
                                 )
                               : const Icon(
                                   OrbitIcons.wrench,
@@ -1585,13 +1566,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                   ? null
                                   : _previewImport,
                               icon: _importing == 'preview'
-                                  ? SizedBox(
-                                      width: AppDimens.iconSizeSm,
-                                      height: AppDimens.iconSizeSm,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: colors.secondaryText,
-                                      ),
+                                  ? OrbitSpinner(
+                                      size: AppDimens.iconSizeSm,
+                                      color: colors.secondaryText,
                                     )
                                   : const Icon(
                                       OrbitIcons.eye,
@@ -1609,13 +1586,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         FilledButton.icon(
                           onPressed: _importing != null ? null : _executeImport,
                           icon: _importing == 'execute'
-                              ? SizedBox(
-                                  width: AppDimens.iconSizeSm,
-                                  height: AppDimens.iconSizeSm,
-                                  child: const CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
+                              ? const OrbitSpinner(
+                                  size: AppDimens.iconSizeSm,
+                                  color: Colors.white,
                                 )
                               : const Icon(
                                   OrbitIcons.download,
@@ -1779,13 +1752,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 child: OutlinedButton.icon(
                   onPressed: _widgetBusy ? null : _widgetRefresh,
                   icon: _widgetBusy
-                      ? SizedBox(
-                          width: AppDimens.iconSizeSm,
-                          height: AppDimens.iconSizeSm,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: colors.secondaryText,
-                          ),
+                      ? OrbitSpinner(
+                          size: AppDimens.iconSizeSm,
+                          color: colors.secondaryText,
                         )
                       : const Icon(
                           OrbitIcons.layoutGrid,
@@ -2056,13 +2025,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                   const Spacer(),
                   if (_secBusy)
-                    SizedBox(
-                      width: AppDimens.iconSizeSm,
-                      height: AppDimens.iconSizeSm,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: OrbitAccents.themeAccent,
-                      ),
+                    OrbitSpinner(
+                      size: AppDimens.iconSizeSm,
+                      color: OrbitAccents.themeAccent,
                     )
                   else
                     Icon(

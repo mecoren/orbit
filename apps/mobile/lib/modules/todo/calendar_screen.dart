@@ -24,6 +24,7 @@ import '../../shared/widgets/shadcn/orbit_strikethrough.dart';
 import '../../shared/widgets/shadcn/orbit_month_calendar.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_timeline_day.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../services/local_prefs.dart';
@@ -1100,11 +1101,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     final tip = auto ? '$lastText（每月自动更新）' : '$lastText（自动更新已关闭）';
     return IconButton(
       icon: _updating
-          ? const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
+          ? const OrbitSpinner(size: AppDimens.iconSizeSm)
           : const Icon(OrbitIcons.refresh, size: AppDimens.iconSizeMd),
       tooltip: tip,
       onPressed: _updating ? null : _updateHolidays,

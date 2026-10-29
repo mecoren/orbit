@@ -16,6 +16,7 @@ import '../../shared/widgets/shadcn/orbit_actions_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_date_picker.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
+import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import 'logic/task_logic.dart';
 import '../../shared/utils/hex_color.dart';
@@ -27,7 +28,7 @@ import '../../core/theme/icon_map.dart';
 /// 列表（名称 + 条件摘要 + 命中数）+ 底部新建（名称 + 条件 JSON）+ 长按删除。
 /// 条件应用在行内展开即时预览（不走独立路由——移动端轻量消费形态）。
 ///
-/// [initialConditions]：入页即弹构建抽屉并预填该条件（列表面板「存为视图」
+/// [initialConditions]：入页即弹构建抽屉并预填该条件（列表面板「保存为筛选器」
 /// 把当前筛选映射进来，G1，镜像桌面 `saved-filter-dialog` 预填链）。
 class SavedFiltersScreen extends ConsumerStatefulWidget {
   const SavedFiltersScreen({super.key, this.initialConditions});
@@ -46,7 +47,7 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
   @override
   void initState() {
     super.initState();
-    // 「存为视图」预填：首帧后弹构建抽屉（等本页数据骨架就位再叠加弹层）
+    // 「保存为筛选器」预填：首帧后弹构建抽屉（等本页数据骨架就位再叠加弹层）
     final prefill = widget.initialConditions;
     if (prefill != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -154,7 +155,7 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
   /// has_open_subtask。仅收纳已设置键，未设置键不写入 JSON
   /// （与桌面白名单校验口径一致）。
   ///
-  /// [initialConditions]：预填条件（「存为视图」把面板当前筛选映射进来，
+  /// [initialConditions]：预填条件（「保存为筛选器」把面板当前筛选映射进来，
   /// 与桌面 `toolbarToForm` 预填链同语义）；与 [existing] 互斥（编辑态忽略）。
   Future<void> _openBuilder({
     TodoSavedFilter? existing,
@@ -754,7 +755,7 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
                     );
                   },
                   loading: () => const SliverFillRemaining(
-                    child: Center(child: CircularProgressIndicator()),
+                    child: Center(child: OrbitSpinner(size: AppDimens.iconSizeLg)),
                   ),
                   error: (e, _) => SliverFillRemaining(
                     child: Center(

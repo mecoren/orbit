@@ -44,6 +44,9 @@ class AppMotion {
   /// 骨架呼吸周期（首屏加载占位专用；往返一次的时长）
   static const Duration skeletonPulse = Duration(milliseconds: 1100);
 
+  /// 加载转圈周期（`OrbitSpinner` 环内点绕行一圈的时长，与参考实现同源）
+  static const Duration spinnerOrbit = Duration(milliseconds: 1200);
+
   /// 滚动定位时长（日历选中日滚到分组 / 年视图翻年；与曲线配套）
   static const Duration scrollSettle = Duration(milliseconds: 260);
 

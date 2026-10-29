@@ -11,6 +11,7 @@ import '../../data/providers/bridge_provider.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
+import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import 'diagnostics_page.dart' show formatBytes;
 
@@ -161,7 +162,7 @@ class _StorageCleanupPageState extends ConsumerState<StorageCleanupPage> {
               else if (rows == null)
                 const Padding(
                   padding: EdgeInsets.all(AppDimens.space16),
-                  child: Center(child: CircularProgressIndicator()),
+                  child: Center(child: OrbitSpinner(size: AppDimens.iconSizeLg)),
                 )
               else if (rows.isEmpty)
                 SectionCard(

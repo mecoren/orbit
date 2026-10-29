@@ -20,6 +20,7 @@ import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/utils/hex_color.dart';
+import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_empty_state.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
@@ -334,7 +335,7 @@ class _TriagePageState extends ConsumerState<TriagePage> {
                 ? Padding(
                     padding: EdgeInsets.only(top: topInset),
                     child: const Center(
-                        child: CircularProgressIndicator(strokeWidth: 2)),
+                        child: OrbitSpinner(size: AppDimens.iconSizeLg)),
                   )
                 : task == null
                     ? Padding(

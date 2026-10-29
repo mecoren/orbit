@@ -30,6 +30,7 @@ import '../../modules/todo/providers/todo_providers.dart';
 import '../utils/sync_status_text.dart';
 import 'shadcn/orbit_actions_sheet.dart' show bottomSheetTopShape;
 import 'shadcn/orbit_sheet_scaffold.dart';
+import 'shadcn/orbit_spinner.dart';
 import 'shadcn/orbit_toast.dart';
 import '../../core/theme/icon_map.dart';
 
@@ -179,14 +180,7 @@ class _SyncStatusButtonState extends ConsumerState<SyncStatusButton> {
         children: [
           Icon(OrbitIcons.cloud, size: AppDimens.iconSizeMd, color: color),
           if (status == SyncUiStatus.syncing)
-            SizedBox(
-              width: _iconBox,
-              height: _iconBox,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: OrbitAccents.themeAccent,
-              ),
-            ),
+            OrbitSpinner(size: _iconBox, color: OrbitAccents.themeAccent),
           if (status == SyncUiStatus.success)
             Positioned(
               right: 0,
@@ -461,14 +455,7 @@ class _SyncInfoSheetState extends ConsumerState<_SyncInfoSheet> {
             ? (_cancelling ? null : () => unawaited(_cancelSync()))
             : () => unawaited(_runSync()),
         confirmChild: _cancelling
-            ? const SizedBox(
-                width: AppDimens.iconSizeSm,
-                height: AppDimens.iconSizeSm,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white,
-                ),
-              )
+            ? const OrbitSpinner(size: AppDimens.iconSizeSm, color: Colors.white)
             : null,
       ),
     );

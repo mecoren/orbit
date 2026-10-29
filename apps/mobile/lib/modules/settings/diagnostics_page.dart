@@ -10,6 +10,7 @@ import '../../core/theme/icon_map.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
+import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 
@@ -121,7 +122,7 @@ class _DiagnosticsPageState extends ConsumerState<DiagnosticsPage> {
             ),
             children: [
               if (_loading)
-                const Center(child: CircularProgressIndicator())
+                const Center(child: OrbitSpinner(size: AppDimens.iconSizeLg))
               else if (snap == null)
                 Text(
                   '读数不可用',

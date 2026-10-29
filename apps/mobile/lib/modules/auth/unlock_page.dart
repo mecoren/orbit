@@ -6,6 +6,7 @@ import '../../core/theme/app_dimens.dart';
 import '../../data/providers/biometric_provider.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../core/theme/icon_map.dart';
+import '../../shared/widgets/shadcn/orbit_spinner.dart';
 
 /// 主密码解锁页（原 React 版 unlock-page.tsx 同构）
 ///
@@ -165,10 +166,9 @@ class _UnlockPageState extends ConsumerState<UnlockPage> {
                     child: OutlinedButton.icon(
                       onPressed: _loading ? null : _biometricSubmit,
                       icon: _loading
-                          ? SizedBox(
-                              width: AppDimens.iconSizeSm,
-                              height: AppDimens.iconSizeSm,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: colors.secondaryText),
+                          ? OrbitSpinner(
+                              size: AppDimens.iconSizeSm,
+                              color: colors.secondaryText,
                             )
                           : const Icon(OrbitIcons.fingerprint,
                               size: AppDimens.iconSizeSm + 2),

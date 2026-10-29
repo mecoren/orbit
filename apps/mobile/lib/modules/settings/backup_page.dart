@@ -13,6 +13,7 @@ import '../../shared/widgets/shadcn/orbit_card.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../todo/logic/task_logic.dart' show formatDateTime;
 import '../../core/theme/icon_map.dart';
@@ -863,12 +864,8 @@ class _MiniSpinner extends StatelessWidget {
   const _MiniSpinner();
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-    width: AppDimens.iconSizeSm,
-    height: AppDimens.iconSizeSm,
-    child: CircularProgressIndicator(
-      strokeWidth: 2,
-      color: OrbitAccents.themeAccent,
-    ),
+  Widget build(BuildContext context) => OrbitSpinner(
+    size: AppDimens.iconSizeSm,
+    color: OrbitAccents.themeAccent,
   );
 }

@@ -19,6 +19,7 @@ import '../../shared/widgets/shadcn/orbit_password_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../todo/providers/todo_providers.dart';
 import '../../core/theme/icon_map.dart';
@@ -230,15 +231,11 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
                       : '已配置 · ${_engineLabel(_engine)}',
                   child: _loading
                       ? Padding(
-                          padding: EdgeInsets.all(AppDimens.space16),
+                          padding: const EdgeInsets.all(AppDimens.space16),
                           child: Center(
-                            child: SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: OrbitAccents.themeAccent,
-                              ),
+                            child: OrbitSpinner(
+                              size: AppDimens.iconSizeLg,
+                              color: OrbitAccents.themeAccent,
                             ),
                           ),
                         )
@@ -514,25 +511,15 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
                   ? null
                   : _testConnection,
               child: _testing
-                  ? const SizedBox(
-                      width: AppDimens.iconSizeSm,
-                      height: AppDimens.iconSizeSm,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
+                  ? const OrbitSpinner(size: AppDimens.iconSizeSm)
                   : const Text('测试连接'),
             ),
             const SizedBox(width: AppDimens.space8),
             FilledButton(
               onPressed: (_busy || endpointEmpty) ? null : _save,
               child: _busy
-                  ? const SizedBox(
-                      width: AppDimens.iconSizeSm,
-                      height: AppDimens.iconSizeSm,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
+                  ? const OrbitSpinner(
+                      size: AppDimens.iconSizeSm, color: Colors.white)
                   : const Text('保存'),
             ),
           ],
@@ -958,14 +945,8 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
                     child: FilledButton(
                       onPressed: _busy ? null : _setup,
                       child: _busy
-                          ? const SizedBox(
-                              width: AppDimens.iconSizeSm,
-                              height: AppDimens.iconSizeSm,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
+                          ? const OrbitSpinner(
+                              size: AppDimens.iconSizeSm, color: Colors.white)
                           : const Text('设置密码'),
                     ),
                   ),
@@ -1011,14 +992,8 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
                       child: FilledButton(
                         onPressed: _busy ? null : _unlock,
                         child: _busy
-                            ? const SizedBox(
-                                width: AppDimens.iconSizeSm,
-                                height: AppDimens.iconSizeSm,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
+                            ? const OrbitSpinner(
+                                size: AppDimens.iconSizeSm, color: Colors.white)
                             : const Text('解锁'),
                       ),
                     ),
@@ -1201,15 +1176,11 @@ class _SyncHistoryCardState extends ConsumerState<_SyncHistoryCard> {
           const SizedBox(height: AppDimens.space8),
           if (_loading)
             Padding(
-              padding: EdgeInsets.all(AppDimens.space16),
+              padding: const EdgeInsets.all(AppDimens.space16),
               child: Center(
-                child: SizedBox(
-                  width: AppDimens.iconSizeLg,
-                  height: AppDimens.iconSizeLg,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: OrbitAccents.themeAccent,
-                  ),
+                child: OrbitSpinner(
+                  size: AppDimens.iconSizeLg,
+                  color: OrbitAccents.themeAccent,
                 ),
               ),
             )
@@ -1388,15 +1359,11 @@ class _SyncLedgerCardState extends ConsumerState<_SyncLedgerCard> {
       ),
       child: _loading && state == null
           ? Padding(
-              padding: EdgeInsets.all(AppDimens.space16),
+              padding: const EdgeInsets.all(AppDimens.space16),
               child: Center(
-                child: SizedBox(
-                  width: AppDimens.iconSizeLg,
-                  height: AppDimens.iconSizeLg,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: OrbitAccents.themeAccent,
-                  ),
+                child: OrbitSpinner(
+                  size: AppDimens.iconSizeLg,
+                  color: OrbitAccents.themeAccent,
                 ),
               ),
             )
@@ -1732,13 +1699,7 @@ class _CloudCleanupCardState extends ConsumerState<_CloudCleanupCard> {
                                   }
                                 },
                           child: busy
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
+                              ? const OrbitSpinner(size: 16)
                               : Text(
                                   '删除选中${selected.isEmpty ? '' : ' (${selected.length})'}',
                                 ),
@@ -1801,22 +1762,14 @@ class _CloudCleanupCardState extends ConsumerState<_CloudCleanupCard> {
           OutlinedButton(
             onPressed: _scanning ? null : _scan,
             child: _scanning
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
+                ? const OrbitSpinner(size: 16)
                 : const Text('清理云端孤儿附件'),
           ),
           const SizedBox(height: AppDimens.space8),
           OutlinedButton(
             onPressed: _chunkGcBusy ? null : _chunkGc,
             child: _chunkGcBusy
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
+                ? const OrbitSpinner(size: 16)
                 : const Text('回收孤儿数据桶'),
           ),
         ],
@@ -1898,11 +1851,7 @@ class _SyncDiagnosticCardState extends ConsumerState<_SyncDiagnosticCard> {
                 child: OutlinedButton(
                   onPressed: _busy == null ? () => _run('push') : null,
                   child: _busy == 'push'
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
+                      ? const OrbitSpinner(size: 16)
                       : const Text('仅推送'),
                 ),
               ),
@@ -1911,11 +1860,7 @@ class _SyncDiagnosticCardState extends ConsumerState<_SyncDiagnosticCard> {
                 child: OutlinedButton(
                   onPressed: _busy == null ? () => _run('pull') : null,
                   child: _busy == 'pull'
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
+                      ? const OrbitSpinner(size: 16)
                       : const Text('先拉后推'),
                 ),
               ),

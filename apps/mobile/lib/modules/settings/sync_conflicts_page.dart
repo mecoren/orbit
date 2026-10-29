@@ -13,6 +13,7 @@ import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_card.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
+import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../core/theme/icon_map.dart';
 
@@ -198,15 +199,11 @@ class _SyncConflictsPageState extends ConsumerState<SyncConflictsPage> {
                       const SizedBox(height: AppDimens.space4),
                       if (_loading)
                         Padding(
-                          padding: EdgeInsets.all(AppDimens.space16),
+                          padding: const EdgeInsets.all(AppDimens.space16),
                           child: Center(
-                            child: SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: OrbitAccents.themeAccent,
-                              ),
+                            child: OrbitSpinner(
+                              size: AppDimens.iconSizeLg,
+                              color: OrbitAccents.themeAccent,
                             ),
                           ),
                         )

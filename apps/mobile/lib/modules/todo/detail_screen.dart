@@ -30,6 +30,7 @@ import '../../shared/widgets/shadcn/orbit_actions_sheet.dart'
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_date_picker.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import 'form_bottom_sheet.dart' show showTodoDatePicker, syncTaskReminder;
@@ -2065,7 +2066,7 @@ class _RelationsSectionState extends ConsumerState<_RelationsSection> {
                 ),
                 const SizedBox(height: AppDimens.space8),
                 if (searching)
-                  const Center(child: CircularProgressIndicator())
+                  const Center(child: OrbitSpinner(size: AppDimens.iconSizeLg))
                 else
                   Flexible(
                     child: ListView(
@@ -2670,11 +2671,7 @@ class _AttachmentsSectionState extends ConsumerState<_AttachmentsSection> {
     return SectionCard(
       title: '附件',
       trailing: _busy
-          ? const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
+          ? const OrbitSpinner(size: 16)
           : IconButton(
               tooltip: '添加附件',
               icon: const Icon(OrbitIcons.add),

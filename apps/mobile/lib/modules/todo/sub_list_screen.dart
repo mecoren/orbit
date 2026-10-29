@@ -26,6 +26,7 @@ import '../../shared/widgets/shadcn/orbit_list_card.dart';
 import '../../shared/widgets/shadcn/orbit_row_toggle.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_skeleton.dart';
+import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
@@ -170,6 +171,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   static const _sortChoices = {
     TaskSortKey.manual: '拖拽顺序',
     TaskSortKey.due: '截止时间',
+    TaskSortKey.start: '开始时间',
     TaskSortKey.priority: '优先级',
     TaskSortKey.title: '标题',
     TaskSortKey.created: '创建时间',
@@ -472,12 +474,12 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                 : '已启用 ${_filters.activeCount} 项',
             onTap: _showFilterSheet,
           ),
-          // 存为视图（G1，对齐桌面「···」菜单「存为视图」）：把当前筛选
+          // 保存为筛选器（G1，对齐桌面「···」菜单「保存为筛选器」）：把当前筛选
           // 一键固化为保存的筛选器——跳筛选器页并预填构建抽屉
           //（filterToSavedConditions 与桌面 toolbarToForm 同口径）
           OrbitPanelItem(
             icon: OrbitIcons.saveView,
-            label: '存为视图',
+            label: '保存为筛选器',
             onTap: () => context.push(
               '/todo/saved-filters',
               extra: filterToSavedConditions(
@@ -2542,13 +2544,9 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
               if (_batchBusy)
                 Padding(
                   padding: EdgeInsets.only(right: AppDimens.space12),
-                  child: SizedBox(
-                    width: AppDimens.iconSizeSm,
-                    height: AppDimens.iconSizeSm,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: OrbitAccents.themeAccent,
-                    ),
+                  child: OrbitSpinner(
+                    size: AppDimens.iconSizeSm,
+                    color: OrbitAccents.themeAccent,
                   ),
                 ),
             ],

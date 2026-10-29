@@ -10,6 +10,7 @@ import '../../data/providers/bridge_provider.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
+import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 
 /// 三档规模：首屏联调 / 常规翻页与看板 / 统计与滚动压力（与桌面同档）
@@ -349,11 +350,7 @@ class _TestDataPageState extends ConsumerState<TestDataPage> {
     }
   }
 
-  Widget _spinner() => SizedBox(
-        width: AppDimens.iconSizeSm,
-        height: AppDimens.iconSizeSm,
-        child: const CircularProgressIndicator(strokeWidth: 2),
-      );
+  Widget _spinner() => const OrbitSpinner(size: AppDimens.iconSizeSm);
 
   /// 桥层异常文案（去掉 Dart 的 `Exception: ` 前缀，与设置页其他错误提示同口径）
   String _errorText(Object e) {

@@ -19,6 +19,7 @@ import '../../shared/widgets/shadcn/orbit_empty_state.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import 'logic/project_actions.dart';
 import 'logic/project_palette.dart';
@@ -162,7 +163,7 @@ class _ProjectEditPageState extends ConsumerState<ProjectEditPage> {
           OrbitPanelItem(
             icon: OrbitIcons.archive,
             label: project.isArchived == 1 ? '取消归档' : '归档项目',
-            onTap: () => toggleProjectArchive(ref, project),
+            onTap: () => toggleProjectArchive(ref, context, project),
           ),
           OrbitPanelItem(
             icon: OrbitIcons.delete,
@@ -252,11 +253,7 @@ class _ProjectEditPageState extends ConsumerState<ProjectEditPage> {
                       ? null
                       : () => _save(project),
                   icon: _saving
-                      ? const SizedBox(
-                          width: AppDimens.iconSizeSm,
-                          height: AppDimens.iconSizeSm,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
+                      ? const OrbitSpinner(size: AppDimens.iconSizeSm)
                       : Icon(
                           OrbitIcons.check,
                           size: AppDimens.iconSizeLg,
