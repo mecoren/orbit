@@ -17,6 +17,10 @@
 
 ## [Unreleased]
 
+### 优化：看板截止条目对齐日历——逾期红胶囊 + 悬浮完整时刻（2026-10-30）
+
+看板卡片的截止一直只有「日历图标 + 灰色 MM-dd」：逾期只靠整段染红、看不出具体时刻（卡片宽度也放不下），与日历视图行尾的截止处理不一致。现对齐日历口径：①逾期未完成渲染红色胶囊（`bg-destructive/10` 底 + 11px font-medium，与日历同款）；②截止条目挂 Tooltip——逾期「已逾期 · 截止 M月d日 HH:mm」，未逾期「截止 M月d日 HH:mm」（`zhCN` locale，随主题色底白字）。docs/04 §3.3 同步。
+
 ### 优化：看板拖拽卡顿——dnd 订阅拆薄壳，帧间隔 83ms→16.7ms（2026-10-30）
 
 dnd-kit 的 internal context 在指针跨卡时更新，`useDraggable/useDroppable` 的每个消费者都会重渲染。此前 hook 直接挂在卡片与列本体上：卡片一体订阅 → 每次跨卡把整张卡的子树重建；列一体订阅 → 整列连带 `getVirtualItems()` 的 15 行树重建（实测一次拖拽整列重渲染 86 次），dev 下 60 张卡的看板单次拖拽生成上万 React 元素、p95 帧间隔 83ms、最长一次掉帧 483ms。现改为：①`SortableKanbanCard` 薄壳承载 dnd 两 hook 与 listeners，`KanbanCard` 本体只吃 `dragging/isOver/dragAttributes`；②`DroppableKanbanColumn`（isOver 边框 + droppable 注册）包 `KanbanColumnBody`（虚拟行树），列本体不再订阅拖拽上下文；③`dragging` 改由 `useDraggable().isDragging` 内聚，不再把 `draggingId` 提到列 props（一起手就击穿整板 memo）；④`onClearSelection` 改 `useCallback` 恒定引用、`displayReminder` 产物按任务 `useMemo` 缓存。实测同一场景（240 任务 / 4 列 × 60）：p95 83ms → 16.7ms、掉帧（>32ms）28 → 1、最长帧 483ms → 50ms、长任务 24 段 → 1 段。docs/04 §3.3 补「拖拽性能口径」防回退。

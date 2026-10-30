@@ -30,6 +30,7 @@ import {
   type DraggableAttributes,
 } from "@dnd-kit/core";
 import { format } from "date-fns";
+import { zhCN } from "date-fns/locale";
 import { toast } from "sonner";
 import {
   Calendar,
@@ -903,15 +904,30 @@ const KanbanCard = memo(function KanbanCard({
             <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
               {labels.length > 0 && <LabelChips labels={labels} max={2} />}
               {task.due_date != null && (
-                <span
-                  className={cn(
-                    "inline-flex shrink-0 items-center gap-1",
-                    overdue && OVERDUE_COLOR_CLASS,
-                  )}
-                >
-                  <Calendar size={11} />
-                  {format(new Date(task.due_date), "MM-dd")}
-                </span>
+                /* 截止口径对齐日历视图（04 §3.3）：逾期改红色胶囊（同款
+                   bg-destructive/10 底 + 11px 字），完整截止时刻挂悬浮提示——
+                   卡片只放得下 MM-dd，具体到日/时全靠 tooltip */
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span
+                      className={cn(
+                        "inline-flex shrink-0 items-center gap-1 tabular-nums",
+                        overdue &&
+                          cn(
+                            "rounded bg-destructive/10 px-1.5 py-0.5 text-[11px] font-medium",
+                            OVERDUE_COLOR_CLASS,
+                          ),
+                      )}
+                    >
+                      <Calendar size={11} aria-hidden />
+                      {format(new Date(task.due_date), "MM-dd")}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {overdue ? "已逾期 · " : ""}
+                    截止 {format(new Date(task.due_date), "M月d日 HH:mm", { locale: zhCN })}
+                  </TooltipContent>
+                </Tooltip>
               )}
               <ReminderChip reminder={reminder} />
               {task.percent_done > 0 && (
