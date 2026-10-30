@@ -143,10 +143,16 @@ test("回收站：删除入站 → 恢复回列表", async ({ page }) => {
   await expect(page.getByText("冒烟任务-回收站验证")).toBeVisible();
   await expect(page.getByText(/天后自动清除/)).toBeVisible();
 
-  // ---- 恢复：回列表 + 回收站清空 ----
-  await page.getByRole("button", { name: "恢复" }).first().click();
+  // ---- 恢复：行尾图标钮 → 行内小弹框确认（ConfirmPopover）----
+  await page.getByRole("button", { name: "恢复", exact: true }).first().click();
+  await page
+    .locator('[data-slot="popover-content"]')
+    .getByRole("button", { name: "恢复", exact: true })
+    .click();
   await expect(page.getByText("已恢复")).toBeVisible(); // toast
-  await expect(page.getByText("冒烟任务-回收站验证")).toHaveCount(0); // 回收站空
+  // toast 文案「已恢复「任务名」」含标题，行消失断言限定在回收站区域内
+  const trashRegion = page.getByRole("region", { name: "回收站" });
+  await expect(trashRegion.getByText("冒烟任务-回收站验证")).toHaveCount(0); // 回收站空
   // 空态居中布局（2026-09-09：移出 ScrollArea 修复顶对齐）
   await expect(page.getByText("回收站是空的")).toBeVisible();
 
@@ -173,8 +179,9 @@ test("回收站：彻底删除可撤销（2026-09-09 purge 接入延迟提交）
   // ---- 进回收站 → 彻底删除 → 5s 窗口内撤销 → 行回归 ----
   await page.getByRole("button", { name: "回收站" }).first().click();
   await expect(page.getByText("冒烟任务-彻底删除验证")).toBeVisible();
+  const purgePopover = page.locator('[data-slot="popover-content"]');
   await page.getByRole("button", { name: "彻底删除" }).first().click(); // 行尾图标钮
-  await page.getByRole("button", { name: "彻底删除", exact: true }).click(); // AlertDialog 确认
+  await purgePopover.getByRole("button", { name: "彻底删除", exact: true }).click(); // 行内小弹框确认
   await expect(page.getByText("已删除任务「冒烟任务-彻底删除验证」")).toBeVisible(); // 撤销 toast
   await page.getByRole("button", { name: "撤销" }).click();
   // 撤销后行回归（exact 匹配行内标题——toast 文案「已删除任务「…」」是超串不撞）
@@ -184,7 +191,7 @@ test("回收站：彻底删除可撤销（2026-09-09 purge 接入延迟提交）
 
   // ---- 再彻底删除一次：不撤销 → 落库 → 空态 ----
   await page.getByRole("button", { name: "彻底删除" }).first().click();
-  await page.getByRole("button", { name: "彻底删除", exact: true }).click();
+  await purgePopover.getByRole("button", { name: "彻底删除", exact: true }).click();
   await page.waitForTimeout(6000); // 撤销窗口 5s + 余量
   await expect(page.getByText("冒烟任务-彻底删除验证")).toHaveCount(0);
   await expect(page.getByText("回收站是空的")).toBeVisible();
@@ -725,10 +732,15 @@ test("保存的筛选器：创建 → 侧栏分组 → 点击过滤 → 删除�
   // 标题切换为筛选器名（面板消费 activeSavedFilter）
   await expect(page.getByRole("heading", { name: "本周紧急" })).toBeVisible();
 
-  // 删除：hover 行 → 删除按钮
+  // 删除：hover 行 → 行尾删除钮 → 行内小弹框确认（ConfirmPopover）
   await filterRow.hover();
   await page.getByRole("button", { name: "删除筛选器 本周紧急" }).click();
-  await expect(page.getByRole("button", { name: "本周紧急" })).toHaveCount(0, {
+  await page
+    .locator('[data-slot="popover-content"]')
+    .getByRole("button", { name: "删除", exact: true })
+    .click();
+  // 行名按钮用 exact 限定——编辑/删除图标钮的 aria-label 是「…筛选器 本周紧急」超串
+  await expect(page.getByRole("button", { name: "本周紧急", exact: true })).toHaveCount(0, {
     timeout: 5_000,
   });
 });
