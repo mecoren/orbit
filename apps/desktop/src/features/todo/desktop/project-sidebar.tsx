@@ -3,7 +3,7 @@
  *
  * 结构：快捷入口区（6 视图，选中才显示语义色图标）+ 项目列表区
  * （Folder 图标按项目色染色 + 名称，内联新增在列表尾部，
- * 右键删除，删除保护双 AlertDialog）。
+ * 右键菜单内联确认归档/删除——不收起菜单，未完成任务时删除只告知）。
  * 未分组为虚拟项（id=-1），可拖拽参与项目排序，默认项目第一位，
  * 位置持久化为「前驱项目 id」存 localStorage（LS_UNGROUPED_AFTER）。
  *
@@ -52,16 +52,6 @@ import {
 } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import {
   Dialog,
   DialogContent,
   DialogFooter,
@@ -79,6 +69,7 @@ import {
   type TodoProject,
 } from "@/lib/tauri";
 import { LS_UNGROUPED_AFTER, QUICK_VIEWS, TODO_ACCENT, type QuickViewKey, PRESET_10 } from "../shared/constants";
+import type { QuickViewCounts } from "../shared/sidebar-counts";
 import { REVIEW_INTERVAL_PRESETS, REVIEW_OFF } from "../shared/project-review";
 import {
   buildFolderPathLabels,
@@ -94,6 +85,7 @@ import {
   saveSidebarManualCollapsed,
 } from "../shared/sidebar-collapsed";
 import { ProjectContextMenu } from "./task-context-menu";
+import { ConfirmPopover } from "../shared/confirm-popover";
 
 /** 未分组虚拟 id */
 export const UNGROUPED_ID = -1;
@@ -106,6 +98,8 @@ interface ProjectSidebarProps {
   projects: TodoProject[];
   /** 项目 id → 未完成任务数（由父级从任务全量数据聚合，删除保护判定用） */
   undoneCounts: Record<number, number>;
+  /** 快捷视图 → 角标计数（壳层 SQL 聚合；未就绪时行尾不渲染数字） */
+  quickViewCounts?: QuickViewCounts;
   activeQuickView: QuickViewKey | null;
   activeProjectId: number | null;
   ungroupedActive: boolean;
@@ -126,6 +120,7 @@ interface ProjectSidebarProps {
 export function ProjectSidebar({
   projects,
   undoneCounts,
+  quickViewCounts,
   activeQuickView,
   activeProjectId,
   ungroupedActive,
@@ -164,20 +159,19 @@ export function ProjectSidebar({
     saveSidebarManualCollapsed(next);
   };
 
-  // 删除保护对话框状态：null 关闭；{project, hasUndone} 决定弹哪种
-  const [deleteTarget, setDeleteTarget] = useState<{
-    project: TodoProject;
-    hasUndone: boolean;
-    undoneCount?: number;
-  } | null>(null);
-
   // 编辑项目对话框状态（#36 重命名 + 改色）：null 关闭
   const [editTarget, setEditTarget] = useState<TodoProject | null>(null);
+
+  // 筛选器删除确认（行内小弹框，锚定在删除钮旁）：null 关闭。
+  // 侧栏行只有 3px 图标，误点即删（软删且无回收站入口），故先出一层轻量确认。
+  const [confirmDeleteFilterId, setConfirmDeleteFilterId] = useState<number | null>(null);
 
   // ---- 归档区（展开态项目列表尾部折叠组）----
   // 归档列表独立 queryKey：db-change 表级失效只命中 ["todo-project"] 前缀,
   // 归档切换经 refetchProjects + refetchArchived 双失效
   const [archivedOpen, setArchivedOpen] = useState(false);
+  // 取消归档确认（行内小弹框，锚定归档区的恢复钮）：与正向归档确认同形制
+  const [confirmUnarchiveId, setConfirmUnarchiveId] = useState<number | null>(null);
   const { data: archivedProjects = [] } = useQuery({
     queryKey: ["todo-project", "archived"],
     queryFn: () => todoProjectListArchived(),
@@ -272,10 +266,10 @@ export function ProjectSidebar({
     }
   };
 
-  // 删除项目：项目下有未完成任务 → 拒绝；无任务 → 确认后进入撤销窗口软删
+  // 删除项目：无任务 → 菜单内确认后进入撤销窗口软删（未完成任务拦截在菜单
+  // 确认区里做——见 ProjectContextMenu 的 undoneCount 分支）
   const undoableDelete = useUndoableDeleteAction();
   const confirmDelete = (project: TodoProject) => {
-    setDeleteTarget(null);
     if (activeProjectId === project.id) navigate("/todo");
     undoableDelete({
       entityLabel: "项目",
@@ -396,6 +390,7 @@ export function ProjectSidebar({
         <div className="mt-1 flex w-full flex-col items-center gap-1">
           {QUICK_VIEWS.map((v) => {
             const active = effectiveQuickView === v.key && !ungroupedActive;
+            const count = quickViewCounts?.[v.key] ?? 0;
             return (
               <Tooltip key={v.key}>
                 <TooltipTrigger asChild>
@@ -411,7 +406,10 @@ export function ProjectSidebar({
                     <v.icon className="size-4" style={active ? { color: v.color } : undefined} />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent>{v.label}</TooltipContent>
+                <TooltipContent>
+                  {v.label}
+                  {count > 0 ? ` · ${count}` : ""}
+                </TooltipContent>
               </Tooltip>
             );
           })}
@@ -566,6 +564,7 @@ export function ProjectSidebar({
       <div className="space-y-1 p-3">
         {QUICK_VIEWS.map((v) => {
           const active = effectiveQuickView === v.key && !ungroupedActive;
+          const count = quickViewCounts?.[v.key] ?? 0;
           return (
             <button
               key={v.key}
@@ -579,6 +578,17 @@ export function ProjectSidebar({
               {/* 未选中与未分组图标同款（继承前景色），选中才显示语义色 */}
               <v.icon className="size-4" style={active ? { color: v.color } : undefined} />
               <span>{v.label}</span>
+              {/* 行尾计数（参考 TickTick 版式：纯灰数字不占常态视觉）；aria-hidden
+                  保住按钮可访问名恰为视图名（e2e 的 exact 匹配依赖它）。
+                  贴行右缘，与项目区同一条计数竖线（项目区的尾部图标排在数字左侧） */}
+              {count > 0 && (
+                <span
+                  aria-hidden="true"
+                  className="ml-auto text-xs tabular-nums text-muted-foreground"
+                >
+                  {count}
+                </span>
+              )}
             </button>
           );
         })}
@@ -657,14 +667,26 @@ export function ProjectSidebar({
                   >
                     <Pencil className="size-3 text-muted-foreground hover:text-foreground" />
                   </button>
-                  <button
-                    type="button"
-                    aria-label={`删除筛选器 ${f.name}`}
-                    className="shrink-0 opacity-0 group-hover:opacity-100"
-                    onClick={() => onDeleteSavedFilter(f.id)}
+                  <ConfirmPopover
+                    open={confirmDeleteFilterId === f.id}
+                    onOpenChange={(o) => setConfirmDeleteFilterId(o ? f.id : null)}
+                    title="删除筛选器"
+                    description={`确定要删除「${f.name}」吗？删除后将从侧栏移除。`}
+                    onConfirm={() => onDeleteSavedFilter(f.id)}
                   >
-                    <Trash2 className="size-3 text-muted-foreground hover:text-destructive" />
-                  </button>
+                    <button
+                      type="button"
+                      aria-label={`删除筛选器 ${f.name}`}
+                      className={cn(
+                        "shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
+                        // 弹框打开后鼠标离开行，行内按钮会回到 opacity-0——保持可见，
+                        // 否则锚点视觉上"消失"只剩一个悬空小框
+                        confirmDeleteFilterId === f.id && "opacity-100",
+                      )}
+                    >
+                      <Trash2 className="size-3 text-muted-foreground hover:text-destructive" />
+                    </button>
+                  </ConfirmPopover>
                 </div>
               );
             })}
@@ -717,9 +739,9 @@ export function ProjectSidebar({
                       dueForReview={reviewDueIds.has(id)}
                       active={effectiveProjectId === id && !ungroupedActive}
                       onSelect={() => onSelectProject(id)}
-                      onRequestDelete={(hasUndone, undoneCount) => {
+                      onConfirmDelete={() => {
                         const target = projectById.get(id);
-                        if (target) setDeleteTarget({ project: target, hasUndone, undoneCount });
+                        if (target) confirmDelete(target);
                       }}
                       onRequestEdit={() => {
                         const target = projectById.get(id);
@@ -764,9 +786,12 @@ export function ProjectSidebar({
                     >
                       <Archive className="size-3.5" />
                       <span>已归档</span>
-                      <span className="text-xs tabular-nums">{archivedProjects.length}</span>
-                      {/* 折叠箭头钉在行尾：与项目行（hasChildren 箭头）同版式，size-4 槽居中 */}
-                      <span className="ml-auto flex size-4 shrink-0 items-center justify-center">
+                      {/* 计数推到行尾（不再紧贴文字连读成「已归档3」），
+                          折叠箭头钉最右——与项目行同版式 */}
+                      <span className="ml-auto text-xs tabular-nums">
+                        {archivedProjects.length}
+                      </span>
+                      <span className="flex size-3.5 shrink-0 items-center justify-center">
                         {archivedOpen ? (
                           <ChevronDown className="size-3.5" />
                         ) : (
@@ -797,19 +822,30 @@ export function ProjectSidebar({
                             >
                               {p.title}
                             </button>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <button
-                                  type="button"
-                                  aria-label={`取消归档 ${p.title}`}
-                                  className="shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
-                                  onClick={() => void toggleArchive(p)}
-                                >
-                                  <ArchiveRestore className="size-3 text-muted-foreground hover:text-foreground" />
-                                </button>
-                              </TooltipTrigger>
-                              <TooltipContent>取消归档</TooltipContent>
-                            </Tooltip>
+                            {/* 取消归档：与归档同形制先出轻量确认（锚定恢复钮），
+                                确认后才翻转 is_archived 回到主列表 */}
+                            <ConfirmPopover
+                              open={confirmUnarchiveId === p.id}
+                              onOpenChange={(o) => setConfirmUnarchiveId(o ? p.id : null)}
+                              title="取消归档"
+                              description={`确定要将「${p.title}」恢复到项目列表吗？`}
+                              confirmLabel="恢复"
+                              confirmTone="default"
+                              onConfirm={() => void toggleArchive(p)}
+                              tooltip="取消归档"
+                            >
+                              <button
+                                type="button"
+                                aria-label={`取消归档 ${p.title}`}
+                                className={cn(
+                                  "shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
+                                  // 弹框打开后鼠标离开行仍保持锚点可见（同筛选器删除）
+                                  confirmUnarchiveId === p.id && "opacity-100",
+                                )}
+                              >
+                                <ArchiveRestore className="size-3 text-muted-foreground hover:text-foreground" />
+                              </button>
+                            </ConfirmPopover>
                           </div>
                         ))}
                       </div>
@@ -821,47 +857,6 @@ export function ProjectSidebar({
           </DndContext>
         </div>
       </div>
-
-      {/* 删除保护双弹窗（04 §3.1） */}
-      <AlertDialog
-        open={deleteTarget?.hasUndone === true}
-        onOpenChange={(o) => !o && setDeleteTarget(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>无法删除</AlertDialogTitle>
-            <AlertDialogDescription>
-              该项目下还有未完成任务，请先清空或移走任务后再删除。
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogAction>我知道了</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog
-        open={deleteTarget != null && deleteTarget.hasUndone === false}
-        onOpenChange={(o) => !o && setDeleteTarget(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>删除项目</AlertDialogTitle>
-            <AlertDialogDescription className="break-words">
-              确定要删除项目「{deleteTarget?.project.title}」吗？删除后 5 秒内可撤销。
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-white hover:bg-destructive/90"
-              onClick={() => deleteTarget && confirmDelete(deleteTarget.project)}
-            >
-              删除
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {/* 编辑项目（#36 重命名 + 改色；M8 追加「上级文件夹」选择） */}
       <ProjectEditDialog
@@ -1114,7 +1109,7 @@ function SortableProjectRow({
   dueForReview,
   active,
   onSelect,
-  onRequestDelete,
+  onConfirmDelete,
   onRequestEdit,
   onRequestArchive,
 }: {
@@ -1130,8 +1125,8 @@ function SortableProjectRow({
   dueForReview: boolean;
   active: boolean;
   onSelect: () => void;
-  /** 上报删除请求；hasUndone 决定弹窗类型（保护 / 确认） */
-  onRequestDelete: (hasUndone: boolean, undoneCount: number) => void;
+  /** 删除确认通过后直接执行（撤销窗口软删由父级负责） */
+  onConfirmDelete: () => void;
   /** 上报编辑请求（重命名/改色/改上级文件夹；#36 + M8） */
   onRequestEdit: () => void;
   /** 上报归档请求（本批新增；is_archived 翻转由父级 toggleArchive 处理） */
@@ -1168,9 +1163,10 @@ function SortableProjectRow({
       {/* 右键菜单：标题头 + 编辑项目（重命名/改色/改上级）+ 归档 + 删除（保护弹窗由父级处理） */}
       <ProjectContextMenu
         project={project}
-        onRequestDelete={() => onRequestDelete(undoneCount > 0, undoneCount)}
+        undoneCount={undoneCount}
         onRequestEdit={onRequestEdit}
         onRequestArchive={onRequestArchive}
+        onConfirmDelete={onConfirmDelete}
       >
         <button
           type="button"
@@ -1183,8 +1179,14 @@ function SortableProjectRow({
           />
           <span className="truncate">{project.title}</span>
         </button>
-        {/* F1 待回顾徽标：琥珀圆点 + tooltip，点击直达回顾中心（钉在行尾箭头前，
-            不占标题空间——到期是「状态」不是「计数」，点状提示即可） */}
+        {/* 行尾未完成计数（纯灰数字；0 不占位）：紧跟行尾图标左侧右对齐 */}
+        {undoneCount > 0 && (
+          <span className="ml-auto text-xs tabular-nums text-muted-foreground">
+            {undoneCount}
+          </span>
+        )}
+        {/* F1 待回顾徽标：琥珀圆点 + tooltip，点击直达回顾中心（排在计数与
+            折叠箭头之间；到期是「状态」不是「计数」，点状提示即可） */}
         {dueForReview && (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -1195,7 +1197,7 @@ function SortableProjectRow({
                   e.stopPropagation();
                   navigate("/todo/review");
                 }}
-                className="flex size-4 shrink-0 items-center justify-center"
+                className="flex size-3.5 shrink-0 items-center justify-center"
               >
                 <span className="size-2 rounded-full bg-amber-500" />
               </button>
@@ -1203,25 +1205,24 @@ function SortableProjectRow({
             <TooltipContent>待回顾 · 点击进入回顾中心</TooltipContent>
           </Tooltip>
         )}
+        {/* 折叠箭头：仅父节点渲染，钉在行尾最右（不在图标前占槽——那会在行首与
+            图标之间空出一条死带；叶子行零占位） */}
+        {hasChildren && (
+          <button
+            type="button"
+            aria-label={`${collapsed ? "展开" : "折叠"}子项目 ${project.title}`}
+            aria-expanded={!collapsed}
+            onClick={onToggleCollapse}
+            className="flex size-3.5 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+          >
+            {collapsed ? (
+              <ChevronRight className="size-3.5" />
+            ) : (
+              <ChevronDown className="size-3.5" />
+            )}
+          </button>
+        )}
       </ProjectContextMenu>
-      {/* 折叠箭头：仅父节点渲染，钉在行尾（与筛选器删除钮/取消归档钮同版式）。
-          不在图标前占槽——那会在行首与图标之间空出一条死带，
-          行尾位置由行宽决定，各天然对齐，叶子行零占位 */}
-      {hasChildren && (
-        <button
-          type="button"
-          aria-label={`${collapsed ? "展开" : "折叠"}子项目 ${project.title}`}
-          aria-expanded={!collapsed}
-          onClick={onToggleCollapse}
-          className="flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground"
-        >
-          {collapsed ? (
-            <ChevronRight className="size-3.5" />
-          ) : (
-            <ChevronDown className="size-3.5" />
-          )}
-        </button>
-      )}
     </div>
   );
 }

@@ -307,7 +307,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
         MoreActionItem(
           icon: OrbitIcons.archive,
           label: project.isArchived == 1 ? '取消归档' : '归档项目',
-          onTap: () => toggleProjectArchive(ref, project),
+          onTap: () => toggleProjectArchive(ref, context, project),
         ),
         MoreActionItem(
           icon: OrbitIcons.delete,
@@ -890,7 +890,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
         ),
         dense: true,
         trailing: TextButton(
-          onPressed: () => toggleProjectArchive(ref, project),
+          onPressed: () => toggleProjectArchive(ref, context, project),
           child: const Text('恢复'),
         ),
         onTap: () => context.push('/todo/tasks?projectId=${project.id}'),

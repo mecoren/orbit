@@ -14,10 +14,24 @@ import '../../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../../shared/widgets/shadcn/orbit_toast.dart';
 import '../providers/todo_providers.dart';
 
-/// 归档 / 取消归档（桌面右键同口径）：is_archived 翻转经 patchJson；
-/// 双失效（主列表 + 归档区）——两处入口都必须让两个列表同时收敛
-Future<void> toggleProjectArchive(WidgetRef ref, TodoProject project) async {
+/// 归档 / 取消归档（桌面右键同口径）：先出轻量确认（对齐桌面 ConfirmPopover
+/// 的形制），确认后 is_archived 翻转经 patchJson；双失效（主列表 + 归档区）
+/// ——两处入口都必须让两个列表同时收敛
+Future<void> toggleProjectArchive(
+  WidgetRef ref,
+  BuildContext context,
+  TodoProject project,
+) async {
   final next = project.isArchived == 1 ? 0 : 1;
+  final confirmed = await showConfirmBottomSheet(
+    context,
+    title: next == 1 ? '归档项目' : '取消归档',
+    message: next == 1
+        ? '确定要归档「${project.title}」吗？归档后项目从列表收起，可在「已归档」中恢复。'
+        : '确定要将「${project.title}」恢复到项目列表吗？',
+    confirmLabel: next == 1 ? '归档' : '恢复',
+  );
+  if (!confirmed) return;
   try {
     await ref
         .read(orbitBridgeProvider)

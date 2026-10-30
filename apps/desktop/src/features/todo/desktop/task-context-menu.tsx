@@ -6,7 +6,8 @@
  *   打开详情 / 标记完成·标记未完成 / 收藏·取消收藏 / 我的一天 / 复制任务 /
  *   修改标签▸(勾选切换) / 更换项目▸ / 设置提醒(Dialog) /
  *   添加评论(Dialog,Textarea) / 多选(可选,仅多选态视图传入) / ─ / 删除
- * 项目菜单：项目名标题头 + 编辑项目（重命名/改色，#36）+ 删除项目（destructive；删除保护由父级弹窗处理）
+ * 项目菜单：项目名标题头 + 编辑项目（重命名/改色，#36）+ 归档（点击不关菜单，
+ * 原地展开确认区）+ 删除项目（destructive；删除保护由父级弹窗处理）
  */
 import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -586,22 +587,33 @@ export function TaskContextMenu({
 
 export function ProjectContextMenu({
   project,
-  onRequestDelete,
+  undoneCount,
   onRequestEdit,
   onRequestArchive,
+  onConfirmDelete,
   children,
 }: {
   project: TodoProject;
-  /** 上报删除请求；删除保护（未完成任务拦截）由父级弹窗处理 */
-  onRequestDelete: () => void;
+  /** 未完成任务数：> 0 时删除确认区只告知不可删（原删除保护口径） */
+  undoneCount: number;
   /** 上报编辑请求（重命名/改色）；对话框由父级统一渲染 */
   onRequestEdit: () => void;
-  /** 上报归档/取消归档请求（is_archived 翻转由父级按 project.is_archived 判定） */
+  /** 确认归档后上报；is_archived 翻转由父级按 project.is_archived 判定 */
   onRequestArchive: () => void;
+  /** 确认删除后直接执行（撤销窗口软删由父级负责） */
+  onConfirmDelete: () => void;
   children: React.ReactNode;
 }) {
+  // 菜单内联确认：归档 / 删除都在原位置展开，不收起菜单——先收菜单再弹
+  // 外部小窗会让菜单「缩进去」一下（视觉跳变），且两次点击的锚点会漂移。
+  // pending 同时充当互斥锁：展开一项时另一项回到普通菜单项。
+  const [pending, setPending] = useState<"archive" | "delete" | null>(null);
+
   return (
     <ContextMenuBase
+      onOpenChange={(open) => {
+        if (!open) setPending(null);
+      }}
       menu={(close) => (
         <>
           <DropdownMenuLabel className="max-w-[240px] truncate px-2 py-1.5 text-xs font-normal text-muted-foreground">
@@ -614,19 +626,117 @@ export function ProjectContextMenu({
             <Pencil size={14} />
             编辑项目
           </DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={() => { close(); onRequestArchive(); }}
-          >
-            <Archive size={14} />
-            {project.is_archived ? "取消归档" : "归档项目"}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            variant="destructive"
-            onSelect={() => { close(); onRequestDelete(); }}
-          >
-            <Trash2 size={14} />
-            删除项目
-          </DropdownMenuItem>
+          {pending === "archive" ? (
+            <div className="px-3 pb-2.5 pt-1.5">
+              <p className="max-w-[240px] text-xs font-semibold">
+                确定要归档「{project.title}」吗？
+              </p>
+              <p className="mt-1 max-w-[240px] text-[10px] leading-relaxed text-muted-foreground">
+                归档后项目从列表收起，可在「已归档」中恢复。
+              </p>
+              <div className="mt-2 flex justify-end gap-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2.5 text-xs"
+                  onClick={() => setPending(null)}
+                >
+                  取消
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2.5 text-xs text-primary hover:bg-primary/10 hover:text-primary"
+                  onClick={() => {
+                    close();
+                    onRequestArchive();
+                  }}
+                >
+                  归档
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <DropdownMenuItem
+              onSelect={(event) => {
+                // preventDefault：Radix 默认选中即关菜单，这里要让确认区留在原处
+                event.preventDefault();
+                setPending("archive");
+              }}
+            >
+              <Archive size={14} />
+              {project.is_archived ? "取消归档" : "归档项目"}
+            </DropdownMenuItem>
+          )}
+          {pending === "delete" ? (
+            <div className="px-3 pb-2.5 pt-1.5">
+              {undoneCount > 0 ? (
+                <>
+                  {/* 删除保护：未完成任务拦截（原居中弹窗口径，不提供确认按钮） */}
+                  <p className="text-xs font-semibold">无法删除</p>
+                  <p className="mt-1 max-w-[240px] text-[10px] leading-relaxed text-muted-foreground">
+                    该项目下还有 {undoneCount} 条未完成任务，请先清空或移走任务后再删除。
+                  </p>
+                  <div className="mt-2 flex justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2.5 text-xs"
+                      onClick={() => setPending(null)}
+                    >
+                      我知道了
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="max-w-[240px] break-words text-xs font-semibold">
+                    确定要删除项目「{project.title}」吗？
+                  </p>
+                  <p className="mt-1 max-w-[240px] text-[10px] leading-relaxed text-muted-foreground">
+                    删除后 5 秒内可撤销。
+                  </p>
+                  <div className="mt-2 flex justify-end gap-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2.5 text-xs"
+                      onClick={() => setPending(null)}
+                    >
+                      取消
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      onClick={() => {
+                        close();
+                        onConfirmDelete();
+                      }}
+                    >
+                      删除
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          ) : (
+            <DropdownMenuItem
+              variant="destructive"
+              onSelect={(event) => {
+                event.preventDefault();
+                setPending("delete");
+              }}
+            >
+              <Trash2 size={14} />
+              删除项目
+            </DropdownMenuItem>
+          )}
         </>
       )}
     >

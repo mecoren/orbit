@@ -41,6 +41,7 @@ import { parseTemplatePayload } from "../shared/template-apply";
 import type { CalendarDateField } from "../shared/calendar-date-field";
 import { TASK_LIST_PAGE_SIZE, type QuickViewKey } from "../shared/constants";
 import { needsTodoIndexNav, TODO_INDEX_PATH } from "../shared/sidebar-nav";
+import { buildQuickViewCounts, type QuickViewCounts } from "../shared/sidebar-counts";
 import { ProjectSidebar } from "./project-sidebar";
 import { TaskDetailDrawer } from "./task-detail-drawer";
 import { TaskCreateDrawer } from "./task-create-drawer";
@@ -103,7 +104,7 @@ interface TodoShellContextValue {
   templates: import("@/lib/tauri").TodoTemplate[];
   labelManagerOpen: boolean;
   setLabelManagerOpen: (open: boolean) => void;
-  /** 新建保存筛选器（F3：面板「存为视图」传工具栏筛选预填条件 JSON） */
+  /** 新建保存筛选器（F3：面板「保存为筛选器」传工具栏筛选预填条件 JSON） */
   createSavedFilterWith: (conditions: string) => void;
 }
 
@@ -231,6 +232,38 @@ export default function TodoShell() {
     // 挂在 ["todo_tasks"] 前缀下，让 db-change 的列表失效顺带刷新角标
     queryKey: ["todo_tasks", "overview"],
     queryFn: () => todoTaskOverview({ page: 1, page_size: 0 }),
+    staleTime: 2 * 60 * 1000,
+    placeholderData: (prev) => prev,
+  });
+
+  // 侧栏快捷视图角标（与移动端 sidebarCountsProvider 同口径）：六路
+  // `todo_task_overview` 各自谓词下推只做 COUNT，不拉行。全部/未完成共用
+  // 未完成总数（角标答「还剩多少要做」），今天/近7天含逾期。挂在
+  // ["todo_tasks"] 前缀下随任务写事件失效；项目角标仍复用上面的
+  // undone_by_project（该聚合与筛选无关，不重复消费）。
+  const sidebarCountsQuery = useQuery({
+    queryKey: ["todo_tasks", "sidebar-counts", todayZero],
+    queryFn: async (): Promise<QuickViewCounts> => {
+      const todayEnd = todayZero + 86_400_000;
+      const weekEnd = todayEnd + 6 * 86_400_000;
+      const base = { page: 1, page_size: 0 };
+      const [undone, done, today, week, favorite, myDay] = await Promise.all([
+        todoTaskOverview({ ...base, done: false }),
+        todoTaskOverview({ ...base, done: true }),
+        todoTaskOverview({ ...base, done: false, due_to: todayEnd }),
+        todoTaskOverview({ ...base, done: false, due_to: weekEnd }),
+        todoTaskOverview({ ...base, done: false, favorite_only: true }),
+        todoTaskOverview({ ...base, done: false, my_day_today: todayZero }),
+      ]);
+      return buildQuickViewCounts({
+        undone: undone.total,
+        done: done.total,
+        today: today.total,
+        week: week.total,
+        favorite: favorite.total,
+        myDay: myDay.total,
+      });
+    },
     staleTime: 2 * 60 * 1000,
     placeholderData: (prev) => prev,
   });
@@ -397,6 +430,7 @@ export default function TodoShell() {
           <ProjectSidebar
             projects={projects}
             undoneCounts={undoneCounts}
+            quickViewCounts={sidebarCountsQuery.data}
             activeQuickView={projectId == null && !ungrouped && savedFilterId == null ? quickView : null}
             activeProjectId={projectId}
             ungroupedActive={ungrouped}

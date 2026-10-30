@@ -16,14 +16,21 @@ import {
 export function ContextMenuBase({
   children,
   menu,
+  onOpenChange,
 }: {
   /** 右键目标元素（行/卡片等） */
   children: ReactNode;
   /** 菜单内容；close 用于子项点击后收起 */
   menu: (close: () => void) => ReactNode;
+  /** 菜单开合回调：调用方据此重置菜单内的临时态（如内联确认区） */
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpenState] = useState(false);
   const [pos, setPos] = useState({ x: 0, y: 0 });
+  const setOpen = (next: boolean) => {
+    setOpenState(next);
+    onOpenChange?.(next);
+  };
   const close = () => setOpen(false);
 
   return (

@@ -199,6 +199,7 @@ pnpm bump:check           # 只校验一致性（零写入，CI/本地通用）
 - 共享纯函数（排序/分档/日期/位置）放 `features/todo/shared/` + 同目录 `.test.ts` 共置。
 - 满高预览区不嵌 Radix ScrollArea（viewport 的 table 包裹打断高度链——qraft 同款坑），用 `div.min-h-0 flex-1 overflow-auto`。
 - PopoverContent 内禁嵌自带 Popover 控件（Radix 焦点陷阱），两段式避嵌套。
+- **右键菜单里的操作确认一律「菜单内联」，不得先收菜单再弹外部小窗**：项目右键的「归档项目 / 删除项目」点击后菜单保持展开（`DropdownMenuItem.onSelect` 里 `event.preventDefault()`，用 `ContextMenuBase.onOpenChange` 复位内联态），在原菜单位置展开确认区（说明 + 取消/确认）。两条硬理由：①先收菜单再弹小窗，视觉上菜单「缩回去一下」再冒出第二个弹层，锚点漂移；②Radix 菜单 `modal` 关闭会把焦点还给右键哨兵，同一次交互里新开的 Popover 会被判 focusOutside 立即自关（现象＝「点了没反应」，2026-10-29 归档踩坑）。语气口径：归档/恢复用主题色（可逆操作），删除用红色；项目下有未完成任务时删除确认区只告知「无法删除」不给确认钮。行内图标直接触发的确认（筛选器删除、已归档行恢复）仍走 `ConfirmPopover` 原语。
 
 **测试**
 
