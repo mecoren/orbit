@@ -157,7 +157,9 @@ export function LogbookView({
                   <span className="h-px flex-1 bg-border/40" />
                 </div>
               ) : (
-                <div className="py-0.5">
+                // 行自带下边框（日历/日志共用 CalendarTaskRow 列表版式），
+                // 外层不再补纵向间距，否则分隔线在行间断开
+                <div>
                   <TaskContextMenu
                     task={item.task}
                     projects={projects}

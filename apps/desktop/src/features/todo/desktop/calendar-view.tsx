@@ -36,6 +36,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import {
+  Calendar,
   CalendarClock,
   CalendarDays,
   CalendarRange,
@@ -150,7 +151,8 @@ const CALENDAR_RANGE_LIMIT = 5000;
  *  右/下留白在 CalendarView 根层统一补（三档共用），左半区只保留左侧内距 */
 const SPLIT_LAYOUT = "flex h-full min-h-0 flex-col gap-3 xl:flex-row";
 const LEFT_PANE = "flex min-h-0 flex-1 flex-col pl-4 xl:flex-none xl:basis-1/2 xl:pl-5";
-const RIGHT_PANE = "flex min-h-0 flex-1 flex-col rounded-xl border bg-card/40";
+/** overflow-hidden：滚动行贴到圆角边框时不溢出面板裁切 */
+const RIGHT_PANE = "flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card/40";
 /** 左半区内容宽度约束：flex-1 占满高度（fillHeight 月历需要确定高度容器），
  *  max-w-3xl + mx-auto 水平居中——月历 lg 尺寸 7 列 + 年视图 3 列的最佳宽度 */
 const LEFT_CONTENT = "mx-auto min-h-0 w-full max-w-3xl flex-1";
@@ -738,13 +740,17 @@ export function CalendarView({
 
           {/* ===== 右半区：当前月的任务列表（按日分组，选中日高亮定位） ===== */}
           <div className={RIGHT_PANE}>
-            <div className="flex shrink-0 items-center gap-2 border-b px-4 py-3">
-              <h3 className="text-sm font-semibold">
+            <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2.5">
+              <h3 className="truncate text-sm font-semibold">
                 {viewYear}年{viewMonth + 1}月的任务
               </h3>
-              <Badge variant="secondary">{listTotal} 条</Badge>
+              <Badge variant="secondary" className="h-5 px-1.5 text-[11px] tabular-nums">
+                {listTotal} 条
+              </Badge>
               {listTotal > 0 && (
-                <span className="text-xs text-muted-foreground">点击日历日期可定位</span>
+                <span className="ml-auto shrink-0 text-[11px] text-muted-foreground/80">
+                  点击日期定位
+                </span>
               )}
             </div>
             {isLoading && listTotal === 0 ? (
@@ -831,11 +837,15 @@ export function CalendarView({
 
           {/* ===== 右半区：本周任务（按日分组，选中日高亮定位） ===== */}
           <div className={RIGHT_PANE}>
-            <div className="flex shrink-0 items-center gap-2 border-b px-4 py-3">
-              <h3 className="text-sm font-semibold">本周任务</h3>
-              <Badge variant="secondary">{listTotal} 条</Badge>
+            <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2.5">
+              <h3 className="truncate text-sm font-semibold">本周任务</h3>
+              <Badge variant="secondary" className="h-5 px-1.5 text-[11px] tabular-nums">
+                {listTotal} 条
+              </Badge>
               {listTotal > 0 && (
-                <span className="text-xs text-muted-foreground">点击日历日期可定位</span>
+                <span className="ml-auto shrink-0 text-[11px] text-muted-foreground/80">
+                  点击日期定位
+                </span>
               )}
             </div>
             {isLoading && listTotal === 0 ? (
@@ -930,9 +940,11 @@ export function CalendarView({
 
           {/* ===== 右半区：当年的任务列表（按月分节） ===== */}
           <div className={RIGHT_PANE}>
-            <div className="flex shrink-0 items-center gap-2 border-b px-4 py-3">
-              <h3 className="text-sm font-semibold">{yearPaneYear}年的任务</h3>
-              <Badge variant="secondary">{listTotal} 条</Badge>
+            <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2.5">
+              <h3 className="truncate text-sm font-semibold">{yearPaneYear}年的任务</h3>
+              <Badge variant="secondary" className="h-5 px-1.5 text-[11px] tabular-nums">
+                {listTotal} 条
+              </Badge>
             </div>
             {isLoading && listTotal === 0 ? (
               // 同月模式（H3）：年模式右栏加载骨架
@@ -1023,6 +1035,8 @@ export function CalendarView({
                     project={t.project_id != null ? projectById.get(t.project_id) : undefined}
                     reminder={displayReminder(remindersByTask.get(t.id) ?? [], Date.now(), !!t.done)}
                     dateField={dateField}
+                    // 弹层与右栏同一逾期口径（与分桶口径无关）
+                    overdue={!t.done && t.due_date != null && t.due_date < today.getTime()}
                     hasDescription={descriptionIds.has(t.id)}
                     onActivate={() => openDetail(t.id)}
                   />
@@ -1148,9 +1162,10 @@ type FlatItem =
   | { kind: "month"; key: string; month: number }
   | { kind: "task"; key: string; task: TodoTaskListItem };
 
-/** 任务行固定尺寸：CalendarTaskRow 恒 h-12（48）+ 行间距 pb-1（4）。
+/** 任务行固定尺寸：CalendarTaskRow 恒 h-11（44），行间分隔由行内下边框承担
+ *  （不再额外留 pb 间距，避免「行距 + 分隔线」双份留白）。
  *  固定高度让滚动时无需逐行 getBoundingClientRect（头行文案不定仍动态测量） */
-const TASK_ROW_SIZE = 52;
+const TASK_ROW_SIZE = 44;
 /** 日期头/月节头首帧估算值（真实高度由 measureElement 校正） */
 const DAY_HEADER_ESTIMATE = 40;
 const MONTH_HEADER_ESTIMATE = 30;
@@ -1286,7 +1301,7 @@ function VirtualGroupedList({
   }, [scrollToToday]);
 
   return (
-    <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto p-2">
+    <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-1.5 py-1">
       <div style={{ height: virtualizer.getTotalSize(), position: "relative", width: "100%" }}>
         {virtualizer.getVirtualItems().map((vi) => {
           const item = flat[vi.index];
@@ -1297,8 +1312,9 @@ function VirtualGroupedList({
               // 固定高度的任务行不测量（省掉每帧逐行 rect）；头行动态测量
               ref={item.kind === "task" ? undefined : virtualizer.measureElement}
               // 行间距统一用 padding-bottom：absolute 定位下 flex gap 失效，
-              // 且 padding 计入 measureElement 高度
-              className="pb-1"
+              // 且 padding 计入 measureElement 高度。任务行不再留间隙——
+              // 行间视觉分隔交给行内下边框，列表更紧凑
+              className={item.kind === "task" ? undefined : "pb-1"}
               style={{ position: "absolute", top: vi.start, left: 0, width: "100%" }}
             >
               {item.kind === "month" ? (
@@ -1380,26 +1396,41 @@ function DayHeaderRow({
     );
   }
 
-  // 月/年右栏日期头
+  // 月/年右栏日期头：日期 + 星期 + 相对日（弱化）+ 右侧当日条数。
+  // 选中日不用整行淡底（任务密集时太抢视觉），改左侧主色竖条 + 极淡底色
   return (
     <div
       className={cn(
-        "flex items-center gap-2 rounded-lg px-3 py-1.5",
-        isSelectedDay && "bg-primary/10",
+        "relative flex items-center gap-2 rounded-md px-3 py-1.5",
+        isSelectedDay && "bg-primary/[0.06]",
       )}
     >
+      {isSelectedDay && (
+        <span
+          aria-hidden
+          className="absolute inset-y-1.5 left-0 w-[3px] rounded-full bg-primary"
+        />
+      )}
       <span className={cn("text-sm font-semibold", isToday && "text-primary")}>
         {dayLabel(group.date)}
       </span>
       <span className="text-xs text-muted-foreground">
         {format(group.date, "EEEE", { locale: zhCN })}
       </span>
-      <span className="text-xs text-muted-foreground">{relativeLabel(group.date)}</span>
+      {/* 今天由下方徽标表达，此处的「今天」相对标签是重复信息 */}
+      {!isToday && (
+        <span className="text-[11px] text-muted-foreground/60">
+          {relativeLabel(group.date)}
+        </span>
+      )}
       {isToday && (
         <Badge variant="outline" className="h-5 text-[10px] text-primary">
           今天
         </Badge>
       )}
+      <span className="ml-auto text-[11px] tabular-nums text-muted-foreground/70">
+        {group.tasks.length} 条
+      </span>
     </div>
   );
 }
@@ -1438,10 +1469,9 @@ const CalendarTaskRowItem = memo(function CalendarTaskRowItem({
         project={project}
         onActivate={onActivate}
         dateField={dateField}
-        // 逾期是截止语义：按开始日期看时不染红（否则无截止任务会被误判）
-        overdue={
-          dateField === "due" && !task.done && task.due_date != null && task.due_date < todayMs
-        }
+        // 逾期是截止语义，与当前分桶口径无关：按开始日期看时同样标红
+        //（判定始终取 due_date，不会把 start_date 当逾期基准）
+        overdue={!task.done && task.due_date != null && task.due_date < todayMs}
         reminder={displayReminder(reminderMetas, Date.now(), !!task.done)}
         hasDescription={hasDescription}
       />
@@ -1456,8 +1486,10 @@ interface CalendarTaskRowProps {
   labels: ProjectedTaskLabel[];
   project?: TodoProject;
   onActivate: () => void;
+  /** 逾期（截止早于今天零点且未完成；与当前分桶口径无关） */
   overdue?: boolean;
-  /** 日期口径：行尾时刻取该字段（缺省 = 截止日期，Logbook 沿用） */
+  /** 日期口径：行尾时刻取该字段（缺省 = 截止日期，Logbook 沿用）；
+   *  逾期红标恒取 due_date，不受此口径影响 */
   dateField?: CalendarDateField;
   /** 行内提醒徽标数据（displayReminder 产物；null = 无存活提醒行） */
   reminder?: DisplayReminder | null;
@@ -1465,11 +1497,13 @@ interface CalendarTaskRowProps {
   hasDescription?: boolean;
 }
 
-/** 右栏/议程/弹层任务行：优先级左色条 + 标题 + 标签/项目元信息 + 截止时刻（逾期红）。
+/** 右栏/议程/弹层任务行：优先级左色条 + 标题 + 标签/项目元信息 + 行尾时刻
+ *  （逾期时换成红色「日历图标 + 截止 MM-dd」标，悬浮给完整截止时间）。
  *  memo：勾选其他任务（todo_tasks 数组换引用）时未变行跳过 reconcile。
- *  行高固定 h-12：有无标签/项目名的行等高——原实现元信息行无条件渲染
- *  （空 div 也占 mt-0.5+text-xs 一行），无元信息行矮一截、分组内参差；
- *  现改为元信息有内容才渲染 + 内容垂直居中，外层 flex 恒高 48px */
+ *  行高固定 h-11（44）：有无标签/项目名的行等高——元信息有内容才渲染 +
+ *  内容垂直居中，外层 flex 恒高，分组内不参差。
+ *  行版式为列表式（下边框分隔 + hover 底色），不用卡片外框——日历右栏
+ *  一屏二三十行，逐行描边会退化成一堆碎块，分隔线更利于纵向扫读 */
 export const CalendarTaskRow = memo(function CalendarTaskRow({
   task: t,
   labels,
@@ -1488,7 +1522,7 @@ export const CalendarTaskRow = memo(function CalendarTaskRow({
       role="button"
       tabIndex={0}
       aria-label={`${t.done ? "已完成" : "未完成"}任务：${t.title}`}
-      className="group relative flex h-12 cursor-default items-center gap-2.5 rounded-md border border-border/40 px-3 hover:bg-accent/30 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
+      className="group relative flex h-11 cursor-default items-center gap-2 border-b border-border/30 px-3 transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
       onClick={onActivate}
       onKeyDown={(e) => {
         if (e.nativeEvent.isComposing) return;
@@ -1501,21 +1535,28 @@ export const CalendarTaskRow = memo(function CalendarTaskRow({
       {/* 优先级左缘竖条：六档全显（含 P0「无」浅灰），与列表行/看板卡口径统一 */}
       <span
         aria-hidden
-        className="absolute inset-y-1 left-0 w-1 rounded-full"
+        className="absolute inset-y-2 left-0 w-[3px] rounded-full"
         style={{ background: PRIORITY_COLOR[t.priority] }}
       />
       <div className="flex min-w-0 flex-1 flex-col justify-center">
         <div
           className={cn(
-            "truncate text-sm leading-5",
+            "truncate text-[13px] leading-[18px]",
             t.done ? "text-muted-foreground line-through" : "text-foreground",
           )}
         >
           {t.title}
         </div>
         {hasMeta && (
-          <div className="flex items-center gap-1.5 text-xs leading-4 text-muted-foreground">
-            <LabelChips labels={labels} />
+          <div className="flex min-w-0 items-center gap-1.5 text-[11px] leading-4 text-muted-foreground">
+            <LabelChips labels={labels} max={2} />
+            {/* 项目名与标签之间加分隔点：两者都是彩色文本 + 小色点，
+                紧挨着会被读成一串同类标签 */}
+            {project && labels.length > 0 && (
+              <span aria-hidden className="shrink-0 text-muted-foreground/40">
+                ·
+              </span>
+            )}
             {project && (
               <span className="truncate" style={{ color: project.hex_color || TODO_ACCENT }}>
                 {project.title}
@@ -1535,14 +1576,33 @@ export const CalendarTaskRow = memo(function CalendarTaskRow({
           </div>
         )}
       </div>
-      <span
-        className={cn(
-          "shrink-0 text-xs text-muted-foreground tabular-nums",
-          overdue && OVERDUE_COLOR_CLASS,
-        )}
-      >
-        {timeMs != null ? format(new Date(timeMs), "HH:mm", { locale: zhCN }) : ""}
-      </span>
+      {/* 行尾：逾期改渲染红标（与看板卡同形制：日历图标 + MM-dd）。
+          红标固定取**截止日期**——逾期是截止语义：按开始日期看时
+          start_date 只决定分组，不参与逾期判定，红标仍显示截止日；
+          普通行只显示当前口径的时刻。分组头滚动后会移出视野，
+          行内保留日期可继续辨认这条属于哪一天；完整截止时刻进悬浮提示 */}
+      {overdue && t.due_date != null ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              className={cn(
+                "inline-flex shrink-0 items-center gap-1 rounded bg-destructive/10 px-1.5 py-0.5 text-[11px] font-medium tabular-nums",
+                OVERDUE_COLOR_CLASS,
+              )}
+            >
+              <Calendar size={11} aria-hidden />
+              {format(new Date(t.due_date), "MM-dd")}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>
+            已逾期 · 截止 {format(new Date(t.due_date), "M月d日 HH:mm", { locale: zhCN })}
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        <span className="w-9 shrink-0 text-right text-[11px] text-muted-foreground tabular-nums">
+          {timeMs != null ? format(new Date(timeMs), "HH:mm", { locale: zhCN }) : ""}
+        </span>
+      )}
     </div>
   );
 });
