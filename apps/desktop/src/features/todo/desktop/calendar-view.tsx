@@ -1140,13 +1140,25 @@ function HolidayBadge({ holiday }: { holiday: HolidayMark | undefined }) {
 
 // ---------------- 右栏/议程统一虚拟化分组列表 ----------------
 
-/** 打平后的虚拟条目：三种块型共用一个滚动序列 */
+/** 打平后的虚拟条目：三种块型共用一个滚动序列。
+ *  注意任务行是**独立条目**（行级虚拟化）——按「天」成块交给虚拟器时，单日
+ *  数百条任务仍会一次性渲染成数千 DOM（2026-10-29 单日 560 条滑动卡顿根因）。 */
 type FlatItem =
   | { kind: "day"; key: string; group: DayGroup }
-  | { kind: "month"; key: string; month: number };
+  | { kind: "month"; key: string; month: number }
+  | { kind: "task"; key: string; task: TodoTaskListItem };
 
-/** 缺省空集：避免调用方每次渲染新建 Set 破坏 CalendarTaskRow 的 memo */
+/** 任务行固定尺寸：CalendarTaskRow 恒 h-12（48）+ 行间距 pb-1（4）。
+ *  固定高度让滚动时无需逐行 getBoundingClientRect（头行文案不定仍动态测量） */
+const TASK_ROW_SIZE = 52;
+/** 日期头/月节头首帧估算值（真实高度由 measureElement 校正） */
+const DAY_HEADER_ESTIMATE = 40;
+const MONTH_HEADER_ESTIMATE = 30;
+
+/** 缺省空集/空表：避免调用方每次渲染新建引用破坏行 memo */
 const NO_DESCRIPTION_IDS: ReadonlySet<number> = new Set();
+const NO_LABELS: ProjectedTaskLabel[] = [];
+const NO_REMINDERS: TaskReminderMeta[] = [];
 
 interface VirtualGroupedListProps {
   /** 月/议程档：按日分组（可含月外溢出日）；与 sections 二选一 */
@@ -1179,9 +1191,9 @@ interface VirtualGroupedListProps {
  * 右栏（月/年模式）与议程档统一的虚拟化分组列表（P0 #5 日历补齐）。
  *
  * 三个消费位原先各自裸 map 全量渲染 + ScrollArea：千条任务即万级 DOM，
- * 与列表/看板虚拟化后形成口径差。此处打平为 day/month 两种头 + 任务行
- * 的线性序列交给 useVirtualizer（动态 measureElement，行高随标签/项目行
- * 有无浮动），只渲染可视窗 ± overscan。
+ * 与列表/看板虚拟化后形成口径差。此处打平为「月节头 / 日期头 / 任务行」
+ * 三种**行级**条目交给 useVirtualizer，只渲染可视窗 ± overscan。
+ * 任务行固定 52px 不测量；头行随徽标/文案浮动走 measureElement。
  *
  * 虚拟化行绝对定位后 sticky 日期头不再可用——日期头改为普通块随内容
  * 滚动（选中日/今天仍高亮定位，体验降级点仅「滚动时日期头不吸附」）。
@@ -1204,20 +1216,23 @@ function VirtualGroupedList({
 }: VirtualGroupedListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  /** 打平：年模式 [月头 + 日头 + 任务行]；其余 [日头 + 任务行] */
+  /** 打平：年模式 [月头 + 日头 + 任务行…]；其余 [日头 + 任务行…]（逐行条目） */
   const flat = useMemo<FlatItem[]>(() => {
     const out: FlatItem[] = [];
+    const pushGroup = (group: DayGroup) => {
+      out.push({ kind: "day", key: `d-${group.key}`, group });
+      for (const task of group.tasks) {
+        // 带组前缀的 key：任务 id 全局唯一，前缀只防同日跨节（年档）拼错
+        out.push({ kind: "task", key: `t-${group.key}-${task.id}`, task });
+      }
+    };
     if (sections) {
       for (const section of sections) {
-        out.push({ kind: "month", key: section.key, month: section.month });
-        for (const group of section.groups) {
-          out.push({ kind: "day", key: group.key, group });
-        }
+        out.push({ kind: "month", key: `m-${section.key}`, month: section.month });
+        for (const group of section.groups) pushGroup(group);
       }
     } else if (groups) {
-      for (const group of groups) {
-        out.push({ kind: "day", key: group.key, group });
-      }
+      for (const group of groups) pushGroup(group);
     }
     return out;
   }, [groups, sections]);
@@ -1225,9 +1240,15 @@ function VirtualGroupedList({
   const virtualizer = useVirtualizer({
     count: flat.length,
     getScrollElement: () => scrollRef.current,
-    // 初值仅影响首帧测量前的高度估计（行高 48 + 行间 gap 4 + 日期头 ~36）
-    estimateSize: (i) => (flat[i].kind === "day" ? 92 : 30),
-    overscan: 10,
+    // 任务行固定 52px（h-12 + 4 间距），不挂 measureElement；头行高度随
+    // 文案/徽标浮动，仍动态测量
+    estimateSize: (i) => {
+      const it = flat[i];
+      if (it.kind === "month") return MONTH_HEADER_ESTIMATE;
+      if (it.kind === "day") return DAY_HEADER_ESTIMATE;
+      return TASK_ROW_SIZE;
+    },
+    overscan: 12,
     getItemKey: (i) => flat[i].key,
   });
 
@@ -1235,7 +1256,9 @@ function VirtualGroupedList({
   // 组节点常不在渲染窗内（ref 缺失），索引定位由 virtualizer 算偏移量
   useEffect(() => {
     if (!scrollToKey) return;
-    const idx = flat.findIndex((it) => it.kind === "day" && it.key === scrollToKey);
+    const idx = flat.findIndex(
+      (it) => it.kind === "day" && it.group.key === scrollToKey,
+    );
     if (idx >= 0) virtualizer.scrollToIndex(idx, { align: "start" });
     // selected 变化即定位；flat 结构变化时也会带 scrollToKey 重跑
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1251,7 +1274,9 @@ function VirtualGroupedList({
     const target =
       list.find((g) => g.date >= today) ?? list[list.length - 1];
     if (!target) return;
-    const idx = flat.findIndex((it) => it.kind === "day" && it.key === target.key);
+    const idx = flat.findIndex(
+      (it) => it.kind === "day" && it.group.key === target.key,
+    );
     if (idx >= 0) {
       virtualizer.scrollToIndex(idx, { align: "start" });
       scrolled.current = true;
@@ -1269,29 +1294,42 @@ function VirtualGroupedList({
             <div
               key={item.key}
               data-index={vi.index}
-              ref={virtualizer.measureElement}
+              // 固定高度的任务行不测量（省掉每帧逐行 rect）；头行动态测量
+              ref={item.kind === "task" ? undefined : virtualizer.measureElement}
+              // 行间距统一用 padding-bottom：absolute 定位下 flex gap 失效，
+              // 且 padding 计入 measureElement 高度
+              className="pb-1"
               style={{ position: "absolute", top: vi.start, left: 0, width: "100%" }}
             >
               {item.kind === "month" ? (
-                <div className="mb-1 flex items-center gap-2 px-2 py-1.5">
+                <div className="flex items-center gap-2 px-2 py-1.5">
                   <span className="text-xs font-bold text-primary">
                     {item.month + 1}月
                   </span>
                   <span className="h-px flex-1 bg-border" />
                 </div>
-              ) : (
-                <DayGroupBlock
+              ) : item.kind === "day" ? (
+                <DayHeaderRow
                   group={item.group}
                   today={today}
                   isSelectedDay={selectedDay != null && isSameDay(item.group.date, selectedDay)}
                   showHolidayBadge={holidayMarks != null}
                   holiday={holidayMarks?.[item.group.key]}
+                />
+              ) : (
+                <CalendarTaskRowItem
+                  task={item.task}
+                  todayMs={today.getTime()}
                   dateField={dateField}
+                  labels={labelsByTask.get(item.task.id) ?? NO_LABELS}
+                  project={
+                    item.task.project_id != null
+                      ? projectById.get(item.task.project_id)
+                      : undefined
+                  }
+                  reminderMetas={remindersByTask.get(item.task.id) ?? NO_REMINDERS}
+                  hasDescription={descriptionIds.has(item.task.id)}
                   projects={projects}
-                  projectById={projectById}
-                  labelsByTask={labelsByTask}
-                  remindersByTask={remindersByTask}
-                  descriptionIds={descriptionIds}
                   onOpenDetail={onOpenDetail}
                 />
               )}
@@ -1303,21 +1341,14 @@ function VirtualGroupedList({
   );
 }
 
-/** 右栏单个按日分组块（日期头 + 任务行；选中日整行高亮）。
- *  agenda 风格（议程档）：日期头带节假日徽标 + 条数 + 分隔线 */
-function DayGroupBlock({
+/** 按日分组的日期头（行级虚拟化后独立成条目，任务行不再跟它同块）。
+ *  agenda 风格（议程档）：日期头带节假日徽标 + 条数 + 分隔线；月/年右栏带选中日高亮 */
+function DayHeaderRow({
   group,
   today,
   isSelectedDay,
   showHolidayBadge,
   holiday,
-  dateField,
-  projects,
-  projectById,
-  labelsByTask,
-  remindersByTask,
-  descriptionIds = NO_DESCRIPTION_IDS,
-  onOpenDetail,
 }: {
   group: DayGroup;
   today: Date;
@@ -1325,89 +1356,98 @@ function DayGroupBlock({
   /** true = 议程档日期头样式（带徽标/条数分隔线） */
   showHolidayBadge: boolean;
   holiday?: HolidayMark;
-  dateField: CalendarDateField;
-  projects: TodoProject[];
-  projectById: Map<number, TodoProject>;
-  labelsByTask: Map<number, ProjectedTaskLabel[]>;
-  /** 任务→提醒映射（行内提醒徽标） */
-  remindersByTask: Map<number, TaskReminderMeta[]>;
-  /** 有描述的任务 id 集（行内图标只取有无） */
-  descriptionIds?: ReadonlySet<number>;
-  onOpenDetail: (id: number) => void;
 }) {
   const isToday = isSameDay(group.date, today);
 
-  return (
-    <div>
-      {showHolidayBadge ? (
-        // 议程档日期头（原 AgendaList 样式口径）
-        <div className="mt-4 flex items-center gap-2 px-1 py-1.5 first:mt-0">
-          <span
-            className={cn(
-              "rounded px-1.5 py-0.5 text-xs font-medium",
-              isToday ? "bg-primary text-primary-foreground" : "text-muted-foreground",
-            )}
-          >
-            {format(group.date, "M月d日 EEEE", { locale: zhCN })}
-          </span>
-          <HolidayBadge holiday={holiday} />
-          <span className="text-xs text-muted-foreground/70 tabular-nums">
-            {group.tasks.length} 条
-          </span>
-          <span className="h-px flex-1 bg-border/40" />
-        </div>
-      ) : (
-        // 月/年右栏日期头
-        <div
+  if (showHolidayBadge) {
+    // 议程档日期头（原 AgendaList 样式口径）
+    return (
+      <div className="flex items-center gap-2 px-1 py-1.5">
+        <span
           className={cn(
-            "flex items-center gap-2 rounded-lg px-3 py-1.5",
-            isSelectedDay && "bg-primary/10",
+            "rounded px-1.5 py-0.5 text-xs font-medium",
+            isToday ? "bg-primary text-primary-foreground" : "text-muted-foreground",
           )}
         >
-          <span className={cn("text-sm font-semibold", isToday && "text-primary")}>
-            {dayLabel(group.date)}
-          </span>
-          <span className="text-xs text-muted-foreground">
-            {format(group.date, "EEEE", { locale: zhCN })}
-          </span>
-          <span className="text-xs text-muted-foreground">{relativeLabel(group.date)}</span>
-          {isToday && (
-            <Badge variant="outline" className="h-5 text-[10px] text-primary">
-              今天
-            </Badge>
-          )}
-        </div>
-      )}
-      <div className="mt-1 flex flex-col gap-1">
-        {group.tasks.map((t) => (
-          <TaskContextMenu
-            key={t.id}
-            task={t}
-            projects={projects}
-            onOpenDetail={() => onOpenDetail(t.id)}
-          >
-            <CalendarTaskRow
-              task={t}
-              labels={labelsByTask.get(t.id) ?? []}
-              project={t.project_id != null ? projectById.get(t.project_id) : undefined}
-              onActivate={() => onOpenDetail(t.id)}
-              dateField={dateField}
-              // 逾期是截止语义：按开始日期看时不染红（否则无截止任务会被误判）
-              overdue={
-                dateField === "due" &&
-                !t.done &&
-                t.due_date != null &&
-                t.due_date < today.getTime()
-              }
-              reminder={displayReminder(remindersByTask.get(t.id) ?? [], Date.now(), !!t.done)}
-              hasDescription={descriptionIds.has(t.id)}
-            />
-          </TaskContextMenu>
-        ))}
+          {format(group.date, "M月d日 EEEE", { locale: zhCN })}
+        </span>
+        <HolidayBadge holiday={holiday} />
+        <span className="text-xs text-muted-foreground/70 tabular-nums">
+          {group.tasks.length} 条
+        </span>
+        <span className="h-px flex-1 bg-border/40" />
       </div>
+    );
+  }
+
+  // 月/年右栏日期头
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-2 rounded-lg px-3 py-1.5",
+        isSelectedDay && "bg-primary/10",
+      )}
+    >
+      <span className={cn("text-sm font-semibold", isToday && "text-primary")}>
+        {dayLabel(group.date)}
+      </span>
+      <span className="text-xs text-muted-foreground">
+        {format(group.date, "EEEE", { locale: zhCN })}
+      </span>
+      <span className="text-xs text-muted-foreground">{relativeLabel(group.date)}</span>
+      {isToday && (
+        <Badge variant="outline" className="h-5 text-[10px] text-primary">
+          今天
+        </Badge>
+      )}
     </div>
   );
 }
+
+/** 单条任务行（含右键菜单）：memo 到行级，props 全部取稳定引用
+ *  （task 对象 / map 取值 / NO_* 常量 / 稳定回调）——滚动时只有进出窗口的行
+ *  才 reconcile，可视窗内的行与右键菜单整体跳过。 */
+const CalendarTaskRowItem = memo(function CalendarTaskRowItem({
+  task,
+  todayMs,
+  dateField,
+  labels,
+  project,
+  reminderMetas,
+  hasDescription,
+  projects,
+  onOpenDetail,
+}: {
+  task: TodoTaskListItem;
+  /** 今天 00:00（逾期判定基准） */
+  todayMs: number;
+  dateField: CalendarDateField;
+  labels: ProjectedTaskLabel[];
+  project?: TodoProject;
+  reminderMetas: TaskReminderMeta[];
+  hasDescription: boolean;
+  projects: TodoProject[];
+  onOpenDetail: (id: number) => void;
+}) {
+  const onActivate = useCallback(() => onOpenDetail(task.id), [onOpenDetail, task.id]);
+  return (
+    <TaskContextMenu task={task} projects={projects} onOpenDetail={onActivate}>
+      <CalendarTaskRow
+        task={task}
+        labels={labels}
+        project={project}
+        onActivate={onActivate}
+        dateField={dateField}
+        // 逾期是截止语义：按开始日期看时不染红（否则无截止任务会被误判）
+        overdue={
+          dateField === "due" && !task.done && task.due_date != null && task.due_date < todayMs
+        }
+        reminder={displayReminder(reminderMetas, Date.now(), !!task.done)}
+        hasDescription={hasDescription}
+      />
+    </TaskContextMenu>
+  );
+});
 
 // ---------------- 共用行 ----------------
 
