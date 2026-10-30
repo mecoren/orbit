@@ -30,7 +30,7 @@ Future<void> _settlePastMockLatency(WidgetTester tester) async {
 
 /// 经页头 ⋮ 下拉面板切排序档（⋮ → 就地展开「排序方式」→ 点档位）
 ///
-/// 面板 2026-10-16 加「存为视图」后条目超出 0.7 屏限高、面板内容可滚——
+/// 面板 2026-10-16 加「保存为筛选器」后条目超出 0.7 屏限高、面板内容可滚——
 /// 「排序方式」及其子项可能在可视区外，点前必须 ensureVisible。
 Future<void> _switchSort(WidgetTester tester, String label) async {
   await tester.tap(find.byTooltip('更多操作'));

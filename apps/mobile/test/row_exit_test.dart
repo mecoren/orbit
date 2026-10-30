@@ -51,7 +51,7 @@ void main() {
     // 默认 manual 重排档不进退场（仅标准列表分支）：先从 ⋮ 面板切到截止时间排序
     await tester.tap(find.byTooltip('更多操作'));
     await tester.pumpAndSettle();
-    // 面板 2026-10-16 加「存为视图」后条目超出 0.7 屏限高——点前须滚入可视区
+    // 面板 2026-10-16 加「保存为筛选器」后条目超出 0.7 屏限高——点前须滚入可视区
     await tester.ensureVisible(find.text('排序方式'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('排序方式'));

@@ -123,7 +123,7 @@ describe("parse ⇄ build 往返", () => {
   });
 });
 
-describe("toolbarToForm（存为视图预填）", () => {
+describe("toolbarToForm（保存为筛选器预填）", () => {
   it("状态/优先级/收藏三档映射；空集与未完成档丢弃", () => {
     const f = toolbarToForm({ statusFilters: ["pending"], priorityFilter: 3, favoriteOnly: false });
     expect(f.status).toBe("pending");

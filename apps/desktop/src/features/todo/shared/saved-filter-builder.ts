@@ -109,7 +109,7 @@ export function buildConditions(f: FilterFormState): string {
   return JSON.stringify(c);
 }
 
-/** 工具栏筛选状态 → 表单态（「存为视图」预填：面板当前筛选一键固化） */
+/** 工具栏筛选状态 → 表单态（「保存为筛选器」预填：面板当前筛选一键固化） */
 export function toolbarToForm(input: {
   /** 状态多选档（空集 = 全部状态） */
   statusFilters: TaskStatusFilterSet;

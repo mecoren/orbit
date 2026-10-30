@@ -38,7 +38,7 @@ abstract final class OrbitIcons {
 
   static const IconData add = LucideIcons.plus;
 
-  /// 存为视图（列表面板：把当前筛选固化为保存的筛选器，G1）
+  /// 保存为筛选器（列表面板：把当前筛选固化为保存的筛选器，G1）
   static const IconData saveView = LucideIcons.bookmark;
   static const IconData remove = LucideIcons.minus;
   static const IconData close = LucideIcons.x;

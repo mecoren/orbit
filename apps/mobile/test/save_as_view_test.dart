@@ -1,8 +1,8 @@
-// 列表面板「存为视图」（G1，对齐桌面 toolbar-menus.tsx:319 +
+// 列表面板「保存为筛选器」（G1，对齐桌面 toolbar-menus.tsx:319 +
 // saved-filter-builder.ts:111）：
 // 1. 纯函数：面板筛选态 → 保存的筛选器条件 JSON（status 非 all/undone 才落键、
 //    priority 等值档落 priority_min、标签档落 label_ids、收藏视图落 favorite_only）
-// 2. 面板含「存为视图」项，点开即入筛选器构建抽屉（预填当前筛选），
+// 2. 面板含「保存为筛选器」项，点开即入筛选器构建抽屉（预填当前筛选），
 //    命名创建后落库 savedFilterCreate。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -15,7 +15,7 @@ import 'package:orbit/modules/todo/saved_filters_screen.dart';
 import 'package:orbit/modules/todo/sub_list_screen.dart';
 import 'support/orbit_test_app.dart';
 
-/// 路由壳：面板「存为视图」走 context.push 跳筛选器页，须 GoRouter 承载
+/// 路由壳：面板「保存为筛选器」走 context.push 跳筛选器页，须 GoRouter 承载
 GoRouter _buildRouter() => GoRouter(
       initialLocation: '/todo/tasks',
       routes: [
@@ -47,7 +47,7 @@ Future<void> _settlePastMockLatency(WidgetTester tester) async {
 }
 
 void main() {
-  group('filterToSavedConditions（存为视图预填，镜像桌面 toolbarToForm）', () {
+  group('filterToSavedConditions（保存为筛选器预填，镜像桌面 toolbarToForm）', () {
     test('空筛选 → 空条件', () {
       expect(
         filterToSavedConditions(
@@ -86,7 +86,7 @@ void main() {
     });
   });
 
-  testWidgets('面板「存为视图」→ 构建抽屉预填当前筛选 → 创建落库', (tester) async {
+  testWidgets('面板「保存为筛选器」→ 构建抽屉预填当前筛选 → 创建落库', (tester) async {
     final bridge = MockOrbitBridge();
     await tester.pumpWidget(_wrap(bridge));
     await _settlePastMockLatency(tester);
@@ -103,11 +103,11 @@ void main() {
     await tester.tapAt(const Offset(20, 20));
     await tester.pumpAndSettle();
 
-    // 面板补「存为视图」项
+    // 面板补「保存为筛选器」项
     await tester.tap(find.byTooltip('更多操作'));
     await tester.pumpAndSettle();
-    expect(find.text('存为视图'), findsOneWidget);
-    await tester.tap(find.text('存为视图'));
+    expect(find.text('保存为筛选器'), findsOneWidget);
+    await tester.tap(find.text('保存为筛选器'));
     await tester.pumpAndSettle();
 
     // 构建抽屉（预填 priority_min=3）：命名 → 创建。
