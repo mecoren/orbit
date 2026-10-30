@@ -27,6 +27,7 @@ import {
   useSensors,
   type DragEndEvent,
   type DragStartEvent,
+  type DraggableAttributes,
 } from "@dnd-kit/core";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -152,6 +153,8 @@ export function KanbanView({
       return next;
     });
   }, []);
+  // 恒定引用：内联箭头会让 draggingId 一变就击穿列/卡片的 memo，整板重渲染
+  const clearSelection = useCallback(() => setSelected(new Set()), []);
 
   const runBatch = useCallback(
     async (label: string, action: (sel: TodoTaskListItem[]) => Promise<unknown>) => {
@@ -368,7 +371,7 @@ export function KanbanView({
       >
         <div className="flex h-full gap-4 p-4">
           {columns.map((col) => (
-            <KanbanColumn
+            <DroppableKanbanColumn
               key={col.key}
               column={col}
               tasks={grouped.get(col.key) ?? []}
@@ -376,14 +379,13 @@ export function KanbanView({
               projects={projects}
               labelsByTask={labelsByTask}
               remindersByTask={remindersByTask}
-              draggingId={draggingId}
               dragEndStamp={dragEndStamp}
               onOpenDetail={openDetail}
               onOpenColumnInList={onOpenColumnInList}
               selected={selected}
               hasSelection={selected.size > 0}
               onToggleSelect={toggleSelect}
-              onClearSelection={() => setSelected(new Set())}
+              onClearSelection={clearSelection}
             />
           ))}
         </div>
@@ -516,22 +518,7 @@ export function KanbanView({
  * dnd-kit 拖拽用 transform 定位（视觉层）不动 DOM 流，与绝对定位
  * 行容器不冲突——dnd-kit 内部 transform 映射目标非布局盒。
  */
-const KanbanColumn = memo(function KanbanColumn({
-  column,
-  tasks,
-  total,
-  projects,
-  labelsByTask,
-  remindersByTask,
-  draggingId,
-  dragEndStamp,
-  onOpenDetail,
-  onOpenColumnInList,
-  selected,
-  hasSelection,
-  onToggleSelect,
-  onClearSelection,
-}: {
+interface KanbanColumnProps {
   column: KanbanColumnDef;
   tasks: TodoTaskListItem[];
   /** 该列真实总数（窗口化下大于 tasks.length）；缺省 = tasks.length */
@@ -539,7 +526,6 @@ const KanbanColumn = memo(function KanbanColumn({
   projects: TodoProject[];
   labelsByTask: Map<number, ProjectedTaskLabel[]>;
   remindersByTask: Map<number, TaskReminderMeta[]>;
-  draggingId: number | null;
   /** 拖拽结束时间戳 ref（点击抑制用） */
   dragEndStamp: React.RefObject<number>;
   onOpenDetail: (id: number) => void;
@@ -551,17 +537,17 @@ const KanbanColumn = memo(function KanbanColumn({
   onToggleSelect: (id: number) => void;
   /** Escape 退选全部（选中态下；透传卡片） */
   onClearSelection: () => void;
-}) {
-  const { setNodeRef, isOver } = useDroppable({ id: `col:${column.key}` });
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const virtualizer = useVirtualizer({
-    count: tasks.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => 76,
-    overscan: 6,
-    getItemKey: (i) => tasks[i].id,
-  });
+}
 
+/**
+ * 列 dnd 订阅壳（2026-10-30 拖拽卡顿治理）：
+ * 原来 useDroppable 挂在列本体上，拖拽上下文一变整列就连带
+ * `virtualizer.getVirtualItems()` 重建整棵行树（实测一次拖拽整列重渲染 86 次，
+ * 是元素风暴的最大来源）。拆分后：壳只负责 isOver 边框 + droppable 注册，
+ * 列本体（KanbanColumnBody）不再订阅拖拽上下文。
+ */
+const DroppableKanbanColumn = memo(function DroppableKanbanColumn(props: KanbanColumnProps) {
+  const { setNodeRef, isOver } = useDroppable({ id: `col:${props.column.key}` });
   return (
     <div
       className={cn(
@@ -569,6 +555,61 @@ const KanbanColumn = memo(function KanbanColumn({
         isOver ? "border-primary/40 bg-muted/40" : "border-border/50",
       )}
     >
+      <KanbanColumnBody {...props} dropRef={setNodeRef} />
+    </div>
+  );
+});
+
+const KanbanColumnBody = memo(function KanbanColumnBody({
+  column,
+  tasks,
+  total,
+  projects,
+  labelsByTask,
+  remindersByTask,
+  dragEndStamp,
+  onOpenDetail,
+  onOpenColumnInList,
+  selected,
+  hasSelection,
+  onToggleSelect,
+  onClearSelection,
+  dropRef,
+}: KanbanColumnProps & {
+  /** 列卡片区注册为 droppable 的节点回调 */
+  dropRef?: (node: HTMLElement | null) => void;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  /** 同一 node 双注册：droppable 区 + 虚拟化滚动容器（回调保持稳定，避免每帧重挂） */
+  const setScrollNode = useCallback(
+    (node: HTMLDivElement | null) => {
+      dropRef?.(node);
+      scrollRef.current = node;
+    },
+    [dropRef],
+  );
+  const virtualizer = useVirtualizer({
+    count: tasks.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 76,
+    overscan: 6,
+    getItemKey: (i) => tasks[i].id,
+  });
+  /**
+   * 提醒徽标按任务缓存：displayReminder 每次调用都产新对象，不缓存的话
+   * selected/多选批量等任一列渲染都会让全部卡片 memo 失效、整列整树重建。
+   */
+  const reminderByTask = useMemo(() => {
+    const map = new Map<number, DisplayReminder | null>();
+    const now = Date.now();
+    for (const t of tasks) {
+      map.set(t.id, displayReminder(remindersByTask.get(t.id) ?? [], now, !!t.done));
+    }
+    return map;
+  }, [tasks, remindersByTask]);
+
+  return (
+    <>
       {/* 列头（P1 窗口化：角标报真实总数；窗口内只装了前 N 条） */}
       <div className="flex items-center gap-2 border-b px-3 py-2">
         <span className="h-2 w-2 rounded-full" style={{ background: column.color }} />
@@ -595,11 +636,7 @@ const KanbanColumn = memo(function KanbanColumn({
       {/* 卡片区：虚拟化行容器（绝对定位行 + gap 以 padding 计入 estimate 初值）。
           原 flex+gap 控制间距的说明已随虚拟化失效——间距改由行容器的 margin 承担 */}
       <div
-        ref={(node) => {
-          setNodeRef(node);
-          // 同一 node 双注册：droppable 区 + 虚拟化滚动容器
-          scrollRef.current = node;
-        }}
+        ref={setScrollNode}
         className="flex min-h-0 flex-1 flex-col overflow-y-auto p-2"
       >
         {tasks.length === 0 ? (
@@ -636,11 +673,10 @@ const KanbanColumn = memo(function KanbanColumn({
                     onOpenDetail={() => onOpenDetail(t.id)}
                     onStartSelect={() => onToggleSelect(t.id)}
                   >
-                    <KanbanCard
+                    <SortableKanbanCard
                       task={t}
                       labels={labelsByTask.get(t.id) ?? []}
-                      reminder={displayReminder(remindersByTask.get(t.id) ?? [], Date.now(), !!t.done)}
-                      dragging={draggingId === t.id}
+                      reminder={reminderByTask.get(t.id) ?? null}
                       dragEndStamp={dragEndStamp}
                       onOpenDetail={onOpenDetail}
                       selected={selected.has(t.id)}
@@ -655,25 +691,13 @@ const KanbanColumn = memo(function KanbanColumn({
           </div>
         )}
       </div>
-    </div>
+    </>
   );
 });
 
 /* ================= 卡片 ================= */
 
-const KanbanCard = memo(function KanbanCard({
-  task,
-  labels,
-  reminder,
-  dragging,
-  overlay,
-  dragEndStamp,
-  onOpenDetail,
-  onToggleSelect,
-  onClearSelection,
-  selected = false,
-  hasSelection = false,
-}: {
+interface KanbanCardProps {
   task: TodoTaskListItem;
   labels: ProjectedTaskLabel[];
   /** 行内提醒徽标数据（displayReminder 产物；null = 无存活提醒行） */
@@ -690,15 +714,62 @@ const KanbanCard = memo(function KanbanCard({
   selected?: boolean;
   /** 任一卡片被选中时，卡片点击语义切换为「切换勾选」（与列表行一致） */
   hasSelection?: boolean;
+}
+
+/**
+ * 卡片 dnd 订阅壳（2026-10-30 拖拽卡顿治理）：
+ * dnd-kit 的 useDraggable/useDroppable 读同一份拖拽上下文，指针跨卡时 over
+ * 变化会让每个消费者重渲染——hook 挂在卡片本体上时，一次拖拽要把已渲染的
+ * 几十张卡整树重建（dev 实测单次拖拽 6s 生成上万 React 元素、p95 帧间隔
+ * 83ms、24 段长任务）。拆出薄壳后每帧只重建这层 div，卡片本体 memo 命中、
+ * 不再进入子树。
+ */
+const SortableKanbanCard = memo(function SortableKanbanCard(props: KanbanCardProps) {
+  const { task } = props;
+  /** 任何排序档都挂拖拽源（2026-10-30）：跨列改归属与排序档无关；列内落位是否生效由父层判 sortable */
+  const {
+    setNodeRef: setDragRef,
+    attributes,
+    listeners,
+    isDragging,
+  } = useDraggable({ id: `task:${task.id}` });
+  const { setNodeRef: setDropRef, isOver } = useDroppable({ id: `task:${task.id}` });
+  const setRefs = useCallback(
+    (node: HTMLDivElement | null) => {
+      setDragRef(node);
+      setDropRef(node);
+    },
+    [setDragRef, setDropRef],
+  );
+
+  return (
+    <div ref={setRefs} {...listeners} style={{ touchAction: "none" }}>
+      <KanbanCard {...props} dragging={isDragging} isOver={isOver} dragAttributes={attributes} />
+    </div>
+  );
+});
+
+const KanbanCard = memo(function KanbanCard({
+  task,
+  labels,
+  reminder,
+  dragging,
+  overlay,
+  dragEndStamp,
+  onOpenDetail,
+  onToggleSelect,
+  onClearSelection,
+  selected = false,
+  hasSelection = false,
+  isOver = false,
+  dragAttributes,
+}: KanbanCardProps & {
+  /** 作为放置目标的悬停态（SortableKanbanCard 传入；overlay 恒 false） */
+  isOver?: boolean;
+  /** dnd-kit draggable 属性（role/aria-describedby）；overlay 不传 */
+  dragAttributes?: DraggableAttributes;
 }) {
   const qc = useQueryClient();
-  /**
-   * 任何排序档都挂拖拽源（2026-10-30）：跨列改归属与排序档无关，此前用
-   * `!sortable` 一并禁用会让非「拖拽顺序」档的看板彻底拖不动；列内落位是否
-   * 生效由父层 handleDragEnd 判 sortable 并提示。
-   */
-  const draggable = useDraggable({ id: `task:${task.id}`, disabled: !!overlay });
-  const { setNodeRef: setDropRef, isOver } = useDroppable({ id: `task:${task.id}` });
   /** 逾期判定与列表行同源：截止早于当前时刻且未完成 */
   const overdue = task.due_date != null && !task.done && task.due_date < Date.now();
   /** 多选态才把勾选框切成多选框（拖拽浮层例外：浮层只做静态预览） */
@@ -706,16 +777,7 @@ const KanbanCard = memo(function KanbanCard({
 
   return (
     <div
-      ref={(node) => {
-        if (!overlay) {
-          draggable.setNodeRef(node);
-          setDropRef(node);
-        } else {
-          setNodeRefNull(node);
-        }
-      }}
-      {...(overlay ? {} : draggable.attributes)}
-      {...(overlay ? {} : draggable.listeners)}
+      {...dragAttributes}
       style={{ touchAction: "none" }}
       role="button"
       tabIndex={overlay ? -1 : 0}
@@ -866,6 +928,3 @@ const KanbanCard = memo(function KanbanCard({
     </div>
   );
 });
-
-/** overlay 场景无需 droppable/draggable 注册 */
-function setNodeRefNull(_node: HTMLElement | null) {}

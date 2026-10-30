@@ -17,6 +17,10 @@
 
 ## [Unreleased]
 
+### 优化：看板拖拽卡顿——dnd 订阅拆薄壳，帧间隔 83ms→16.7ms（2026-10-30）
+
+dnd-kit 的 internal context 在指针跨卡时更新，`useDraggable/useDroppable` 的每个消费者都会重渲染。此前 hook 直接挂在卡片与列本体上：卡片一体订阅 → 每次跨卡把整张卡的子树重建；列一体订阅 → 整列连带 `getVirtualItems()` 的 15 行树重建（实测一次拖拽整列重渲染 86 次），dev 下 60 张卡的看板单次拖拽生成上万 React 元素、p95 帧间隔 83ms、最长一次掉帧 483ms。现改为：①`SortableKanbanCard` 薄壳承载 dnd 两 hook 与 listeners，`KanbanCard` 本体只吃 `dragging/isOver/dragAttributes`；②`DroppableKanbanColumn`（isOver 边框 + droppable 注册）包 `KanbanColumnBody`（虚拟行树），列本体不再订阅拖拽上下文；③`dragging` 改由 `useDraggable().isDragging` 内聚，不再把 `draggingId` 提到列 props（一起手就击穿整板 memo）；④`onClearSelection` 改 `useCallback` 恒定引用、`displayReminder` 产物按任务 `useMemo` 缓存。实测同一场景（240 任务 / 4 列 × 60）：p95 83ms → 16.7ms、掉帧（>32ms）28 → 1、最长帧 483ms → 50ms、长任务 24 段 → 1 段。docs/04 §3.3 补「拖拽性能口径」防回退。
+
 ### 修复：看板列滚动条越拖越短——虚拟高度容器被 flex 压缩（2026-10-30）
 
 卡片区是 `flex flex-col` 的滚动容器，虚拟化高度容器（`height: getTotalSize()`）作为 flex 子项默认 `flex-shrink: 1`，被压回视口高度（533px）；绝对定位卡片溢出该容器，滚动高度退化为「已渲染行下缘」——每往下滚一屏 `scrollHeight` 就长一屏（60 条列实测 1016 → 3392px），滚动条滑块随之越拖越短。给高度容器补 `shrink-0` 后 `height` 与 `scrollHeight` 一致（4440px 恒定），滑块稳定在 ~12%。顺带把看板拖拽源改为**任何排序档都挂**：此前用 `!sortable` 一并禁用，非「拖拽顺序」档整块拖不动，与「跨列改归属任何档位都可用」的既定口径矛盾；列内落位仍只在 manual 档生效，其他档位落位时提示「列内顺序由当前排序档决定」。docs/04 §3.3 同步（含 flex 陷阱）。回归锚点：`tsc` 零错误、同列/跨列/滚动后拖拽与 due 档提示实测、看板多选批量 e2e 绿、`vitest` 769 绿。
