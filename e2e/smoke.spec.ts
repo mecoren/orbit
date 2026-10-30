@@ -38,12 +38,11 @@ async function openMoreMenu(page: Page) {
   await expect(page.getByRole("menu")).toBeVisible();
 }
 
-/** 「···」菜单切视图：视图图标排点按即切且菜单不关，须按 Esc 收起——
- *  Radix 菜单开着时 popper 覆盖层 + html pointer-events:none 会拦截后续页面点击 */
-async function switchViewViaMenu(page: Page, name: string) {
-  await openMoreMenu(page);
-  await page.getByRole("button", { name }).click();
-  await page.keyboard.press("Escape");
+/** 切视图：工具栏「切换视图」单钮 → 下拉五档单选（radio 选中即自动收菜单） */
+async function switchView(page: Page, name: string) {
+  await page.getByRole("button", { name: "切换视图" }).click();
+  await page.getByRole("menuitemradio", { name }).click();
+  await expect(page.getByRole("menu")).toHaveCount(0);
 }
 
 /** 切换「隐藏已完成」开关（Logbook 治理，默认开 = 隐藏）：入口在「···」菜单；
@@ -517,8 +516,8 @@ test("完成态乐观：重复任务完成即翻已完成，撤销删克隆（D4
 test("日历视图：左右分栏 + 选中定位 + 年视图 + 右键新增预填日期", async ({ page }) => {
   const today = new Date();
 
-  // ---- 切到日历视图（「···」菜单视图图标排，切完收菜单） ----
-  await switchViewViaMenu(page, "日历视图");
+  // ---- 切到日历视图（工具栏「切换视图」单钮） ----
+  await switchView(page, "日历视图");
 
   // 左半区月历：默认选中今天 → 右栏显示当月任务分组（seed 的今天截止任务）
   await expect(page.getByText("月的任务", { exact: false })).toBeVisible();
@@ -837,8 +836,8 @@ test("看板多选批量：勾选卡片 → 工具条 → 批量改期落库（2
     mk("看板批量-乙", 41);
     m.emitDbChange();
   });
-  // 切看板视图（「···」菜单视图图标排，切完收菜单）
-  await switchViewViaMenu(page, "看板视图");
+  // 切看板视图（工具栏「切换视图」单钮）
+  await switchView(page, "看板视图");
   await expect(page.getByText("看板批量-甲")).toBeVisible();
 
   // 右键卡片 → 菜单「多选」进入多选态（2026-10-10：多选圈默认隐藏、
@@ -1202,10 +1201,13 @@ test("列表触底懒加载连续推进：平铺列表仍能翻到末页（2026-
   await expect(progress).toHaveCount(0, { timeout: 10_000 });
 });
 
-test("「···」更多菜单：视图图标排点按即切且菜单不关（2026-09-29 工具栏收拢）", async ({ page }) => {
+test("「···」菜单去图标排 + 视图切换单钮往返（2026-10-30 视图入口上提）", async ({ page }) => {
   await openMoreMenu(page);
   const menu = page.getByRole("menu");
   await expect(menu).toBeVisible();
+
+  // 视图五联图标排已上提为工具栏「切换视图」单钮，菜单首项即「隐藏已完成」
+  await expect(menu.getByRole("button", { name: "矩阵视图" })).toHaveCount(0);
 
   // CheckboxItem 文本须与普通 MenuItem 左对齐（原语默认 pl-8 给左侧指示器留位，
   // 曾致「隐藏已完成」比「保存为筛选器」缩进一截——2026-09-29 指示器改行尾后锁死）
@@ -1230,19 +1232,14 @@ test("「···」更多菜单：视图图标排点按即切且菜单不关（20
       return range.getBoundingClientRect().left;
     });
   expect(Math.abs(checkboxTextLeft - plainLeft)).toBeLessThanOrEqual(1);
-
-  // 点矩阵视图 icon：普通 button 不触发 Radix 关菜单
-  await menu.getByRole("button", { name: "矩阵视图" }).click();
-  await expect(menu).toBeVisible();
-
-  // 收起后矩阵四象限真实渲染（空桶也出格）
   await page.keyboard.press("Escape");
+
+  // 单钮切矩阵：四象限真实渲染（空桶也出格）
+  await switchView(page, "矩阵视图");
   await expect(page.getByText("重要且紧急")).toBeVisible();
 
   // 切回列表视图：状态筛选的断言要看任务行，矩阵视图没有列表行
-  await openMoreMenu(page);
-  await menu.getByRole("button", { name: "列表视图" }).click();
-  await page.keyboard.press("Escape");
+  await switchView(page, "列表视图");
 
   // 状态筛选子菜单仍可走通（2026-10-28 改 checkbox 多选：空集 = 全部状态）——
   // 子菜单条目用 evaluate 直点（仓库惯例：Radix 弹层内合成点击被 html 拦截）

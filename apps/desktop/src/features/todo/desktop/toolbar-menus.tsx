@@ -1,10 +1,16 @@
 /**
  * 工具栏收拢双菜单（TickTick Web 同款形态，prd/desktop-toolbar-dropdown）：
  *
+ * - ViewMenuButton「▦」：视图切换单钮（钮面 = 当前视图图标）+ 下拉五档单选；
  * - SortMenuButton「↑↓」：分组（仅看板）/ 排序档 / 顺序（升/降序）+ 状态/优先级
  *   筛选子菜单就地展开（筛选与排序同属「行怎么排」语义，收在一处）；
- * - MoreMenuButton「···」：顶部视图图标排（当前高亮、点按不关菜单）+ 隐藏已完成
- *   + 保存为筛选器 + 搜索或跳转 + 标签管理。
+ * - MoreMenuButton「···」：隐藏已完成 + 保存为筛选器 + 搜索或跳转 + 标签管理
+ *   + 周回顾 / 分诊未分组 / 规划今天。
+ *
+ * 视图切换 2026-10-30 从「···」菜单顶栏上提为独立单钮：切视图是高频主操作，
+ * 藏在两级菜单里要多点一次且弹层遮住列表；但五钮全平铺会让工具栏控件 5→10
+ * （PRD 的「≤5 控件」验收线），故取「一钮一档」中间态——钮面常驻当前视图图标
+ * （一眼可知所处视图），展开即五档单选。
  *
  * 全部状态由 task-panel 持有、props 注入（面板是唯一状态源，本文件纯 UI 转发）；
  * 数据语义与收拢前逐项等价——aria-label 沿用原文案（列表视图/保存为筛选器/标签管理…），
@@ -36,7 +42,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
 import {
   type TaskSortDir,
   type TaskSortKey,
@@ -273,9 +278,38 @@ export function SortMenuButton(props: SortMenuButtonProps) {
   );
 }
 
-interface MoreMenuButtonProps {
+interface ViewMenuButtonProps {
   viewMode: ViewMode;
   onViewModeChange: (m: ViewMode) => void;
+}
+
+/** 视图切换单钮：钮面图标随当前视图变化，下拉五档单选（当前档圆点指示） */
+export function ViewMenuButton({ viewMode, onViewModeChange }: ViewMenuButtonProps) {
+  const current = VIEW_TABS.find((t) => t.key === viewMode) ?? VIEW_TABS[0];
+  const CurrentIcon = current.icon;
+
+  return (
+    <DropdownMenu>
+      <MenuTrigger label="切换视图">
+        <CurrentIcon size={14} />
+      </MenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-36">
+        <DropdownMenuRadioGroup
+          value={viewMode}
+          onValueChange={(v) => onViewModeChange(v as ViewMode)}
+        >
+          {VIEW_TABS.map(({ key, label }) => (
+            <DropdownMenuRadioItem key={key} value={key}>
+              {label}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+interface MoreMenuButtonProps {
   hideDone: boolean;
   onHideDoneChange: (v: boolean) => void;
   /** 置灰条件原样保留：Logbook 视图 / 已完成状态筛选下开关无意义 */
@@ -290,11 +324,9 @@ interface MoreMenuButtonProps {
   onTriageUngrouped: () => void;
 }
 
-/** 「···」更多菜单：视图图标排 + 显示/入口类低频项收拢 */
+/** 「···」更多菜单：显示/入口类低频项收拢 */
 export function MoreMenuButton(props: MoreMenuButtonProps) {
   const {
-    viewMode,
-    onViewModeChange,
     hideDone,
     onHideDoneChange,
     hideDoneDisabled,
@@ -312,30 +344,6 @@ export function MoreMenuButton(props: MoreMenuButtonProps) {
         <Ellipsis size={14} />
       </MenuTrigger>
       <DropdownMenuContent align="end" className="min-w-48">
-        {/* 视图图标排：普通 button 不触发 Radix 关菜单（点按即切、菜单保持）；
-            aria-label 与原五联钮一致，e2e 选择器零改动 */}
-        <div className="flex items-center justify-between gap-1 px-2 py-1.5">
-          {VIEW_TABS.map(({ key, label, icon: Icon }) => (
-            <Tooltip key={key}>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  aria-label={label}
-                  onClick={() => onViewModeChange(key)}
-                  className={cn(
-                    "flex h-8 w-8 items-center justify-center rounded-md",
-                    viewMode === key ? "bg-primary/10 text-primary" : "hover:bg-accent",
-                  )}
-                >
-                  <Icon size={14} />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>{label}</TooltipContent>
-            </Tooltip>
-          ))}
-        </div>
-        <DropdownMenuSeparator />
-
         {/* CheckboxItem 原语默认 pl-8 给左侧勾选指示器留位，文字会比普通 MenuItem
             缩进一截；这里文字左对齐各项、指示器移到行尾（Win11 切换项同款），
             role=menuitemcheckbox 与 aria-checked 不变，e2e 选择器零改动 */}

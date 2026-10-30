@@ -61,7 +61,7 @@ import { LogbookView } from "./logbook-view";
 import { QuickAddBar } from "./quick-add-bar";
 import { toolbarToForm, buildConditions } from "../shared/saved-filter-builder";
 import { useDebouncedValue } from "../shared/use-debounced-value";
-import { SortMenuButton, MoreMenuButton } from "./toolbar-menus";
+import { MoreMenuButton, SortMenuButton, ViewMenuButton } from "./toolbar-menus";
 import { KanbanView, type KanbanGroupBy } from "./kanban-view";
 import { CalendarView } from "./calendar-view";
 import TaskTableView from "./task-table-view";
@@ -735,8 +735,10 @@ export default function TaskPanel() {
             />
           </div>
 
-          {/* 收拢双菜单（TickTick 同款，prd/desktop-toolbar-dropdown）：
-              「↑↓」= 分组/排序/顺序 + 状态/优先级筛选；「···」= 视图/显示/入口类低频项 */}
+          {/* 收拢菜单（TickTick 同款，prd/desktop-toolbar-dropdown）：
+              「▦」= 视图切换单选；「↑↓」= 分组/排序/顺序 + 状态/优先级筛选；
+              「···」= 显示/入口类低频项 */}
+          <ViewMenuButton viewMode={viewMode} onViewModeChange={setViewMode} />
           <SortMenuButton
             viewMode={viewMode}
             sortKey={sortKey}
@@ -751,8 +753,6 @@ export default function TaskPanel() {
             onPriorityFilterChange={setPriorityFilter}
           />
           <MoreMenuButton
-            viewMode={viewMode}
-            onViewModeChange={setViewMode}
             hideDone={hideDone}
             onHideDoneChange={setHideDone}
             hideDoneDisabled={isLogbook || statusFilterOf(statusFilters) === "done"}
