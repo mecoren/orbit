@@ -134,6 +134,14 @@ export function TaskContextMenu({
   const commentTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const undoableDelete = useUndoableDeleteAction();
+  /**
+   * 行内菜单的常驻开销治理（2026-10-30 滚动流畅度）：本组件挂在每个列表行/
+   * 看板卡上，虚拟化滚动会逐帧重建可视行——此前连带把「5 个 Radix Dialog 根
+   * + 快捷日期档数组」一起重建，单帧脚本耗时翻倍。改为：快捷档数组只在菜单
+   * 打开时构造，四个二级 Dialog 在**首次右键打开后**才挂载（此前的行只留
+   * 菜单事件壳）。
+   */
+  const [dialogsMounted, setDialogsMounted] = useState(false);
 
   const patch = (p: Parameters<typeof todoTaskUpdate>[1]) =>
     todoTaskUpdate(task.id, p).then(refetch);
@@ -187,7 +195,9 @@ export function TaskContextMenu({
   // （一小时后/今天晚些时候/明天 09:00/下周一 09:00，目标为绝对时刻直接落库、
   // 不做保时刻换算；已过 22:00 自动隐藏今晚档）；「选择日期和时间」点击直接弹
   // DateTimePicker Dialog；末位清除钮写 null。
-  const dateIcons: { key: string; label: string; Icon: LucideIcon; run: () => void }[] = [
+  // 只在菜单打开时求值（见 dialogsMounted 注释）：关闭态每帧重建这组 Date 对象
+  // 是纯浪费。
+  const buildDateIcons = (): { key: string; label: string; Icon: LucideIcon; run: () => void }[] => [
     ...buildQuickDateTimeOptions().map((o) => ({
       key: o.key,
       label: `${o.label}（${o.hint}）`,
@@ -210,6 +220,9 @@ export function TaskContextMenu({
   return (
     <>
       <ContextMenuBase
+        onOpenChange={(open) => {
+          if (open) setDialogsMounted(true);
+        }}
         menu={(close) => (
           <>
             {/* 日期图标行（对标 TickTick 右键菜单顶部段）：快捷档 + 选择日期和时间
@@ -218,7 +231,7 @@ export function TaskContextMenu({
               日期
             </DropdownMenuLabel>
             <div className="flex items-center gap-0.5 px-1 pb-1">
-              {dateIcons.map(({ key, label, Icon, run }) => (
+              {buildDateIcons().map(({ key, label, Icon, run }) => (
                 <Tooltip key={key}>
                   <TooltipTrigger asChild>
                     <button
@@ -430,155 +443,160 @@ export function TaskContextMenu({
         {children}
       </ContextMenuBase>
 
-      {/* 设置截止时间（与设置提醒同构：Dialog + DateTimePicker，含清除） */}
-      <Dialog open={dueOpen} onOpenChange={setDueOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>设置截止时间 · {task.title}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">截止时间：</p>
-            <DateTimePicker
-              value={dueDraft}
-              onChange={(v) => {
-                setDueDraft(v);
-                setDueError(null);
-              }}
-            />
-            {dueError && <p className="text-xs text-destructive">{dueError}</p>}
-          </div>
-          <DialogFooter>
-            <Button
-              variant="ghost"
-              onClick={() => {
-                void patch({ due_date: null });
-                setDueOpen(false);
-              }}
-            >
-              清除
-            </Button>
-            <Button variant="outline" onClick={() => setDueOpen(false)}>取消</Button>
-            <Button disabled={!dueDraft.trim()} onClick={saveDue}>
-              确定
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* 二级 Dialog 只在首次打开菜单后挂载：关闭态零 Radix Dialog 根 */}
+      {dialogsMounted && (
+        <>
+          {/* 设置截止时间（与设置提醒同构：Dialog + DateTimePicker，含清除） */}
+          <Dialog open={dueOpen} onOpenChange={setDueOpen}>
+            <DialogContent className="max-w-sm">
+              <DialogHeader>
+                <DialogTitle>设置截止时间 · {task.title}</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">截止时间：</p>
+                <DateTimePicker
+                  value={dueDraft}
+                  onChange={(v) => {
+                    setDueDraft(v);
+                    setDueError(null);
+                  }}
+                />
+                {dueError && <p className="text-xs text-destructive">{dueError}</p>}
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    void patch({ due_date: null });
+                    setDueOpen(false);
+                  }}
+                >
+                  清除
+                </Button>
+                <Button variant="outline" onClick={() => setDueOpen(false)}>取消</Button>
+                <Button disabled={!dueDraft.trim()} onClick={saveDue}>
+                  确定
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
-      {/* 设置提醒（⚖① 统一用自有 DateTimePicker） */}
-      <Dialog open={reminderOpen} onOpenChange={setReminderOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>设置提醒 · {task.title}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">提醒时间：</p>
-            <DateTimePicker
-              value={reminderDraft}
-              dueDateMs={task.due_date}
-              endMs={reminderEndMs({
-                start_date: task.start_date,
-                due_date: task.due_date,
-                duration_minutes: task.duration_minutes,
-              })}
-              onChange={(v) => {
-                setReminderDraft(v);
-                setReminderError(null);
-              }}
-            />
-            {reminderError && <p className="text-xs text-destructive">{reminderError}</p>}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setReminderOpen(false)}>取消</Button>
-            <Button
-              disabled={!reminderDraft.trim()}
-              onClick={() => {
-                const ms = new Date(reminderDraft.replace(" ", "T")).getTime();
-                if (Number.isNaN(ms)) {
-                  setReminderError("时间格式不正确");
-                  return;
-                }
-                void todoReminderCreate({ task_id: task.id, remind_at: ms }).then(() => {
-                  toast.success("提醒已创建");
-                  refetch();
-                });
-                setReminderOpen(false);
-                setReminderDraft("");
-              }}
-            >
-              保存
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          {/* 设置提醒（⚖① 统一用自有 DateTimePicker） */}
+          <Dialog open={reminderOpen} onOpenChange={setReminderOpen}>
+            <DialogContent className="max-w-sm">
+              <DialogHeader>
+                <DialogTitle>设置提醒 · {task.title}</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">提醒时间：</p>
+                <DateTimePicker
+                  value={reminderDraft}
+                  dueDateMs={task.due_date}
+                  endMs={reminderEndMs({
+                    start_date: task.start_date,
+                    due_date: task.due_date,
+                    duration_minutes: task.duration_minutes,
+                  })}
+                  onChange={(v) => {
+                    setReminderDraft(v);
+                    setReminderError(null);
+                  }}
+                />
+                {reminderError && <p className="text-xs text-destructive">{reminderError}</p>}
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setReminderOpen(false)}>取消</Button>
+                <Button
+                  disabled={!reminderDraft.trim()}
+                  onClick={() => {
+                    const ms = new Date(reminderDraft.replace(" ", "T")).getTime();
+                    if (Number.isNaN(ms)) {
+                      setReminderError("时间格式不正确");
+                      return;
+                    }
+                    void todoReminderCreate({ task_id: task.id, remind_at: ms }).then(() => {
+                      toast.success("提醒已创建");
+                      refetch();
+                    });
+                    setReminderOpen(false);
+                    setReminderDraft("");
+                  }}
+                >
+                  保存
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
-      {/* 添加评论（max-w-sm + Textarea） */}
-      <Dialog open={commentOpen} onOpenChange={setCommentOpen}>
-        {/* 打开即聚焦输入框：Dialog 常驻渲染、open 切换显隐，React autoFocus
-            只在挂载时生效会错过打开时机，且 Radix 默认把焦点给首个可聚焦元素
-            （关闭钮）——onOpenAutoFocus 接管， preventDefault 后手动聚焦 */}
-        <DialogContent
-          className="max-w-sm"
-          onOpenAutoFocus={(e) => {
-            e.preventDefault();
-            commentTextareaRef.current?.focus();
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle>添加评论 · {task.title}</DialogTitle>
-          </DialogHeader>
-          <Textarea
-            ref={commentTextareaRef}
-            value={commentDraft}
-            placeholder="输入评论..."
-            // 固定高度（原语 field-sizing-content 会随输入无限增高）：超出走内部滚动
-            className="min-h-40 max-h-40 resize-none overflow-y-auto"
-            onChange={(e) => setCommentDraft(e.target.value)}
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCommentOpen(false)}>取消</Button>
-            <Button
-              disabled={!commentDraft.trim()}
-              onClick={() => {
-                void todoCommentCreate({ task_id: task.id, content: commentDraft.trim() }).then(refetch);
-                setCommentOpen(false);
-                setCommentDraft("");
+          {/* 添加评论（max-w-sm + Textarea） */}
+          <Dialog open={commentOpen} onOpenChange={setCommentOpen}>
+            {/* 打开即聚焦输入框：Dialog 常驻渲染、open 切换显隐，React autoFocus
+                只在挂载时生效会错过打开时机，且 Radix 默认把焦点给首个可聚焦元素
+                （关闭钮）——onOpenAutoFocus 接管， preventDefault 后手动聚焦 */}
+            <DialogContent
+              className="max-w-sm"
+              onOpenAutoFocus={(e) => {
+                e.preventDefault();
+                commentTextareaRef.current?.focus();
               }}
             >
-              保存
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              <DialogHeader>
+                <DialogTitle>添加评论 · {task.title}</DialogTitle>
+              </DialogHeader>
+              <Textarea
+                ref={commentTextareaRef}
+                value={commentDraft}
+                placeholder="输入评论..."
+                // 固定高度（原语 field-sizing-content 会随输入无限增高）：超出走内部滚动
+                className="min-h-40 max-h-40 resize-none overflow-y-auto"
+                onChange={(e) => setCommentDraft(e.target.value)}
+              />
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setCommentOpen(false)}>取消</Button>
+                <Button
+                  disabled={!commentDraft.trim()}
+                  onClick={() => {
+                    void todoCommentCreate({ task_id: task.id, content: commentDraft.trim() }).then(refetch);
+                    setCommentOpen(false);
+                    setCommentDraft("");
+                  }}
+                >
+                  保存
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
-      {/* 删除确认（P0：确认后进入 5s 撤销窗口，非立即落库） */}
-      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>删除待办</AlertDialogTitle>
-            <AlertDialogDescription>
-              确定要删除「{task.title}」吗？删除后 5 秒内可撤销，之后将移入回收站。
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-white hover:bg-destructive/90"
-              onClick={() => {
-                setDeleteOpen(false);
-                undoableDelete({
-                  entityLabel: "任务",
-                  recordName: task.title,
-                  commit: () => todoTaskDelete(task.id),
-                  hide: (qc) => hideFromQueries(qc, ["todo_tasks"], task.id),
-                });
-              }}
-            >
-              删除
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+          {/* 删除确认（P0：确认后进入 5s 撤销窗口，非立即落库） */}
+          <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>删除待办</AlertDialogTitle>
+                <AlertDialogDescription>
+                  确定要删除「{task.title}」吗？删除后 5 秒内可撤销，之后将移入回收站。
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>取消</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-destructive text-white hover:bg-destructive/90"
+                  onClick={() => {
+                    setDeleteOpen(false);
+                    undoableDelete({
+                      entityLabel: "任务",
+                      recordName: task.title,
+                      commit: () => todoTaskDelete(task.id),
+                      hide: (qc) => hideFromQueries(qc, ["todo_tasks"], task.id),
+                    });
+                  }}
+                >
+                  删除
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </>
+      )}
     </>
   );
 }

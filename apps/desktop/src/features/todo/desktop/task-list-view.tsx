@@ -166,6 +166,9 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, d
   const scrollRef = useRef<HTMLDivElement>(null);
   const [overdueCollapsed, setOverdueCollapsed] = useState(loadOverdueCollapsed);
 
+  // 项目索引表只在 projects 换引用时重建（滚动每帧都重跑本组件，不能每帧 new Map）
+  const projectById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
+
   useEffect(() => {
     localStorage.setItem(LS_SECTION_COLLAPSED, overdueCollapsed ? "overdue" : "");
   }, [overdueCollapsed]);
@@ -229,6 +232,20 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, d
       rowIndexByTaskId,
     };
   }, [tasks, overdueCollapsed, pinOverdue, overdueAll]);
+
+  /**
+   * 行内提醒徽标：按任务缓存（与看板 KanbanColumnBody 同口径）。
+   * displayReminder 每次调用都产新对象——放在 renderRow 里会让 TaskRow 的
+   * memo 比较器（reminder === reminder）逐帧击穿，滚动时整窗重渲染。
+   */
+  const reminderByTask = useMemo(() => {
+    const now = Date.now();
+    const map = new Map<number, DisplayReminder | null>();
+    for (const t of stream) {
+      map.set(t.id, displayReminder(remindersByTask.get(t.id) ?? [], now, !!t.done));
+    }
+    return map;
+  }, [stream, remindersByTask]);
 
   const focusRow = (index: number) => {
     if (index < 0 || index >= stream.length) return;
@@ -474,7 +491,6 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, d
     );
   }
 
-  const projectById = new Map(projects.map((p) => [p.id, p]));
   const toggleFavorite = (t: TodoTaskListItem) => {
     // 乐观翻转（D3）：纯字段，先 paint 后收敛（失效链仍在，见 handleDragEnd 尾）
     patchQueriesData<TodoTaskListItem>(qc, ["todo_tasks"], [t.id], { is_favorite: t.is_favorite ? 0 : 1 });
@@ -498,14 +514,15 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, d
     const overdue = !!t.due_date && !t.done && t.due_date < nowMs;
     const due = dueText(t.due_date);
     const project = t.project_id != null ? projectById.get(t.project_id) : undefined;
-    const reminder = displayReminder(remindersByTask.get(t.id) ?? [], nowMs, !!t.done);
+    const reminder = reminderByTask.get(t.id) ?? null;
     return (
       // 绝对定位行容器：divide-y 在脱离文档流的兄弟间不生效，改每行自带 border-b。
       // 用 top 而非 transform 定位（见文件头注释）
       <div
         key={`t-${t.id}`}
         data-index={vi.index}
-        ref={virtualizer.measureElement}
+        // 固定行高（57/33）不挂 measureElement：estimateSize 已精确，
+        // 逐行 ResizeObserver 只会在滚动时反复触发重测（2026-10-30）
         style={{ position: "absolute", top: vi.start, left: 0, width: "100%" }}
       >
         <TaskContextMenu

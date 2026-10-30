@@ -87,6 +87,16 @@ export function MatrixView({
     () => new Map(projects.map((p) => [p.id, p])),
     [projects],
   );
+  /** 提醒徽标按任务缓存（同看板/列表口径）：displayReminder 每次产新对象，
+   *  逐帧重算会让 MatrixRow 的 memo 比较器（reminder === reminder）击穿 */
+  const reminderByTask = useMemo(() => {
+    const now = Date.now();
+    const map = new Map<number, ReturnType<typeof displayReminder>>();
+    for (const t of tasks) {
+      map.set(t.id, displayReminder(remindersByTask.get(t.id) ?? [], now, !!t.done));
+    }
+    return map;
+  }, [tasks, remindersByTask]);
 
   // 行动作（stable 引用：行 memo 比较器忽略函数 props，这里收口成 useCallback
   // 纯属习惯——写路径语义与 task-list-view 逐字同源）
@@ -138,7 +148,7 @@ export function MatrixView({
           total={groupTotals?.get(q)}
           projectById={projectById}
           labelsByTask={labelsByTask}
-          remindersByTask={remindersByTask}
+          reminderByTask={reminderByTask}
           onOpenDetail={onOpenDetail}
           onToggleDone={toggleDone}
           onToggleFavorite={toggleFavorite}
@@ -155,7 +165,8 @@ interface QuadrantCardProps {
   total?: number;
   projectById: Map<number, TodoProject>;
   labelsByTask: Map<number, ProjectedTaskLabel[]>;
-  remindersByTask: Map<number, TaskReminderMeta[]>;
+  /** 任务→提醒徽标（父级 useMemo 缓存，稳定引用是行 memo 命中的前提） */
+  reminderByTask: Map<number, ReturnType<typeof displayReminder>>;
   onOpenDetail: (id: number) => void;
   onToggleDone: (t: TodoTaskListItem) => void;
   onToggleFavorite: (t: TodoTaskListItem) => void;
@@ -168,7 +179,7 @@ function QuadrantCard({
   total,
   projectById,
   labelsByTask,
-  remindersByTask,
+  reminderByTask,
   onOpenDetail,
   onToggleDone,
   onToggleFavorite,
@@ -224,9 +235,9 @@ function QuadrantCard({
           <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
             {virtualizer.getVirtualItems().map((vi) => {
               const t = tasks[vi.index];
-              // 每帧一次 nowMs 供行内 overdue/reminder 判定（同 renderRow 口径）
+              // 每帧一次 nowMs 供行内 overdue 判定（提醒徽标走父级缓存）
               const nowMs = Date.now();
-              const reminder = displayReminder(remindersByTask.get(t.id) ?? [], nowMs, !!t.done);
+              const reminder = reminderByTask.get(t.id) ?? null;
               return (
                 <div
                   key={vi.key}
@@ -375,7 +386,21 @@ const MatrixRow = memo(function MatrixRow({
       </button>
     </div>
   );
-});
+}, matrixRowPropsEqual);
+
+/**
+ * MatrixRow memo 比较器：与 TaskRow 同口径——忽略函数 props（父级每帧重建
+ * 内联箭头），业务字段全量比较。象限格滚动每帧只重建可视行，命中即跳过子树。
+ */
+function matrixRowPropsEqual(prev: MatrixRowProps, next: MatrixRowProps): boolean {
+  return (
+    prev.task === next.task &&
+    prev.project === next.project &&
+    prev.labels === next.labels &&
+    prev.reminder === next.reminder &&
+    prev.overdue === next.overdue
+  );
+}
 
 /** 完成态白勾（TaskRow 的 CheckSvg 同形；size 由本组件固定） */
 function CheckIcon() {
