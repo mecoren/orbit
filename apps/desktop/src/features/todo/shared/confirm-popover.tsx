@@ -4,14 +4,18 @@
  * 用于详情抽屉内轻量行的删除/清除确认：确认框锚定在目标行下方而非
  * 屏幕中央（居中 AlertDialog 打断感强），点外部 / Esc 均视为取消。
  * 子任务 / 关联任务 / 评论 / 提醒 / 截止日期清除共用同一形制。
+ * 侧栏筛选器行、回收站行尾图标钮（恢复/彻底删除）也走同一形制——传
+ * `tooltip` 即可在图标上保留悬停提示，确认框仍在下方展开。
  *
  * 受控组件：open / onOpenChange 由使用方按行持有（confirmDelete 按 id
  * 匹配），确认时组件负责关闭再回调 onConfirm。
  */
 import type { ReactNode } from "react";
 
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 export interface ConfirmPopoverProps {
   open: boolean;
@@ -22,12 +26,22 @@ export interface ConfirmPopoverProps {
   description: ReactNode;
   /** 确认按钮文案（默认「删除」） */
   confirmLabel?: string;
+  /**
+   * 确认按钮语气：destructive（默认，删除类）/ default（可逆但需二次确认的
+   * 轻操作，如归档——用主题色而非红色，避免把「可恢复的收起」画成删除）
+   */
+  confirmTone?: "destructive" | "default";
   /** 确认回调（删除/清除动作本体；关闭弹框由组件完成） */
   onConfirm: () => void;
   /** 触发行内容（PopoverTrigger asChild 包住目标行） */
   children: ReactNode;
   /** 锚定对齐（默认右缘对齐，随删除按钮一侧） */
   align?: "start" | "center" | "end";
+  /**
+   * 悬停提示（可选）：图标触发点（侧栏行尾钮、回收站行尾钮）保留了 tooltip，
+   * 与确认框共存——Tooltip 走默认顶部、确认框走下方，互不遮挡。
+   */
+  tooltip?: string;
 }
 
 export function ConfirmPopover({
@@ -36,15 +50,26 @@ export function ConfirmPopover({
   title,
   description,
   confirmLabel = "删除",
+  confirmTone = "destructive",
   onConfirm,
   children,
   align = "end",
+  tooltip,
 }: ConfirmPopoverProps) {
+  const trigger = <PopoverTrigger asChild>{children}</PopoverTrigger>;
+
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverTrigger asChild>
-        {children}
-      </PopoverTrigger>
+      {/* 触发链必须逐层转发 ref：TooltipTrigger(asChild) → PopoverTrigger(asChild) → 目标元素。
+          PopoverTrigger 是 forwardRef，故可安全套在 TooltipTrigger 内。 */}
+      {tooltip ? (
+        <Tooltip>
+          <TooltipTrigger asChild>{trigger}</TooltipTrigger>
+          <TooltipContent>{tooltip}</TooltipContent>
+        </Tooltip>
+      ) : (
+        trigger
+      )}
       <PopoverContent align={align} side="bottom" className="w-56 p-3">
         <p className="text-xs font-semibold">{title}</p>
         <p className="mt-1 break-words text-[10px] text-muted-foreground">{description}</p>
@@ -62,7 +87,12 @@ export function ConfirmPopover({
             type="button"
             variant="ghost"
             size="sm"
-            className="h-7 px-2.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+            className={cn(
+              "h-7 px-2.5 text-xs",
+              confirmTone === "destructive"
+                ? "text-destructive hover:bg-destructive/10 hover:text-destructive"
+                : "text-primary hover:bg-primary/10 hover:text-primary",
+            )}
             onClick={() => {
               onOpenChange(false);
               onConfirm();
