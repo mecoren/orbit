@@ -62,7 +62,7 @@ import {
   type TodoProject,
   type TodoTaskListItem,
 } from "@/lib/tauri";
-import { FAVORITE_COLOR, PRIORITY_COLOR, PRIORITY_LABELS } from "../shared/constants";
+import { FAVORITE_COLOR, OVERDUE_COLOR_CLASS, PRIORITY_COLOR, PRIORITY_LABELS } from "../shared/constants";
 import { LabelChips } from "../shared/label-chips";
 import { ReminderChip } from "../shared/reminder-chip";
 import { displayReminder, type DisplayReminder, type TaskReminderMeta } from "../shared/reminder-meta";
@@ -689,6 +689,10 @@ const KanbanCard = memo(function KanbanCard({
   const qc = useQueryClient();
   const draggable = useDraggable({ id: `task:${task.id}`, disabled: !!overlay || !sortable });
   const { setNodeRef: setDropRef, isOver } = useDroppable({ id: `task:${task.id}` });
+  /** 逾期判定与列表行同源：截止早于当前时刻且未完成 */
+  const overdue = task.due_date != null && !task.done && task.due_date < Date.now();
+  /** 多选态才把勾选框切成多选框（拖拽浮层例外：浮层只做静态预览） */
+  const selectMode = !!hasSelection && !overlay;
 
   return (
     <div
@@ -737,7 +741,7 @@ const KanbanCard = memo(function KanbanCard({
         }
       }}
       className={cn(
-        "group rounded-md border border-border/50 bg-card p-3 shadow-sm hover:shadow-md",
+        "group relative rounded-md border border-border/50 bg-card p-3 shadow-sm hover:shadow-md",
         "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
         sortable && "cursor-grab active:cursor-grabbing",
         dragging && "opacity-40",
@@ -747,27 +751,32 @@ const KanbanCard = memo(function KanbanCard({
         selected && "bg-primary/5 ring-1 ring-inset ring-primary/40",
       )}
     >
-      {/* 优先级条（卡片顶部 2px）：六档全显——P0「无」浅灰 #D1D5DB 也参与 */}
-      <div
-        className="mb-2 h-0.5 rounded-full"
-        style={{ background: PRIORITY_COLOR[task.priority] }}
-      />
+      {/* 多选态优先级左缘竖条（与列表行同口径）：常态优先级由完成框描边承载，
+          进入多选后完成框让位给多选框、颜色无处可附，改由左缘竖条续上。
+          卡片顶部不再画通栏色条——它悬在标题上方只剩一道孤线，反成噪点 */}
+      {selectMode && (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-y-2 left-0 w-1 rounded-full"
+          style={{ background: PRIORITY_COLOR[task.priority] }}
+        />
+      )}
 
-      {/* 标题行：选中勾 + 完成勾 + 标题 + 星标 */}
+      {/* 标题行：勾选框 + 标题/元信息列 + 星标。
+          勾选框与列表行同一次点击语义（2026-10-29 口径）：默认是完成框，
+          进入多选态就地变多选框，不再多出一个隐形勾选圈占位 */}
       <div className="flex items-start gap-1.5">
-        {/* 多选勾选圈（P2 扩展）：默认隐藏，经右键菜单「多选」进入多选态后显现
-            （2026-10-10 去 hover 显现）；隐藏时同步 pointer-events-none
-            避免透明圈拦截卡片左上角误触 */}
-        {!overlay && (
+        {selectMode ? (
           <button
             type="button"
             aria-label={selected ? "取消选中" : "选中任务"}
             aria-checked={selected}
             role="checkbox"
             className={cn(
-              "mt-0.5 h-5 w-5 shrink-0 rounded border-2 transition-colors",
-              selected ? "border-primary bg-primary" : "border-muted-foreground/30",
-              hasSelection || selected ? "opacity-100" : "pointer-events-none opacity-0",
+              "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] border transition-colors",
+              selected
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-muted-foreground/30 hover:border-primary",
               "focus-visible:outline-none",
             )}
             onClick={(e) => {
@@ -775,65 +784,75 @@ const KanbanCard = memo(function KanbanCard({
               onToggleSelect?.(task.id);
             }}
           >
-            {selected ? <CheckSvg /> : null}
+            {selected ? <CheckSvg className="size-3.5" stroke={3} /> : null}
+          </button>
+        ) : (
+          /* 完成 checkbox（M5，与列表同款方角）：卡片正面直接入口，
+             不必右键菜单绕一圈；未完成描边 = 优先级色（P0 回落中性灰） */
+          <button
+            type="button"
+            aria-label={task.done ? "标记未完成" : "标记完成"}
+            className={cn(
+              "mt-0.5 h-5 w-5 shrink-0 rounded-[4px] border-2 transition-colors",
+              task.done
+                ? "border-muted-foreground bg-muted-foreground"
+                : "border-muted-foreground/30 hover:border-primary",
+            )}
+            style={
+              !task.done && task.priority > 0
+                ? { borderColor: PRIORITY_COLOR[task.priority] }
+                : undefined
+            }
+            onClick={(e) => {
+              e.stopPropagation();
+              void completeTask(task, qc);
+            }}
+          >
+            {task.done ? <CheckSvg /> : null}
           </button>
         )}
-        {/* 完成 checkbox（M5，与列表同款方角）：卡片正面直接入口，
-            不必右键菜单绕一圈；未完成描边 = 优先级色（P0 回落中性灰） */}
-        <button
-          type="button"
-          aria-label={task.done ? "标记未完成" : "标记完成"}
-          className={cn(
-            "mt-0.5 h-5 w-5 shrink-0 rounded-[4px] border-2 transition-colors",
-            task.done
-              ? "border-muted-foreground bg-muted-foreground"
-              : "border-muted-foreground/30 hover:border-primary",
+
+        <div className="min-w-0 flex-1">
+          <div
+            className={cn(
+              // break-words：长连续文本（URL/长英文串无空格断点）在卡内强制断行，
+              // 否则整串不换行撑出卡片右缘
+              "break-words text-sm font-medium leading-5",
+              task.done && "text-muted-foreground line-through",
+            )}
+          >
+            {task.title}
+          </div>
+
+          {/* 元信息单行：标签 / 截止 / 提醒 / 进度——与标题左缘对齐（旧版挂在
+              卡片左内边距上，缩进比标题少 26px，整卡看着是歪的）；逾期未完成
+              同列表行染红（旧版卡片只有灰色 MM-dd，逾期在板上没有任何信号） */}
+          {(labels.length > 0 || task.due_date != null || reminder != null || task.percent_done > 0) && (
+            <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+              {labels.length > 0 && <LabelChips labels={labels} max={2} />}
+              {task.due_date != null && (
+                <span
+                  className={cn(
+                    "inline-flex shrink-0 items-center gap-1",
+                    overdue && OVERDUE_COLOR_CLASS,
+                  )}
+                >
+                  <Calendar size={11} />
+                  {format(new Date(task.due_date), "MM-dd")}
+                </span>
+              )}
+              <ReminderChip reminder={reminder} />
+              {task.percent_done > 0 && (
+                <span className="shrink-0 tabular-nums">{Math.round(task.percent_done)}%</span>
+              )}
+            </div>
           )}
-          style={
-            !task.done && task.priority > 0
-              ? { borderColor: PRIORITY_COLOR[task.priority] }
-              : undefined
-          }
-          onClick={(e) => {
-            e.stopPropagation();
-            void completeTask(task, qc);
-          }}
-        >
-          {task.done ? <CheckSvg /> : null}
-        </button>
-        <span
-          className={cn(
-            // break-words：长连续文本（URL/长英文串无空格断点）在卡内强制断行，
-            // 否则整串不换行撑出卡片右缘
-            "min-w-0 flex-1 break-words text-sm font-medium leading-5",
-            task.done && "text-muted-foreground line-through",
-          )}
-        >
-          {task.title}
-        </span>
-        {!!task.is_favorite && <Star size={13} style={{ color: FAVORITE_COLOR }} fill="currentColor" />}
+        </div>
+
+        {!!task.is_favorite && (
+          <Star size={13} className="mt-0.5 shrink-0" style={{ color: FAVORITE_COLOR }} fill="currentColor" />
+        )}
       </div>
-
-      {/* 标签 chips（标签自选色） */}
-      {labels.length > 0 && (
-        <div className="mt-1.5">
-          <LabelChips labels={labels} max={2} />
-        </div>
-      )}
-
-      {/* 底部元信息 */}
-      {(task.due_date != null || reminder != null || task.percent_done > 0) && (
-        <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-          {task.due_date != null && (
-            <span className="inline-flex items-center gap-1">
-              <Calendar size={10} />
-              {format(new Date(task.due_date), "MM-dd")}
-            </span>
-          )}
-          <ReminderChip reminder={reminder} />
-          {task.percent_done > 0 && <span>{Math.round(task.percent_done)}%</span>}
-        </div>
-      )}
     </div>
   );
 });

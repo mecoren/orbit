@@ -17,6 +17,10 @@
 
 ## [Unreleased]
 
+### 优化：看板卡片版式收敛——去顶部优先级孤线 + 元信息单行对齐（2026-10-30）
+
+卡片原来自上而下是「顶部 2px 通栏优先级色条 → 勾选 + 标题 → 标签行 → 日期行」：色条悬在标题上方只剩一道孤线（P0 浅灰尤其像误画的分隔线），标签行与日期行又挂在卡片左内边距上、比标题少缩进 26px，整卡看着是歪的；多选态还常驻一个 `opacity-0` 的隐形勾选圈，把勾选框与标题整体右推。现改为：①**撤掉顶部色条**，优先级统一由勾选框描边承载（与列表行 2026-10-29 口径一致），多选态勾选框让位给多选框时改由左缘竖条续上，同时删掉隐形勾选圈、卡片左侧不再留空槽；②标签/截止/提醒/进度**合并为元信息单行并对齐标题左缘**（逾期未完成染 `text-destructive`——旧版只有灰色 MM-dd，逾期在看板上没有任何信号）；③单卡高度约 98→68px，同屏能多看约三成卡片。回归锚点：`tsc` 零错误、看板多选批量 e2e 绿、亮/暗两套截图目检。
+
 ### 优化：加载动画双端统一「环 + 绕行点」（2026-10-29）
 
 移动端 45 处裸 `CircularProgressIndicator`（外加节假日补写弹层里 1 处不定态 `LinearProgressIndicator`——拿不到总数时走转圈，有确切比例才画进度条）与桌面端 26 处 `Loader2 + animate-spin`、3 处「让图标自己转」（同步状态云图标 / 诊断刷新 / 同步卡状态刷新）、7 处三块弹跳 `EqualizerLoader`（启动等待、退出同步遮罩、懒加载兜底、统计、回顾中心、规划今天、创建按钮），全部收敛到一个原语：静止细环 + 环内一个匀速绕行的实心点（几何按边长比例推导——描边 8%、点心轨道 42%、点半径 34%、轨道透明度 0.28，一圈 1200ms 线性；只表达「在动」，不画进度弧）。移动端新建 `shared/widgets/shadcn/orbit_spinner.dart`（`OrbitSpinner`，默认色取 `themeAccent`，深底显式传色，周期走 `AppMotion.spinnerOrbit`；自带方形占位，调用方不再套 `SizedBox`）；桌面新建 `components/ui/spinner.tsx`（`Spinner`，`currentColor` 继承按钮文字色，尺寸沿用原 `size-*` 类，动画走新增的 `--animate-orbit-spin` token），`components/EqualizerLoader.tsx` 无引用后删除。语义进度（带 `value` 的进度条 / 同步 checked-total）与骨架屏、下拉刷新（平台 `RefreshIndicator`，与蓝本同口径）保留不动。回归锚点：移动 `flutter analyze` 干净 + 新增 `orbit_spinner_test` 10 绿 + 节假日页 18 绿；桌面 `tsc --noEmit` 零错误 + `vitest` 769 绿（含新增 `spinner.test.ts` 5 例）+ `pnpm build` 产物确认生成 `.animate-orbit-spin` 与 `@keyframes orbit-spin`。
