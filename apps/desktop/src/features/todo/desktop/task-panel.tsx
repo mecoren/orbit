@@ -44,6 +44,7 @@ import {
   type TaskStatusFilterSet,
 } from "../shared/task-filters";
 import { applySavedFilter } from "../shared/saved-filter";
+import { nextViewMode, type ViewMode } from "../shared/view-mode";
 import {
   savedFiltersList,
   todoTaskBoard,
@@ -74,8 +75,8 @@ import { PlanDayDialog } from "./plan-day-dialog";
 type PriorityFilter = "all" | "0" | "1" | "2" | "3" | "4" | "5";
 /** 状态多选档（2026-10-28，对齐 TickTick 多状态筛选）：空数组 = 全部状态 */
 type StatusFilterSet = TaskStatusFilterSet;
-/** 五档视图（矩阵 = 四象限 Eisenhower Matrix，TickTick 同款；2026-09-25 与移动端对齐） */
-export type ViewMode = "list" | "kanban" | "calendar" | "table" | "matrix";
+/** 五档视图（真源 shared/view-mode：顺序即钮面左键循环序） */
+export type { ViewMode };
 
 /** 看板/矩阵每列首屏条数（列内「还有 N 条」由组总数给，不再拉全量） */
 const BOARD_PAGE_LIMIT = 60;
@@ -220,19 +221,9 @@ export default function TaskPanel() {
 
   useEffect(() => {
     if (viewToggleIntent === 0) return;
-    // 循环切换 list→kanban→calendar→table→matrix→list（原实现漏了 table，
-    // 加 matrix 档时一并修正）
-    setViewMode((m) =>
-      m === "list"
-        ? "kanban"
-        : m === "kanban"
-          ? "calendar"
-          : m === "calendar"
-            ? "table"
-            : m === "table"
-              ? "matrix"
-              : "list",
-    );
+    // 与工具栏钮面左键同源（shared/view-mode 的 nextViewMode）：命令面板与按钮
+    // 不会因各持一份链式三元而在加档时漂移
+    setViewMode((m) => nextViewMode(m));
     consumeViewToggleIntent();
   }, [viewToggleIntent, consumeViewToggleIntent]);
 

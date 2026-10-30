@@ -1,7 +1,7 @@
 /**
  * 工具栏收拢双菜单（TickTick Web 同款形态，prd/desktop-toolbar-dropdown）：
  *
- * - ViewMenuButton「▦」：视图切换单钮（钮面 = 当前视图图标）+ 下拉五档单选；
+ * - ViewMenuButton「▦」：视图切换单钮——左键循环下一档，右键弹五档单选；
  * - SortMenuButton「↑↓」：分组（仅看板）/ 排序档 / 顺序（升/降序）+ 状态/优先级
  *   筛选子菜单就地展开（筛选与排序同属「行怎么排」语义，收在一处）；
  * - MoreMenuButton「···」：隐藏已完成 + 保存为筛选器 + 搜索或跳转 + 标签管理
@@ -10,7 +10,14 @@
  * 视图切换 2026-10-30 从「···」菜单顶栏上提为独立单钮：切视图是高频主操作，
  * 藏在两级菜单里要多点一次且弹层遮住列表；但五钮全平铺会让工具栏控件 5→10
  * （PRD 的「≤5 控件」验收线），故取「一钮一档」中间态——钮面常驻当前视图图标
- * （一眼可知所处视图），展开即五档单选。
+ * （一眼可知所处视图）。
+ *
+ * 同日形态再调（左键循环 / 右键菜单）：点一下就切比「点开再选」少一层弹层遮挡，
+ * 与相邻主题钮同一手感。代价是「下一个」不等于「目标」——低频档（表格/矩阵）
+ * 靠右键直达，因此 tooltip 必须把下一档与「右键选择」都写出来，否则右键沦为
+ * 不可发现手势。键盘精确选档能力让位主路径：Tab + Enter 仍是循环切换，精确跳档
+ * 走命令面板（Ctrl+K「切换视图」）；钮面 aria-label 保持静态文案，e2e 选择器
+ * 与读屏名称不受视图变化影响。
  *
  * 全部状态由 task-panel 持有、props 注入（面板是唯一状态源，本文件纯 UI 转发）；
  * 数据语义与收拢前逐项等价——aria-label 沿用原文案（列表视图/保存为筛选器/标签管理…），
@@ -50,8 +57,10 @@ import {
 } from "../shared/task-filters";
 import { type KanbanGroupBy } from "./kanban-view";
 import { KANBAN_GROUP_LABEL } from "../shared/kanban-group";
-// 仅类型反向引用（inline type 擦除，无运行时环）：三态类型真源在 task-panel
-import { type PriorityFilter, type ViewMode } from "./task-panel";
+import { VIEW_MODE_SHORT_LABEL, nextViewMode, type ViewMode } from "../shared/view-mode";
+import { ContextMenuBase } from "./context-menu";
+// 仅类型反向引用（inline type 擦除，无运行时环）：优先级筛选类型真源在 task-panel
+import { type PriorityFilter } from "./task-panel";
 
 /** 视图图标排元数据（与原五联钮同序同 icon；aria-label 原样保留供 e2e 复用） */
 const VIEW_TABS: { key: ViewMode; label: string; icon: typeof ListTodo }[] = [
@@ -300,17 +309,16 @@ interface ViewMenuButtonProps {
   onViewModeChange: (m: ViewMode) => void;
 }
 
-/** 视图切换单钮：钮面图标随当前视图变化，下拉五档单选（当前档圆点指示） */
+/** 视图切换单钮：左键循环下一档（tooltip 预告下一档），右键弹五档单选 */
 export function ViewMenuButton({ viewMode, onViewModeChange }: ViewMenuButtonProps) {
   const current = VIEW_TABS.find((t) => t.key === viewMode) ?? VIEW_TABS[0];
+  const next = nextViewMode(viewMode);
   const CurrentIcon = current.icon;
 
   return (
-    <DropdownMenu>
-      <MenuTrigger label="切换视图">
-        <CurrentIcon size={14} />
-      </MenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-36">
+    <ContextMenuBase
+      contentClassName="min-w-36"
+      menu={() => (
         <DropdownMenuRadioGroup
           value={viewMode}
           onValueChange={(v) => onViewModeChange(v as ViewMode)}
@@ -321,8 +329,25 @@ export function ViewMenuButton({ viewMode, onViewModeChange }: ViewMenuButtonPro
             </MenuRadioItem>
           ))}
         </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
+      )}
+    >
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            aria-label="切换视图"
+            onClick={() => onViewModeChange(next)}
+          >
+            <CurrentIcon size={14} />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          {`切换视图 · ${VIEW_MODE_SHORT_LABEL[viewMode]} → ${VIEW_MODE_SHORT_LABEL[next]}（右键选择）`}
+        </TooltipContent>
+      </Tooltip>
+    </ContextMenuBase>
   );
 }
 

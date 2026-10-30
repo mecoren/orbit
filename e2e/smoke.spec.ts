@@ -38,9 +38,10 @@ async function openMoreMenu(page: Page) {
   await expect(page.getByRole("menu")).toBeVisible();
 }
 
-/** 切视图：工具栏「切换视图」单钮 → 下拉五档单选（radio 选中即自动收菜单） */
+/** 切视图：工具栏「切换视图」单钮 → 右键弹五档单选（左键为循环下一档；
+ *  radio 选中即自动收菜单） */
 async function switchView(page: Page, name: string) {
-  await page.getByRole("button", { name: "切换视图" }).click();
+  await page.getByRole("button", { name: "切换视图" }).click({ button: "right" });
   await page.getByRole("menuitemradio", { name }).click();
   await expect(page.getByRole("menu")).toHaveCount(0);
 }
@@ -1250,6 +1251,14 @@ test("「···」菜单去图标排 + 视图切换单钮往返（2026-10-30 视
   await expect(page.getByText("重要且紧急")).toBeVisible();
 
   // 切回列表视图：状态筛选的断言要看任务行，矩阵视图没有列表行
+  await switchView(page, "列表视图");
+
+  // 左键 = 循环下一档（不弹菜单），右键才是选择器：列表 → 看板
+  await page.getByRole("button", { name: "切换视图" }).click();
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem("todo_view_mode")))
+    .toBe("kanban");
   await switchView(page, "列表视图");
 
   // 状态筛选子菜单仍可走通（2026-10-28 改 checkbox 多选：空集 = 全部状态）——

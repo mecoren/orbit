@@ -13,7 +13,7 @@ interface AppState {
   taskFormIntent: number;
   bumpTaskFormIntent: () => void;
   consumeTaskFormIntent: () => void;
-  /** 「切换视图」意图计数器（list ⇄ kanban），机制同上 */
+  /** 「切换视图」意图计数器（五档循环，顺序见 shared/view-mode），机制同上 */
   viewToggleIntent: number;
   bumpViewToggleIntent: () => void;
   consumeViewToggleIntent: () => void;

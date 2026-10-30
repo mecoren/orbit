@@ -24,6 +24,7 @@ export function ContextMenuBase({
   children,
   menu,
   onOpenChange,
+  contentClassName = "min-w-[200px]",
 }: {
   /** 右键目标元素（行/卡片等） */
   children: ReactNode;
@@ -31,6 +32,9 @@ export function ContextMenuBase({
   menu: (close: () => void) => ReactNode;
   /** 菜单开合回调：调用方据此重置菜单内的临时态（如内联确认区） */
   onOpenChange?: (open: boolean) => void;
+  /** 菜单宽度档（默认 200px 起步；窄菜单如视图五档传 min-w-36）——整体替换而非
+   *  cn 合并：两个 min-w-* 同时存在时胜出方由 CSS 顺序决定，不随 props 意图 */
+  contentClassName?: string;
 }) {
   const [open, setOpenState] = useState(false);
   const [pos, setPos] = useState({ x: 0, y: 0 });
@@ -71,7 +75,7 @@ export function ContextMenuBase({
             <DropdownMenuTrigger asChild>
               <span tabIndex={-1} className="block size-full" />
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" sideOffset={2} className="min-w-[200px]">
+            <DropdownMenuContent align="start" sideOffset={2} className={contentClassName}>
               {menu(close)}
             </DropdownMenuContent>
           </DropdownMenu>
