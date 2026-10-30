@@ -9,8 +9,9 @@
  *   position 一律取中值算法写入（03 文档 §一）。
  * - 排序（#26）：列内保留父层传入序（task-panel 已按工具栏档位 sortTasks），
  *   本视图不再 position 重排——否则截止/优先级/标题/创建档在看板全部失效。
- *   仅 manual 档允许拖拽重排（与列表视图 sortable 口径一致）；跨列移动
- *   （改归属）任何档位都允许，落位仍走 position 中值。
+ *   拖拽源任何档位都挂（2026-10-30）——跨列改归属与排序档无关，此前用
+ *   sortable 一并禁用会让非「拖拽顺序」档的看板完全拖不动；列内落位仅
+ *   manual 档生效（其他档位提示切档），跨列落位仍走 position 中值。
  */
 import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -101,7 +102,7 @@ interface KanbanViewProps {
   labelsByTask: Map<number, ProjectedTaskLabel[]>;
   /** 任务→提醒映射（TaskPanel 级拉取，卡片渲染提醒徽标） */
   remindersByTask: Map<number, TaskReminderMeta[]>;
-  /** 工具栏排序档位（#26）：列内沿用传入序；manual 才允许拖拽重排 */
+  /** 工具栏排序档位（#26）：列内沿用传入序；manual 才允许列内拖拽重排 */
   sortKey: TaskSortKey;
   /** 加载态（H3）：查询进行中列内不闪「拖拽任务到此处」空态 */
   loading?: boolean;
@@ -266,6 +267,13 @@ export function KanbanView({
     setDraggingId(taskIdOf(e.active.id));
   };
 
+  /** 非「拖拽顺序」档的列内落位提示：跨列改归属照样能用，只是列内顺序由排序档决定 */
+  const hintSortedColumn = () => {
+    toast("列内顺序由当前排序档决定", {
+      description: "切到「排序 → 拖拽顺序」后可手动调整",
+    });
+  };
+
   const handleDragEnd = async (e: DragEndEvent) => {
     const { active, over } = e;
     setDraggingId(null);
@@ -283,7 +291,7 @@ export function KanbanView({
       const colKey = overData.slice(4);
       if (colKey === draggedCol) {
         // 同列空白 → 追加到末尾；非拖拽档下同列 position 无意义，不写
-        if (!sortable) return;
+        if (!sortable) return hintSortedColumn();
         const list = grouped.get(colKey) ?? [];
         const last = list[list.length - 1];
         if (last && last.id !== taskId) await reorder(taskId, last.id, null);
@@ -309,8 +317,8 @@ export function KanbanView({
       await reorder(taskId, null, targetId);
     } else {
       // 同列插到目标前：取目标与前一张卡片的中值；
-      // 非拖拽档下顺序由排序档决定，写入立即被覆盖，跳过
-      if (!sortable) return;
+      // 非拖拽档下顺序由排序档决定，写入立即被覆盖 → 提示切档
+      if (!sortable) return hintSortedColumn();
       const list = grouped.get(targetCol) ?? [];
       const idx = list.findIndex((t) => t.id === targetId);
       const prev = idx > 0 ? list[idx - 1] : undefined;
@@ -372,7 +380,6 @@ export function KanbanView({
               dragEndStamp={dragEndStamp}
               onOpenDetail={openDetail}
               onOpenColumnInList={onOpenColumnInList}
-              sortable={sortable}
               selected={selected}
               hasSelection={selected.size > 0}
               onToggleSelect={toggleSelect}
@@ -520,7 +527,6 @@ const KanbanColumn = memo(function KanbanColumn({
   dragEndStamp,
   onOpenDetail,
   onOpenColumnInList,
-  sortable,
   selected,
   hasSelection,
   onToggleSelect,
@@ -539,8 +545,6 @@ const KanbanColumn = memo(function KanbanColumn({
   onOpenDetail: (id: number) => void;
   /** 列满出口：切到列表继续加载（缺省 = 不渲染按钮） */
   onOpenColumnInList?: (colKey: string) => void;
-  /** 仅拖拽顺序档允许拖拽（#26）；跨列移动始终可用 */
-  sortable: boolean;
   /** 多选态（P2 扩展：看板对齐列表/表格） */
   selected: Set<number>;
   hasSelection: boolean;
@@ -603,7 +607,12 @@ const KanbanColumn = memo(function KanbanColumn({
             拖拽任务到此处
           </div>
         ) : (
+          /* shrink-0 不能省：本容器是 flex-col 的滚动区，虚拟高度holder 作为 flex
+             子项默认 flex-shrink=1，会被压回视口高度——此时绝对定位的卡片溢出
+             holder 形成「滚动高度 = 已渲染行下缘」，往下滚一屏 scrollHeight 就长
+             一屏，滚动条滑块越拖越短（2026-10-30 用户反馈） */
           <div
+            className="shrink-0"
             style={{ height: virtualizer.getTotalSize(), position: "relative", width: "100%" }}
           >
             {virtualizer.getVirtualItems().map((vi) => {
@@ -634,7 +643,6 @@ const KanbanColumn = memo(function KanbanColumn({
                       dragging={draggingId === t.id}
                       dragEndStamp={dragEndStamp}
                       onOpenDetail={onOpenDetail}
-                      sortable={sortable}
                       selected={selected.has(t.id)}
                       hasSelection={hasSelection}
                       onToggleSelect={onToggleSelect}
@@ -663,7 +671,6 @@ const KanbanCard = memo(function KanbanCard({
   onOpenDetail,
   onToggleSelect,
   onClearSelection,
-  sortable = true,
   selected = false,
   hasSelection = false,
 }: {
@@ -680,14 +687,17 @@ const KanbanCard = memo(function KanbanCard({
   onToggleSelect?: (id: number) => void;
   /** Escape 退选全部（选中态下） */
   onClearSelection?: () => void;
-  /** 仅拖拽顺序档可拖（#26）；跨列移动的落点仍注册（droppable 不受影响） */
-  sortable?: boolean;
   selected?: boolean;
   /** 任一卡片被选中时，卡片点击语义切换为「切换勾选」（与列表行一致） */
   hasSelection?: boolean;
 }) {
   const qc = useQueryClient();
-  const draggable = useDraggable({ id: `task:${task.id}`, disabled: !!overlay || !sortable });
+  /**
+   * 任何排序档都挂拖拽源（2026-10-30）：跨列改归属与排序档无关，此前用
+   * `!sortable` 一并禁用会让非「拖拽顺序」档的看板彻底拖不动；列内落位是否
+   * 生效由父层 handleDragEnd 判 sortable 并提示。
+   */
+  const draggable = useDraggable({ id: `task:${task.id}`, disabled: !!overlay });
   const { setNodeRef: setDropRef, isOver } = useDroppable({ id: `task:${task.id}` });
   /** 逾期判定与列表行同源：截止早于当前时刻且未完成 */
   const overdue = task.due_date != null && !task.done && task.due_date < Date.now();
@@ -743,7 +753,7 @@ const KanbanCard = memo(function KanbanCard({
       className={cn(
         "group relative rounded-md border border-border/50 bg-card p-3 shadow-sm hover:shadow-md",
         "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-        sortable && "cursor-grab active:cursor-grabbing",
+        "cursor-grab active:cursor-grabbing",
         dragging && "opacity-40",
         isOver && !dragging && "ring-2 ring-primary/40",
         overlay && "border-primary/40 shadow-xl",
