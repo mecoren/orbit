@@ -57,6 +57,17 @@ Future<void> _navigateToMonth(WidgetTester tester, int year, int month) async {
   }
 }
 
+/// 月历日格定位（`OrbitMonthCalendar._buildCell` 的 key 同口径）。
+///
+/// 不能用 `find.text('${day.day}').first`：补位格会重复日号——10 月网格
+/// 前导行含 9/30，`first` 会按到上月那一格（2026-10-30 长按用例假红根因）。
+Finder _dayCell(DateTime day) => find.byKey(
+  ValueKey(
+    'orbit-calendar-day-${day.year}-${day.month.toString().padLeft(2, '0')}-'
+    '${day.day.toString().padLeft(2, '0')}',
+  ),
+);
+
 /// 视图档切换（页头档位抽屉 → 点选一项）
 ///
 /// [from] 是切换前的档位名（页头 tooltip 内嵌当前档位，用它定位按钮）；
@@ -356,10 +367,9 @@ void main() {
     await tester.pumpWidget(_wrap(const SizedBox(), bridge));
     await settle(tester);
 
-    // 长按今天格（月历 OrbitMonthCalendar 的日格）
+    // 长按今天格（月历 OrbitMonthCalendar 的日格；按完整日期定位，避开补位格同号）
     final today = DateTime.now();
-    final dayText = find.text('${today.day}').first;
-    await tester.longPress(dayText, warnIfMissed: false);
+    await tester.longPress(_dayCell(today), warnIfMissed: false);
     await tester.pumpAndSettle();
 
     // 统一新建入口：快速添加面板打开（不再是完整表单）

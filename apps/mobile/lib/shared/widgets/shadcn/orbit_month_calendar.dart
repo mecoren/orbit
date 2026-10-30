@@ -626,6 +626,9 @@ class OrbitMonthCalendar extends StatelessWidget {
     final isCircle = size == AppCalendarSize.small;
 
     return SizedBox(
+      // 稳定测试锚点：补位格会重复日号（如 10 月网格里同时有 9/30 与 10/30），
+      // 测试按「今天」长按/点按时必须能精确落到当月那一格，故以完整日期做 key。
+      key: ValueKey('orbit-calendar-day-$ymd'),
       height: _cellHeight,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
