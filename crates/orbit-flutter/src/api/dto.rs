@@ -51,7 +51,7 @@ pub struct ListFilter {
     pub exclude_due_before: Option<i64>,
     /// 是否有截止（日历「未排期」区用）：Some(false) = due_date IS NULL
     pub has_due: Option<bool>,
-    /// 排序键（P1 键集分页）：manual/due/priority/created/done_at；title 走全量通道
+    /// 排序键（P1 键集分页）：manual/due/start/priority/created/done_at；title 走全量通道
     pub sort_key: Option<String>,
     /// 排序方向 asc/desc；None = 各档默认方向
     pub sort_dir: Option<String>,
@@ -158,7 +158,8 @@ impl From<ListFilter> for orbit_core::models::business::ListFilter {
 pub struct ListCursor {
     pub sort_key: String,
     pub dir: String,
-    /// 主排序键值（position/priority/created_at/due_date）；due 档 None = 无截止尾段
+    /// 主排序键值（position/priority/created_at/due_date/start_date/done_at）；
+    /// due/start/done_at 档 None = 无值尾段
     pub key: Option<f64>,
     /// 次排序键（仅 priority 档：同优先级按 position 升序）
     pub key2: Option<f64>,

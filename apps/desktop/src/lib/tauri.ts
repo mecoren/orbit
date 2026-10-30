@@ -42,7 +42,7 @@ export interface ListFilter {
   has_due?: boolean | null;
   /**
    * 排序键下推（P1 键集分页，仅 todo_tasks 分页通道消费）：
-   * manual/due/priority/created/done_at。`title` 不支持——中文拼音序无法在 SQL 侧复刻。
+   * manual/due/start/priority/created/done_at。`title` 不支持——中文拼音序无法在 SQL 侧复刻。
    */
   sort_key?: TaskPageSortKey | null;
   /** 排序方向；缺省 = 各档默认方向（与 BASE_SORT_DIR 一致） */
@@ -79,7 +79,7 @@ export interface ListFilter {
 }
 
 /** 键集分页支持的排序档（title 档走旧的全量通道） */
-export type TaskPageSortKey = "manual" | "due" | "priority" | "created" | "done_at";
+export type TaskPageSortKey = "manual" | "due" | "start" | "priority" | "created" | "done_at";
 export type TaskSortDir = "asc" | "desc";
 
 /**

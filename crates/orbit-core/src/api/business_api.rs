@@ -214,7 +214,7 @@ pub async fn list_todo_tasks(
 
 /// 任务键集分页（P1 50k 规模档）：列表窗口化/增量加载的唯一读通道。
 ///
-/// - `filter.sort_key` 只接受 manual/due/priority/created（title 走旧通道）；
+/// - `filter.sort_key` 只接受 manual/due/start/priority/created/done_at（title 走旧通道）；
 /// - `cursor` 为上一页返回的 [ListCursor]，首页传 None；
 /// - `limit` 内部钳制到 1..=1000。
 ///

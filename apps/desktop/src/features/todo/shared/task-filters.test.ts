@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { type TodoTask } from "@/lib/tauri";
-import { BASE_SORT_DIR, buildPagedFilter, filterTasks, groupByDueSection, groupDoneByDay, groupEisenhower, groupOverdueFirst, sortTasks, statusFilterOf, todayStartMs, toggleMyDayValue } from "./task-filters";
+import { BASE_SORT_DIR, buildPagedFilter, filterTasks, groupDoneByDay, groupEisenhower, groupOverdueFirst, sortTasks, statusFilterOf, todayStartMs, toggleMyDayValue } from "./task-filters";
 
 /** 补齐 TodoTask 全部必填字段的工厂 */
 function mk(partial: Partial<TodoTask>): TodoTask {
@@ -269,7 +269,20 @@ describe("sortTasks - position 升序，同 position 按 created_at 降序", () 
   });
 });
 
-describe("sortTasks - 排序档位（#26：due/priority/title/created）", () => {
+describe("sortTasks - 排序档位（#26：due/start/priority/title/created）", () => {
+  it("start：有开始升序在前，无开始沉底（2026-10-29）", () => {
+    const out = sortTasks(
+      [
+        mk({ id: 1, start_date: null }),
+        mk({ id: 2, start_date: 300 }),
+        mk({ id: 3, start_date: 100 }),
+        mk({ id: 4, start_date: 200 }),
+      ],
+      "start",
+    );
+    expect(out.map((t) => t.id)).toEqual([3, 4, 2, 1]);
+  });
+
   it("due：有截止升序在前，无截止沉底", () => {
     const out = sortTasks(
       [
@@ -332,6 +345,20 @@ describe("sortTasks - 方向档 dir（工具栏「顺序」收拢，主键翻转
     expect(out.map((t) => t.id)).toEqual([2, 4, 3, 1]);
   });
 
+  it("start desc：晚开始在前，无开始恒沉底（不随方向翻到顶）", () => {
+    const out = sortTasks(
+      [
+        mk({ id: 1, start_date: null }),
+        mk({ id: 2, start_date: 300 }),
+        mk({ id: 3, start_date: 100 }),
+        mk({ id: 4, start_date: 200 }),
+      ],
+      "start",
+      "desc",
+    );
+    expect(out.map((t) => t.id)).toEqual([2, 4, 3, 1]);
+  });
+
   it("created asc：从旧到新（图 2「顺序：从旧到新」口径）", () => {
     const out = sortTasks(
       [mk({ id: 1, created_at: 100 }), mk({ id: 2, created_at: 300 }), mk({ id: 3, created_at: 200 })],
@@ -369,8 +396,14 @@ describe("sortTasks - 方向档 dir（工具栏「顺序」收拢，主键翻转
   });
 
   it("BASE_SORT_DIR：各档位现状默认方向（未显式选方向 = 收拢前行为）", () => {
-    // due/title 现状升序；priority/created 现状降序（大优先级在前 / 最新在前）
-    expect(BASE_SORT_DIR).toEqual({ due: "asc", priority: "desc", title: "asc", created: "desc" });
+    // due/start/title 现状升序；priority/created 现状降序（大优先级在前 / 最新在前）
+    expect(BASE_SORT_DIR).toEqual({
+      due: "asc",
+      start: "asc",
+      priority: "desc",
+      title: "asc",
+      created: "desc",
+    });
   });
 });
 
@@ -459,52 +492,6 @@ describe("todayStartMs / toggleMyDayValue 我的一天零点口径", () => {
   it("toggleMyDayValue：拒绝非零点残留值（Date.now() 类脏数据不匹配判定，重新对齐零点）", () => {
     const dirty = new Date(2026, 8, 11, 15, 30, 0, 0).getTime();
     expect(toggleMyDayValue(dirty, base)).toBe(zeroPoint);
-  });
-});
-
-describe("groupByDueSection 日期状态分节（2026-10-28，对齐 TickTick 分节折叠）", () => {
-  const NOW = new Date("2026-10-28T15:00:00");
-  const DAY = 86_400_000;
-  const dayStart = new Date(NOW);
-  dayStart.setHours(0, 0, 0, 0);
-  const T0 = dayStart.getTime();
-
-  it("未完成按截止日分 逾期 / 今天 / 以后 / 无日期；完成行进「已完成」节", () => {
-    const tasks = [
-      mk({ id: 1, done: 0, due_date: NOW.getTime() - 1000 }), // 逾期
-      mk({ id: 2, done: 0, due_date: NOW.getTime() + 1000 }), // 今天
-      mk({ id: 3, done: 0, due_date: T0 + 3 * DAY }), // 以后
-      mk({ id: 4, done: 0, due_date: null }), // 无日期
-      mk({ id: 5, done: 1, status: "done", due_date: NOW.getTime() - 5000 }), // 已完成（逾期也不进逾期节）
-    ];
-    const s = groupByDueSection(tasks, NOW);
-    expect(s.overdue.map((t) => t.id)).toEqual([1]);
-    expect(s.today.map((t) => t.id)).toEqual([2]);
-    expect(s.later.map((t) => t.id)).toEqual([3]);
-    expect(s.undated.map((t) => t.id)).toEqual([4]);
-    expect(s.done.map((t) => t.id)).toEqual([5]);
-  });
-
-  it("节内保持入参顺序（排序在调用方做）", () => {
-    const tasks = [
-      mk({ id: 3, due_date: T0 + 5 * DAY }),
-      mk({ id: 1, due_date: T0 + 2 * DAY }),
-      mk({ id: 2, due_date: T0 + 9 * DAY }),
-    ];
-    expect(groupByDueSection(tasks, NOW).later.map((t) => t.id)).toEqual([3, 1, 2]);
-  });
-
-  it("今天到期但已过时刻 → 逾期节（与行内红字 due < now 逐字同源，不出现两套判定）", () => {
-    const tasks = [mk({ id: 1, done: 0, due_date: T0 + 9 * 3600_000 })];
-    // NOW 是 15:00，9:00 已过 —— 行内标红，故分节也归逾期
-    expect(groupByDueSection(tasks, NOW).overdue.map((t) => t.id)).toEqual([1]);
-    expect(groupByDueSection(tasks, NOW).today).toEqual([]);
-  });
-
-  it("空输入返回五个空节（视图可无条件按节渲染）", () => {
-    const s = groupByDueSection([], NOW);
-    expect(Object.keys(s)).toHaveLength(5);
-    expect(Object.values(s).every((l) => l.length === 0)).toBe(true);
   });
 });
 

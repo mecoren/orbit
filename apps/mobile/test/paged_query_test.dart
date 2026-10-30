@@ -211,6 +211,13 @@ void main() {
       expect(q.filter.priorityMin, isNull);
     });
 
+    test('开始时间档下推 sort_key=start（2026-10-29，与截止时间同构）', () {
+      final q = _build(sortKey: TaskSortKey.start)!;
+      expect(q.sortKey, 'start');
+      expect(q.filter.sortKey, 'start');
+      expect(q.sortDir, 'asc');
+    });
+
     test('显式方向覆盖默认值', () {
       final q = _build(sortKey: TaskSortKey.due, sortDir: TaskSortDir.desc)!;
       expect(q.sortDir, 'desc');

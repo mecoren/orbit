@@ -26,8 +26,9 @@ export function statusFilterOf(set: TaskStatusFilterSet): TaskStatusFilter {
   return "all";
 }
 
-/** 排序档位（manual = position 拖拽顺序，唯一允许拖拽重排的档位） */
-export type TaskSortKey = "manual" | "due" | "priority" | "title" | "created";
+/** 排序档位（manual = position 拖拽顺序，唯一允许拖拽重排的档位；
+ *  start = 开始时间，2026-10-29 与 due 同构：无开始恒沉底） */
+export type TaskSortKey = "manual" | "due" | "start" | "priority" | "title" | "created";
 
 /** 排序方向（工具栏「↑↓ → 顺序」档；manual 无方向概念） */
 export type TaskSortDir = "asc" | "desc";
@@ -36,6 +37,7 @@ export type TaskSortDir = "asc" | "desc";
  *  用户未显式选方向时逐档回落到它，保证「入口收拢」前后可见顺序零变化 */
 export const BASE_SORT_DIR: Record<Exclude<TaskSortKey, "manual">, TaskSortDir> = {
   due: "asc",
+  start: "asc",
   priority: "desc",
   title: "asc",
   created: "desc",
@@ -205,6 +207,17 @@ export function sortTasks(
         return b.created_at - a.created_at;
       });
     }
+    case "start": {
+      // 与 due 同构：无开始排最后（方向无关），有开始按方向排，同值落回创建时间降序
+      const sign = (dir ?? BASE_SORT_DIR.start) === "asc" ? 1 : -1;
+      return list.sort((a, b) => {
+        if (a.start_date == null && b.start_date == null) return b.created_at - a.created_at;
+        if (a.start_date == null) return 1;
+        if (b.start_date == null) return -1;
+        if (a.start_date !== b.start_date) return sign * (a.start_date - b.start_date);
+        return b.created_at - a.created_at;
+      });
+    }
     case "priority": {
       // 主键按方向排（desc = 大者在前 = 现状），同值落回拖拽顺序
       const sign = (dir ?? BASE_SORT_DIR.priority) === "asc" ? 1 : -1;
@@ -257,75 +270,6 @@ export function groupOverdueFirst(
     else rest.push(t);
   }
   return { overdue, rest };
-}
-
-// =============================================================================
-// 日期状态分节（2026-10-28，对齐 TickTick 列表分节 + 折叠）
-// =============================================================================
-
-/** 分节键（展示顺序即枚举序：逾期最前，完成最后） */
-export type DueSectionKey = "overdue" | "today" | "later" | "undated" | "done";
-
-/** 分节展示名与语义色（节头文案 + 计数徽标；逾期红 / 今天主题蓝 /
- *  以后中性 / 无日期中性 / 完成绿，与 STATUS_COLOR/OVERDUE 同源） */
-export const DUE_SECTION_META: Record<DueSectionKey, { title: string; color: string }> = {
-  overdue: { title: "已逾期", color: "#EF4444" },
-  today: { title: "今天", color: "#3B82F6" },
-  later: { title: "以后", color: "#6B7280" },
-  undated: { title: "无日期", color: "#6B7280" },
-  done: { title: "已完成", color: "#22C55E" },
-};
-
-/** 分节展示顺序（渲染与键盘导航共用单一口径） */
-export const DUE_SECTION_ORDER: DueSectionKey[] = [
-  "overdue",
-  "today",
-  "later",
-  "undated",
-  "done",
-];
-
-export type DueSections = Record<DueSectionKey, TodoTaskListItem[]>;
-
-/**
- * 日期状态分节：把已排序的任务集按「逾期 / 今天 / 以后 / 无日期 / 已完成」
- * 切成五节（2026-10-28 对齐 TickTick 列表分节，节头带计数、可折叠）。
- *
- * 口径：
- * - 完成态优先：done = 1 或 status = 'done' 一律进「已完成」节，**不进逾期节**
- *   （逾期节只承载未完成工作集——已完成项不再警示）。
- * - 逾期 = 截止**早于 now**（与 [groupOverdueFirst] 与行内红字逐字同源）。
- *   刻意不用「早于今日零点」：那样今天 09:00 到期、现在 15:00 的行会落在
- *   「今天」节却同时显示逾期红字，同一行给出两套判定。
- * - 组内保持入参顺序（排序在调用方做，与 groupOverdueFirst 同约定）。
- */
-export function groupByDueSection(tasks: TodoTaskListItem[], now = new Date()): DueSections {
-  const nowMs = now.getTime();
-  const dayStart = new Date(now);
-  dayStart.setHours(0, 0, 0, 0);
-  const todayEnd = dayStart.getTime() + 86_400_000;
-
-  const sections: DueSections = {
-    overdue: [],
-    today: [],
-    later: [],
-    undated: [],
-    done: [],
-  };
-  for (const t of tasks) {
-    if (t.done || t.status === "done") {
-      sections.done.push(t);
-    } else if (t.due_date == null) {
-      sections.undated.push(t);
-    } else if (t.due_date < nowMs) {
-      sections.overdue.push(t);
-    } else if (t.due_date < todayEnd) {
-      sections.today.push(t);
-    } else {
-      sections.later.push(t);
-    }
-  }
-  return sections;
 }
 
 // =============================================================================

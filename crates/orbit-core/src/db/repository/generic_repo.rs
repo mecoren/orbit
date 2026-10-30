@@ -165,6 +165,8 @@ enum TaskSortKey {
     Manual,
     /// 截止时间：无截止恒沉底，其余按方向
     Due,
+    /// 开始时间（2026-10-29）：与截止时间同构——无开始恒沉底，默认升序
+    Start,
     /// 优先级：默认降序，同值回落 position 升序
     Priority,
     /// 创建时间：默认降序
@@ -178,6 +180,7 @@ impl TaskSortKey {
         match raw.map(str::trim).filter(|s| !s.is_empty()) {
             None | Some("manual") => Ok(Self::Manual),
             Some("due") => Ok(Self::Due),
+            Some("start") => Ok(Self::Start),
             Some("priority") => Ok(Self::Priority),
             Some("created") => Ok(Self::Created),
             Some("done_at") => Ok(Self::DoneAt),
@@ -192,6 +195,7 @@ impl TaskSortKey {
         match self {
             Self::Manual => "manual",
             Self::Due => "due",
+            Self::Start => "start",
             Self::Priority => "priority",
             Self::Created => "created",
             Self::DoneAt => "done_at",
@@ -213,6 +217,8 @@ impl TaskSortKey {
             (Self::Manual, _) => "ORDER BY position ASC, id ASC",
             (Self::Due, false) => "ORDER BY (due_date IS NULL) ASC, due_date ASC, id ASC",
             (Self::Due, true) => "ORDER BY (due_date IS NULL) ASC, due_date DESC, id DESC",
+            (Self::Start, false) => "ORDER BY (start_date IS NULL) ASC, start_date ASC, id ASC",
+            (Self::Start, true) => "ORDER BY (start_date IS NULL) ASC, start_date DESC, id DESC",
             (Self::Priority, false) => "ORDER BY priority ASC, position ASC, id ASC",
             (Self::Priority, true) => "ORDER BY priority DESC, position ASC, id ASC",
             (Self::Created, false) => "ORDER BY created_at ASC, id ASC",
@@ -310,6 +316,28 @@ fn build_task_where(
 ///
 /// 每个档位手写而非用行值比较：`priority` 档是「主键降序 + 次键升序」的混合
 /// 方向，`due` 档还要把 NULL 尾段整体排在游标之后——行值比较表达不了。
+/// NULL 沉底档（due_date / start_date / done_at）的游标谓词：三档同构，只有列名不同。
+///
+/// 游标 key = None 表示已进入「无值尾段」，只剩同段内 id 顺序；有值时无值行整体
+/// 排在游标之后（不受升降序影响），同值再比 id。
+fn null_last_cursor(column: &str, desc: bool, c: &ListCursor) -> (String, Vec<BindVal>) {
+    let cmp = if desc { "<" } else { ">" };
+    let mut binds = Vec::new();
+    let frag = match c.key {
+        None => {
+            binds.push(BindVal::Int(c.id));
+            format!(" AND ({column} IS NULL AND id {cmp} ?)")
+        }
+        Some(value) => {
+            binds.push(BindVal::Real(value));
+            binds.push(BindVal::Real(value));
+            binds.push(BindVal::Int(c.id));
+            format!(" AND ({column} IS NULL OR {column} {cmp} ? OR ({column} = ? AND id {cmp} ?))")
+        }
+    };
+    (frag, binds)
+}
+
 fn cursor_predicate(sort: TaskSortKey, desc: bool, c: &ListCursor) -> (String, Vec<BindVal>) {
     let mut binds = Vec::new();
     let frag = match sort {
@@ -345,44 +373,22 @@ fn cursor_predicate(sort: TaskSortKey, desc: bool, c: &ListCursor) -> (String, V
                  (position > ? OR (position = ? AND id > ?))))"
             )
         }
+        // 截止 / 开始 / 完成时间三档同构：NULL 尾段整体沉底
         TaskSortKey::Due => {
-            let cmp = if desc { "<" } else { ">" };
-            match c.key {
-                // 已进入「无截止」尾段：只剩同段内 id 顺序
-                None => {
-                    binds.push(BindVal::Int(c.id));
-                    format!(" AND (due_date IS NULL AND id {cmp} ?)")
-                }
-                // 有截止值：无截止行整体在后，或截止值更靠后，或同值比 id
-                Some(due) => {
-                    binds.push(BindVal::Real(due));
-                    binds.push(BindVal::Real(due));
-                    binds.push(BindVal::Int(c.id));
-                    format!(
-                        " AND (due_date IS NULL OR due_date {cmp} ? OR \
-                         (due_date = ? AND id {cmp} ?))"
-                    )
-                }
-            }
+            let (frag, cursor_binds) = null_last_cursor("due_date", desc, c);
+            binds.extend(cursor_binds);
+            frag
         }
-        // 与 Due 同构：NULL 尾段（历史数据可能没写 done_at）整体沉底
+        TaskSortKey::Start => {
+            let (frag, cursor_binds) = null_last_cursor("start_date", desc, c);
+            binds.extend(cursor_binds);
+            frag
+        }
+        // 历史数据可能没写 done_at——真实空值不能折成 0，否则落进「有值」段
         TaskSortKey::DoneAt => {
-            let cmp = if desc { "<" } else { ">" };
-            match c.key {
-                None => {
-                    binds.push(BindVal::Int(c.id));
-                    format!(" AND (done_at IS NULL AND id {cmp} ?)")
-                }
-                Some(at) => {
-                    binds.push(BindVal::Real(at));
-                    binds.push(BindVal::Real(at));
-                    binds.push(BindVal::Int(c.id));
-                    format!(
-                        " AND (done_at IS NULL OR done_at {cmp} ? OR \
-                         (done_at = ? AND id {cmp} ?))"
-                    )
-                }
-            }
+            let (frag, cursor_binds) = null_last_cursor("done_at", desc, c);
+            binds.extend(cursor_binds);
+            frag
         }
     };
     (frag, binds)
@@ -398,6 +404,7 @@ fn cursor_from_task(
     let (key, key2) = match sort {
         TaskSortKey::Manual => (Some(t.position), None),
         TaskSortKey::Due => (t.due_date.map(|v| v as f64), None),
+        TaskSortKey::Start => (t.start_date.map(|v| v as f64), None),
         TaskSortKey::Priority => (Some(t.priority as f64), Some(t.position)),
         TaskSortKey::Created => (Some(t.created_at as f64), None),
         // 游标里 done_at 可能为空（历史数据）——真实空值不能折成 0，
@@ -415,7 +422,8 @@ fn cursor_from_task(
 
 /// 任务键集分页查询（P1 50k 规模档）。
 ///
-/// 与 [list] 的区别：排序键下推到 SQL（四档）、用游标代替 OFFSET、返回
+/// 与 [list] 的区别：排序键下推到 SQL（manual/due/start/priority/created/done_at
+/// 六档）、用游标代替 OFFSET、返回
 /// `has_more` 与下一页游标。`limit` 上限 1000（窗口化首屏 200～500 足够；
 /// 大值只会让单次 IPC 传输变大，失去窗口化意义）。
 ///
@@ -2447,6 +2455,13 @@ mod keyset_paging_tests {
                     } else {
                         Some(1_700_000_000_000 + (i % 5) * 86_400_000)
                     },
+                    // 开始日期分布刻意与 due 错开（i%5 为空 vs i%4 为空）：
+                    // 两档若共用同一列，测试就分不出排序键有没有真下推
+                    start_date: if i % 5 == 0 {
+                        None
+                    } else {
+                        Some(1_699_000_000_000 + (i % 7) * 86_400_000)
+                    },
                     ..Default::default()
                 },
             )
@@ -2500,6 +2515,8 @@ mod keyset_paging_tests {
             ("manual", None),
             ("due", None),
             ("due", Some("desc")),
+            ("start", None),
+            ("start", Some("desc")),
             ("priority", None),
             ("priority", Some("asc")),
             ("created", None),
@@ -2578,6 +2595,40 @@ mod keyset_paging_tests {
                 .windows(2)
                 .all(|w| w[0].due_date >= w[1].due_date),
             "due desc 主键应降序"
+        );
+
+        // 开始时间档（2026-10-29）与 due 同构：NULL 沉底、默认升序
+        let start = list_tasks_page(&pool, &filter("start", None), None, 1000)
+            .await
+            .unwrap();
+        let first_null_start = start.items.iter().position(|t| t.start_date.is_none());
+        if let Some(idx) = first_null_start {
+            assert!(
+                start.items[idx..].iter().all(|t| t.start_date.is_none()),
+                "start 档无开始必须整体沉底"
+            );
+        }
+        assert!(
+            start.items[..first_null_start.unwrap_or(start.items.len())]
+                .windows(2)
+                .all(|w| w[0].start_date <= w[1].start_date),
+            "start 档默认升序"
+        );
+        let start_desc = list_tasks_page(&pool, &filter("start", Some("desc")), None, 1000)
+            .await
+            .unwrap();
+        let first_null_start_desc = start_desc.items.iter().position(|t| t.start_date.is_none());
+        if let Some(idx) = first_null_start_desc {
+            assert!(
+                start_desc.items[idx..].iter().all(|t| t.start_date.is_none()),
+                "start desc 时无开始仍在最后"
+            );
+        }
+        assert!(
+            start_desc.items[..first_null_start_desc.unwrap_or(start_desc.items.len())]
+                .windows(2)
+                .all(|w| w[0].start_date >= w[1].start_date),
+            "start desc 主键应降序"
         );
     }
 

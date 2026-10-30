@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
+import 'package:orbit/modules/todo/logic/paged_query.dart';
 import 'package:orbit/modules/todo/logic/task_logic.dart';
 import 'package:orbit/modules/todo/providers/todo_providers.dart';
 import 'package:orbit/modules/todo/calendar_screen.dart';
@@ -132,7 +133,7 @@ void main() {
 
   testWidgets('任务子列表：窗口化后出「已加载 X / 共 Y」条幅（A5）', (tester) async {
     final bridge = MockOrbitBridge();
-    // 造满 10000 条：窗口首屏 200 条，条幅按 SQL 总数报「已加载 / 共」
+    // 造满 10000 条：窗口首屏 kTaskPageWindow（500）条，条幅按 SQL 总数报「已加载 / 共」
     final now = bridge.store.now();
     while (bridge.store.tasks.length < taskListPageSize) {
       final t = <String, dynamic>{
@@ -170,9 +171,9 @@ void main() {
     ));
     await _settlePastMockLatency(tester);
 
-    // 窗口化条幅：首屏 200 条 + SQL 总数（造数受 id 冲突影响可能少 1 条，
-    // 故只断言「已加载 200 / 共」前缀与续拉提示，不写死总数）
-    expect(find.textContaining('已加载 200 / 共'), findsOneWidget);
+    // 窗口化条幅：首屏 kTaskPageWindow 条 + SQL 总数（造数受 id 冲突影响可能少 1 条，
+    // 故只断言「已加载 X / 共」前缀与续拉提示，不写死总数）
+    expect(find.textContaining('已加载 $kTaskPageWindow / 共'), findsOneWidget);
     expect(find.textContaining('条，继续滚动加载更多'), findsOneWidget);
   });
 

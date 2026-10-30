@@ -671,7 +671,7 @@ function filterByKeyword<T extends { title: string; description: string | null }
 // 任务键集分页（P1 50k 规模档）：mock 侧按 Rust generic_repo 的 SQL 语义复刻
 // ============================================================================
 
-type MockTaskSortKey = "manual" | "due" | "priority" | "created" | "done_at";
+type MockTaskSortKey = "manual" | "due" | "start" | "priority" | "created" | "done_at";
 
 /** 排序方向：缺省 = 各档默认（priority/created/done_at 降序，其余升序），与 BASE_SORT_DIR 一致 */
 function taskSortDesc(key: MockTaskSortKey, dir?: string | null): boolean {
@@ -696,6 +696,15 @@ function sortTaskRows(rows: MockTask[], key: MockTaskSortKey, dir?: string | nul
         // 无截止段内部仍按 id 方向（Rust: `id ASC|DESC`，方向随档位而非恒升序）
         if (an && bn) return cmp(a.id, b.id);
         return cmp(a.due_date as number, b.due_date as number) || cmp(a.id, b.id);
+      });
+    case "start":
+      // 与 due 同构：无开始恒沉底（沉底段内 id 方向随档位）
+      return out.sort((a, b) => {
+        const an = a.start_date == null;
+        const bn = b.start_date == null;
+        if (an !== bn) return an ? 1 : -1;
+        if (an && bn) return cmp(a.id, b.id);
+        return cmp(a.start_date as number, b.start_date as number) || cmp(a.id, b.id);
       });
     case "priority":
       return out.sort(
@@ -752,6 +761,19 @@ function tasksAfterCursor(
         return desc ? t.id < cursor.id : t.id > cursor.id;
       });
     }
+    case "start": {
+      if (cursor.key == null) {
+        // 无开始尾段：只剩 id 顺序
+        return rows.filter(
+          (t) => t.start_date == null && (desc ? t.id < cursor.id : t.id > cursor.id),
+        );
+      }
+      return rows.filter((t) => {
+        if (t.start_date == null) return true;
+        if (t.start_date !== k) return desc ? t.start_date < k : t.start_date > k;
+        return desc ? t.id < cursor.id : t.id > cursor.id;
+      });
+    }
     case "done_at": {
       if (cursor.key == null) {
         return rows.filter(
@@ -773,11 +795,13 @@ function cursorFromMockTask(key: MockTaskSortKey, dir: string, t: MockTask) {
       ? t.position
       : key === "due"
         ? t.due_date
-        : key === "priority"
-          ? t.priority
-          : key === "done_at"
-            ? t.done_at
-            : t.created_at;
+        : key === "start"
+          ? t.start_date
+          : key === "priority"
+            ? t.priority
+            : key === "done_at"
+              ? t.done_at
+              : t.created_at;
   return {
     sort_key: key,
     dir,
@@ -1238,7 +1262,7 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   // 任务键集分页（P1 50k 规模档）：与 Rust list_tasks_page 同语义
   todo_tasks_page: ({ filter, cursor, limit }, { db }) => {
     const key = (filter?.sort_key ?? "manual") as MockTaskSortKey;
-    if (!["manual", "due", "priority", "created", "done_at"].includes(key)) {
+    if (!["manual", "due", "start", "priority", "created", "done_at"].includes(key)) {
       throw new Error(`未知或不可分页的排序键: ${key}`);
     }
     const desc = key === "manual" ? false : taskSortDesc(key, filter?.sort_dir);

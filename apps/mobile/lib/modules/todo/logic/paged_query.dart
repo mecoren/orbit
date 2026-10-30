@@ -54,9 +54,10 @@ class PagedTaskQuery {
 
 /// 列表/表格单页行数（与桌面 `TASK_PAGE_WINDOW` 同值）。
 ///
-/// 200 条 ≈ 首屏一屏半：首屏桥往返体积与可交互时间随页长线性下降，同时
-/// 滚到尾部前有足够余量预取下一页。
-const int kTaskPageWindow = 200;
+/// 500 条 = docs/13 §七 P1 方案给的首屏档（500–1000 行；FRB 侧 core `limit` 上限 1000）。
+/// 200 条时大库要反复滚动续拉、尾部 spinner 频繁出现；500 条把翻页次数压到 1/2.5，
+/// 桥是二进制编解码（非 JSON），体积代价更小；`ListView` 只构建可视窗，内存增量仅是瘦 DTO。
+const int kTaskPageWindow = 500;
 
 /// 逾期置顶段单次上限（逾期集天然有界；超限只显示最早逾期的 200 条）。
 const int kOverduePageLimit = 200;
@@ -166,6 +167,7 @@ PagedTaskQuery? buildPagedQuery({
   final sortKeyString = switch (sortKey) {
     TaskSortKey.manual => 'manual',
     TaskSortKey.due => 'due',
+    TaskSortKey.start => 'start',
     TaskSortKey.priority => 'priority',
     TaskSortKey.created => 'created',
     // title 已在上面回退；此处兜底走 manual 不会被执行

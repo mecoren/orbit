@@ -5,7 +5,7 @@
  * 工具栏（标题/搜索/筛选/视图切换）+ 内容区（列表/看板/日历）+ 快加栏。
  * 选中态经 useTodoShell 取用——从回收站面板切回来时筛选原样保留。
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CopyPlus, ListTodo, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -103,7 +103,11 @@ function loadHideDone(): boolean {
 
 function loadSortKey(): TaskSortKey {
   const saved = localStorage.getItem(LS_SORT_KEY);
-  return saved === "due" || saved === "priority" || saved === "title" || saved === "created"
+  return saved === "due" ||
+    saved === "start" ||
+    saved === "priority" ||
+    saved === "title" ||
+    saved === "created"
     ? saved
     : "manual";
 }
@@ -503,11 +507,11 @@ export default function TaskPanel() {
     staleTime: 2 * 60 * 1000,
   });
 
-  // 下一页预取：React Query 在 fetching 中重复调用会排队，这里再加一道 ref 守卫
-  const loadMoreLock = useRef(false);
-  useEffect(() => {
-    if (!pagedQuery.isFetchingNextPage) loadMoreLock.current = false;
-  }, [pagedQuery.isFetchingNextPage]);
+  // 下一页预取：hasNextPage / isFetchingNextPage 是 React Query 的实时快照，
+  // 不用额外 ref 锁——ref 锁只能靠「观察到 isFetchingNextPage 由 true 回 false」
+  // 的渲染提交来释放；本地 SQLite 查询足够快时 true 态会被批处理合并掉，
+  // 该观测永不发生，锁一旦置 true 就再不会加载下一页（2026-10-29 触底加载
+  // 只推进一页后卡死的根因）。同一次触底的重复调用由视图层的行数水位挡住。
   const loadMore = useCallback(() => {
     // Logbook 走 done_at 通道，与列表分页各自持有游标
     if (logbookPagedMode) {
@@ -516,8 +520,6 @@ export default function TaskPanel() {
       return;
     }
     if (!pagedMode || !pagedQuery.hasNextPage || pagedQuery.isFetchingNextPage) return;
-    if (loadMoreLock.current) return;
-    loadMoreLock.current = true;
     void pagedQuery.fetchNextPage();
   }, [pagedMode, pagedQuery, logbookPagedMode, logbookQuery]);
 
@@ -531,7 +533,10 @@ export default function TaskPanel() {
     // 不再跑 filterTasks/sortTasks——任何本地重排都会让「翻页边界」与
     // 「视觉顺序」分叉（新一页的行插到已看过的位置上方）。
     if (pagedMode) {
-      // 逾期行已由独立查询取回并置顶；分页窗口里同一行还在原位置，
+      // 拖拽顺序档：顺序即用户拖拽结果，逾期行不再抽出置顶——置顶段不给拖拽把手，
+      // 逾期多时（实测 251 条）整屏无一行可拖；行级「已逾期」徽标 + 处置条仍给提示
+      if (sortKey === "manual") return pagedTasks;
+      // 其余排序档：逾期行由独立查询取回并置顶；分页窗口里同一行还在原位置，
       // 必须按 id 去重，否则会渲染两份（checkbox 出现两次是灾难）
       const overdue = overdueQuery.data ?? [];
       if (overdue.length === 0) return pagedTasks;
@@ -650,10 +655,29 @@ export default function TaskPanel() {
   const boardLoading = boardGroupBy != null ? boardQuery.isLoading : tasksLoading;
   const boardError = boardGroupBy != null ? errorText(boardQuery.error) : tasksError;
   // 「已加载 X / 共 Y」：Y 由独立 COUNT 给（分页接口不逐页 COUNT）；
-  // 页头计数与条幅同源，窗口化时都不再读已加载数组长度
+  // 页头计数与进度指示同源，窗口化时都不再读已加载数组长度
   const pagedLoaded = pagedMode ? pagedTasks.length : logbookPagedMode ? logbookTasks.length : 0;
   const pagedTotal = pagedMode ? listTotal : undefined;
   const headerCount = listTotal ?? visibleTasks.length;
+  // 分页进度（2026-10-29）：原「向下滚动加载更多 · 已加载 X 条 / 共 Y 条」独立条幅
+  // 挤占一行正文高度且措辞冗长，收进标题行压成「已加载 X / Y」，滚动提示进 Tooltip；
+  // 末页到账（hasNextPage=false）即回落到纯计数
+  const listLoadHint =
+    pagedMode && pagedQuery.hasNextPage
+      ? {
+          text: pagedQuery.isFetchingNextPage
+            ? "正在加载更多…"
+            : `已加载 ${pagedLoaded}${pagedTotal != null ? ` / ${pagedTotal}` : ""}`,
+          tip: "向下滚动加载更多",
+        }
+      : logbookPagedMode && logbookQuery.hasNextPage
+        ? {
+            text: logbookQuery.isFetchingNextPage
+              ? "正在加载更多…"
+              : `已加载 ${pagedLoaded}${listTotal != null ? ` / ${listTotal}` : ""}`,
+            tip: "向下滚动加载更早的完成记录",
+          }
+        : null;
 
   // 完成进度线（TickTick 列表页头语义；移动端 2026-09-25 先落地，本端对齐）：
   // 只在「既有未完成又有已完成」时出现——看板/表格随隐藏开关剔除完成行、
@@ -678,10 +702,26 @@ export default function TaskPanel() {
       <div className="relative flex items-center justify-between gap-3 border-b px-4 py-3">
         <div className="flex items-baseline gap-2">
           <h1 className="text-lg font-semibold">{title}</h1>
-          <span className="text-sm text-muted-foreground">
-            {headerCount}
-            {countCapped && "+"}
-          </span>
+          {/* 计数与分页进度合并成一个紧凑指示：未加载完时报「已加载 X / Y」
+              （悬停补滚动口径），末页到账或全量通道回落为纯计数 */}
+          {listLoadHint ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  data-testid="task-list-load-progress"
+                  className="cursor-default text-sm text-muted-foreground tabular-nums"
+                >
+                  {listLoadHint.text}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{listLoadHint.tip}</TooltipContent>
+            </Tooltip>
+          ) : (
+            <span className="text-sm text-muted-foreground">
+              {headerCount}
+              {countCapped && "+"}
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -791,27 +831,6 @@ export default function TaskPanel() {
         </div>
       )}
 
-      {/* 分页通道的增量提示（P1）：加载完即消失；「已加载 X / 共 Y」给滚动一个终点感 */}
-      {pagedMode && pagedQuery.hasNextPage && (
-        <div className="flex items-center gap-1.5 border-b bg-muted/40 px-4 py-1.5 text-xs text-muted-foreground">
-          {pagedQuery.isFetchingNextPage
-            ? "正在加载更多…"
-            : `向下滚动加载更多 · 已加载 ${pagedLoaded} 条${
-                pagedTotal != null ? ` / 共 ${pagedTotal} 条` : ""
-              }`}
-        </div>
-      )}
-      {/* Logbook 通道同样按 done 谓词 COUNT 给出终点（listTotal 的 filter 即 logbookFilter） */}
-      {logbookPagedMode && logbookQuery.hasNextPage && (
-        <div className="flex items-center gap-1.5 border-b bg-muted/40 px-4 py-1.5 text-xs text-muted-foreground">
-          {logbookQuery.isFetchingNextPage
-            ? "正在加载更多…"
-            : `向下滚动加载更早的完成记录 · 已加载 ${logbookTasks.length} 条${
-                listTotal != null ? ` / 共 ${listTotal} 条` : ""
-              }`}
-        </div>
-      )}
-
       {/* 今日上下文条（G2 正反馈 + G4 容量）：今日已达成 + 今日已排/预算。
           数据源取 shell 的任务集（内存口径，与完成进度线同源）；两项皆空时自隐藏 */}
       {/* 分页模式下只算已加载窗口（窗口外的今日完成会漏计，随滚动逼近真值）；
@@ -908,8 +927,11 @@ export default function TaskPanel() {
             error={listError}
             onLoadMore={loadMore}
             hasMore={pagedMode && pagedQuery.hasNextPage}
-            // #26：仅拖拽顺序档显示拖拽把手
+            // #26：仅拖拽顺序档显示拖拽把手；该档逾期行也不抽段置顶（否则置顶段不可拖），
+            // 处置条的计数/顺延仍取壳层全局逾期集
             sortable={sortKey === "manual"}
+            pinOverdue={sortKey !== "manual"}
+            overdueAll={overdueQuery.data}
             onCreateClick={() => {
               openCreateForm();
             }}

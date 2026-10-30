@@ -62,6 +62,7 @@ import {
   OVERDUE_COLOR_CLASS,
   PRIORITY_COLOR,
   PRIORITY_LABELS,
+  TASK_PREFETCH_ROWS,
   TODO_ACCENT,
 } from "../shared/constants";
 import type { TaskReminderMeta } from "../shared/reminder-meta";
@@ -170,7 +171,7 @@ export default function TaskTableView({
     getItemKey: (i) => tasks[i].id,
   });
 
-  // 触底预取（P1 窗口化）：与列表视图同口径（末尾 5 行内请求下一页）
+  // 触底预取（P1 窗口化）：与列表视图同口径（末尾 TASK_PREFETCH_ROWS 行内请求下一页）
   const virtualItems = virtualizer.getVirtualItems();
   const lastVirtualIndex =
     virtualItems.length > 0 ? virtualItems[virtualItems.length - 1].index : -1;
@@ -180,7 +181,7 @@ export default function TaskTableView({
   }, [tasks.length]);
   useEffect(() => {
     if (!hasMore || !onLoadMore || lastVirtualIndex < 0) return;
-    if (lastVirtualIndex < tasks.length - 5) return;
+    if (lastVirtualIndex < tasks.length - TASK_PREFETCH_ROWS) return;
     if (loadMoreLock.current) return;
     loadMoreLock.current = true;
     onLoadMore();

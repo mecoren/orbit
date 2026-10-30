@@ -260,7 +260,7 @@ class SidebarCounts {
   final Map<int, int> undoneByProject;
 }
 
-enum TaskSortKey { manual, due, priority, title, created }
+enum TaskSortKey { manual, due, start, priority, title, created }
 
 /// 排序方向档（页头 ⋮ 面板「排序方向」；对齐桌面 `TaskSortDir`）
 enum TaskSortDir { asc, desc }
@@ -269,6 +269,7 @@ enum TaskSortDir { asc, desc }
 /// 生效方向跟随本表；manual 档无方向概念（不在此表）
 const Map<TaskSortKey, TaskSortDir> baseSortDir = {
   TaskSortKey.due: TaskSortDir.asc,
+  TaskSortKey.start: TaskSortDir.asc,
   TaskSortKey.priority: TaskSortDir.desc,
   TaskSortKey.title: TaskSortDir.asc,
   TaskSortKey.created: TaskSortDir.desc,
@@ -297,6 +298,18 @@ List<TodoTask> sortTasks(
         if (a.dueDate == null) return 1;
         if (b.dueDate == null) return -1;
         final c = a.dueDate!.compareTo(b.dueDate!);
+        return c != 0 ? sign * c : b.createdAt.compareTo(a.createdAt);
+      });
+    case TaskSortKey.start:
+      // 与 due 同构（2026-10-29）：无开始沉底（方向无关），有开始按方向排
+      final sign = (dir ?? baseSortDir[key]!) == TaskSortDir.asc ? 1 : -1;
+      sorted.sort((a, b) {
+        if (a.startDate == null && b.startDate == null) {
+          return b.createdAt.compareTo(a.createdAt);
+        }
+        if (a.startDate == null) return 1;
+        if (b.startDate == null) return -1;
+        final c = a.startDate!.compareTo(b.startDate!);
         return c != 0 ? sign * c : b.createdAt.compareTo(a.createdAt);
       });
     case TaskSortKey.priority:
@@ -1003,7 +1016,7 @@ class TaskListFilters {
       );
 }
 
-/// 列表内筛选态 → 保存的筛选器条件 JSON（「存为视图」预填，G1）。
+/// 列表内筛选态 → 保存的筛选器条件 JSON（「保存为筛选器」预填，G1）。
 ///
 /// 镜像桌面 `saved-filter-builder.ts` 的 `toolbarToForm` + `buildConditions`：
 /// 空维度不落键（缺键 = 不过滤），全空产出空 Map（Rust 端空条件 = 万能视图）。

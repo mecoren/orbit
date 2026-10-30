@@ -109,16 +109,17 @@ pub struct ListFilter {
     /// 是否有截止日期：`Some(false)` = `due_date IS NULL`（日历「未排期」区），
     /// `Some(true)` = 有截止；None 不限。与 [Self::due_from] 的严格区间互补。
     pub has_due: Option<bool>,
-    /// 排序键（仅 todo_tasks 的分页通道消费）：`manual` / `due` / `priority` /
-    /// `created` / `done_at`（Logbook 完成时间倒序）；None = `manual`（与桌面
-    /// `TaskSortKey` 默认值一致）。
+    /// 排序键（仅 todo_tasks 的分页通道消费）：`manual` / `due` / `start` /
+    /// `priority` / `created` / `done_at`（Logbook 完成时间倒序）；None = `manual`
+    /// （与桌面 `TaskSortKey` 默认值一致）。`start`（2026-10-29）与 `due` 同构：
+    /// 无开始日期恒沉底。
     ///
     /// `title` 档**不在此列**：前端按 `localeCompare("zh-Hans-CN")` 排中文拼音序，
     /// SQLite 的 BINARY collation 复刻不了（多音字与声调都会分叉），强行下推会让
     /// 分页边界与用户看到的顺序不一致。该档继续走旧的全量单页通道。
     pub sort_key: Option<String>,
     /// 排序方向 `asc` / `desc`；None = 各档默认方向（manual 恒升序、due 升序、
-    /// priority 降序、created 降序），与前端 `BASE_SORT_DIR` 同口径。
+    /// start 升序、priority 降序、created 降序），与前端 `BASE_SORT_DIR` 同口径。
     pub sort_dir: Option<String>,
     /// 截止时间下界（毫秒，含）。日历视图按可见范围取数用（P1 窗口化）。
     pub due_from: Option<i64>,
@@ -184,11 +185,11 @@ pub struct ListFilter {
 /// - `id`：唯一 tiebreaker（`todo_tasks.id` 是 rowid 别名，单调且唯一）。
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ListCursor {
-    /// 生成游标时的排序键（manual/due/priority/created）
+    /// 生成游标时的排序键（manual/due/start/priority/created/done_at）
     pub sort_key: String,
     /// 生成游标时的方向（asc/desc）
     pub dir: String,
-    /// 排序主键值（position / priority / created_at / due_date）。
+    /// 排序主键值（position / priority / created_at / due_date / start_date / done_at）。
     /// `due` 档为 None 表示已进入「无截止」尾段。
     pub key: Option<f64>,
     /// 次排序键（仅 `priority` 档使用：同优先级按 `position` 升序）

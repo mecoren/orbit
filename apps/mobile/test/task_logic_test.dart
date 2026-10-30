@@ -17,6 +17,7 @@ TodoTask _task({
   int done = 0,
   int? doneAt,
   int? dueDate,
+  int? startDate,
   int isFavorite = 0,
   int? myDayDate,
   int? durationMinutes,
@@ -34,7 +35,7 @@ TodoTask _task({
     done: done,
     doneAt: doneAt,
     dueDate: dueDate,
-    startDate: null,
+    startDate: startDate,
     repeatAfter: 1,
     repeatMode: 0,
     repeatWeekdays: 0,
@@ -211,6 +212,7 @@ void main() {
   group('sortTasks 排序方向（dir / baseSortDir，对齐桌面 sortTasks）', () {
     test('baseSortDir 各档默认方向与桌面同表', () {
       expect(baseSortDir[TaskSortKey.due], TaskSortDir.asc);
+      expect(baseSortDir[TaskSortKey.start], TaskSortDir.asc);
       expect(baseSortDir[TaskSortKey.priority], TaskSortDir.desc);
       expect(baseSortDir[TaskSortKey.title], TaskSortDir.asc);
       expect(baseSortDir[TaskSortKey.created], TaskSortDir.desc);
@@ -233,6 +235,23 @@ void main() {
       expect(
         sortTasks(tasks, TaskSortKey.due, TaskSortDir.desc).map((t) => t.id),
         [1, 5, 4, 2, 3],
+      );
+    });
+
+    test('start 档（2026-10-29）：缺省 asc，无开始沉底；desc 只翻主键', () {
+      final tasks = [
+        _task(id: 1, startDate: 300, createdAt: 100),
+        _task(id: 2, startDate: 100, createdAt: 100),
+        _task(id: 3), // 无开始
+        _task(id: 4, startDate: 200, createdAt: 100),
+      ];
+      expect(
+        sortTasks(tasks, TaskSortKey.start).map((t) => t.id),
+        [2, 4, 1, 3],
+      );
+      expect(
+        sortTasks(tasks, TaskSortKey.start, TaskSortDir.desc).map((t) => t.id),
+        [1, 4, 2, 3],
       );
     });
 

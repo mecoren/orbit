@@ -4,10 +4,10 @@
  * - SortMenuButton「↑↓」：分组（仅看板）/ 排序档 / 顺序（升/降序）+ 状态/优先级
  *   筛选子菜单就地展开（筛选与排序同属「行怎么排」语义，收在一处）；
  * - MoreMenuButton「···」：顶部视图图标排（当前高亮、点按不关菜单）+ 隐藏已完成
- *   + 存为视图 + 搜索或跳转 + 标签管理。
+ *   + 保存为筛选器 + 搜索或跳转 + 标签管理。
  *
  * 全部状态由 task-panel 持有、props 注入（面板是唯一状态源，本文件纯 UI 转发）；
- * 数据语义与收拢前逐项等价——aria-label 沿用原文案（列表视图/存为视图/标签管理…），
+ * 数据语义与收拢前逐项等价——aria-label 沿用原文案（列表视图/保存为筛选器/标签管理…），
  * e2e 选择器平移成本最小。
  */
 import {
@@ -59,6 +59,7 @@ const VIEW_TABS: { key: ViewMode; label: string; icon: typeof ListTodo }[] = [
 const SORT_LABEL: Record<TaskSortKey, string> = {
   manual: "拖拽顺序",
   due: "截止时间",
+  start: "开始时间",
   priority: "优先级",
   title: "标题",
   created: "创建时间",
@@ -178,6 +179,7 @@ export function SortMenuButton(props: SortMenuButtonProps) {
             >
               <DropdownMenuRadioItem value="manual">拖拽顺序</DropdownMenuRadioItem>
               <DropdownMenuRadioItem value="due">截止时间</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="start">开始时间</DropdownMenuRadioItem>
               <DropdownMenuRadioItem value="priority">优先级</DropdownMenuRadioItem>
               <DropdownMenuRadioItem value="title">标题</DropdownMenuRadioItem>
               <DropdownMenuRadioItem value="created">创建时间</DropdownMenuRadioItem>
@@ -347,8 +349,8 @@ export function MoreMenuButton(props: MoreMenuButtonProps) {
         </DropdownMenuCheckboxItem>
         <DropdownMenuSeparator />
 
-        {/* 存为视图：预填链路在 task-panel（buildConditions），此处仅回调 */}
-        <DropdownMenuItem onSelect={() => onSaveAsView()}>存为视图</DropdownMenuItem>
+        {/* 保存为筛选器：预填链路在 task-panel（buildConditions），此处仅回调 */}
+        <DropdownMenuItem onSelect={() => onSaveAsView()}>保存为筛选器</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onOpenCommand()}>
           搜索或跳转
           <DropdownMenuShortcut>Ctrl+P</DropdownMenuShortcut>

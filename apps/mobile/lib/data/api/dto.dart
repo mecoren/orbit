@@ -49,7 +49,7 @@ class ListFilter {
   /// 是否有截止：false = due_date IS NULL（日历「未排期」区）
   final bool? hasDue;
 
-  /// 排序键（P1 键集分页）：manual/due/priority/created/done_at；
+  /// 排序键（P1 键集分页）：manual/due/start/priority/created/done_at；
   /// title 依赖 localeCompare 拼音序，SQL 复刻不了，该档走全量通道
   final String? sortKey;
 

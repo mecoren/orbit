@@ -95,6 +95,14 @@ class MockOrbitBridge implements OrbitBridge {
         if (ad == null && bd == null) return _cmpNum(ida, idb, desc);
         final byDue = _cmpNum(ad!, bd!, desc);
         return byDue != 0 ? byDue : _cmpNum(ida, idb, desc);
+      case 'start':
+        // 与 due 同构（2026-10-29）：无开始恒沉底（方向无关）
+        final ad = a['start_date'] as num?;
+        final bd = b['start_date'] as num?;
+        if ((ad == null) != (bd == null)) return ad == null ? 1 : -1;
+        if (ad == null && bd == null) return _cmpNum(ida, idb, desc);
+        final byStart = _cmpNum(ad!, bd!, desc);
+        return byStart != 0 ? byStart : _cmpNum(ida, idb, desc);
       case 'priority':
         final byPri = _cmpNum(
           _taskNum(a, 'priority'),
@@ -147,6 +155,14 @@ class MockOrbitBridge implements OrbitBridge {
         if (due == null) return true;
         if (due != k) return desc ? due < k : due > k;
         return desc ? id < c.id : id > c.id;
+      case 'start':
+        final start = t['start_date'] as num?;
+        if (c.key == null) {
+          return start == null && (desc ? id < c.id : id > c.id);
+        }
+        if (start == null) return true;
+        if (start != k) return desc ? start < k : start > k;
+        return desc ? id < c.id : id > c.id;
       case 'priority':
         final pri = _taskNum(t, 'priority');
         if (pri != k) return desc ? pri < k : pri > k;
@@ -173,6 +189,8 @@ class MockOrbitBridge implements OrbitBridge {
         ? _taskNum(t, 'position').toDouble()
         : key == 'due'
         ? (t['due_date'] as num?)?.toDouble()
+        : key == 'start'
+        ? (t['start_date'] as num?)?.toDouble()
         : key == 'done_at'
         ? (t['done_at'] as num?)?.toDouble()
         : key == 'priority'
@@ -879,6 +897,7 @@ class MockOrbitBridge implements OrbitBridge {
     if (!const [
       'manual',
       'due',
+      'start',
       'priority',
       'created',
       'done_at',

@@ -866,13 +866,13 @@ test("看板多选批量：勾选卡片 → 工具条 → 批量改期落库（2
 });
 
 test("筛选器可视化构建器：pill 选条件 → 保存落库 → 侧栏生效（2026-09-12 F3）", async ({ page }) => {
-  // 「···」菜单「存为视图」入口（当前工具栏筛选预填）→ 构建器弹层（不再有条件 JSON 手填框）
+  // 「···」菜单「保存为筛选器」入口（当前工具栏筛选预填）→ 构建器弹层（不再有条件 JSON 手填框）
   await openMoreMenu(page);
-  await page.getByRole("menuitem", { name: "存为视图" }).click();
+  await page.getByRole("menuitem", { name: "保存为筛选器" }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
   await expect(dialog.getByText("任意状态")).toBeVisible();
-  await expect(dialog.getByText("已逾期")).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "已逾期" })).toBeVisible();
 
   // pill 交互：点「7 天内」再点「已逾期」→ 互斥清天数（保存后条件只剩 overdue）
   await dialog.getByRole("button", { name: "7 天内" }).click();
@@ -1102,6 +1102,8 @@ test("「↑↓」排序菜单：创建时间档 + 升/降序切换（2026-09-29
   // 「↑↓」→ 排序子菜单 → 创建时间
   await page.getByRole("button", { name: "排序与筛选", exact: true }).click();
   await page.getByRole("menuitem", { name: "排序" }).click();
+  // 2026-10-29 新增开始时间档（与截止时间同构：无开始沉底）
+  await expect(page.getByRole("menuitemradio", { name: "开始时间" })).toBeVisible();
   await page.getByRole("menuitemradio", { name: "创建时间" }).click();
   await expect(lateRow).toBeVisible();
   expect(await yOf(lateRow)).toBeLessThan(await yOf(earlyRow));
@@ -1118,70 +1120,74 @@ test("「↑↓」排序菜单：创建时间档 + 升/降序切换（2026-09-29
   expect(savedDir).toBe("asc");
 });
 
-test("列表日期状态分节：节头计数 + 点击折叠/展开（2026-10-28 对齐 TickTick）", async ({ page }) => {
-  // 默认隐藏已完成：先切到显示，否则「已完成」节不渲染
-  await showDoneTasks(page);
-  // 补造四档日期任务（seed 任务今天 10:00 截止，已过 10 点即落逾期节，计数不写死）
+test("列表触底懒加载连续推进：平铺列表仍能翻到末页（2026-10-29）", async ({ page }) => {
+  // 造 1200 条逾期任务（单页 500，2026-10-29 由 200 提到 500）：首页 500 → 第二页 500 → 末页 200。
+  // 回归背景：预取 ref 锁只在「观察到 isFetchingNextPage 由 true 回 false」时释放，
+  // 本地查询快到该状态被批处理合并、从不提交渲染，锁永久 true → 只推进一页就卡死。
   await page.evaluate(() => {
     const now = Date.now();
     const db = (window as any).__orbitMock.db;
-    const base = {
-      description: null,
-      project_id: db.projects[0]?.id ?? null,
-      priority: 0,
-      start_date: null,
-      repeat_after: 0,
-      repeat_mode: 0,
-      repeat_month_mode: 0,
-      repeat_nth_week: 0,
-      percent_done: 0,
-      is_favorite: 0,
-      my_day_date: null,
-      duration_minutes: null,
-      is_deleted: 0,
-      created_at: now,
-      updated_at: now,
-      deleted_at: null,
-      version: 1,
-    };
-    const mk = (id: number, title: string, due: number | null, status = "pending", done = 0) => ({
-      ...base,
-      id,
-      uuid: `sec-${id}`,
-      title,
-      status,
-      done,
-      done_at: done ? now : null,
-      due_date: due,
-      position: 9000 + id,
-    });
-    db.tasks.push(
-      mk(901, "分节-逾期", now - 3_600_000),
-      mk(902, "分节-以后", now + 3 * 86_400_000, "doing"),
-      mk(903, "分节-无日期", null),
-      mk(904, "分节-已完成", null, "done", 1),
-    );
+    for (let i = 1; i <= 1200; i++) {
+      db.tasks.push({
+        id: 10_000 + i,
+        uuid: `lazy-${i}`,
+        title: `懒加载-${String(i).padStart(3, "0")}`,
+        description: null,
+        project_id: null,
+        priority: 0,
+        status: "pending",
+        done: 0,
+        done_at: null,
+        due_date: now - (i + 1) * 3_600_000,
+        start_date: null,
+        repeat_after: 0,
+        repeat_mode: 0,
+        repeat_month_mode: 0,
+        repeat_nth_week: 0,
+        percent_done: 0,
+        position: 20_000 + i,
+        is_favorite: 0,
+        my_day_date: null,
+        duration_minutes: null,
+        is_deleted: 0,
+        created_at: now,
+        updated_at: now,
+        deleted_at: null,
+        version: 1,
+      });
+    }
     (window as any).__orbitMock.emitDbChange();
   });
 
-  const section = (name: string) =>
-    page.getByRole("button", { name: new RegExp(`^${name} \\d+ 条$`) });
-  await expect(section("已逾期")).toBeVisible();
-  await expect(section("以后")).toBeVisible();
-  await expect(section("无日期")).toHaveAccessibleName(/^无日期 1 条$/);
-  await expect(section("已完成")).toBeVisible();
-  await expect(page.getByRole("button", { name: "未完成任务：分节-无日期" })).toBeVisible();
+  // 分页进度已收进标题行（2026-10-29），文案为「已加载 X / Y」
+  const progress = page.getByTestId("task-list-load-progress");
+  await expect(progress).toHaveText(/已加载 500 \/ \d+/, { timeout: 10_000 });
 
-  // 整行点击折叠：该节任务隐藏，折叠态落 localStorage
-  await section("无日期").click();
-  await expect(page.getByRole("button", { name: "未完成任务：分节-无日期" })).toHaveCount(0);
-  await expect(section("以后")).toBeVisible();
-  expect(await page.evaluate(() => localStorage.getItem("todo_section_collapsed"))).toContain("undated");
+  // 逾期行自报身份：日期分节撤掉后行级仍带「已逾期」徽标（2026-10-29）
+  await expect(page.getByTestId("task-overdue-badge").first()).toBeVisible();
 
-  // 再次点击展开：任务回归、折叠态清空
-  await section("无日期").click();
-  await expect(page.getByRole("button", { name: "未完成任务：分节-无日期" })).toBeVisible();
-  expect(await page.evaluate(() => localStorage.getItem("todo_section_collapsed"))).not.toContain("undated");
+  // 拖拽顺序档（默认档）：逾期行同样有拖拽把手——置顶段禁拖曾让整屏 251 条逾期拖不动
+  await expect(page.getByRole("button", { name: "拖拽排序" }).first()).toBeVisible();
+
+  // 滚到虚拟列表容器底部（容器在行挂载后才可定位，按行向上找可滚动祖先）
+  const scrollToBottom = () =>
+    page.evaluate(() => {
+      const rows = document.querySelectorAll("[data-index]");
+      let node: HTMLElement | null = (rows[rows.length - 1] as HTMLElement) ?? null;
+      while (node && node !== document.body) {
+        if (node.scrollHeight > node.clientHeight + 4) {
+          node.scrollTop = node.scrollHeight;
+          return;
+        }
+        node = node.parentElement;
+      }
+    });
+
+  await scrollToBottom();
+  await expect(progress).toHaveText(/已加载 1000 \/ \d+/, { timeout: 10_000 });
+  await scrollToBottom();
+  // 末页到账 → hasNextPage=false → 进度指示回落为纯计数
+  await expect(progress).toHaveCount(0, { timeout: 10_000 });
 });
 
 test("「···」更多菜单：视图图标排点按即切且菜单不关（2026-09-29 工具栏收拢）", async ({ page }) => {
@@ -1190,12 +1196,12 @@ test("「···」更多菜单：视图图标排点按即切且菜单不关（20
   await expect(menu).toBeVisible();
 
   // CheckboxItem 文本须与普通 MenuItem 左对齐（原语默认 pl-8 给左侧指示器留位，
-  // 曾致「隐藏已完成」比「存为视图」缩进一截——2026-09-29 指示器改行尾后锁死）
+  // 曾致「隐藏已完成」比「保存为筛选器」缩进一截——2026-09-29 指示器改行尾后锁死）
   const plainLeft = await page
-    .getByRole("menuitem", { name: "存为视图" })
+    .getByRole("menuitem", { name: "保存为筛选器" })
     .evaluate((el) => {
       const textNode = Array.from(el.childNodes).find(
-        (n) => n.nodeType === Node.TEXT_NODE && n.textContent?.includes("存为视图"),
+        (n) => n.nodeType === Node.TEXT_NODE && n.textContent?.includes("保存为筛选器"),
       )!;
       const range = document.createRange();
       range.selectNode(textNode);
