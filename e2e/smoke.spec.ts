@@ -1232,6 +1232,17 @@ test("「···」菜单去图标排 + 视图切换单钮往返（2026-10-30 视
       return range.getBoundingClientRect().left;
     });
   expect(Math.abs(checkboxTextLeft - plainLeft)).toBeLessThanOrEqual(1);
+
+  // 选中标记统一贴行尾（2026-10-30）：勾/圆点共用 [&>span]:left-auto right-2，
+  // 标记中心须落在菜单项右半区（回退成原语默认的左槽位即红）
+  const indicatorAtEnd = await page
+    .getByRole("menuitemcheckbox", { name: "隐藏已完成" })
+    .evaluate((el) => {
+      const box = el.getBoundingClientRect();
+      const dot = el.querySelector("span")!.getBoundingClientRect();
+      return dot.left + dot.width / 2 > box.left + box.width / 2;
+    });
+  expect(indicatorAtEnd).toBe(true);
   await page.keyboard.press("Escape");
 
   // 单钮切矩阵：四象限真实渲染（空桶也出格）

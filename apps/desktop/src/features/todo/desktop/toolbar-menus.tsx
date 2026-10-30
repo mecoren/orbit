@@ -42,6 +42,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 import {
   type TaskSortDir,
   type TaskSortKey,
@@ -110,6 +111,22 @@ function MenuTrigger({ label, children }: { label: string; children: React.React
   );
 }
 
+/** 行尾指示器版菜单项（本地包装，2026-10-30）：
+ *  原语默认把选中标记放左侧 32px 槽位（pl-8），混排菜单里普通项的文字就会比
+ *  开关项/单选项左移一截。统一挪到行尾后所有项文本从同一 x 起、状态标记贴右缘
+ *  （Win11 设置项同款）；形态差异保留——打勾 = 可独立开关，圆点 = 互斥单选。 */
+const END_INDICATOR = "pl-2 [&>span]:left-auto [&>span]:right-2";
+
+function MenuRadioItem(props: React.ComponentProps<typeof DropdownMenuRadioItem>) {
+  return <DropdownMenuRadioItem {...props} className={cn(END_INDICATOR, props.className)} />;
+}
+
+function MenuCheckboxItem(props: React.ComponentProps<typeof DropdownMenuCheckboxItem>) {
+  return (
+    <DropdownMenuCheckboxItem {...props} className={cn(END_INDICATOR, props.className)} />
+  );
+}
+
 interface SortMenuButtonProps {
   viewMode: ViewMode;
   sortKey: TaskSortKey;
@@ -162,11 +179,11 @@ export function SortMenuButton(props: SortMenuButtonProps) {
                 value={kanbanGroupBy}
                 onValueChange={(v) => onKanbanGroupByChange(v as KanbanGroupBy)}
               >
-                <DropdownMenuRadioItem value="project">按项目</DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="status">按状态</DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="priority">按优先级</DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="label">按标签</DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="due">按截止日期</DropdownMenuRadioItem>
+                <MenuRadioItem value="project">按项目</MenuRadioItem>
+                <MenuRadioItem value="status">按状态</MenuRadioItem>
+                <MenuRadioItem value="priority">按优先级</MenuRadioItem>
+                <MenuRadioItem value="label">按标签</MenuRadioItem>
+                <MenuRadioItem value="due">按截止日期</MenuRadioItem>
               </DropdownMenuRadioGroup>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
@@ -182,12 +199,12 @@ export function SortMenuButton(props: SortMenuButtonProps) {
               value={sortKey}
               onValueChange={(v) => onSortKeyChange(v as TaskSortKey)}
             >
-              <DropdownMenuRadioItem value="manual">拖拽顺序</DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="due">截止时间</DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="start">开始时间</DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="priority">优先级</DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="title">标题</DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="created">创建时间</DropdownMenuRadioItem>
+              <MenuRadioItem value="manual">拖拽顺序</MenuRadioItem>
+              <MenuRadioItem value="due">截止时间</MenuRadioItem>
+              <MenuRadioItem value="start">开始时间</MenuRadioItem>
+              <MenuRadioItem value="priority">优先级</MenuRadioItem>
+              <MenuRadioItem value="title">标题</MenuRadioItem>
+              <MenuRadioItem value="created">创建时间</MenuRadioItem>
             </DropdownMenuRadioGroup>
           </DropdownMenuSubContent>
         </DropdownMenuSub>
@@ -206,8 +223,8 @@ export function SortMenuButton(props: SortMenuButtonProps) {
                 value={sortDir}
                 onValueChange={(v) => onSortDirChange(v as TaskSortDir)}
               >
-                <DropdownMenuRadioItem value="asc">升序</DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="desc">降序</DropdownMenuRadioItem>
+                <MenuRadioItem value="asc">升序</MenuRadioItem>
+                <MenuRadioItem value="desc">降序</MenuRadioItem>
               </DropdownMenuRadioGroup>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
@@ -226,16 +243,16 @@ export function SortMenuButton(props: SortMenuButtonProps) {
             <span className="text-xs text-muted-foreground">{statusSummary(statusFilters)}</span>
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent>
-            <DropdownMenuCheckboxItem
+            <MenuCheckboxItem
               checked={statusFilters.length === 0}
               onCheckedChange={() => onStatusFiltersChange([])}
               onSelect={(e) => e.preventDefault()}
             >
               全部状态
-            </DropdownMenuCheckboxItem>
+            </MenuCheckboxItem>
             <DropdownMenuSeparator />
             {STATUS_ITEMS.map((i) => (
-              <DropdownMenuCheckboxItem
+              <MenuCheckboxItem
                 key={i.value}
                 checked={statusFilters.includes(i.value)}
                 onCheckedChange={(checked) =>
@@ -248,7 +265,7 @@ export function SortMenuButton(props: SortMenuButtonProps) {
                 onSelect={(e) => e.preventDefault()}
               >
                 {i.label}
-              </DropdownMenuCheckboxItem>
+              </MenuCheckboxItem>
             ))}
           </DropdownMenuSubContent>
         </DropdownMenuSub>
@@ -266,9 +283,9 @@ export function SortMenuButton(props: SortMenuButtonProps) {
               onValueChange={(v) => onPriorityFilterChange(v as PriorityFilter)}
             >
               {PRIORITY_ITEMS.map((i) => (
-                <DropdownMenuRadioItem key={i.value} value={i.value}>
+                <MenuRadioItem key={i.value} value={i.value}>
                   {i.label}
-                </DropdownMenuRadioItem>
+                </MenuRadioItem>
               ))}
             </DropdownMenuRadioGroup>
           </DropdownMenuSubContent>
@@ -299,9 +316,9 @@ export function ViewMenuButton({ viewMode, onViewModeChange }: ViewMenuButtonPro
           onValueChange={(v) => onViewModeChange(v as ViewMode)}
         >
           {VIEW_TABS.map(({ key, label }) => (
-            <DropdownMenuRadioItem key={key} value={key}>
+            <MenuRadioItem key={key} value={key}>
               {label}
-            </DropdownMenuRadioItem>
+            </MenuRadioItem>
           ))}
         </DropdownMenuRadioGroup>
       </DropdownMenuContent>
@@ -344,17 +361,15 @@ export function MoreMenuButton(props: MoreMenuButtonProps) {
         <Ellipsis size={14} />
       </MenuTrigger>
       <DropdownMenuContent align="end" className="min-w-48">
-        {/* CheckboxItem 原语默认 pl-8 给左侧勾选指示器留位，文字会比普通 MenuItem
-            缩进一截；这里文字左对齐各项、指示器移到行尾（Win11 切换项同款），
+        {/* 行尾勾选标记由 MenuCheckboxItem 包装统一提供（与下方普通项文本左对齐）；
             role=menuitemcheckbox 与 aria-checked 不变，e2e 选择器零改动 */}
-        <DropdownMenuCheckboxItem
+        <MenuCheckboxItem
           checked={hideDone}
           disabled={hideDoneDisabled}
           onCheckedChange={(v) => onHideDoneChange(v === true)}
-          className="pl-2 [&>span]:left-auto [&>span]:right-2"
         >
           隐藏已完成
-        </DropdownMenuCheckboxItem>
+        </MenuCheckboxItem>
         <DropdownMenuSeparator />
 
         {/* 保存为筛选器：预填链路在 task-panel（buildConditions），此处仅回调 */}
