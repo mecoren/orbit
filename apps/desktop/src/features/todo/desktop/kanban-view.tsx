@@ -892,53 +892,72 @@ const KanbanCard = memo(function KanbanCard({
               // 否则整串不换行撑出卡片右缘
               "break-words text-sm font-medium leading-5",
               task.done && "text-muted-foreground line-through",
+              /* 星标改成绝对定位后给标题让位，避免长标题压到星标上 */
+              !!task.is_favorite && "pr-5",
             )}
           >
             {task.title}
           </div>
 
-          {/* 元信息单行：标签 / 截止 / 提醒 / 进度——与标题左缘对齐（旧版挂在
-              卡片左内边距上，缩进比标题少 26px，整卡看着是歪的）；逾期未完成
-              同列表行染红（旧版卡片只有灰色 MM-dd，逾期在板上没有任何信号） */}
+          {/* 元信息单行：标签在左、截止/提醒/进度固定贴卡片右下缘（2026-10-30）。
+              标签 flex-1 截断、右侧组 shrink-0 右对齐且不换行——日期因此对齐成
+              一列好扫读，也不会因标签多寡把截止挤到第二行（旧版 flex-wrap 会让
+              同一列卡片的日期位置上下跳，还会把卡撑高） */}
           {(labels.length > 0 || task.due_date != null || reminder != null || task.percent_done > 0) && (
-            <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-              {labels.length > 0 && <LabelChips labels={labels} max={2} />}
-              {task.due_date != null && (
-                /* 截止口径对齐日历视图（04 §3.3）：逾期改红色胶囊（同款
-                   bg-destructive/10 底 + 11px 字），完整截止时刻挂悬浮提示——
-                   卡片只放得下 MM-dd，具体到日/时全靠 tooltip */
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span
-                      className={cn(
-                        "inline-flex shrink-0 items-center gap-1 tabular-nums",
-                        overdue &&
-                          cn(
-                            "rounded bg-destructive/10 px-1.5 py-0.5 text-[11px] font-medium",
-                            OVERDUE_COLOR_CLASS,
-                          ),
-                      )}
-                    >
-                      <Calendar size={11} aria-hidden />
-                      {format(new Date(task.due_date), "MM-dd")}
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {overdue ? "已逾期 · " : ""}
-                    截止 {format(new Date(task.due_date), "M月d日 HH:mm", { locale: zhCN })}
-                  </TooltipContent>
-                </Tooltip>
+            <div className="mt-1.5 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+              {labels.length > 0 && (
+                <span className="min-w-0 flex-1 overflow-hidden">
+                  <LabelChips labels={labels} max={2} />
+                </span>
               )}
-              <ReminderChip reminder={reminder} />
-              {task.percent_done > 0 && (
-                <span className="shrink-0 tabular-nums">{Math.round(task.percent_done)}%</span>
-              )}
+              <span className="ml-auto flex shrink-0 items-center gap-1.5">
+                {task.percent_done > 0 && (
+                  <span className="shrink-0 tabular-nums">{Math.round(task.percent_done)}%</span>
+                )}
+                <ReminderChip reminder={reminder} />
+                {/* 截止放右组末位：右下角才是稳定的锚点，进度/提醒再多也不会把
+                    日期挤离卡片右缘（同列日期成一条竖线） */}
+                {task.due_date != null && (
+                  /* 截止口径对齐日历视图（04 §3.3）：逾期改红色胶囊（同款
+                     bg-destructive/10 底 + 11px 字），完整截止时刻挂悬浮提示——
+                     卡片只放得下 MM-dd，具体到日/时全靠 tooltip */
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span
+                        className={cn(
+                          /* 胶囊盒式统一（11px + px/py 内外一致），逾期才加红底：
+                             否则逾期卡比普通卡高 2px，同列卡片高度参差 */
+                          "inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium tabular-nums",
+                          overdue
+                            ? cn("bg-destructive/10", OVERDUE_COLOR_CLASS)
+                            : "text-muted-foreground",
+                        )}
+                      >
+                        <Calendar size={11} aria-hidden />
+                        {format(new Date(task.due_date), "MM-dd")}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {overdue ? "已逾期 · " : ""}
+                      截止 {format(new Date(task.due_date), "M月d日 HH:mm", { locale: zhCN })}
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+              </span>
             </div>
           )}
         </div>
 
+        {/* 星标绝对定位：留在标题行里会占掉内容列宽度，让收藏卡的截止日期比
+            其他卡左缩 19px，破坏右下角日期成列的对齐 */}
         {!!task.is_favorite && (
-          <Star size={13} className="mt-0.5 shrink-0" style={{ color: FAVORITE_COLOR }} fill="currentColor" />
+          <Star
+            size={13}
+            aria-hidden
+            className="absolute right-3 top-3"
+            style={{ color: FAVORITE_COLOR }}
+            fill="currentColor"
+          />
         )}
       </div>
     </div>
