@@ -38,7 +38,18 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { Spinner } from "@/components/ui/spinner";
@@ -47,6 +58,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { DateTimePicker } from "@/components/business/date-picker";
 import { cn } from "@/lib/utils";
 import { reminderEndMs } from "@/lib/quick-dates";
@@ -232,6 +244,8 @@ export function TaskCreateDrawer({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
+  /** 关闭前的丢弃确认（草稿非空时 Esc/点遮罩不再直接丢内容） */
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
 
   // 每次打开重算默认值（跨零点打开也正确）；关闭不清空，避免关闭动画期间闪空
   useEffect(() => {
@@ -261,6 +275,25 @@ export function TaskCreateDrawer({
 
   const patch = (next: Partial<DraftState>) =>
     setDraft((prev) => ({ ...prev, ...next }));
+
+  // 脏判定只认用户实际填过的内容：日期/项目等默认值不算——日历右键带入的
+  // 截止日不该让「什么都没输就按 Esc」也弹确认
+  const isDraftDirty =
+    draft.title.trim() !== "" ||
+    draft.description.trim() !== "" ||
+    draft.tags.length > 0 ||
+    draft.reminder != null ||
+    draft.subtasks.some((s) => s.trim() !== "");
+
+  /** Esc / 点遮罩 / 右上角 × 的统一出口：有草稿先确认，别一次按键丢几分钟输入 */
+  const requestClose = () => {
+    if (submitting) return;
+    if (isDraftDirty) {
+      setConfirmDiscard(true);
+      return;
+    }
+    onOpenChange(false);
+  };
 
   const handleCreate = async () => {
     if (submitting) return; // 双击/回车连发防重（按钮 disable 是异步态，挡不住同一帧）
@@ -343,7 +376,13 @@ export function TaskCreateDrawer({
   };
 
   return (
-    <Sheet open={open} onOpenChange={(o) => !submitting && onOpenChange(o)}>
+    <Sheet
+      open={open}
+      onOpenChange={(o) => {
+        if (o) onOpenChange(true);
+        else requestClose();
+      }}
+    >
       <SheetContent className="flex w-full max-w-xl flex-col gap-0 p-0 sm:max-w-xl">
         {/* 标题行：与详情头部同位同阶（pt-8 / border-b），但始终是输入框 */}
         <div className="shrink-0 border-b px-6 pt-8 pb-4">
@@ -599,6 +638,30 @@ export function TaskCreateDrawer({
           </div>
         </div>
       </SheetContent>
+
+      {/* 草稿丢弃确认：只在真有输入时出现（详见 requestClose） */}
+      <AlertDialog open={confirmDiscard} onOpenChange={setConfirmDiscard}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>放弃这份草稿？</AlertDialogTitle>
+            <AlertDialogDescription>
+              标题、描述、子任务、标签等已填写的内容会全部丢失。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>继续编辑</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white hover:bg-destructive/90"
+              onClick={() => {
+                setConfirmDiscard(false);
+                onOpenChange(false);
+              }}
+            >
+              放弃
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Sheet>
   );
 }
@@ -652,8 +715,7 @@ function DescriptionDraft({
         <div
           role="button"
           tabIndex={0}
-          aria-label="点击编辑描述"
-          title="点击编辑（支持 Markdown：# 标题 / **粗体** / *斜体* / `代码` / [链接](url) / - 列表）"
+          aria-label="点击编辑描述（支持 Markdown）"
           className="max-h-64 space-y-0.5 overflow-y-auto break-words rounded-md text-[13px] transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
           onClick={() => setEditing(true)}
           onKeyDown={(e) => {
@@ -825,14 +887,19 @@ function ReminderDraft({
               {format(new Date(value.remindMs), "yyyy-MM-dd HH:mm")}
             </button>
             {value.isConstant && (
-              <button
-                type="button"
-                title="持续提醒：未完成则每 5 分钟再提醒，点击关闭"
-                onClick={() => onChange({ ...value, isConstant: false })}
-                className="shrink-0 rounded-full bg-orange-500/15 px-1.5 py-0.5 text-[10px] font-medium text-orange-600 hover:bg-orange-500/25 dark:text-orange-400"
-              >
-                持续
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="持续提醒：未完成则每 5 分钟再提醒，点击关闭"
+                    onClick={() => onChange({ ...value, isConstant: false })}
+                    className="shrink-0 rounded-full bg-warning/15 px-1.5 py-0.5 text-[10px] font-medium text-warning hover:bg-warning/25"
+                  >
+                    持续
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>持续提醒：未完成则每 5 分钟再提醒，点击关闭</TooltipContent>
+              </Tooltip>
             )}
             <button
               type="button"
@@ -973,19 +1040,31 @@ function TagsDraft({
                 </p>
               )}
               {allLabels.map((l) => (
-                <label
+                <div
                   key={l.id}
-                  className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`切换标签 ${l.title}`}
+                  aria-pressed={selectedIds.has(l.id)}
+                  onClick={() => toggleExisting(l)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      toggleExisting(l);
+                    }
+                  }}
+                  className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
                 >
-                  <input
-                    type="checkbox"
+                  {/* 行本身已承载点击：勾选框不再冒泡，避免一次点击切两次 */}
+                  <Checkbox
                     checked={selectedIds.has(l.id)}
-                    onChange={() => toggleExisting(l)}
-                    className="size-4 shrink-0 accent-primary"
+                    tabIndex={-1}
+                    onClick={(e) => e.stopPropagation()}
+                    onCheckedChange={() => toggleExisting(l)}
                   />
                   <span className="size-2.5 rounded-sm" style={{ background: l.hex_color }} />
                   <span className="truncate">{l.title}</span>
-                </label>
+                </div>
               ))}
             </div>
             <div className="border-t p-2">

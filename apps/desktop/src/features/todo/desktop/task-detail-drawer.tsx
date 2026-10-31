@@ -44,7 +44,9 @@ import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
@@ -383,22 +385,26 @@ function TitleRow({
       >
         <Star size={16} fill={task.is_favorite ? "currentColor" : "none"} />
       </Button>
-      <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="复制任务"
-        title="复制任务（克隆字段与子任务）"
-        onClick={() => {
-          void (async () => {
-            try {
-              const copy = await todoTaskDuplicate(task.id);
-              toast.success(`已复制为「${copy.title}」`);
-              setSelectedTaskId(copy.id);
-            } catch (e) {
-              toast.error(`复制失败：${e}`);
-            }
-          })();
-        }}
-      >
-        <Copy size={16} />
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="复制任务"
+            onClick={() => {
+              void (async () => {
+                try {
+                  const copy = await todoTaskDuplicate(task.id);
+                  toast.success(`已复制为「${copy.title}」`);
+                  setSelectedTaskId(copy.id);
+                } catch (e) {
+                  toast.error(`复制失败：${e}`);
+                }
+              })();
+            }}
+          >
+            <Copy size={16} />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>复制任务（克隆字段与子任务）</TooltipContent>
+      </Tooltip>
       <Button variant="ghost" size="icon" className="text-destructive h-8 w-8" aria-label="删除"
         onClick={() => setConfirmDelete(true)}
       >
@@ -895,12 +901,12 @@ export function RepeatEditor({
             </button>
             <div className="flex items-center gap-1.5 px-2 py-1.5">
               <span className="shrink-0 text-xs text-muted-foreground">每</span>
-              <Input
-                type="number"
+              <NumberInput
                 min={1}
                 value={customDays}
-                onChange={(e) => setCustomDays(e.target.value)}
-                className="h-6 w-14 px-1.5 text-xs"
+                onValueChange={setCustomDays}
+                className="h-6 w-14"
+                ariaLabel="重复间隔天数"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") applyExt(REPEAT_MODE.DAILY, Math.max(1, Number(customDays) || 1));
                 }}
@@ -1035,18 +1041,24 @@ export function RepeatEditor({
             </div>
           )}
           <div className="flex items-center gap-1.5">
-            <button type="button"
-              onClick={() => setWhenDone((v) => (v ? 0 : 1))}
-              className={cn(
-                "rounded-md border px-2 py-0.5 text-[11px]",
-                whenDone
-                  ? "border-primary bg-primary/10 font-medium text-primary"
-                  : "text-muted-foreground hover:bg-accent",
-              )}
-              title="默认按原定日期推进（节奏恒定）；勾选后按实际完成日推进（迟到完成，下次顺延一个完整周期）"
-            >
-              按完成日推进
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button type="button"
+                  onClick={() => setWhenDone((v) => (v ? 0 : 1))}
+                  className={cn(
+                    "rounded-md border px-2 py-0.5 text-[11px]",
+                    whenDone
+                      ? "border-primary bg-primary/10 font-medium text-primary"
+                      : "text-muted-foreground hover:bg-accent",
+                  )}
+                >
+                  按完成日推进
+                </button>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                默认按原定日期推进（节奏恒定）；勾选后按实际完成日推进（迟到完成，下次顺延一个完整周期）
+              </TooltipContent>
+            </Tooltip>
           </div>
           <Button size="sm" variant="outline" className="h-6 w-full text-xs"
             disabled={mode === REPEAT_MODE.NONE}
@@ -1290,11 +1302,12 @@ function DescriptionSection({
     <SectionBlock icon={AlignLeft} title="描述">
       {task.description ? (
         <DescriptionPreviewHover content={renderMarkdown(task.description)}>
+          {/* 原生 title 会与 DescriptionPreviewHover 的悬浮预览叠成两层，
+              且走系统灰白浮层；点击编辑语义由 aria-label 承载 */}
           <div
             role="button"
             tabIndex={0}
-            aria-label="点击编辑描述"
-            title="点击编辑（支持 Markdown：# 标题 / **粗体** / *斜体* / `代码` / [链接](url) / - 列表）"
+            aria-label="点击编辑描述（支持 Markdown）"
             className="max-h-64 space-y-0.5 overflow-y-auto break-words rounded-md text-[13px] transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
             onClick={() => setEditing(true)}
             onKeyDown={(e) => {
@@ -1399,6 +1412,8 @@ function SubtasksSection({
   // M10：行内「加子级」——addingUnder = 父行 uuid（顶层添加框为 null 语义的下方输入）
   const [addingUnder, setAddingUnder] = useState<string | null>(null);
   const [childTitle, setChildTitle] = useState("");
+  // 添加中锁：连按 Enter / 双击「添加」曾各建一条同名子任务
+  const [addingBusy, setAddingBusy] = useState(false);
   // 待删子任务（null = 关闭）：删除前确认弹窗，防误触（与任一评论删除同惯例）
   const [confirmDelete, setConfirmDelete] = useState<TodoSubtask | null>(null);
   const qc = useQueryClient();
@@ -1422,18 +1437,25 @@ function SubtasksSection({
 
   const submitAdd = async (parentUuid: string | null) => {
     const v = (parentUuid === null ? newTitle : childTitle).trim();
-    if (!v) return;
-    await todoSubtaskCreate({
-      task_id: taskId,
-      title: v,
-      ...(parentUuid === null ? {} : { parent_uuid: parentUuid }),
-    });
-    if (parentUuid === null) setNewTitle("");
-    else {
-      setChildTitle("");
-      setAddingUnder(null);
+    if (!v || addingBusy) return;
+    setAddingBusy(true);
+    try {
+      await todoSubtaskCreate({
+        task_id: taskId,
+        title: v,
+        ...(parentUuid === null ? {} : { parent_uuid: parentUuid }),
+      });
+      if (parentUuid === null) setNewTitle("");
+      else {
+        setChildTitle("");
+        setAddingUnder(null);
+      }
+      onChanged();
+    } catch (e) {
+      toast.error(`添加子任务失败：${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setAddingBusy(false);
     }
-    onChanged();
   };
 
   const liftToTop = async (s: TodoSubtask) => {
@@ -1522,12 +1544,16 @@ function SubtasksSection({
                   >
                     {s.done ? <Check className="size-2.5" /> : null}
                   </button>
-                  <span
-                    className={cn("flex-1 truncate text-[13px]", s.done && "text-muted-foreground line-through")}
-                    title={s.title}
-                  >
-                    {s.title}
-                  </span>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span
+                        className={cn("flex-1 truncate text-[13px]", s.done && "text-muted-foreground line-through")}
+                      >
+                        {s.title}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>{s.title}</TooltipContent>
+                  </Tooltip>
                   {/* M10：行内「加子级」——在当前行下建嵌套子任务 */}
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -1726,16 +1752,31 @@ function LabelsSection({
           <PopoverContent align="start" className="w-64 p-0">
             <div className="max-h-60 overflow-y-auto p-1">
               {allLabels.map((l) => (
-                <label key={l.id} className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent">
-                  <input
-                    type="checkbox"
+                <div
+                  key={l.id}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`切换标签 ${l.title}`}
+                  aria-pressed={mountedIds.has(l.id)}
+                  onClick={() => void toggleMount(l.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      void toggleMount(l.id);
+                    }
+                  }}
+                  className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
+                >
+                  {/* 行本身已承载点击：勾选框不再冒泡，避免一次点击切两次 */}
+                  <Checkbox
                     checked={mountedIds.has(l.id)}
-                    onChange={() => void toggleMount(l.id)}
-                    className="size-4 shrink-0 accent-primary"
+                    tabIndex={-1}
+                    onClick={(e) => e.stopPropagation()}
+                    onCheckedChange={() => void toggleMount(l.id)}
                   />
                   <span className="size-2.5 rounded-sm" style={{ background: l.hex_color }} />
                   <span className="truncate">{l.title}</span>
-                </label>
+                </div>
               ))}
             </div>
             <div className="border-t p-2">
@@ -1910,15 +1951,20 @@ function RemindersSection({
                   {fmt(r.remind_at)}
                 </button>
                 {r.is_constant === 1 && (
-                  <button
-                    type="button"
-                    title="持续提醒：未完成则每 5 分钟再提醒，点击关闭"
-                    data-testid={`constant-${r.id}`}
-                    onClick={() => void toggleConstant(r)}
-                    className="shrink-0 rounded-full bg-orange-500/15 px-1.5 py-0.5 text-[10px] font-medium text-orange-600 hover:bg-orange-500/25 dark:text-orange-400"
-                  >
-                    持续
-                  </button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        aria-label="持续提醒：未完成则每 5 分钟再提醒，点击关闭"
+                        data-testid={`constant-${r.id}`}
+                        onClick={() => void toggleConstant(r)}
+                        className="shrink-0 rounded-full bg-warning/15 px-1.5 py-0.5 text-[10px] font-medium text-warning hover:bg-warning/25"
+                      >
+                        持续
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>持续提醒：未完成则每 5 分钟再提醒，点击关闭</TooltipContent>
+                  </Tooltip>
                 )}
                 {repeatMode > 0 && (
                   <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
@@ -2044,15 +2090,21 @@ function RelationsSection({
             >
               <div className="group flex items-center gap-2 rounded-md px-1 py-1 hover:bg-accent/30">
                 <Link2 size={12} className="shrink-0 text-muted-foreground" />
-                <button
-                  type="button"
-                  className="min-w-0 flex-1 truncate text-left text-[13px] hover:text-primary"
-                  title={other ? `打开「${other.title}」` : `任务 #${r.other_task_id}`}
-                  onClick={() => useTodoStore.getState().setSelectedTaskId(r.other_task_id)}
-                >
-                  {other ? other.title : `任务 #${r.other_task_id}`}
-                  {other?.done ? "（已完成）" : ""}
-                </button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      className="min-w-0 flex-1 truncate text-left text-[13px] hover:text-primary"
+                      onClick={() => useTodoStore.getState().setSelectedTaskId(r.other_task_id)}
+                    >
+                      {other ? other.title : `任务 #${r.other_task_id}`}
+                      {other?.done ? "（已完成）" : ""}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {other ? `打开「${other.title}」` : `任务 #${r.other_task_id}`}
+                  </TooltipContent>
+                </Tooltip>
                 <span className="shrink-0 text-[11px] text-muted-foreground">
                   {RELATION_TYPE_LABEL[r.relation_type] ?? r.relation_type}
                 </span>
