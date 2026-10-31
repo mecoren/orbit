@@ -19,6 +19,7 @@ import 'package:orbit/modules/todo/quick_add_sheet.dart' show showQuickAddSheet;
 import 'package:orbit/modules/todo/sub_list_screen.dart';
 import 'package:orbit/shared/utils/hex_color.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_dropdown_panel.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_icon_button.dart';
 import 'package:orbit/services/local_prefs.dart';
 import 'support/orbit_test_app.dart';
 
@@ -242,10 +243,10 @@ void main() {
       // 只旗子变该档色：无文字胶囊，tooltip 仍带已选值，顶部无 chips 行
       expect(find.byTooltip('优先级：P3 高'), findsOneWidget);
       expect(find.text('P3 高'), findsNothing);
-      final button = tester.widget<IconButton>(
+      final button = tester.widget<OrbitIconButton>(
         find.ancestor(
           of: find.byTooltip('优先级：P3 高'),
-          matching: find.byType(IconButton),
+          matching: find.byType(OrbitIconButton),
         ),
       );
       expect((button.icon as Icon).color,
@@ -259,7 +260,10 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.tap(find.byTooltip('标签'));
-      await tester.pumpAndSettle();
+      // 标签卡片要等桥层 120ms 的标签查询落定才开：Miuix 图标钮没有 InkWell
+      // 水波，pumpAndSettle 在首帧后即收敛、不会顺带把假时钟推过这段延迟，
+      // 故显式推进一拍（与 _settle 同口径）
+      await _settle(tester);
       // 卡片内列表（mock 种子：紧急/阅读），无确认/取消尾栏
       Finder cardText(String label) => find.descendant(
             of: find.byKey(const ValueKey('quick-add-label-card-list')),
@@ -767,3 +771,5 @@ void main() {
     });
   });
 }
+
+

@@ -10,6 +10,7 @@ import 'package:orbit/data/api/dto.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/todo/detail_screen.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_icon_button.dart';
 import 'support/orbit_test_app.dart';
 
 Widget _wrap(Widget child, MockOrbitBridge bridge) => ProviderScope(
@@ -79,9 +80,9 @@ Finder _row(String title) => find.ancestor(
       matching: find.byType(Row),
     );
 
-/// 找指定 tooltip 的 IconButton（移动端行尾按钮常驻可见，无桌面 hover 门槛）
+/// 找指定 tooltip 的图标按钮（移动端行尾按钮常驻可见，无桌面 hover 门槛）
 Finder _iconButton(String tooltip) => find.byWidgetPredicate(
-      (w) => w is IconButton && w.tooltip == tooltip,
+      (w) => w is OrbitIconButton && w.tooltip == tooltip,
     );
 
 /// 行内/顶层添加框（hintText 定位；标题输入框在页面顶部，不能按类型取）
@@ -192,3 +193,4 @@ void main() {
     await _flushTimers(tester);
   });
 }
+

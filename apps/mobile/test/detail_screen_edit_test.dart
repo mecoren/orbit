@@ -12,6 +12,7 @@ import 'package:orbit/shared/widgets/shadcn/orbit_info_row.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_month_calendar.dart';
 import 'support/orbit_test_app.dart';
 import 'package:orbit/core/theme/icon_map.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_icon_button.dart';
 
 Widget _wrap(Widget child, MockOrbitBridge bridge) => ProviderScope(
       overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
@@ -294,7 +295,7 @@ void main() {
     // 信息区清空按钮是裸 Icon 非 IconButton 不会误中；取 .last 即提醒的删除
     // 删除走二次确认抽屉（对齐桌面 ConfirmPopover）：先取消验证不删、再确认删
     await tester.tap(
-      find.widgetWithIcon(IconButton, OrbitIcons.close).last,
+      find.widgetWithIcon(OrbitIconButton, OrbitIcons.close).last,
     );
     await tester.pumpAndSettle();
     final sheet = find.byType(BottomSheet);
@@ -306,7 +307,7 @@ void main() {
     expect((await tester.runAsync(() => remindersOf(5)))!.length, 1);
 
     await tester.tap(
-      find.widgetWithIcon(IconButton, OrbitIcons.close).last,
+      find.widgetWithIcon(OrbitIconButton, OrbitIcons.close).last,
     );
     await tester.pumpAndSettle();
     await tester.tap(
@@ -321,3 +322,4 @@ void main() {
         (await tester.runAsync(() => remindersOf(5)))!.length, 0);
   });
 }
+

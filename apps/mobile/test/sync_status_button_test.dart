@@ -11,9 +11,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/data/api/dto.dart' show SyncProgress;
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_icon_button.dart';
 import 'package:orbit/shared/widgets/sync_status_button.dart';
 import 'support/orbit_test_app.dart';
 import 'package:orbit/core/theme/icon_map.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_progress_bar.dart';
 
 /// WaitToast 经全局 rootNavigatorKey 的 Overlay 插入（wait_toast.dart），
 /// 故测试宿主 MaterialApp 必须挂同一 key，否则 toast 静默丢弃。
@@ -55,7 +57,7 @@ void main() {
 
     expect(find.byIcon(OrbitIcons.cloud), findsOneWidget);
     expect(
-      tester.widget<IconButton>(find.byType(IconButton)).tooltip,
+      tester.widget<OrbitIconButton>(find.byType(OrbitIconButton)).tooltip,
       '未配置云同步',
     );
     expect(find.text('立即同步'), findsNothing);
@@ -73,11 +75,11 @@ void main() {
     await _flush(tester);
 
     expect(
-      tester.widget<IconButton>(find.byType(IconButton)).tooltip,
+      tester.widget<OrbitIconButton>(find.byType(OrbitIconButton)).tooltip,
       '已就绪',
     );
 
-    await tester.tap(find.byType(IconButton));
+    await tester.tap(find.byType(OrbitIconButton));
     await _flush(tester);
 
     expect(find.text('云同步'), findsOneWidget);
@@ -99,7 +101,7 @@ void main() {
     await presetCrypto;
     await _flush(tester);
 
-    await tester.tap(find.byType(IconButton));
+    await tester.tap(find.byType(OrbitIconButton));
     await _flush(tester);
     expect(find.text('立即同步'), findsOneWidget);
 
@@ -112,7 +114,7 @@ void main() {
     await _drainTimers(tester);
     // 成功态回落后回到待命
     expect(
-      tester.widget<IconButton>(find.byType(IconButton)).tooltip,
+      tester.widget<OrbitIconButton>(find.byType(OrbitIconButton)).tooltip,
       '已就绪',
     );
   });
@@ -126,11 +128,11 @@ void main() {
     await presetCrypto;
     await _flush(tester);
 
-    await tester.tap(find.byType(IconButton));
+    await tester.tap(find.byType(OrbitIconButton));
     await _flush(tester);
     expect(find.text('立即同步'), findsOneWidget);
     // 未开始同步时不该有进度条（进度只覆盖「进行中」这一段）
-    expect(find.byType(LinearProgressIndicator), findsNothing);
+    expect(find.byType(OrbitProgressBar), findsNothing);
 
     await tester.tap(find.text('立即同步'));
     await tester.pump(); // 让 _busy 置位、订阅生效（不越过 120ms 的桥延迟）
@@ -149,10 +151,10 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    expect(find.byType(OrbitProgressBar), findsOneWidget);
     expect(find.text('正在上传任务...'), findsOneWidget);
-    final bar = tester.widget<LinearProgressIndicator>(
-      find.byType(LinearProgressIndicator),
+    final bar = tester.widget<OrbitProgressBar>(
+      find.byType(OrbitProgressBar),
     );
     expect(bar.value, closeTo(0.3, 0.001));
 
@@ -170,7 +172,7 @@ void main() {
     await presetCrypto;
     await _flush(tester);
 
-    await tester.tap(find.byType(IconButton));
+    await tester.tap(find.byType(OrbitIconButton));
     await _flush(tester);
 
     await tester.tap(find.text('立即同步'));
@@ -191,9 +193,10 @@ void main() {
     await tester.pump();
 
     expect(find.text('正在下载项目...'), findsNothing);
-    expect(find.byType(LinearProgressIndicator), findsNothing);
+    expect(find.byType(OrbitProgressBar), findsNothing);
 
     await _flush(tester);
     await _drainTimers(tester);
   });
 }
+

@@ -15,6 +15,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/settings/sync_settings_page.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_button.dart';
 import 'support/orbit_test_app.dart';
 
 Widget _wrap(MockOrbitBridge bridge) => ProviderScope(
@@ -103,8 +104,9 @@ void main() {
     await _flush(tester);
 
     // endpoint 为空 → 保存按钮禁用
-    final saveBtn = tester
-        .widget<FilledButton>(find.widgetWithText(FilledButton, '保存'));
+    final saveBtn = tester.widget<OrbitButton>(
+        find.widgetWithText(OrbitButton, '保存'),
+      );
     expect(saveBtn.onPressed, isNull);
     expect(await _probe(tester, bridge.syncConfigGet()), isNull);
 
@@ -118,7 +120,7 @@ void main() {
     await tester.enterText(find.widgetWithText(TextFormField, '密码'), 'pw123456');
     await tester.pump();
 
-    await _tapAt(tester, find.widgetWithText(FilledButton, '保存'));
+    await _tapAt(tester, find.widgetWithText(OrbitButton, '保存'));
     await _flush(tester);
 
     final saved = await _probe(tester, bridge.syncConfigGet());
@@ -352,7 +354,7 @@ void main() {
     await tester.pumpWidget(_wrap(bridge));
     await _flush(tester);
 
-    await _tapAt(tester, find.widgetWithText(OutlinedButton, '仅推送'));
+    await _tapAt(tester, find.widgetWithText(OrbitButton, '仅推送'));
     await _flush(tester);
 
     // mock push_only：pushedModules = 2、pulledModules = 0
@@ -368,7 +370,7 @@ void main() {
     await tester.pumpWidget(_wrap(bridge));
     await _flush(tester);
 
-    await _tapAt(tester, find.widgetWithText(OutlinedButton, '先拉后推'));
+    await _tapAt(tester, find.widgetWithText(OrbitButton, '先拉后推'));
     await _flush(tester);
 
     expect(find.text('先拉后推完成：拉取 2 个模块'), findsOneWidget);
@@ -383,7 +385,7 @@ void main() {
     await tester.pumpWidget(_wrap(bridge));
     await _flush(tester);
 
-    await _tapAt(tester, find.widgetWithText(OutlinedButton, '清理云端孤儿附件'));
+    await _tapAt(tester, find.widgetWithText(OrbitButton, '清理云端孤儿附件'));
     await _flush(tester);
 
     expect(find.text('没有可清理的云端附件'), findsOneWidget);
@@ -398,7 +400,7 @@ void main() {
     await tester.pumpWidget(_wrap(bridge));
     await _flush(tester);
 
-    await _tapAt(tester, find.widgetWithText(OutlinedButton, '回收孤儿数据桶'));
+    await _tapAt(tester, find.widgetWithText(OrbitButton, '回收孤儿数据桶'));
     await _flush(tester);
 
     expect(find.text('没有可回收的孤儿数据桶'), findsOneWidget);

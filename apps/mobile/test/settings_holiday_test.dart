@@ -11,6 +11,7 @@ import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/settings/settings_screen.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_section_card.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_switch.dart';
 import 'support/orbit_test_app.dart';
 
 Widget _wrap(MockOrbitBridge bridge) => ProviderScope(
@@ -59,7 +60,7 @@ Finder _holidaySwitch() => find.descendant(
         of: find.text('日历与节假日'),
         matching: find.byType(SectionCard),
       ),
-      matching: find.byType(Switch),
+      matching: find.byType(OrbitSwitch),
     );
 
 void main() {
@@ -72,14 +73,14 @@ void main() {
     expect(find.text('自动更新'), findsOneWidget);
     // core 缺省开启（cfg_kv 无键按 1 处理），Mock 同口径
     expect(bridge.store.holidayAutoEnabled, isTrue);
-    expect(tester.widget<Switch>(_holidaySwitch()).value, isTrue);
+    expect(tester.widget<OrbitSwitch>(_holidaySwitch()).value, isTrue);
     expect(find.textContaining('每月自动联网更新一次'), findsOneWidget);
 
     await tester.tap(_holidaySwitch());
     await _settle(tester);
 
     expect(bridge.store.holidayAutoEnabled, isFalse);
-    expect(tester.widget<Switch>(_holidaySwitch()).value, isFalse);
+    expect(tester.widget<OrbitSwitch>(_holidaySwitch()).value, isFalse);
     expect(find.textContaining('自动更新已关闭'), findsOneWidget);
     await drainToastTimers(tester);
   });
@@ -90,7 +91,7 @@ void main() {
     await _settle(tester);
 
     await _scrollTo(tester, find.text('自动更新'));
-    expect(tester.widget<Switch>(_holidaySwitch()).value, isFalse);
+    expect(tester.widget<OrbitSwitch>(_holidaySwitch()).value, isFalse);
     expect(find.textContaining('自动更新已关闭'), findsOneWidget);
   });
 }

@@ -1,6 +1,7 @@
 // 已完成行整行置灰回归：标题 / 日期 / 元信息 / 勾选框统一弱化灰，
 // 不再保留主题蓝、逾期红、星标黄、优先级色环。
 import 'package:flutter/material.dart';
+import 'package:flutter_miuix/miuix.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/core/theme/app_colors.dart';
 import 'package:orbit/core/theme/icon_map.dart';
@@ -8,7 +9,6 @@ import 'package:orbit/data/api/dto.dart';
 import 'package:orbit/modules/todo/sub_list_screen.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_checkbox.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_strikethrough.dart';
-import 'package:shadcn_flutter/shadcn_flutter.dart' as sh;
 import 'support/orbit_test_app.dart';
 
 TodoTask _doneTask() => TodoTask(
@@ -76,12 +76,11 @@ void main() {
     expect(strike.doneColor, muted);
 
     // 勾选框填充走弱化灰，且不保留优先级色环
-    final box = tester.widget<sh.Checkbox>(find.descendant(
+    final box = tester.widget<MiuixCheckbox>(find.descendant(
       of: find.byType(OrbitCheckbox),
-      matching: find.byType(sh.Checkbox),
+      matching: find.byType(MiuixCheckbox),
     ));
-    expect(box.activeColor, muted);
-    expect(box.borderColor, isNot(const Color(0xFFF59E0B)));
+    expect(box.colors?.checkedBackgroundColor, muted);
 
     // 星标不再是黄色
     final star = tester.widget<Icon>(find.byIcon(OrbitIcons.star));

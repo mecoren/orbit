@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/settings/holiday_cache_page.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_switch.dart';
 import 'support/orbit_test_app.dart';
 
 Widget _wrap(MockOrbitBridge bridge) => ProviderScope(
@@ -73,7 +74,7 @@ void main() {
     expect(find.textContaining('（旧缓存保留可用）'), findsNothing);
     // 每月自动更新总开关（core 缺省开启）
     expect(find.text('每月自动更新'), findsOneWidget);
-    expect(tester.widget<Switch>(find.byType(Switch)).value, isTrue);
+    expect(tester.widget<OrbitSwitch>(find.byType(OrbitSwitch)).value, isTrue);
     expect(find.text('立即更新'), findsOneWidget);
     // 按年补写入口与可选区间提示（上界 = 明年，随本机当前年推导）
     final maxYear = DateTime.now().year + 1;
@@ -129,11 +130,11 @@ void main() {
     await tester.pumpWidget(_wrap(bridge));
     await _settle(tester);
 
-    await tester.tap(find.byType(Switch));
+    await tester.tap(find.byType(OrbitSwitch));
     await _advance(tester, 300);
 
     expect(bridge.store.holidayAutoEnabled, isFalse);
-    expect(tester.widget<Switch>(find.byType(Switch)).value, isFalse);
+    expect(tester.widget<OrbitSwitch>(find.byType(OrbitSwitch)).value, isFalse);
     expect(find.textContaining('已关闭：仅保留下面的手动更新与按年补写'), findsOneWidget);
     await drainToastTimers(tester);
   });
