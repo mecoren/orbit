@@ -120,6 +120,8 @@ export function useTodoShell() {
 export default function TodoShell() {
   const taskFormIntent = useAppStore((s) => s.taskFormIntent);
   const consumeTaskFormIntent = useAppStore((s) => s.consumeTaskFormIntent);
+  const projectSelectIntent = useAppStore((s) => s.projectSelectIntent);
+  const consumeProjectSelectIntent = useAppStore((s) => s.consumeProjectSelectIntent);
   const navigate = useNavigate();
   const { pathname } = useLocation();
 
@@ -355,6 +357,19 @@ export default function TodoShell() {
   const selectInPanel = () => {
     if (needsTodoIndexNav(pathname)) navigate(TODO_INDEX_PATH);
   };
+  const selectProject = (id: number) => {
+    setSavedFilterId(null);
+    selectInPanel();
+    setUngrouped(false);
+    setQuickView("all");
+    setProjectId(id);
+  };
+  // 全局搜索项目命中：意图来自 AppShell，壳层消费后落到项目视图并归零防重放
+  useEffect(() => {
+    if (projectSelectIntent == null) return;
+    selectProject(projectSelectIntent);
+    consumeProjectSelectIntent();
+  }, [projectSelectIntent, consumeProjectSelectIntent]);
   const ctx: TodoShellContextValue = {
     quickView,
     projectId,
@@ -373,13 +388,7 @@ export default function TodoShell() {
       setProjectId(null);
       setSavedFilterId(id);
     },
-    onSelectProject: (id) => {
-      setSavedFilterId(null);
-      selectInPanel();
-      setUngrouped(false);
-      setQuickView("all");
-      setProjectId(id);
-    },
+    onSelectProject: selectProject,
     onSelectUngrouped: () => {
       setSavedFilterId(null);
       selectInPanel();

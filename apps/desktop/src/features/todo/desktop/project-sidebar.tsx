@@ -698,7 +698,13 @@ export function ProjectSidebar({
       <div className="px-3 pb-3">
         <div className="flex items-center justify-between py-1">
           <span className="text-xs uppercase tracking-wide text-muted-foreground">项目</span>
-          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setAdding(true)}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            aria-label="新建项目"
+            onClick={() => setAdding(true)}
+          >
             <Plus className="size-3.5" />
           </Button>
         </div>

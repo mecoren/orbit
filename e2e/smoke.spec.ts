@@ -1280,3 +1280,36 @@ test("「···」菜单去图标排 + 视图切换单钮往返（2026-10-30 视
   await page.getByRole("menuitemcheckbox", { name: "全部状态" }).evaluate((el) => (el as HTMLElement).click());
   await page.keyboard.press("Escape");
 });
+
+test("全局搜索项目命中进入对应项目视图（2026-10-31）", async ({ page }) => {
+  await page.keyboard.press("Control+k");
+  const input = page.getByPlaceholder(/搜索任务 \/ 项目 \/ 评论/);
+  await input.fill("测试项目");
+
+  const projectHit = page.getByRole("option", { name: "测试项目" });
+  await expect(projectHit).toBeVisible({ timeout: 5_000 });
+  await projectHit.click();
+
+  // 项目命中必须落到该项目视图，不能只回「全部任务」首页
+  await expect(page.getByRole("heading", { level: 1, name: "测试项目" })).toBeVisible({
+    timeout: 5_000,
+  });
+});
+
+test("图标操作可被辅助技术识别（2026-10-31）", async ({ page }) => {
+  await expect(
+    page.getByRole("button", { name: /切换主题（当前：/ }),
+  ).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByRole("button", { name: "新建项目" })).toBeVisible({
+    timeout: 5_000,
+  });
+});
+
+test("任务详情抽屉可被辅助技术按任务名识别（2026-10-31）", async ({ page }) => {
+  await page.getByText("既有任务-今天截止").click();
+
+  await expect(page.getByRole("dialog")).toHaveAccessibleName(
+    "任务详情：既有任务-今天截止",
+    { timeout: 5_000 },
+  );
+});

@@ -47,7 +47,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -232,6 +232,9 @@ export function TaskDetailDrawer({ projects }: TaskDetailDrawerProps) {
       {/* 头部固定 + 内容区独立滚动：SheetContent 去 overflow-y-auto，
           标题行（完成钮/标题/日出/星标/删除）常驻不随内容滚走 */}
       <SheetContent className="flex w-full max-w-xl flex-col gap-0 p-0 sm:max-w-xl">
+        <SheetTitle asChild>
+          <span className="sr-only">{t ? `任务详情：${t.title}` : "任务详情"}</span>
+        </SheetTitle>
         {t ? (
           <>
             {/* 1. 标题行（固定头部；右侧留出关闭钮 44px 防遮挡） */}

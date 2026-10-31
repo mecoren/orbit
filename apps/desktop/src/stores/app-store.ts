@@ -39,6 +39,13 @@ interface AppState {
   triageIntent: number;
   bumpTriageIntent: () => void;
   consumeTriageIntent: () => void;
+  /**
+   * 「选中项目」意图（全局搜索项目命中）：搜索弹层在 AppShell 层，
+   * 项目选中态归 TodoShell；用一次性 id 跨层传递，消费即归零防重放。
+   */
+  projectSelectIntent: number | null;
+  requestProjectSelect: (projectId: number) => void;
+  consumeProjectSelectIntent: () => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -61,4 +68,7 @@ export const useAppStore = create<AppState>((set) => ({
   triageIntent: 0,
   bumpTriageIntent: () => set((s) => ({ triageIntent: s.triageIntent + 1 })),
   consumeTriageIntent: () => set({ triageIntent: 0 }),
+  projectSelectIntent: null,
+  requestProjectSelect: (projectId) => set({ projectSelectIntent: projectId }),
+  consumeProjectSelectIntent: () => set({ projectSelectIntent: null }),
 }));

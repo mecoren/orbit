@@ -85,6 +85,7 @@ export const ThemeModeToggle = forwardRef<
         <button
           ref={ref}
           type="button"
+          aria-label={`切换主题（当前：${label}）`}
           onClick={handleClick}
           className={cn(
             "flex items-center justify-center rounded-md text-sm text-foreground transition-colors",

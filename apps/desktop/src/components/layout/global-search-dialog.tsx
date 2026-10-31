@@ -5,7 +5,7 @@
  * Ctrl/Cmd+K 打开；输入防抖 250ms 后调用 Rust global_search 跨表聚合
  * （projects/tasks/comments 三组，各限 20 条）。条目 value 携带可检索文本，
  * 交给 cmdk 本地过滤做二次收敛；任务/评论命中写入 selectedTaskId 打开详情
- * 抽屉并回待办页，项目命中跳待办页（页内筛选仍由 list-page 自管）。
+ * 抽屉并回待办页，项目命中写 projectSelectIntent，由 TodoShell 落到项目视图。
  */
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
@@ -21,6 +21,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { useTodoStore } from "@/features/todo/store";
+import { useAppStore } from "@/stores/app-store";
 import { globalSearch } from "@/lib/tauri";
 
 import { useDebouncedValue } from "@/features/todo/shared/use-debounced-value";
@@ -33,6 +34,7 @@ interface GlobalSearchDialogProps {
 export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogProps) {
   const navigate = useNavigate();
   const setSelectedTaskId = useTodoStore((s) => s.setSelectedTaskId);
+  const requestProjectSelect = useAppStore((s) => s.requestProjectSelect);
   const [keyword, setKeyword] = useState("");
   const debounced = useDebouncedValue(keyword.trim(), 250);
 
@@ -90,7 +92,10 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
               <CommandItem
                 key={p.id}
                 value={`项目 ${p.title} ${p.description ?? ""}`}
-                onSelect={() => go("/todo")}
+                onSelect={() => {
+                  requestProjectSelect(p.id);
+                  go("/todo");
+                }}
               >
                 <Folder
                   className="size-4 shrink-0"
