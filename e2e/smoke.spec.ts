@@ -1313,3 +1313,90 @@ test("任务详情抽屉可被辅助技术按任务名识别（2026-10-31）", a
     { timeout: 5_000 },
   );
 });
+
+test("连续删除点旧 Toast 撤销只恢复对应任务（2026-10-31）", async ({ page }) => {
+  const deleteTask = async (title: string) => {
+    await page.getByText(title, { exact: true }).click({ button: "right" });
+    await page.getByRole("menuitem", { name: "删除" }).click();
+    const confirm = page.getByRole("button", { name: "删除", exact: true });
+    if (await confirm.isVisible().catch(() => false)) await confirm.click();
+    await expect(page.getByText(`已删除任务「${title}」`)).toBeVisible();
+  };
+
+  await quickAdd(page, "连续删除任务B");
+  await expect(page.getByRole("button", { name: "未完成任务：连续删除任务B" })).toBeVisible();
+
+  await deleteTask("既有任务-今天截止");
+  await deleteTask("连续删除任务B");
+
+  // 点第一笔删除的 Toast：它必须撤销自己，而不是取消第二笔
+  const toastA = page
+    .locator("[data-sonner-toast]")
+    .filter({ hasText: "已删除任务「既有任务-今天截止」" });
+  await toastA.getByRole("button", { name: "撤销" }).click({ force: true });
+
+  await expect(
+    page.getByRole("button", { name: "未完成任务：既有任务-今天截止" }),
+  ).toBeVisible({ timeout: 5_000 });
+  const flags = await page.evaluate(() => {
+    const m = (window as any).__orbitMock;
+    const a = m.db.tasks.find((t: any) => t.title === "既有任务-今天截止");
+    const b = m.db.tasks.find((t: any) => t.title === "连续删除任务B");
+    return { aDeleted: a?.is_deleted === 1, bDeleted: b?.is_deleted === 1 };
+  });
+  expect(flags.aDeleted).toBe(false);
+  expect(flags.bDeleted).toBe(false);
+});
+
+test("快速添加同帧双击 Enter 只创建一条任务（2026-10-31）", async ({ page }) => {
+  const bar = page.getByPlaceholder("添加任务");
+  await bar.fill("重入任务");
+
+  // 同一事件循环内触发两次 Enter，模拟双击/连按在 IPC 返回前的窗口
+  await bar.evaluate((el) => {
+    el.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    el.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  });
+
+  await expect(page.getByText("重入任务", { exact: true })).toHaveCount(1);
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        const m = (window as any).__orbitMock;
+        return m.db.tasks.filter((t: any) => t.title === "重入任务").length;
+      }),
+    )
+    .toBe(1);
+});
+
+test("任务详情跨任务切换不继承上一任务草稿（2026-10-31）", async ({ page }) => {
+  await quickAdd(page, "串台任务B");
+  const taskB = page.getByRole("button", { name: "未完成任务：串台任务B" });
+  await expect(taskB).toBeVisible();
+
+  // 先打开 B 再关闭，使其详情进入 5min 缓存；随后切回 B 时不会出现加载态
+  await taskB.click();
+  await expect(page.getByRole("dialog")).toHaveAccessibleName("任务详情：串台任务B");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
+  // 在 A 留下评论草稿
+  await page.getByRole("button", { name: "未完成任务：既有任务-今天截止" }).click();
+  await expect(page.getByRole("dialog")).toHaveAccessibleName(
+    "任务详情：既有任务-今天截止",
+  );
+  await page.getByRole("button", { name: "添加评论", exact: true }).click();
+  await page.getByPlaceholder("输入评论...").fill("A 的评论草稿");
+
+  // 抽屉保持打开，通过全局搜索切到已缓存的 B
+  await page.keyboard.press("Control+k");
+  await page.getByPlaceholder(/搜索任务 \/ 项目 \/ 评论/).fill("串台任务B");
+  const searchHit = page.getByRole("option", { name: "串台任务B" });
+  await expect(searchHit).toBeVisible({ timeout: 5_000 });
+  await searchHit.click();
+
+  await expect(page.getByRole("dialog")).toHaveAccessibleName("任务详情：串台任务B");
+  // B 必须从折叠态开始，不能继承 A 的评论草稿
+  await expect(page.getByPlaceholder("输入评论...")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "添加评论", exact: true })).toBeVisible();
+});
