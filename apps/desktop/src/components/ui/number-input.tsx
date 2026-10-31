@@ -31,6 +31,8 @@ interface NumberInputProps {
   /** 外层尺寸类（h-6 w-16 等） */
   className?: string;
   ariaLabel?: string;
+  /** 内层 input 的键盘事件（Enter 直接确认等） */
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
 }
 
 /**
@@ -66,6 +68,7 @@ export function NumberInput({
   disabled,
   className,
   ariaLabel,
+  onKeyDown,
 }: NumberInputProps) {
   return (
     <div
@@ -84,6 +87,7 @@ export function NumberInput({
         placeholder={placeholder}
         disabled={disabled}
         aria-label={ariaLabel}
+        onKeyDown={onKeyDown}
         onChange={(e) => onValueChange(e.target.value.replace(/[^\d]/g, ""))}
         className="placeholder:text-muted-foreground min-w-0 flex-1 bg-transparent px-1.5 text-xs tabular-nums outline-none"
       />

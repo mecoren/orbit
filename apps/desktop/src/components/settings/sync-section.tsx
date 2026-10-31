@@ -383,9 +383,8 @@ function ConnectionCard() {
         <div className="flex items-center gap-2">
           <Input
             id="sync-timeout"
-            type="number"
-            min={5}
-            max={600}
+            type="text"
+            inputMode="numeric"
             className="h-8 w-24"
             value={timeoutSecs}
             onChange={(e) => setTimeoutSecs(Number(e.target.value) || 30)}
@@ -1060,7 +1059,7 @@ function SyncHistoryCard() {
                   className={cn(
                     "size-1.5 shrink-0 rounded-full",
                     h.status === "success"
-                      ? "bg-emerald-500"
+                      ? "bg-success"
                       : h.status === "cancelled"
                         ? // N33：主动取消不是故障，用中性灰点区分「失败」的红点
                           "bg-muted-foreground"
@@ -1412,9 +1411,8 @@ function AutoBackupCard() {
                 <span className="text-xs text-muted-foreground">每小时的第</span>
                 <Input
                   id="backup-time"
-                  type="number"
-                  min={0}
-                  max={59}
+                  type="text"
+                  inputMode="numeric"
                   className="h-8 w-20"
                   value={prefs.schedule_minute}
                   onChange={(e) =>

@@ -391,8 +391,11 @@ export function ColorPickerDialog({
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                   {["R", "G", "B"][i]}
                 </span>
+                {/* 窄格内不放步进按钮：用 text + inputMode 去掉原生 number spinner，
+                    范围夹取由 handleRgbInput 负责 */}
                 <Input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   min={0}
                   max={255}
                   value={rgbInput[key]}

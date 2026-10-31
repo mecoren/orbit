@@ -268,8 +268,11 @@ export function TemplatesSection() {
               </div>
               <div>
                 <Label>截止偏移（天）</Label>
+                {/* text + inputMode：需要接受负数（-1 = 昨天），原生 number spinner
+                    在 Windows WebView2 下会挤占输入宽度且不跟主题 */}
                 <Input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   value={draft.dueOffsetDays}
                   placeholder="0 = 今天；留空不预填"
                   onChange={(e) => setDraft((d) => ({ ...d, dueOffsetDays: e.target.value }))}
