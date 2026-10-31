@@ -467,7 +467,14 @@ export default function TaskPanel() {
   // 壳层那份 overview 不带 done/视图谓词，当「共 N 条」用会在「今天」「某项目」
   // 等视图显示全库总数；而 visibleTasks 只是已加载窗口，更不能当总数
   // ——页头曾因此显示 360，而条幅显示 1177。
-  const listTotalFilter = logbookPagedMode ? logbookFilter : pagedMode ? pageFilter : null;
+  // 窗口化通道一律额外 COUNT：游标接口不返回总数，日历/看板/矩阵持有的只是
+  // 按范围或按组截断的窗口。此前只给 pagedMode 算，日历档拿空数组当总数 →
+  // 页头恒显示「全部任务 0」（右栏却列着当月任务）
+  const listTotalFilter = logbookPagedMode
+    ? logbookFilter
+    : pagedMode || calendarPagedMode || boardGroupBy != null
+      ? pageFilter
+      : null;
   const listTotalQuery = useQuery({
     queryKey: ["todo_tasks", "list-total", listTotalFilter],
     queryFn: () => todoTaskOverview(listTotalFilter as ListFilter),
@@ -850,6 +857,10 @@ export default function TaskPanel() {
             remindersByTask={taskReminders}
             sortKey={sortKey}
             loading={boardLoading}
+            error={boardError}
+            onCreateClick={() => {
+              openCreateForm();
+            }}
             groupTotals={boardGroupBy ? boardTotals : undefined}
             onOpenColumnInList={(colKey) => {
               // 列满出口：能映射到工具栏筛选的档位带上条件，其余仅切列表

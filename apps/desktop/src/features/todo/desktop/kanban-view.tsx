@@ -13,7 +13,7 @@
  *   sortable 一并禁用会让非「拖拽顺序」档的看板完全拖不动；列内落位仅
  *   manual 档生效（其他档位提示切档），跨列落位仍走 position 中值。
  */
-import { memo, useCallback, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
@@ -47,6 +47,8 @@ import {
 import { cn } from "@/lib/utils";
 import { useTodoStore } from "@/features/todo/store";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/business/empty-state";
+import { ErrorState } from "@/components/business/error-state";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -119,6 +121,10 @@ interface KanbanViewProps {
    * 仅切视图（项目归属由壳层 props 控制，这里不越权改）。
    */
   onOpenColumnInList?: (colKey: string) => void;
+  /** 看板通道错误（此前查询失败静默显示空列，与其余视图不一致） */
+  error?: string | null;
+  /** 无任务时的「新建任务」入口（列表/表格空态同款） */
+  onCreateClick?: () => void;
 }
 
 export function KanbanView({
@@ -131,6 +137,8 @@ export function KanbanView({
   loading,
   groupTotals,
   onOpenColumnInList,
+  error,
+  onCreateClick,
 }: KanbanViewProps) {
   const qc = useQueryClient();
   const setSelectedTaskId = useTodoStore((s) => s.setSelectedTaskId);
@@ -144,6 +152,15 @@ export function KanbanView({
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [batchBusy, setBatchBusy] = useState(false);
   const selectedTasks = useMemo(() => tasks.filter((t) => selected.has(t.id)), [tasks, selected]);
+  // 与列表/表格同口径：切项目或分组档后选中集合随当前视图收敛，
+  // 否则工具条计数虚高、卡片点击被「有选中」劫持而打不开详情
+  useEffect(() => {
+    if (selected.size === 0) return;
+    const live = new Set(tasks.map((t) => t.id));
+    const next = new Set<number>();
+    for (const id of selected) if (live.has(id)) next.add(id);
+    if (next.size !== selected.size) setSelected(next);
+  }, [tasks, selected]);
   const allDoneSelected = selectedTasks.length > 0 && selectedTasks.every((t) => t.done);
 
   const toggleSelect = useCallback((id: number) => {
@@ -342,7 +359,7 @@ export function KanbanView({
     return (
       <div aria-busy className="flex min-h-0 flex-1 gap-4 overflow-hidden p-4" data-testid="kanban-loading">
         {Array.from({ length: 4 }, (_, i) => (
-          <div key={i} className="w-72 shrink-0 animate-pulse rounded-lg border border-border/50 bg-muted/20">
+          <div key={i} className="w-72 shrink-0 animate-pulse rounded-lg border border-border/50 bg-accent/40">
             <div className="space-y-2 border-b px-3 py-2">
               <div className="h-4 w-24 rounded bg-muted" />
             </div>
@@ -354,6 +371,33 @@ export function KanbanView({
           </div>
         ))}
       </div>
+    );
+  }
+
+  // 查询失败不再静默渲染空列（此前与其余 6 个视图不一致，用户以为任务全没了）
+  if (error && tasks.length === 0) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-6">
+        <ErrorState className="max-w-md" message={error} />
+      </div>
+    );
+  }
+
+  // 全局无任务：列结构此时没有信息量，给同款空态 + 新建入口
+  if (!loading && tasks.length === 0) {
+    return (
+      <EmptyState
+        className="flex-1"
+        title="还没有任务"
+        hint="新建第一条任务后，可按项目、优先级或状态分列查看"
+        action={
+          onCreateClick ? (
+            <Button size="sm" onClick={onCreateClick}>
+              新建任务
+            </Button>
+          ) : undefined
+        }
+      />
     );
   }
 
@@ -369,6 +413,9 @@ export function KanbanView({
         collisionDetection={pointerWithin}
         onDragStart={handleDragStart}
         onDragEnd={(e: DragEndEvent) => void handleDragEnd(e)}
+        // Esc 取消拖拽只走 cancel 分支（不触发 onDragEnd）：不在此复位会让
+        // DragOverlay 常驻、卡片恒半透明、overflow-x-hidden 锁死横向滚动
+        onDragCancel={() => setDraggingId(null)}
       >
         <div className="flex h-full gap-4 p-4">
           {columns.map((col) => (
@@ -384,7 +431,7 @@ export function KanbanView({
               onOpenDetail={openDetail}
               onOpenColumnInList={onOpenColumnInList}
               selected={selected}
-              hasSelection={selected.size > 0}
+              hasSelection={selectedTasks.length > 0}
               onToggleSelect={toggleSelect}
               onClearSelection={clearSelection}
             />
@@ -393,14 +440,14 @@ export function KanbanView({
 
         {/* 多选批量工具条（与列表视图同款浮动形制；不含移动项目——
             看板拖拽本身就是移动入口，工具条里再放一次反而冗余） */}
-        {selected.size > 0 && (
+        {selectedTasks.length > 0 && (
           <div
             role="toolbar"
-            aria-label={`已选中 ${selected.size} 条任务的批量操作`}
+            aria-label={`已选中 ${selectedTasks.length} 条任务的批量操作`}
             className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-0.5 rounded-lg border bg-background px-2 py-1.5 shadow-lg"
           >
             <span className="px-2 text-sm text-muted-foreground tabular-nums" aria-live="polite">
-              已选 {selected.size} 条
+              已选 {selectedTasks.length} 条
             </span>
             <span className="mx-1 h-4 w-px bg-border" />
             {(
