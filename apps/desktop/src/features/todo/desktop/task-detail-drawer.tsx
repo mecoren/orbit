@@ -9,7 +9,7 @@
  * 截止日期 / 重复）同时被 TaskCreateDrawer 复用——它们只吃 value + onChange、
  * 不碰库，新建抽屉直接以草稿 state 驱动，保证两个抽屉同一套字段语言。
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
@@ -236,7 +236,9 @@ export function TaskDetailDrawer({ projects }: TaskDetailDrawerProps) {
           <span className="sr-only">{t ? `任务详情：${t.title}` : "任务详情"}</span>
         </SheetTitle>
         {t ? (
-          <>
+          // 以任务 id 作为子树 key：切换任务时整体重挂载，清空评论/子任务/
+          // 提醒等组件内草稿，避免已缓存任务切换时把 A 的编辑态写进 B
+          <Fragment key={t.id}>
             {/* 1. 标题行（固定头部；右侧留出关闭钮 44px 防遮挡） */}
             <div className="shrink-0 px-6 pt-8">
               <TitleRow task={t} onPatch={updateTask} />
@@ -278,7 +280,7 @@ export function TaskDetailDrawer({ projects }: TaskDetailDrawerProps) {
                 <ActivitySection key={t.id} taskId={t.id} />
               </div>
             </div>
-          </>
+          </Fragment>
         ) : (
           <div className="px-6 py-10 text-sm text-muted-foreground">加载中…</div>
         )}
