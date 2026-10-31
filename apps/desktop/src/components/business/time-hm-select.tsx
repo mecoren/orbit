@@ -18,8 +18,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { attachManualWheelScroll } from "@/lib/manual-wheel-scroll";
-import { cn } from "@/lib/utils";
 
 /** 草稿清洗：只留数字，最多 2 位（输入过程中的中间态不过度纠正） */
 export function sanitizeTimeDigits(raw: string): string {
@@ -60,9 +60,10 @@ interface TimeUnitBoxProps {
 function TimeUnitBox({ value, max, onCommit, ariaLabel, disabled, inputId }: TimeUnitBoxProps) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<string | null>(null);
-  const [openUp, setOpenUp] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  /** Esc 取消标记：供随后的 onBlur 跳过提交（详见 onBlur 注释） */
+  const skipCommitRef = useRef(false);
 
   const shown = draft ?? value;
 
@@ -72,26 +73,7 @@ function TimeUnitBox({ value, max, onCommit, ariaLabel, disabled, inputId }: Tim
     onCommit(formatTimeUnit(Number(clean), max));
   };
 
-  // 下拉打开期间：外部点击/Esc 关闭（内联列表无 portal，document 监听即可）
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (e: PointerEvent) => {
-      // 鼠标中/右键不关（如中键自动滚动取位），只响应主键与触摸
-      if (e.pointerType === "mouse" && e.button !== 0) return;
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open ]);
+  // 外部点击与 Esc 交给 Popover（列表已 Portal 到 body，父级 overflow 不再裁切）
 
   // 下拉打开期间：window 捕获手动滚轮（Dialog/Sheet 的 RemoveScroll 会在
   // document 级吞掉 wheel，列表元素上的监听收不到——见 manual-wheel-scroll）
@@ -111,18 +93,6 @@ function TimeUnitBox({ value, max, onCommit, ariaLabel, disabled, inputId }: Tim
     [max ],
   );
 
-  const toggleOpen = () => {
-    if (disabled) return;
-    const next = !open;
-    if (next && rootRef.current) {
-      // 下方空间不足 220px 时向上展开（如视口底部弹层）
-      const rect = rootRef.current.getBoundingClientRect();
-      setOpenUp(window.innerHeight - rect.bottom < 220);
-    }
-    setDraft(null);
-    setOpen(next);
-  };
-
   // 打开后把当前值滚到可视区（分钟 60 项，选中项常在下方）
   useEffect(() => {
     if (!open) return;
@@ -132,8 +102,14 @@ function TimeUnitBox({ value, max, onCommit, ariaLabel, disabled, inputId }: Tim
   }, [open ]);
 
   return (
-    <div ref={rootRef} className="relative shrink-0">
-      <div className="flex">
+    <Popover
+      open={open}
+      onOpenChange={(o) => {
+        setDraft(null);
+        setOpen(o);
+      }}
+    >
+      <div ref={rootRef} className="flex shrink-0">
         <Input
           id={inputId}
           value={shown}
@@ -146,39 +122,51 @@ function TimeUnitBox({ value, max, onCommit, ariaLabel, disabled, inputId }: Tim
           }}
           onChange={(e) => setDraft(sanitizeTimeDigits(e.target.value))}
           onBlur={() => {
+            // Esc 走取消路径：setDraft 是异步的，同一次按键内 onBlur 读到的
+            // draft 仍是旧值，不跳过就会把「取消」当成「提交」
+            if (skipCommitRef.current) {
+              skipCommitRef.current = false;
+              setDraft(null);
+              return;
+            }
             if (draft != null) commitText(draft);
             setDraft(null);
           }}
           onKeyDown={(e) => {
             if (e.key === "Enter") (e.target as HTMLInputElement).blur();
             if (e.key === "Escape" && draft != null) {
+              skipCommitRef.current = true;
               setDraft(null);
               (e.target as HTMLInputElement).blur();
             }
           }}
           className="h-8 w-12 rounded-r-none border-r-0 px-1.5 text-center tabular-nums"
         />
-        <button
-          type="button"
-          aria-label={`${ariaLabel}下拉选择`}
-          aria-haspopup="listbox"
-          aria-expanded={open}
-          disabled={disabled}
-          onClick={toggleOpen}
-          className="flex h-8 w-7 shrink-0 items-center justify-center rounded-r-md border border-input bg-transparent transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <ChevronDown className="size-3.5 opacity-50" />
-        </button>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            aria-label={`${ariaLabel}下拉选择`}
+            aria-haspopup="listbox"
+            disabled={disabled}
+            className="flex h-8 w-7 shrink-0 items-center justify-center rounded-r-md border border-input bg-transparent transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <ChevronDown className="size-3.5 opacity-50" />
+          </button>
+        </PopoverTrigger>
       </div>
-      {open && (
+      {/* Portal 到 body：抽屉/弹层内的 overflow 不再裁切列表 */}
+      <PopoverContent
+        align="start"
+        sideOffset={4}
+        collisionPadding={8}
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        className="w-auto min-w-24 p-1"
+      >
         <div
           ref={listRef}
           role="listbox"
           aria-label={ariaLabel}
-          className={cn(
-            "absolute z-50 max-h-48 w-full min-w-24 overflow-auto rounded-md border bg-popover p-1 shadow-md",
-            openUp ? "bottom-full mb-1" : "top-full mt-1",
-          )}
+          className="max-h-48 overflow-auto"
         >
           {options.map((opt) => (
             <button
@@ -205,8 +193,8 @@ function TimeUnitBox({ value, max, onCommit, ariaLabel, disabled, inputId }: Tim
             </button>
           ))}
         </div>
-      )}
-    </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 

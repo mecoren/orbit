@@ -3,7 +3,7 @@
  *
  * Dialog(max-w-md)：标签列表 + 10 色预设色板改色（默认选中第 4 色 #3B82F6）+ 增删。
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
 
@@ -44,6 +44,8 @@ export function LabelManager({ open, onOpenChange }: LabelManagerProps) {
   const [newTitle, setNewTitle] = useState("");
   // 删除确认（标签删除会连带解除所有任务关联，悬停误触代价高）
   const [deleteTarget, setDeleteTarget] = useState<TodoLabel | null>(null);
+  /** Esc 取消改名的标签 id（onBlur 据此跳过提交） */
+  const skipRenameRef = useRef<Set<number>>(new Set());
 
   const refetch = async () => {
     // 拉全量并刷新共享缓存（与抽屉内 LabelAdder 共用 ["todo-label","list"]）
@@ -112,8 +114,24 @@ export function LabelManager({ open, onOpenChange }: LabelManagerProps) {
                 <Input
                   defaultValue={l.title}
                   className="h-7 flex-1 text-[13px]"
-                  onBlur={(e) => void rename(l, e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                  onBlur={(e) => {
+                    // Esc 取消改名：还原输入框并跳过 onBlur 的提交
+                    if (skipRenameRef.current.delete(l.id)) {
+                      e.target.value = l.title;
+                      return;
+                    }
+                    void rename(l, e.target.value);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                    if (e.key === "Escape") {
+                      // 拦在这里，否则 Esc 冒泡到 Radix Dialog 会把整个管理弹窗关掉
+                      e.preventDefault();
+                      e.stopPropagation();
+                      skipRenameRef.current.add(l.id);
+                      (e.target as HTMLInputElement).blur();
+                    }
+                  }}
                 />
                 <Button
                   variant="ghost"
