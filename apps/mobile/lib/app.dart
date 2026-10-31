@@ -3,22 +3,26 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sh;
 
 import 'core/routing/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'core/theme/miuix_theme.dart';
 import 'core/theme/shadcn_theme.dart';
 import 'modules/shell/boot_gate.dart';
 import 'services/appearance.dart';
 
-/// OrbitApp — MaterialApp + ShadcnLayer 装配（设计系统 v3）
+/// OrbitApp — MaterialApp + ShadcnLayer + MiuixTheme 三主题装配（设计系统 v3）
 ///
 /// 主题模式三态（theme_mode：system/light/dark）+ 字号/字重档
 /// 全走 LocalPrefs（services/appearance.dart），写后经
 /// Appearance.revision 重建根部即时生效。
 ///
-/// **双主题并存（有意为之）**：
+/// **三套主题并存（有意为之，2026-10-31 起）**：
 /// - Material 侧 [buildAppTheme] 继续喂 `MaterialApp`——`Scaffold`、
 ///   `showModalBottomSheet`、文本选择、滚动条等 Material 设施仍按 token 着色，
 ///   未迁移的页面不会观感割裂；
-/// - shadcn 侧 [buildShadcnTheme] 喂 [sh.ShadcnLayer]——由 `core/theme` 同一份
-///   token 派生，两套主题数值同源，因此不存在"色板漂移"。
+/// - shadcn 侧 [buildShadcnTheme] 喂 [sh.ShadcnLayer]——Toast 与部分原语承载；
+/// - Miuix 侧 [OrbitMiuixTheme] 提供 `MiuixTheme`——卡片（squircle 超椭圆）、
+///   进度指示、OS4 玻璃导航/页头/悬浮钮等 HyperOS 组件读它取色。
+///   三者都从 `core/theme` 同一份 token 派生（角色映射见 `miuix_theme.dart`），
+///   因此不存在"色板漂移"。
 ///
 /// **接入方式为什么是 ShadcnLayer 而不是 ShadcnApp**：`ShadcnApp` 自带
 /// `WidgetsApp`，会与 `MaterialApp` 形成双 Navigator/Overlay；且在锁定工具链
@@ -89,9 +93,17 @@ class OrbitApp extends StatelessWidget {
               // 详见 shadcn_theme.buildDestructiveButtonTheme）
               child: buildDestructiveButtonTheme(
                 child: sh.DrawerOverlay(
-                  // BootGate 挂在 shadcn 层与 Navigator 之间：门控期间无路由内容，
-                  // ready 后放行 child 并持有桥层事件流监听
-                  child: BootGate(child: child ?? const SizedBox.shrink()),
+                  // Miuix 主题层：与 ShadcnLayer 是**兄弟层**（各自读自己的
+                  // InheritedWidget），挂在 BootGate 之外保证解锁页也用同一套
+                  // HyperOS 配色（Miuix 组件未命中主题时会回退浅色默认值）。
+                  // 亮度取外观页三态解析结果：亮/暗档与系统亮度无关。
+                  child: OrbitMiuixTheme(
+                    brightness: _resolveBrightness(context, mode),
+                    baseWeight: weight,
+                    // BootGate 挂在 shadcn 层与 Navigator 之间：门控期间无路由内容，
+                    // ready 后放行 child 并持有桥层事件流监听
+                    child: BootGate(child: child ?? const SizedBox.shrink()),
+                  ),
                 ),
               ),
             );
@@ -131,4 +143,15 @@ sh.ThemeMode _shadcnThemeMode(ThemeMode mode) => switch (mode) {
       ThemeMode.light => sh.ThemeMode.light,
       ThemeMode.dark => sh.ThemeMode.dark,
       ThemeMode.system => sh.ThemeMode.system,
+    };
+
+/// 外观三态 + 系统亮度 → 实际 [Brightness]（Miuix 主题层用）
+///
+/// Miuix 的 `MiuixThemeData` 只吃具体亮度（没有 system 档），故在此把
+/// `ThemeMode.system` 解析成 `MediaQuery.platformBrightnessOf`。
+Brightness _resolveBrightness(BuildContext context, ThemeMode mode) =>
+    switch (mode) {
+      ThemeMode.light => Brightness.light,
+      ThemeMode.dark => Brightness.dark,
+      ThemeMode.system => MediaQuery.platformBrightnessOf(context),
     };

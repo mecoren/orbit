@@ -2,19 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/core/routing/router_keys.dart';
 import 'package:orbit/core/theme/app_theme.dart';
+import 'package:orbit/core/theme/miuix_theme.dart';
 import 'package:orbit/core/theme/shadcn_theme.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_toast.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sh;
 
 /// 测试用应用壳：与 `lib/app.dart` 的根装配同构（MaterialApp + ShadcnLayer
-/// + DrawerOverlay，见 [_orbitRootLayers]）。
+/// + DrawerOverlay + MiuixTheme，见 [_orbitRootLayers]）。
 ///
-/// **为什么测试也必须包这两层**：设计系统 v3 的轻提示（`WaitToast` →
+/// **为什么测试也必须包这几层**：设计系统 v3 的轻提示（`WaitToast` →
 /// `showToast`）依赖 ShadcnLayer 注入的 `ToastLayer`；shadcn 的
 /// `Tooltip`/`Sheet`/`Drawer` 系浮层依赖 `OverlayManagerLayer`（+ 根
-/// `DrawerOverlay` 作落点，见 `orbit_sheets.dart` 的承载口径说明）。
-/// 缺了任何一层都不是"样式不同"而是直接断言失败。测试壳与生产壳同构，
-/// 才能让同名断言继续有效。
+/// `DrawerOverlay` 作落点，见 `orbit_sheets.dart` 的承载口径说明）；
+/// `MiuixCard` / `MiuixInfiniteProgressIndicator` / OS4 玻璃组件靠
+/// `MiuixTheme.of(context)` 取色（未命中回退浅色默认值，会与 token 漂移）。
+/// 缺了任何一层都不是"样式不同"而是直接断言失败或配色错位。测试壳与生产壳
+/// 同构，才能让同名断言继续有效。
 ///
 /// 同时提供 [navigatorKey]（沿用 `rootNavigatorKey`）：WaitToast 经全局 Navigator
 /// 取 context，测试与生产必须指向同一个 key。
@@ -51,7 +54,8 @@ Widget orbitTestAppRouter({
     );
 
 /// 浮层根装配（`lib/app.dart` 同款）：ShadcnLayer（主题 + ToastLayer +
-/// OverlayManagerLayer）→ DrawerOverlay（`SheetConfiguration` 弹层落点）。
+/// OverlayManagerLayer）→ DrawerOverlay（`SheetConfiguration` 弹层落点）
+/// → MiuixTheme（HyperOS 组件取色）。
 Widget _orbitRootLayers({
   required Widget child,
   required Brightness brightness,
@@ -62,7 +66,9 @@ Widget _orbitRootLayers({
       // destructive 按钮的实心填充口径（与 lib/app.dart 同装配，详见
       // shadcn_theme.buildDestructiveButtonTheme）
       child: buildDestructiveButtonTheme(
-        child: sh.DrawerOverlay(child: child),
+        child: sh.DrawerOverlay(
+          child: OrbitMiuixTheme(brightness: brightness, child: child),
+        ),
       ),
     );
 
