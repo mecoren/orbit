@@ -204,13 +204,16 @@ export async function batchMoveToProject(
   const others = allTasks.filter(
     (t) => t.project_id === projectId && !tasks.some((s) => s.id === t.id),
   );
-  const maxPos = others.reduce((m, t) => Math.max(m, t.position), 0);
+  // 尾位游标逐条推进：此前每条都写同一个 midpoint(maxPos)，N 条任务落成同一
+  // position，「拖拽顺序」档退化为按 id，刷新前后顺序还可能变
+  let maxPos = others.reduce((m, t) => Math.max(m, t.position), 0);
   let failed = 0;
   const moved: TodoTaskListItem[] = [];
   for (const t of tasks) {
     try {
       await todoTaskUpdate(t.id, { project_id: projectId });
-      await todoTaskUpdatePosition(t.id, midpoint(maxPos));
+      maxPos = midpoint(maxPos);
+      await todoTaskUpdatePosition(t.id, maxPos);
       moved.push(t);
     } catch (e) {
       failed++;

@@ -237,6 +237,15 @@ export default function TaskTableView({
     () => tasks.filter((t) => selected.has(t.id)),
     [tasks, selected],
   );
+  // 与列表视图同口径：选中集合随当前视图收敛，避免切筛选后
+  // 工具条计数虚高、且行点击被「有选中」劫持而打不开详情
+  useEffect(() => {
+    if (selected.size === 0) return;
+    const live = new Set(tasks.map((t) => t.id));
+    const next = new Set<number>();
+    for (const id of selected) if (live.has(id)) next.add(id);
+    if (next.size !== selected.size) setSelected(next);
+  }, [tasks, selected]);
   const allDoneSelected =
     selectedTasks.length > 0 && selectedTasks.every((t) => t.done);
 
@@ -327,9 +336,9 @@ export default function TaskTableView({
     // 低于最小可读宽度时整表横向滚动（表头与数据行同一滚动容器，滚动同步）。
     <div className="flex min-h-0 flex-1 flex-col overflow-x-auto">
       {/* 批量工具条（与列表视图同款；Button/Select 原语保证主题与焦点环一致） */}
-      {selected.size > 0 && (
+      {selectedTasks.length > 0 && (
         <div className="flex flex-wrap items-center gap-1 border-b bg-primary/5 px-4 py-2 text-sm">
-          <span className="mr-1 text-muted-foreground">已选 {selected.size} 项</span>
+          <span className="mr-1 text-muted-foreground">已选 {selectedTasks.length} 项</span>
           <Button
             variant="ghost"
             size="sm"
@@ -559,7 +568,7 @@ export default function TaskTableView({
                     style={gridStyle}
                     onClick={() => {
                       // 多选态下点击行 = 切换勾选（与列表视图一致），否则打开详情
-                      if (selected.size > 0) toggleSelect(t.id, false);
+                      if (selectedTasks.length > 0) toggleSelect(t.id, false);
                       else onOpenDetail(t.id);
                     }}
                     onKeyDown={(e) => {
@@ -570,7 +579,11 @@ export default function TaskTableView({
                         toggleSelect(t.id, false);
                         return;
                       }
-                      if (e.target === e.currentTarget && e.key === "Escape" && selected.size > 0) {
+                      if (
+                        e.target === e.currentTarget &&
+                        e.key === "Escape" &&
+                        selectedTasks.length > 0
+                      ) {
                         e.preventDefault();
                         clearSelection();
                         return;
@@ -590,7 +603,7 @@ export default function TaskTableView({
                   >
                     {/* 优先级左缘竖条：与列表行同口径，**仅多选态渲染**——默认态优先级
                         在完成框描边上（优先级列另有显式色点，同色不上三处） */}
-                    {selected.size > 0 && (
+                    {selectedTasks.length > 0 && (
                       <span
                         aria-hidden
                         className="pointer-events-none absolute inset-y-1.5 left-0 w-1 rounded-full"
@@ -602,7 +615,7 @@ export default function TaskTableView({
                         完成钮直接变多选框，行首不再多出一个框（2026-10-29）；
                         hover 多选框已移除，多选入口 = 右键菜单「多选」/ x 键 */}
                     <div className="flex items-center">
-                      {selected.size > 0 ? (
+                      {selectedTasks.length > 0 ? (
                         <button
                           type="button"
                           aria-label={selected.has(t.id) ? "取消选中" : "选中"}
@@ -776,11 +789,11 @@ export default function TaskTableView({
       {confirmBatchDelete && (
         <div className="border-t bg-muted/30 px-4 py-2 text-sm">
           <span>
-            确认删除已选 {selected.size} 项？删除后 5 秒内可撤销。
+            确认删除已选 {selectedTasks.length} 项？删除后 5 秒内可撤销。
           </span>
           <button
             type="button"
-            className="ml-2 rounded bg-destructive px-2 py-1 text-destructive-foreground"
+            className="ml-2 rounded bg-destructive px-2 py-1 text-white"
             onClick={() => {
               setConfirmBatchDelete(false);
               batchDelete(selectedTasks);

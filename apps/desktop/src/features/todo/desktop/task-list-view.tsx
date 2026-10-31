@@ -316,6 +316,16 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, d
     () => tasks.filter((t) => selected.has(t.id)),
     [tasks, selected],
   );
+  // 多选集合随视图收敛：切项目/快捷视图/筛选后旧选中项已离场，但 selected
+  // 是 id 集合不会自动收缩 —— 工具条会一直显示「已选 N 条」而动作集为空，
+  // 且 hasSelection 仍为真会让点任意行只加勾选、打不开详情
+  useEffect(() => {
+    if (selected.size === 0) return;
+    const live = new Set(tasks.map((t) => t.id));
+    const next = new Set<number>();
+    for (const id of selected) if (live.has(id)) next.add(id);
+    if (next.size !== selected.size) setSelected(next);
+  }, [tasks, selected]);
   // 工具条动态文案：全完成→「标记未完成」/「移回待办」，否则按未完成口径处理
   const allDoneSelected = selectedTasks.length > 0 && selectedTasks.every((t) => t.done);
 
@@ -543,14 +553,14 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, d
             dependency={dependenciesByTask.get(t.id)}
             dragging={draggingId === t.id}
             selected={selected.has(t.id)}
-            hasSelection={selected.size > 0}
+            hasSelection={selectedTasks.length > 0}
             registerRef={(el) => {
               if (el) rowRefs.current.set(t.id, el);
               else rowRefs.current.delete(t.id);
             }}
             onActivate={() => {
               // 有选择态时，行点击切换勾选（与竞品一致）；否则打开详情
-              if (selected.size > 0) toggleSelect(t.id, false);
+              if (selectedTasks.length > 0) toggleSelect(t.id, false);
               else onOpenDetail(t.id);
             }}
             onToggleSelect={(shift) => toggleSelect(t.id, shift)}
@@ -654,14 +664,14 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, d
           排版：计数 + 图标按钮（Tooltip 补语义）+ 分隔线 + 退出；
           优先级/移动项目走 DropdownMenu（点菜单项即执行，无草稿态），
           总宽收敛在 ~420px，窄窗口不与列表滚动区打架。 */}
-      {selected.size > 0 && (
+      {selectedTasks.length > 0 && (
         <div
           role="toolbar"
-          aria-label={`已选中 ${selected.size} 条任务的批量操作`}
+          aria-label={`已选中 ${selectedTasks.length} 条任务的批量操作`}
           className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-0.5 rounded-lg border bg-background px-2 py-1.5 shadow-lg"
         >
           <span className="px-2 text-sm text-muted-foreground tabular-nums" aria-live="polite">
-            已选 {selected.size} 条
+            已选 {selectedTasks.length} 条
           </span>
           <span className="mx-1 h-4 w-px bg-border" />
 
@@ -1117,9 +1127,9 @@ const TaskRow = memo(function TaskRow({
             {dep && (
               <span
                 className="inline-flex items-center gap-0.5"
-                title={`${dep.relation_count} 个关联任务`}
+                aria-label={`${dep.relation_count} 个关联任务`}
               >
-                <Link2 size={11} />
+                <Link2 size={11} aria-hidden />
                 关联
               </span>
             )}
