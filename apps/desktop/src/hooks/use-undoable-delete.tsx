@@ -18,6 +18,7 @@ import { toast } from "sonner";
 
 import { UNDO_DELAY_MS, createDelayedRun, type DelayedRun } from "@/features/todo/shared/undo-delete";
 import { removeRowsFromData } from "@/lib/query-patch";
+import { useUndoStackInfo } from "@/hooks/use-undo-stack";
 
 export interface UndoableDeleteInput {
   /** 实体中文名，如"任务"/"项目"/"标签" */
@@ -60,6 +61,9 @@ export function hideManyFromQueries<T extends { id: number }>(
 
 function useUndoableDeleteImpl() {
   const qc = useQueryClient();
+  // 删除也进通用撤销栈：只挂 toast 时，用户按 Ctrl+Z 撤的是更早的一次
+  // 无关编辑（栈顶不是删除），被删任务纹丝不动——比无响应更危险。
+  const { push: pushUndo } = useUndoStackInfo();
   // 每笔删除独立持有自己的 DelayedRun；连续删除时旧 Toast 的撤销只能
   // 取消对应那一笔，不能再复用/覆盖全局最新槽位（否则会撤错实体）。
   const pendingRef = useRef(new Map<symbol, DelayedRun>());
@@ -81,8 +85,9 @@ function useUndoableDeleteImpl() {
       const self = createDelayedRun(async () => {
         try {
           await input.commit();
-        } catch {
-          toast.error(`删除${input.entityLabel}失败`);
+        } catch (e) {
+          // 透传 Rust 侧可读错误（[tag] message），不要一律「删除失败」
+          toast.error(`删除${input.entityLabel}失败：${e instanceof Error ? e.message : String(e)}`);
         } finally {
           pendingRef.current.delete(key);
           void qc.invalidateQueries();
@@ -118,8 +123,23 @@ function useUndoableDeleteImpl() {
           },
         },
       });
+
+      // 同一笔删除登记进 Ctrl+Z 栈：窗口内撤销 = 取消延迟提交 + 恢复缓存行；
+      // 窗口外抛错让通用栈走 failed 分支（文案提醒手动检查/回收站找回），
+      // 绝不能在已提交时误报「已撤销」
+      pushUndo({
+        label: `删除${input.entityLabel}`,
+        count: input.count,
+        undo: async () => {
+          const undone = self.cancel();
+          pendingRef.current.delete(key);
+          toast.dismiss(toastId);
+          if (!undone) throw new Error("已过撤销窗口，删除已提交");
+          void qc.invalidateQueries();
+        },
+      });
     },
-    [qc],
+    [qc, pushUndo],
   );
 }
 
