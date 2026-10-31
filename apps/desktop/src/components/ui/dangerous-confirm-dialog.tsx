@@ -91,6 +91,8 @@ export function DangerousConfirmDialog({
 }: DangerousConfirmDialogProps) {
   const [countdown, setCountdown] = useState(holdSeconds);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  /** 弹层面板（焦点陷阱边界 + 初始焦点挂载点） */
+  const panelRef = useRef<HTMLDivElement>(null);
 
   // 开层从头计时，走完停表；关层/卸载复位，下次打开重计。
   // 门控暂停中（holdPaused）不清倒计时走字：停表并保持满格，
@@ -129,6 +131,53 @@ export function DangerousConfirmDialog({
     };
   }, [open]);
 
+  // 初始焦点 + 关闭归还：焦点必须进弹层，否则 Tab 会走到被遮住的背景页上；
+  // 落点优先「取消」（危险操作的默认焦点不该停在确认钮）。归还目标在被 JSDOM /
+  // WebView 移除时静默失败，故可选调用。
+  useEffect(() => {
+    if (!open) return;
+    const prevFocus = document.activeElement as HTMLElement | null;
+    panelRef.current?.querySelector<HTMLElement>("[data-dangerous-cancel]")?.focus();
+    return () => {
+      prevFocus?.focus?.();
+    };
+  }, [open]);
+
+  // 焦点陷阱 + Esc（内联实现无 Radix FocusScope，手工补齐）：
+  // Tab/Shift+Tab 在弹层内循环，Esc 关闭（busy 期间不响应，避免执行中被中断）
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (busy) return;
+        e.preventDefault();
+        e.stopPropagation();
+        onOpenChange(false);
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const panel = panelRef.current;
+      if (!panel) return;
+      const focusables = panel.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement;
+      if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      } else if (e.shiftKey && (active === first || !panel.contains(active))) {
+        e.preventDefault();
+        last.focus();
+      }
+    };
+    // 捕获阶段：先于背景页的快捷键监听吃掉 Esc，避免一次按键关两层
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
+  }, [open, busy, onOpenChange]);
+
   if (!open) return null;
 
   return (
@@ -139,6 +188,7 @@ export function DangerousConfirmDialog({
       }}
     >
       <div
+        ref={panelRef}
         role="alertdialog"
         aria-modal="true"
         aria-label={title}
@@ -154,7 +204,12 @@ export function DangerousConfirmDialog({
         </div>
         {body}
         <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <Button variant="outline" disabled={busy} onClick={() => onOpenChange(false)}>
+          <Button
+            variant="outline"
+            disabled={busy}
+            data-dangerous-cancel
+            onClick={() => onOpenChange(false)}
+          >
             取消
           </Button>
           <Button
