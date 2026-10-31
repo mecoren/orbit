@@ -11,6 +11,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNod
 import { format, parse } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   Calendar,
   CalendarPlus,
@@ -116,6 +117,9 @@ interface QuickAddBarProps {
 
 export function QuickAddBar({ projects, defaultProjectId, quickView }: QuickAddBarProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  // 同步锁挡住同一帧的第二次 Enter/双击；state 只负责按钮/输入框的视觉禁用
+  const submitLock = useRef(false);
+  const [submitting, setSubmitting] = useState(false);
   const [title, setTitle] = useState("");
   const [priority, setPriority] = useState(0);
   const [dueDate, setDueDate] = useState<Date | null>(null);
@@ -189,6 +193,7 @@ export function QuickAddBar({ projects, defaultProjectId, quickView }: QuickAddB
   };
 
   const submit = async () => {
+    if (submitLock.current) return;
     // 用提交瞬间最新输入重算（避免 memo 时差）；token 显式值优先于手动 Popover 选择
     const p = parseQuickInput(title, {
       projects: projects.map((pr) => ({ id: pr.id, title: pr.title })),
@@ -197,6 +202,8 @@ export function QuickAddBar({ projects, defaultProjectId, quickView }: QuickAddB
     });
     const t = p.title.trim();
     if (!t) return;
+    submitLock.current = true;
+    setSubmitting(true);
     // chips 取消的维度回落到手动 Popover 选择（视图标记注入 #39 仍静默附加）
     const nlpDueMs =
       p.dueDate != null && p.dueDate.getTime() !== dismiss.dueMs
@@ -241,11 +248,19 @@ export function QuickAddBar({ projects, defaultProjectId, quickView }: QuickAddB
           /* 忽略单个标签失败 */
         }
       }
-      // 提醒为独立实体：任务创建成功后追加；失败不影响任务本身
+      // 提醒为独立实体：任务创建成功后追加；失败不回滚任务，也不能
+      // 让已创建任务的输入留在框里诱发第二次创建
       if (remindDraft) {
         const ms = new Date(remindDraft).getTime();
         if (!Number.isNaN(ms)) {
-          await todoReminderCreate({ task_id: created.id, remind_at: ms });
+          try {
+            await todoReminderCreate({ task_id: created.id, remind_at: ms });
+          } catch (err) {
+            console.error("创建提醒失败:", err);
+            toast.error("任务已创建，但提醒设置失败", {
+              description: "可在任务详情中重新添加提醒",
+            });
+          }
         }
       }
       // 连续录入：清空并保持焦点（04 §3.5）
@@ -253,6 +268,10 @@ export function QuickAddBar({ projects, defaultProjectId, quickView }: QuickAddB
       requestAnimationFrame(() => inputRef.current?.focus());
     } catch (err) {
       console.error("创建任务失败:", err);
+      toast.error("创建任务失败", { description: String(err) });
+    } finally {
+      submitLock.current = false;
+      setSubmitting(false);
     }
   };
 
@@ -336,6 +355,7 @@ export function QuickAddBar({ projects, defaultProjectId, quickView }: QuickAddB
         <Input
           ref={inputRef}
           value={title}
+          disabled={submitting}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={(e) => {
             if (e.nativeEvent.isComposing) return; // IME 组合期：选词 Enter 不提交（评审修复）
@@ -596,7 +616,13 @@ export function QuickAddBar({ projects, defaultProjectId, quickView }: QuickAddB
             </Popover>
 
             {/* 提交 */}
-            <Button size="sm" className="h-7 px-3" onClick={() => void submit()}>
+            <Button
+              size="sm"
+              className="h-7 px-3"
+              disabled={submitting}
+              aria-busy={submitting}
+              onClick={() => void submit()}
+            >
               <CalendarPlus className="mr-1 size-3.5" />
               添加
             </Button>
