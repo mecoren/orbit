@@ -60,29 +60,35 @@ export function hideManyFromQueries<T extends { id: number }>(
 
 function useUndoableDeleteImpl() {
   const qc = useQueryClient();
-  const pendingRef = useRef<DelayedRun | null>(null);
+  // 每笔删除独立持有自己的 DelayedRun；连续删除时旧 Toast 的撤销只能
+  // 取消对应那一笔，不能再复用/覆盖全局最新槽位（否则会撤错实体）。
+  const pendingRef = useRef(new Map<symbol, DelayedRun>());
 
-  // 卸载兜底：窗口期未结束就离开页面 → 立即提交，避免"看似删了实际没删"
-  useEffect(() => () => pendingRef.current?.flush(), []);
+  // 卸载兜底：窗口期未结束就离开页面 → 全部立即提交，避免"看似删了实际没删"
+  useEffect(
+    () => () => {
+      const pending = pendingRef.current;
+      pending.forEach((run) => run.flush());
+      pending.clear();
+    },
+    [],
+  );
 
   return useCallback(
     (input: UndoableDeleteInput) => {
       input.hide(qc);
-      pendingRef.current?.flush(); // 连续删除：上一笔先落库（MVP 单槽位足够）
-      // self 守卫：上一笔 run 的 finally 不得清掉指向本笔的引用，
-      // 否则第二笔的撤销点击会静默失效（审查 C1）
-      let self: DelayedRun | null = null;
-      self = createDelayedRun(async () => {
+      const key = Symbol(input.entityLabel);
+      const self = createDelayedRun(async () => {
         try {
           await input.commit();
         } catch {
           toast.error(`删除${input.entityLabel}失败`);
         } finally {
-          if (pendingRef.current === self) pendingRef.current = null;
+          pendingRef.current.delete(key);
           void qc.invalidateQueries();
         }
       }, UNDO_DELAY_MS);
-      pendingRef.current = self;
+      pendingRef.current.set(key, self);
 
       let toastId: string | number = "";
       // recordName 截断：超长标题（尤其中间无空格的连续串）整串进 toast
@@ -99,14 +105,13 @@ function useUndoableDeleteImpl() {
         action: {
           label: "撤销",
           onClick: () => {
-            // cancel false（超时已提交/被后续删除 flush）也 dismiss：
-            // 按钮点击就该有响应，无声无息是坏体验
-            const undone = pendingRef.current?.cancel() ?? false;
+            const undone = self.cancel();
             if (undone) {
-              pendingRef.current = null;
+              pendingRef.current.delete(key);
               void qc.invalidateQueries(); // 恢复被隐藏的行
-            } else if (pendingRef.current == null) {
-              // 已提交：行已真删，告知撤销入口已关闭
+            } else {
+              // 已提交：行已真删，明确告知撤销入口已关闭
+              pendingRef.current.delete(key);
               toast.info("已过撤销窗口，删除已提交");
             }
             toast.dismiss(toastId);
