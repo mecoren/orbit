@@ -15,6 +15,7 @@ import { CalendarCheck, CheckCheck, Clock3 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/business/empty-state";
+import { ErrorState } from "@/components/business/error-state";
 import { Spinner } from "@/components/ui/spinner";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
@@ -110,6 +111,20 @@ export function ReviewPanel() {
       {dueQuery.isPending ? (
         <div className="grid h-full place-items-center">
           <Spinner size={32} />
+        </div>
+      ) : dueQuery.isError ? (
+        // 失败不能落进空态：会把「查询挂了」渲染成「没有待回顾的项目」，
+        // 用户误以为全部处理完了
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-6">
+          <ErrorState
+            className="max-w-md"
+            message={`回顾清单加载失败：${
+              dueQuery.error instanceof Error ? dueQuery.error.message : String(dueQuery.error)
+            }`}
+          />
+          <Button variant="outline" size="sm" onClick={() => void dueQuery.refetch()}>
+            重试
+          </Button>
         </div>
       ) : due == null || due.length === 0 ? (
         <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto">

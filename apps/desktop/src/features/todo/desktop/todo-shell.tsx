@@ -18,6 +18,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 import { UndoableDeleteProvider } from "@/hooks/use-undoable-delete";
 import { useAppStore } from "@/stores/app-store";
@@ -321,8 +322,11 @@ export default function TodoShell() {
         await savedFilterCreate({ name, conditions });
       }
       invalidateFilters();
-    } finally {
+      // 成功才关层：失败时保留弹层与已填条件，允许直接重试
       closeSavedFilterDialog();
+    } catch (e) {
+      toast.error(`保存筛选器失败：${e instanceof Error ? e.message : String(e)}`);
+      throw e;
     }
   };
   const handleDeleteSavedFilter = async (id: number) => {

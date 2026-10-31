@@ -19,10 +19,11 @@
  * 「上级文件夹」下拉仍保留，是拖拽的等价入口 + 触屏/键盘可达路径。
  * 拖拽无把手：整行长按 250ms 激活（PointerSensor delay 约束），短击仍是选中。
  */
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router";
 import { useSortable } from "@dnd-kit/sortable";
+import { toast } from "sonner";
 import {
   closestCenter,
   DndContext,
@@ -249,20 +250,29 @@ export function ProjectSidebar({
     return combined;
   }, [visibleIds]);
 
+  // 同步锁防连按 Enter / 双击「新建」建出两个同名项目（ref 不经过渲染，
+  // 同一帧内连触两次也挡得住）
+  const newProjectLock = useRef(false);
   const submitNew = async () => {
     const title = newTitle.trim();
     if (!title) {
       setAdding(false);
       return;
     }
+    if (newProjectLock.current) return;
+    newProjectLock.current = true;
     try {
       // #36：新建项目默认色按现有项目数轮换预设板（用户可右键改色）
       const nextColor = PRESET_10[projects.length % PRESET_10.length];
       await todoProjectCreate({ title, hex_color: nextColor });
       await refetchProjects();
-    } finally {
       setNewTitle("");
       setAdding(false);
+    } catch (e) {
+      // 失败保留输入框与草稿，用户可直接重试
+      toast.error(`新建项目失败：${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      newProjectLock.current = false;
     }
   };
 
@@ -472,7 +482,7 @@ export function ProjectSidebar({
               >
                 <CalendarCheck className="size-4" />
                 {reviewDue.length > 0 && (
-                  <span className="absolute right-1 top-1 size-1.5 rounded-full bg-amber-500" />
+                  <span className="absolute right-1 top-1 size-1.5 rounded-full bg-warning" />
                 )}
               </button>
             </TooltipTrigger>
@@ -627,7 +637,7 @@ export function ProjectSidebar({
           <CalendarCheck className="size-4" />
           <span>回顾</span>
           {reviewDue.length > 0 && (
-            <span className="ml-auto rounded-md bg-amber-500/15 px-1.5 py-0.5 text-xs tabular-nums text-amber-600 dark:text-amber-400">
+            <span className="ml-auto rounded-md bg-warning/15 px-1.5 py-0.5 text-xs tabular-nums text-warning">
               {reviewDue.length}
             </span>
           )}
@@ -1205,7 +1215,7 @@ function SortableProjectRow({
                 }}
                 className="flex size-3.5 shrink-0 items-center justify-center"
               >
-                <span className="size-2 rounded-full bg-amber-500" />
+                <span className="size-2 rounded-full bg-warning" />
               </button>
             </TooltipTrigger>
             <TooltipContent>待回顾 · 点击进入回顾中心</TooltipContent>

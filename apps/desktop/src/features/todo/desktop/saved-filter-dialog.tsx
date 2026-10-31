@@ -160,7 +160,8 @@ export interface SavedFilterDialogProps {
   projects: { id: number; title: string; hex_color: string }[];
   labels: { id: number; title: string; hex_color: string }[];
   onCancel: () => void;
-  onSubmit: (name: string, conditions: string) => void;
+  /** 允许异步：父层写入期间弹层保持 pending，防止双击保存建出两个筛选器 */
+  onSubmit: (name: string, conditions: string) => void | Promise<void>;
 }
 
 /** 截止窗口常用档位（Todoist quick filters 同款节奏） */
@@ -210,9 +211,18 @@ export function SavedFilterDialog({
       dueUntil: days != null ? null : f.dueUntil,
     }));
 
-  const submit = () => {
-    if (!name.trim()) return;
-    onSubmit(name.trim(), buildConditions(form));
+  // saving 兼作重入锁：Enter 与按钮共用同一入口，双击/连按都只落一条
+  const [saving, setSaving] = useState(false);
+  const submit = async () => {
+    if (!name.trim() || saving) return;
+    setSaving(true);
+    try {
+      await onSubmit(name.trim(), buildConditions(form));
+    } catch {
+      // 父层已 toast 具体原因；这里只解除 pending 让用户改了重试
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -232,7 +242,7 @@ export function SavedFilterDialog({
             value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && name.trim()) submit();
+              if (e.key === "Enter" && name.trim()) void submit();
             }}
             className="h-9 border-0 bg-transparent px-0 text-xl font-semibold shadow-none focus-visible:ring-0 dark:bg-transparent"
           />
@@ -489,7 +499,7 @@ export function SavedFilterDialog({
           <Button variant="outline" onClick={onCancel}>
             取消
           </Button>
-          <Button disabled={!name.trim()} onClick={submit}>
+          <Button disabled={!name.trim() || saving} onClick={() => void submit()}>
             {mode === "edit" ? "保存修改" : "保存"}
           </Button>
         </DialogFooter>
