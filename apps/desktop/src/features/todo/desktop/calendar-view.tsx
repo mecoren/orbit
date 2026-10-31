@@ -520,31 +520,56 @@ export function CalendarView({
       <div className="flex shrink-0 items-center justify-between gap-3 px-4 py-2">
         <h2 className="text-lg font-semibold">
           {subMode === "year" ? (
-            <span ref={yearPaneWheelRef} title="滚轮切换年份">
-              {yearPaneYear}年
-            </span>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span ref={yearPaneWheelRef} className="cursor-default" data-testid="calendar-year-pane-title">
+                  {yearPaneYear}年
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>滚轮切换年份</TooltipContent>
+            </Tooltip>
           ) : subMode === "timeline" ? (
             <>
               <span>{weekStart.getFullYear()}年</span>
-              <span ref={viewWeekWheelRef} title="滚轮切换">
-                {weekRangeLabel(weekStart, addDays(weekStart, timelineSpan - 1))}
-              </span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span ref={viewWeekWheelRef} className="cursor-default" data-testid="calendar-timeline-title">
+                    {weekRangeLabel(weekStart, addDays(weekStart, timelineSpan - 1))}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>滚轮切换</TooltipContent>
+              </Tooltip>
             </>
           ) : subMode === "week" ? (
             <>
               <span>{weekStart.getFullYear()}年</span>
-              <span ref={viewWeekWheelRef} title="滚轮切换周">
-                {weekRangeLabel(weekStart, weekEnd)}
-              </span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span ref={viewWeekWheelRef} className="cursor-default" data-testid="calendar-week-title">
+                    {weekRangeLabel(weekStart, weekEnd)}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>滚轮切换周</TooltipContent>
+              </Tooltip>
             </>
           ) : (
             <>
-              <span ref={viewYearWheelRef} title="滚轮切换年份">
-                {viewYear}年
-              </span>
-              <span ref={viewMonthWheelRef} title="滚轮切换月份">
-                {viewMonth + 1}月
-              </span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span ref={viewYearWheelRef} className="cursor-default" data-testid="calendar-year-title">
+                    {viewYear}年
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>滚轮切换年份</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span ref={viewMonthWheelRef} className="cursor-default" data-testid="calendar-month-title">
+                    {viewMonth + 1}月
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>滚轮切换月份</TooltipContent>
+              </Tooltip>
             </>
           )}
         </h2>
@@ -696,6 +721,8 @@ export function CalendarView({
                 collisionDetection={pointerWithin}
                 onDragStart={handleDragStart}
                 onDragEnd={(e: DragEndEvent) => void handleDragEnd(e)}
+                // Esc 取消拖拽只触发 cancel 分支：不复位会让源圆点恒半透明、落点高亮残留
+                onDragCancel={() => setDraggingTaskId(null)}
               >
               <MonthCalendar
                 size="lg"
@@ -757,7 +784,7 @@ export function CalendarView({
               // 加载态与列表视图同口径（H3）：查询进行中不闪「本月没有…」空态
               <div aria-busy className="flex min-h-0 flex-1 flex-col gap-2 p-4" data-testid="calendar-loading">
                 {Array.from({ length: 6 }, (_, i) => (
-                  <div key={i} className="h-12 animate-pulse rounded bg-muted" />
+                  <div key={i} className="h-12 animate-pulse rounded bg-accent" />
                 ))}
               </div>
             ) : listTotal === 0 ? (
@@ -799,6 +826,8 @@ export function CalendarView({
                 collisionDetection={pointerWithin}
                 onDragStart={handleDragStart}
                 onDragEnd={(e: DragEndEvent) => void handleDragEnd(e)}
+                // Esc 取消拖拽只触发 cancel 分支：不复位会让源圆点恒半透明、落点高亮残留
+                onDragCancel={() => setDraggingTaskId(null)}
               >
               <MonthCalendar
                 size="lg"
@@ -852,7 +881,7 @@ export function CalendarView({
               // 加载态与月/年档同口径（H3）：查询进行中不闪空态
               <div aria-busy className="flex min-h-0 flex-1 flex-col gap-2 p-4" data-testid="calendar-loading">
                 {Array.from({ length: 6 }, (_, i) => (
-                  <div key={i} className="h-12 animate-pulse rounded bg-muted" />
+                  <div key={i} className="h-12 animate-pulse rounded bg-accent" />
                 ))}
               </div>
             ) : listTotal === 0 ? (
@@ -950,7 +979,7 @@ export function CalendarView({
               // 同月模式（H3）：年模式右栏加载骨架
               <div aria-busy className="flex min-h-0 flex-1 flex-col gap-2 p-4" data-testid="calendar-loading">
                 {Array.from({ length: 6 }, (_, i) => (
-                  <div key={i} className="h-12 animate-pulse rounded bg-muted" />
+                  <div key={i} className="h-12 animate-pulse rounded bg-accent" />
                 ))}
               </div>
             ) : listTotal === 0 ? (
@@ -1077,7 +1106,7 @@ function DraggableDot({
         ...(dimmed && { opacity: 0.35 }),
         ...(isDragging && { opacity: 0.6, scale: "1.4" }),
       }}
-      title={`拖到其他日期可改期：${task.title}`}
+      aria-label={`${task.title}：拖到其他日期可改期`}
     />
   );
 }
@@ -1139,12 +1168,10 @@ function HolidayBadge({ holiday }: { holiday: HolidayMark | undefined }) {
   if (!holiday) return null;
   return (
     <span
-      title={holiday.name}
+      aria-label={`${holiday.name}${holiday.isOffDay ? "（放假）" : "（补班）"}`}
       className={cn(
         "rounded px-1 text-[10px] font-medium leading-4 tabular-nums",
-        holiday.isOffDay
-          ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-          : "bg-orange-500/15 text-orange-600 dark:text-orange-400",
+        holiday.isOffDay ? "bg-success/15 text-success" : "bg-warning/15 text-warning",
       )}
     >
       {holiday.isOffDay ? "休" : "班"}

@@ -358,7 +358,7 @@ export function TimelinePanel({
                       <button
                         key={b.taskId}
                         type="button"
-                        title={`${hm(Math.max(shownStart, col.dayStartMs))}–${hm(endMs)} · ${b.title}`}
+                        aria-label={`${hm(Math.max(shownStart, col.dayStartMs))}–${hm(endMs)} · ${b.title}`}
                         className={cn(
                           "absolute z-[5] overflow-hidden rounded-sm border-l-[3px] px-1 py-0.5 text-left text-[11px] leading-tight",
                           "hover:z-20 hover:shadow-sm",

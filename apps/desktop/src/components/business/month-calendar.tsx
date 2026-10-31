@@ -394,7 +394,7 @@ export function MonthCalendar({
               {/* 休/班徽标：色块右上角 */}
               {holiday && size !== "sm" && (
                 <span
-                  title={holiday.name}
+                  aria-label={`${holiday.name}${isOffDay ? "（放假）" : "（补班）"}`}
                   className={cn(
                     "absolute right-0.5 top-0.5 flex items-center justify-center rounded-full font-bold leading-none text-white",
                     spec.badge,

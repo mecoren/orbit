@@ -14,7 +14,8 @@
  */
 import { expect, test, type Page } from "@playwright/test";
 
-const WEEK_TITLE = 'h2 span[title="滚轮切换周"]';
+// 标题提示已从原生 title 改为 Tooltip，定位改用 data-testid（语义不变）
+const WEEK_TITLE = '[data-testid="calendar-week-title"]';
 
 /** 直接以日历视图启动（档位预置 + 载入后 seed 今天截止任务） */
 async function openCalendar(page: Page) {

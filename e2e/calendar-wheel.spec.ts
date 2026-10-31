@@ -113,8 +113,8 @@ test("年份下拉展开时滚轮不翻月", async ({ page }) => {
 
 test("日历视图月历滚轮翻月、标题年段滚轮切年", async ({ page }) => {
   const title = await openCalendarView(page);
-  const yearSpan = title.locator('span[title="滚轮切换年份"]');
-  const monthSpan = title.locator('span[title="滚轮切换月份"]');
+  const yearSpan = title.locator('[data-testid="calendar-year-title"]');
+  const monthSpan = title.locator('[data-testid="calendar-month-title"]');
   await expect(yearSpan).toBeVisible();
   const beforeTitle = await title.textContent();
 

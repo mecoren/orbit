@@ -200,7 +200,7 @@ function MiniMonth({
                 isToday && "font-bold",
                 !isToday && isWeekend && "text-sky-600 dark:text-sky-400",
               )}
-              title={`${month + 1}月${day}日`}
+              aria-label={`${month + 1}月${day}日`}
             >
               {/* 今天 = 主色实心圆角方块（与月视图同形制：长方形非胶囊）。
                   年视图日格很扁（行高等分约 17×12），inset-0.5 会随格形
