@@ -11,7 +11,9 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 /// 订阅数据库变更流（db-change）
 ///
-/// Dart 侧消费：收到即全量失效业务缓存（对齐桌面粗粒度失效策略）。
+/// Dart 侧消费：BootGate 单点订阅，按 `table` 走表级精确失效
+/// （`mobile/lib/modules/shell/db_invalidation.dart`；未知表才回退全量）。
+/// 流是单播：全 App 只允许一处 listen，二次订阅被 FORWARDER_STARTED 闸静默丢弃。
 Stream<DbEventDto> subscribeDbChanges() =>
     RustLib.instance.api.crateApiEventsSubscribeDbChanges();
 

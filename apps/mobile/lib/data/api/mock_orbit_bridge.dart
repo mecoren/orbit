@@ -27,11 +27,40 @@ class MockOrbitBridge implements OrbitBridge {
     return body();
   }
 
-  void _emit(String table) {
+  /// mock 设备标识（与备份清单的缺省设备同名，事件与清单口径一致）
+  static const _mockDeviceId = 'mock-device';
+
+  /// 发射 db-change 事件（对齐 core `DbEvent` 载荷口径）
+  ///
+  /// `op` 的取值域必须是 core `DbOp` 的四个变体名（Insert/Update/Delete/Sync），
+  /// 不能自造值——消费者一旦按 op 分支，自造值会让 mock 与真桥分叉成「假通过」
+  /// 或「假失败」。`row` 用于回填 recordId/recordUuid（`DbChangeEvent` 侧本就
+  /// 可空：批量导入/全量恢复没有单行归属）。单行增删改走下面三个便捷口，
+  /// 批量/全库写入走 [_emitSync]，别直接调本函数。
+  void _emit(String table, {Map<String, dynamic>? row, String op = 'Update'}) {
     _dbChangesCtrl.add(
-      DbChangeEvent(table: table, op: 'write', timestamp: store.now()),
+      DbChangeEvent(
+        table: table,
+        op: op,
+        recordId: row?['id'] as int?,
+        recordUuid: row?['uuid'] as String?,
+        deviceId: _mockDeviceId,
+        timestamp: store.now(),
+      ),
     );
   }
+
+  void _emitInsert(String table, Map<String, dynamic> row) =>
+      _emit(table, row: row, op: 'Insert');
+
+  void _emitUpdate(String table, Map<String, dynamic> row) =>
+      _emit(table, row: row, op: 'Update');
+
+  void _emitDelete(String table, Map<String, dynamic> row) =>
+      _emit(table, row: row, op: 'Delete');
+
+  /// 批量/全库级写入（CSV 批量导入、全量备份恢复）：无单行归属，op 记 Sync
+  void _emitSync(String table) => _emit(table, op: 'Sync');
 
   Never _notFound(String what) => throw Exception('$what not found');
 
@@ -530,7 +559,7 @@ class MockOrbitBridge implements OrbitBridge {
           'version': 1,
         };
         store.projects[p['id'] as int] = p;
-        _emit('todo_projects');
+        _emitInsert('todo_projects', p);
         return TodoProject.fromJson(p);
       });
 
@@ -542,14 +571,14 @@ class MockOrbitBridge implements OrbitBridge {
     // 写了 null / 空白串 = 移到顶层）。Dart 无 undefined 概念，不存在桌面 mock
     // 那种「未提供字段被覆盖成 undefined」的 JSON 边界问题。
     p['parent_uuid'] = normalizeParentUuid(p['parent_uuid'] as String?);
-    _emit('todo_projects');
+    _emitUpdate('todo_projects', p);
     return TodoProject.fromJson(p);
   });
 
   @override
   Future<void> todoProjectDelete(int id) => _delay(() {
-    store.projects.remove(id);
-    _emit('todo_projects');
+    final p = store.projects.remove(id);
+    if (p != null) _emitDelete('todo_projects', p);
   });
 
   @override
@@ -622,7 +651,7 @@ class MockOrbitBridge implements OrbitBridge {
     final p = store.projects[projectId] ?? _notFound('project $projectId');
     p['review_last_at'] = store.now();
     p['review_snooze_until'] = null;
-    _emit('todo_projects');
+    _emitUpdate('todo_projects', p);
     return TodoProject.fromJson(p);
   });
 
@@ -640,7 +669,7 @@ class MockOrbitBridge implements OrbitBridge {
           p['review_interval_days'] = null;
         }
         p['review_snooze_until'] = null;
-        _emit('todo_projects');
+        _emitUpdate('todo_projects', p);
         return TodoProject.fromJson(p);
       });
 
@@ -658,7 +687,7 @@ class MockOrbitBridge implements OrbitBridge {
     final n = DateTime.fromMillisecondsSinceEpoch(nowMs);
     final dayStart = DateTime(n.year, n.month, n.day).millisecondsSinceEpoch;
     p['review_snooze_until'] = dayStart + days * Duration.millisecondsPerDay;
-    _emit('todo_projects');
+    _emitUpdate('todo_projects', p);
     return TodoProject.fromJson(p);
   });
 
@@ -853,8 +882,9 @@ class MockOrbitBridge implements OrbitBridge {
       t['start_date'] = s.startMs;
       t['updated_at'] = store.now();
       t['version'] = ((t['version'] as int?) ?? 1) + 1;
+      // 逐任务 Update（core day_planner 同样一任务一条事件）
+      _emitUpdate('todo_tasks', t);
     }
-    _emit('todo_tasks');
     return ApplyResult(applied: applied);
   });
 
@@ -1069,7 +1099,7 @@ class MockOrbitBridge implements OrbitBridge {
       'version': 1,
     };
     store.tasks[t['id'] as int] = t;
-    _emit('todo_tasks');
+    _emitInsert('todo_tasks', t);
     return TodoTask.fromJson(t);
   });
 
@@ -1077,7 +1107,7 @@ class MockOrbitBridge implements OrbitBridge {
   Future<TodoTask> todoTaskUpdate(int id, String patchJson) => _delay(() {
     final t = store.tasks[id] ?? _notFound('task $id');
     store.mergePatch(t, patchJson);
-    _emit('todo_tasks');
+    _emitUpdate('todo_tasks', t);
     return TodoTask.fromJson(t);
   });
 
@@ -1156,6 +1186,7 @@ class MockOrbitBridge implements OrbitBridge {
           'version': 1,
         };
         store.tasks[next['id'] as int] = next;
+        _emitInsert('todo_tasks', next);
         spawnedNext = next;
         for (final s in store.subtasksOf(id)) {
           final clone = {
@@ -1172,8 +1203,8 @@ class MockOrbitBridge implements OrbitBridge {
             'version': 1,
           };
           store.subtasks[clone['id'] as int] = clone;
+          _emitInsert('todo_subtasks', clone);
         }
-        _emit('todo_subtasks');
       }
     }
     t['done'] = 1;
@@ -1181,7 +1212,7 @@ class MockOrbitBridge implements OrbitBridge {
     t['status'] = 'done';
     t['updated_at'] = now;
     t['version'] = ((t['version'] as int?) ?? 1) + 1;
-    _emit('todo_tasks');
+    _emitUpdate('todo_tasks', t);
     return CompleteTaskResult(
       task: TodoTask.fromJson(t),
       nextInstance: spawnedNext == null ? null : TodoTask.fromJson(spawnedNext),
@@ -1239,7 +1270,7 @@ class MockOrbitBridge implements OrbitBridge {
         'version': 1,
       };
     }
-    _emit('todo_tasks');
+    _emitInsert('todo_tasks', copy);
     return TodoTask.fromJson(copy);
   });
 
@@ -1252,7 +1283,7 @@ class MockOrbitBridge implements OrbitBridge {
     t['deleted_at'] = now;
     t['updated_at'] = now;
     t['version'] = (t['version'] as int) + 1;
-    _emit('todo_tasks');
+    _emitDelete('todo_tasks', t);
   });
 
   @override
@@ -1405,7 +1436,7 @@ class MockOrbitBridge implements OrbitBridge {
         };
         store.subtasks[s['id'] as int] = s;
         store.recalcPercent(input.taskId);
-        _emit('todo_subtasks');
+        _emitInsert('todo_subtasks', s);
         return TodoSubtask.fromJson(s);
       });
 
@@ -1414,7 +1445,7 @@ class MockOrbitBridge implements OrbitBridge {
     final s = store.subtasks[id] ?? _notFound('subtask $id');
     store.mergePatch(s, patchJson);
     store.recalcPercent(s['task_id'] as int);
-    _emit('todo_subtasks');
+    _emitUpdate('todo_subtasks', s);
     return TodoSubtask.fromJson(s);
   });
 
@@ -1440,7 +1471,7 @@ class MockOrbitBridge implements OrbitBridge {
     s['deleted_at'] = now;
     s['updated_at'] = now;
     store.recalcPercent(s['task_id'] as int);
-    _emit('todo_subtasks');
+    _emitDelete('todo_subtasks', s);
   });
 
   @override
@@ -1449,7 +1480,7 @@ class MockOrbitBridge implements OrbitBridge {
     s['done'] = done ? 1 : 0;
     s['done_at'] = done ? store.now() : null;
     store.recalcPercent(s['task_id'] as int);
-    _emit('todo_subtasks');
+    _emitUpdate('todo_subtasks', s);
   });
 
   @override
@@ -1525,8 +1556,8 @@ class MockOrbitBridge implements OrbitBridge {
     }
     store.recalcPercent(parent['id'] as int);
     store.recalcPercent(t['id'] as int);
-    _emit('todo_subtasks');
-    _emit('todo_tasks');
+    _emitDelete('todo_subtasks', s);
+    _emitInsert('todo_tasks', t);
     return TodoTask.fromJson(t);
   });
 
@@ -1554,7 +1585,7 @@ class MockOrbitBridge implements OrbitBridge {
       'version': 1,
     };
     store.labels[l['id'] as int] = l;
-    _emit('todo_labels');
+    _emitInsert('todo_labels', l);
     return TodoLabel.fromJson(l);
   });
 
@@ -1562,14 +1593,14 @@ class MockOrbitBridge implements OrbitBridge {
   Future<TodoLabel> todoLabelUpdate(int id, String patchJson) => _delay(() {
     final l = store.labels[id] ?? _notFound('label $id');
     store.mergePatch(l, patchJson);
-    _emit('todo_labels');
+    _emitUpdate('todo_labels', l);
     return TodoLabel.fromJson(l);
   });
 
   @override
   Future<void> todoLabelDelete(int id) => _delay(() {
-    store.labels.remove(id);
-    _emit('todo_labels');
+    final l = store.labels.remove(id);
+    if (l != null) _emitDelete('todo_labels', l);
   });
 
   @override
@@ -1580,7 +1611,8 @@ class MockOrbitBridge implements OrbitBridge {
         }
         final linkId = store.id;
         (store.taskLabels[input.taskId] ??= {})[input.labelId] = linkId;
-        _emit('todo_task_labels');
+        // 关联表无行对象（mock 只存 linkId 三元组），uuid 留空
+        _emitInsert('todo_task_labels', {'id': linkId});
         return _labelWithLink(input.labelId, linkId);
       });
 
@@ -1599,7 +1631,7 @@ class MockOrbitBridge implements OrbitBridge {
     for (final links in store.taskLabels.values) {
       links.removeWhere((_, v) => v == taskLabelId);
     }
-    _emit('todo_task_labels');
+    _emitDelete('todo_task_labels', {'id': taskLabelId});
   });
 
   // ── comments ──
@@ -1623,14 +1655,14 @@ class MockOrbitBridge implements OrbitBridge {
           'version': 1,
         };
         store.comments[c['id'] as int] = c;
-        _emit('todo_comments');
+        _emitInsert('todo_comments', c);
         return TodoComment.fromJson(c);
       });
 
   @override
   Future<void> todoCommentDelete(int id) => _delay(() {
-    store.comments.remove(id);
-    _emit('todo_comments');
+    final c = store.comments.remove(id);
+    if (c != null) _emitDelete('todo_comments', c);
   });
 
   // ── relations ──
@@ -1657,14 +1689,14 @@ class MockOrbitBridge implements OrbitBridge {
       'version': 1,
     };
     store.relations[r['id'] as int] = r;
-    _emit('todo_task_relations');
+    _emitInsert('todo_task_relations', r);
     return TodoTaskRelation.fromJson(r);
   });
 
   @override
   Future<void> todoTaskRelationDelete(int id) => _delay(() {
-    store.relations.remove(id);
-    _emit('todo_task_relations');
+    final r = store.relations.remove(id);
+    if (r != null) _emitDelete('todo_task_relations', r);
   });
 
   // ── reminders ──
@@ -1688,14 +1720,14 @@ class MockOrbitBridge implements OrbitBridge {
           'version': 1,
         };
         store.reminders[r['id'] as int] = r;
-        _emit('todo_reminders');
+        _emitInsert('todo_reminders', r);
         return TodoReminder.fromJson(r);
       });
 
   @override
   Future<void> todoReminderDelete(int id) => _delay(() {
-    store.reminders.remove(id);
-    _emit('todo_reminders');
+    final r = store.reminders.remove(id);
+    if (r != null) _emitDelete('todo_reminders', r);
   });
 
   // ── 任务列表投影聚合（A4，只读：从内存库同口径推导，不 emit 事件）──
@@ -2262,7 +2294,7 @@ class MockOrbitBridge implements OrbitBridge {
     t['done'] = done;
     t['done_at'] = done == 1 ? store.now() : null;
     t['status'] = done == 1 ? 'done' : 'pending';
-    _emit('todo_tasks');
+    _emitUpdate('todo_tasks', t);
   });
 
   // ── ICS 日历导出（#4；与 Rust export_ics 同构最小语义）──
@@ -2611,7 +2643,8 @@ class MockOrbitBridge implements OrbitBridge {
         store.tasks[t['id'] as int] = t;
         success++;
       }
-      _emit('todo_tasks');
+      // 批量导入：无单行归属，按 core 批量路径记 Sync（整表失效即可）
+      _emitSync('todo_tasks');
       return CsvImportStats(
         success: success,
         skipped: skipped,
@@ -2673,7 +2706,7 @@ class MockOrbitBridge implements OrbitBridge {
         store.tasks[t['id'] as int] = t;
         success++;
       }
-      _emit('todo_tasks');
+      _emitSync('todo_tasks');
       _importJobs[jobId] = ImportJobStatus(
         jobId: jobId,
         processed: mapped.length,
@@ -3211,7 +3244,7 @@ class MockOrbitBridge implements OrbitBridge {
       throw Exception('[not_unlocked] 同步加密未解锁，请先输入同步密码');
     }
     if (bytes.isEmpty) throw Exception('[backup] 备份内容为空');
-    _emit('*');
+    _emitSync('*');
     return BackupImportResult(
       successCount: store.tasks.length,
       errorCount: 0,
@@ -3232,7 +3265,7 @@ class MockOrbitBridge implements OrbitBridge {
     if (!store.syncUnlocked) {
       throw Exception('[not_unlocked] 同步加密未解锁，请先输入同步密码');
     }
-    _emit('*');
+    _emitSync('*');
     return BackupImportResult(
       successCount: store.tasks.length,
       errorCount: 0,
@@ -3281,7 +3314,7 @@ class MockOrbitBridge implements OrbitBridge {
     if (filePath.trim().isEmpty) {
       throw Exception('[backup] 备份路径为空');
     }
-    _emit('*');
+    _emitSync('*');
     return BackupImportResult(
       successCount: store.tasks.length,
       errorCount: 0,
@@ -3876,7 +3909,8 @@ class MockOrbitBridge implements OrbitBridge {
     if (pid != null && !(store.projects[pid]?['is_deleted'] == 0)) {
       t['project_id'] = null;
     }
-    _emit('todo_tasks');
+    // 恢复 = 翻回存活态（core restore 同样发 Update）
+    _emitUpdate('todo_tasks', t);
     return TodoTask.fromJson(t);
   });
 
@@ -3887,7 +3921,7 @@ class MockOrbitBridge implements OrbitBridge {
       throw Exception('task $id 不在回收站');
     }
     store.tasks.remove(id);
-    _emit('todo_tasks');
+    _emitDelete('todo_tasks', t);
   });
 
   @override
@@ -3895,8 +3929,9 @@ class MockOrbitBridge implements OrbitBridge {
     final trashed = _trashed;
     for (final t in trashed) {
       store.tasks.remove(t['id'] as int);
+      // 物理清除逐行发 Delete（core purge_all_trashed_tasks 同口径）
+      _emitDelete('todo_tasks', t);
     }
-    _emit('todo_tasks');
     return trashed.length;
   });
 
@@ -3924,8 +3959,8 @@ class MockOrbitBridge implements OrbitBridge {
         .toList();
     for (final t in expired) {
       store.tasks.remove(t['id'] as int);
+      _emitDelete('todo_tasks', t);
     }
-    if (expired.isNotEmpty) _emit('todo_tasks');
     return TrashPurgeStats(purged: expired.length, guarded: 0, ran: true);
   });
 

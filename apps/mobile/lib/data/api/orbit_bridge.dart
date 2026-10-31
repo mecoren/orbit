@@ -932,7 +932,7 @@ abstract class OrbitBridge {
 
   // ── 事件流（下行通道，替代 Tauri event listen）──
 
-  /// 本地写操作事件 → 全量失效业务缓存
+  /// 本地写操作事件 → 按 table 精确失效业务缓存（未知表回退全量）
   Stream<DbChangeEvent> get dbChanges;
 
   /// 提醒到期事件 → 本地通知 + 重复提醒排程
