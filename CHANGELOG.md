@@ -17,6 +17,19 @@
 
 ## [Unreleased]
 
+### 新增：移动端接入 flutter_miuix（HyperOS 组件库）与 OS4 玻璃（2026-10-31）
+
+移动端 UI 组件体系从「shadcn_flutter 单体系」扩为「shadcn_flutter + flutter_miuix 双体系并存」，按最小侵入原则**只换组件承载、不改页面几何与公共 API**：
+
+- **依赖**：`flutter_miuix: 1.3.0`（pub.dev 精确锁版；OS4 玻璃自 1.2.0 起随包发布，1.3.0 带 shader 逐个降级与 `saveLayer` 模糊修复）。
+- **主题桥接**（`core/theme/miuix_theme.dart`）：`MiuixColors` 54 个语义角色全部由既有 `AppColors`/`OrbitAccents` 派生，与 Material/shadcn 两套主题数值同源；`app.dart` 与测试壳同构装配，亮度按外观页三态解析（不读 `platformBrightness`）。
+- **原语层换承载**：`OrbitCard`→`MiuixCard`（squircle 超椭圆，描边用同一路径自绘）、`OrbitCheckbox`→`MiuixCheckbox`（圆形描画对勾，保留弱化灰完成态与优先级圆环）、`OrbitSpinner`→`MiuixInfiniteProgressIndicator`；新增 `OrbitButton` / `OrbitIconButton` / `OrbitSwitch` / `OrbitProgressBar` / `OrbitFilterChip` / `OrbitDivider`，Material 参数兼容面（`tooltip`/`visualDensity`/`constraints`/`padding`/`iconSize`）全部保留。
+- **OS4 玻璃**：页头换液态玻璃表面（`MiuixGlassPanel` 栏体材质，首帧快照未就绪时回落实时模糊）、底栏换 `MiuixGlassNavigationBar`（滑动指示器 + 弹簧回弹 + 拖动换页）、锚点浮层换 `miuixGlassSurface`；壳用 `MiuixLayerBackdropCapture` 只包页面内容、玻璃消费方在捕获树外共享同一 backdrop（避免自采样）。
+- **全站控件替换**（150+ 调用点）：`FilledButton`/`OutlinedButton`/`TextButton`→`OrbitButton`，`IconButton`→`OrbitIconButton`，`Switch`→`OrbitSwitch`，`LinearProgressIndicator`→`OrbitProgressBar`，`Divider`→`OrbitDivider`，`ChoiceChip` 与手搓筛选容器→`OrbitFilterChip`。
+- **保留**（附理由见 `docs/16`）：`showModalBottomSheet`（与 `OrbitSheetScaffold` 骨架深度耦合）、`TextField`（输入基建与 23 条测试依赖）、`ListTile`、`RefreshIndicator`、`Tooltip`（64 条 `find.byTooltip` 断言）。
+- **验证**：`flutter analyze` 0 issue、`flutter test` 1112 绿；APK 确认 7 个 OS4 shader 打进 `packages/flutter_miuix/shaders/`；Pixel 9 Pro XL 模拟器逐页截图（首页/清单/列表/详情/抽屉/日历/四象限/统计/更多面板/暗色）主路径无回归；真机修复玻璃底栏手势区让位。
+- 组件映射与取舍详见 `docs/16_移动端flutter_miuix组件接入-2026-10-31.md`。
+
 ### 优化：工具栏菜单选中标记统一贴行尾——勾/点三态归一（2026-10-30）
 
 「···」菜单里「隐藏已完成」的勾在行尾，而状态筛选的勾、排序/优先级/视图的圆点仍留在原语左侧 32px 槽位，同一族菜单出现「右勾 / 左勾 / 左点」三种形态；带左侧标记的项文字还比普通项右缩 24px。现抽 `MenuRadioItem` / `MenuCheckboxItem` 两个本地包装，统一 `pl-2 + [&>span]:left-auto right-2`：所有项文本从同一 x 起、状态标记贴右缘（Win11 设置项同款）；符号语义保留——打勾 = 可独立开关，圆点 = 互斥单选。e2e 新增「标记中心落在菜单项右半区」回归锁，docs/04 工具栏段同步。
