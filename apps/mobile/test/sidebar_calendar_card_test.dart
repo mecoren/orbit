@@ -13,6 +13,7 @@ import 'package:orbit/modules/todo/sidebar_screen.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_list_card.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_month_calendar.dart';
 import 'support/orbit_test_app.dart';
+import 'support/seed_dates.dart';
 
 late GoRouter _router;
 
@@ -103,8 +104,9 @@ void main() {
 
   testWidgets('日历：月历整卡 + 选中日空态卡 + 议程组卡', (tester) async {
     // 种子任务皆不在今天（相对日期 now()±N 天）：选中日空态确定出现；
-    // 议程档当月有任务：分组卡确定出现。
+    // 议程档要「当月」有任务——种子 due 是次日，月末最后一天会跨月，先钉回当月
     final bridge = MockOrbitBridge();
+    pinSeedTaskIntoCurrentMonth(bridge);
     _router.go('/todo/calendar');
     await tester.pumpWidget(_wrap(bridge));
     await _settle(tester);

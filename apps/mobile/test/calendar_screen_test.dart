@@ -23,6 +23,7 @@ import 'package:orbit/core/theme/icon_map.dart';
 import 'package:table_calendar/table_calendar.dart'
     show CalendarFormat, TableCalendar;
 import 'support/orbit_test_app.dart';
+import 'support/seed_dates.dart';
 
 Widget _wrap(Widget child, MockOrbitBridge bridge) => ProviderScope(
   overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
@@ -824,6 +825,8 @@ void main() {
 
   testWidgets('议程档：切档隐藏月历网格，仅保留按日分组列表', (tester) async {
     final bridge = _seededBridge();
+    // 议程档只渲染当前月：种子 due 是次日，月末跨月会整行消失，先钉回当月
+    pinSeedTaskIntoCurrentMonth(bridge);
     await tester.pumpWidget(_wrap(const SizedBox(), bridge));
     await settle(tester);
 
