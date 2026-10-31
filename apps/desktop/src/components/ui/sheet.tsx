@@ -29,7 +29,9 @@ function SheetOverlay(
     <SheetPrimitive.Overlay
       data-slot="sheet-overlay"
       className={cn(
-        "fixed inset-0 z-50 bg-black/50 transition-opacity duration-slow data-[state=open]:opacity-100 data-[state=closed]:opacity-0",
+        // 让出自绘标题栏（--title-bar-height）：遮罩盖住它会让最小化/关闭三钮
+        // 在抽屉打开期间完全不可点
+        "fixed inset-x-0 bottom-0 top-[var(--title-bar-height)] z-50 bg-black/50 transition-opacity duration-slow data-[state=open]:opacity-100 data-[state=closed]:opacity-0",
         props.className,
       )}
       {...props}
@@ -51,9 +53,9 @@ function SheetContent(
         className={cn(
           "bg-background fixed z-50 flex flex-col gap-4 shadow-lg transition-all duration-slow data-[state=open]:opacity-100 data-[state=closed]:opacity-0",
           side === "right" &&
-            "inset-y-0 right-0 h-full w-3/4 border-l sm:max-w-sm data-[state=open]:translate-x-0 data-[state=closed]:translate-x-full",
+            "bottom-0 right-0 top-[var(--title-bar-height)] w-3/4 border-l sm:max-w-sm data-[state=open]:translate-x-0 data-[state=closed]:translate-x-full",
           side === "left" &&
-            "inset-y-0 left-0 h-full w-3/4 border-r sm:max-w-sm data-[state=open]:translate-x-0 data-[state=closed]:-translate-x-full",
+            "bottom-0 left-0 top-[var(--title-bar-height)] w-3/4 border-r sm:max-w-sm data-[state=open]:translate-x-0 data-[state=closed]:-translate-x-full",
           side === "top" &&
             "inset-x-0 top-0 h-auto border-b data-[state=open]:translate-y-0 data-[state=closed]:-translate-y-full",
           side === "bottom" &&

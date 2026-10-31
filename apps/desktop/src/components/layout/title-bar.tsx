@@ -50,6 +50,9 @@ export function TitleBar() {
   //（? 为 Shift+/ 组合；输入框/文本域聚焦时豁免——正文打问号不弹帮助）
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      // Ctrl/Cmd+K 与 Ctrl/Cmd+P 保持全局优先（不按输入态豁免）：
+      // 「详情抽屉里按 Ctrl+K 切到别的任务」是既有产品路径（e2e 有回归用例），
+      // 输入框内的「删至行尾」让位于全局搜索
       if (e.ctrlKey || e.metaKey) {
         if (e.key === "p") {
           e.preventDefault();
@@ -73,7 +76,7 @@ export function TitleBar() {
   return (
     <>
       <div
-        className="title-bar relative flex h-9 items-center border-b bg-background/60 dark:bg-background/85"
+        className="title-bar relative flex h-[var(--title-bar-height)] items-center border-b bg-background/60 dark:bg-background/85"
         data-tauri-drag-region
         onDoubleClick={() => appWindow.toggleMaximize()}
       >
