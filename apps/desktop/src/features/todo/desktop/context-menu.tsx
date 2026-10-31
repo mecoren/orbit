@@ -12,7 +12,7 @@
  * 因此菜单树只在**真正右键打开时**才挂载：关闭态只剩一个 `display: contents`
  * 的事件壳，没有常驻 fixed 哨兵，也没有 Radix Root。
  */
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 
 import {
   DropdownMenu,
@@ -38,22 +38,46 @@ export function ContextMenuBase({
 }) {
   const [open, setOpenState] = useState(false);
   const [pos, setPos] = useState({ x: 0, y: 0 });
+  /** 打开前的焦点元素（关闭后归还；哨兵随 open=false 卸载，Radix 无处归还） */
+  const focusBackRef = useRef<HTMLElement | null>(null);
   const setOpen = (next: boolean) => {
     setOpenState(next);
     onOpenChange?.(next);
+    if (!next) {
+      const target = focusBackRef.current;
+      requestAnimationFrame(() => target?.focus?.());
+    }
   };
   const close = () => setOpen(false);
 
+  /** 统一打开入口：记录焦点归还目标 + 锚点坐标 */
+  const openAt = (x: number, y: number, target: HTMLElement | null) => {
+    focusBackRef.current =
+      target?.closest<HTMLElement>("[tabindex], button, a") ??
+      (document.activeElement as HTMLElement | null);
+    setPos({ x, y });
+    setOpen(true);
+  };
+
   return (
     <>
-      {/* 捕获右键，不阻止内部其他交互 */}
+      {/* 捕获右键与键盘唤出（Shift+F10 / 菜单键），不阻止内部其他交互 */}
       <span
         className="contents"
         onContextMenu={(e) => {
           e.preventDefault();
           e.stopPropagation();
-          setPos({ x: e.clientX, y: e.clientY });
-          setOpen(true);
+          openAt(e.clientX, e.clientY, e.target as HTMLElement | null);
+        }}
+        onKeyDown={(e) => {
+          // 行本体已 role="button" tabIndex=0：补键盘入口后，菜单里的独占能力
+          // （复制、标签、提醒、评论、项目归档删除、进入多选）不再只有鼠标可达
+          if (e.key !== "ContextMenu" && !(e.shiftKey && e.key === "F10")) return;
+          const el = e.target as HTMLElement | null;
+          if (!el) return;
+          e.preventDefault();
+          const rect = el.getBoundingClientRect();
+          openAt(rect.left + 16, rect.top + 16, el);
         }}
       >
         {children}
