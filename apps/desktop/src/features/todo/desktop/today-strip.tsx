@@ -84,9 +84,9 @@ export function TodayStrip({ tasks }: TodayStripProps) {
       <Tooltip>
         <TooltipTrigger asChild>
           <span className="flex items-center gap-1.5 text-muted-foreground">
-            <CircleCheck className="size-3.5 text-emerald-600" />
+            <CircleCheck className="size-3.5 text-success" />
             今日已达成{" "}
-            <b className={cn("tabular-nums", doneToday > 0 ? "text-emerald-600" : "text-muted-foreground")}>
+            <b className={cn("tabular-nums", doneToday > 0 ? "text-success" : "text-muted-foreground")}>
               {doneToday}
             </b>{" "}
             项
@@ -106,7 +106,7 @@ export function TodayStrip({ tasks }: TodayStripProps) {
               status.level === "over"
                 ? "text-destructive"
                 : status.level === "tight"
-                  ? "text-amber-600"
+                  ? "text-warning"
                   : "text-muted-foreground",
             )}
           >

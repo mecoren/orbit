@@ -97,7 +97,7 @@ export function LogbookView({
     return (
       <div aria-busy className="flex min-h-0 flex-1 flex-col gap-2 p-4">
         {Array.from({ length: 6 }, (_, i) => (
-          <div key={i} className="h-12 animate-pulse rounded bg-muted" />
+          <div key={i} className="h-12 animate-pulse rounded bg-accent" />
         ))}
       </div>
     );
@@ -142,7 +142,7 @@ export function LogbookView({
             >
               {item.kind === "day" ? (
                 <div className="mt-4 flex items-center gap-2 px-1 py-1.5 first:mt-0">
-                  <CheckCircle2 className="size-3.5 text-emerald-500" aria-hidden />
+                  <CheckCircle2 className="size-3.5 text-success" aria-hidden />
                   <span
                     className={cn(
                       "rounded px-1.5 py-0.5 text-xs font-medium",

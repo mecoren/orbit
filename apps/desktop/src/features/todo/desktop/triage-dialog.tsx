@@ -334,7 +334,7 @@ export function TriageDialog({ open, onOpenChange, tasks, projects }: TriageDial
 
         {finished ? (
           <div className="flex flex-col items-center gap-2 py-8 text-muted-foreground">
-            <CheckCircle2 className="size-8 text-emerald-500" />
+            <CheckCircle2 className="size-8 text-success" />
             <p className="text-sm font-medium text-foreground">收件箱已清空</p>
             <p className="text-xs">{formatTriageSummary(moved, scheduled, skipped, deleted)}</p>
           </div>

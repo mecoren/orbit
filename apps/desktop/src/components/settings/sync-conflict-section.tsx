@@ -244,7 +244,7 @@ export function SyncConflictSection() {
                 )}
               >
                 <div className="flex items-start gap-3">
-                  <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-500" />
+                  <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm">
                       {r.record_title || r.record_uuid}
@@ -314,7 +314,7 @@ export function SyncConflictSection() {
                             {FIELD_LABELS[d.key] ?? d.key}
                           </span>
                           <span className="break-all">{fmtValue(d.key, d.after)}</span>
-                          <span className="break-all text-amber-600 dark:text-amber-500">
+                          <span className="break-all text-warning">
                             {fmtValue(d.key, d.before)}
                           </span>
                         </div>

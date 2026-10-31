@@ -61,7 +61,7 @@ function hhmmOf(ms: number): string {
 /** 理由徽标的色调（逾期/截止 = 警示系；其余中性） */
 function reasonTone(reason: string): string {
   if (reason.startsWith("已逾期")) return "bg-red-500/10 text-red-600 dark:text-red-400";
-  if (reason.startsWith("截止")) return "bg-amber-500/15 text-amber-600 dark:text-amber-400";
+  if (reason.startsWith("截止")) return "bg-warning/15 text-warning";
   if (reason === "紧急优先" || reason === "高优先级")
     return "bg-primary/10 text-primary";
   return "bg-muted text-muted-foreground";
@@ -207,7 +207,7 @@ export function PlanDayDialog({ open, onOpenChange }: PlanDayDialogProps) {
         ) : (
           <>
             {plan.overloaded && (
-              <div className="flex items-center gap-2 rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
+              <div className="flex items-center gap-2 rounded-md bg-warning/10 px-3 py-2 text-xs text-warning">
                 <TriangleAlert className="size-3.5 shrink-0" />
                 候选总量超出今日剩余容量 {plan.load_minutes - plan.capacity_minutes} 分钟——
                 建议把低优先级项移到明天。

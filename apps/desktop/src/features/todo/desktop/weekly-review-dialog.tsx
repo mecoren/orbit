@@ -198,7 +198,7 @@ export function WeeklyReviewDialog({ open, onOpenChange, tasks, heading, onFinis
         <div className="max-h-64 overflow-y-auto">
           {currentList.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-8 text-muted-foreground">
-              <CheckCircle2 className="size-8 text-emerald-500" />
+              <CheckCircle2 className="size-8 text-success" />
               <p className="text-sm">{meta.title}已处理完</p>
             </div>
           ) : (

@@ -63,13 +63,14 @@ function ScrollBar({
     <ScrollAreaPrimitive.ScrollAreaScrollbar
       data-slot="scroll-area-scrollbar"
       orientation={orientation}
-      // 与全局滚动条美化一致：14px 轨道 + 主题色圆角滑块（2px 内缩）
+      // 与全局滚动条美化一致：10px 轨道（与 index.css 的 ::-webkit-scrollbar
+      // 同宽，两套滚动区并排时不再一粗一细）+ 主题色圆角滑块（2px 内缩）
       className={cn(
         "group flex touch-none select-none transition-colors",
         // 轨道可穿透：悬浮滚动条不拦截下层内容的鼠标交互
         "pointer-events-none",
-        orientation === "vertical" && "h-full w-3.5 p-[2px]",
-        orientation === "horizontal" && "h-3.5 flex-col p-[2px]",
+        orientation === "vertical" && "h-full w-2.5 p-[2px]",
+        orientation === "horizontal" && "h-2.5 flex-col p-[2px]",
         className,
       )}
       {...props}
