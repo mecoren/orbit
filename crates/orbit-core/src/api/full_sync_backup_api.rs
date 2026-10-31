@@ -581,6 +581,34 @@ fn ensure_backup_self_consistent(
     Ok(())
 }
 
+/// 全量恢复预检：清单里的每张表必须在白名单内且当前库真实存在。
+///
+/// 必须在开启事务/删除任何行之前调用——否则恢复走到一半才发现表不可用，
+/// 只能依赖回滚兜底；预检失败时原库完全不动。
+pub(crate) async fn ensure_restore_manifest_tables(
+    pool: &SqlitePool,
+    table_counts: &BTreeMap<String, usize>,
+) -> FullSyncBackupResult<()> {
+    for table_name in table_counts.keys() {
+        if !business_api::FULL_BACKUP_TABLES.contains(&table_name.as_str()) {
+            return Err(FullSyncBackupError::InvalidFormat(format!(
+                "备份包含当前版本不支持的业务表 {table_name}，已中止恢复"
+            )));
+        }
+        let exists: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?")
+                .bind(table_name)
+                .fetch_one(pool)
+                .await?;
+        if exists.0 == 0 {
+            return Err(FullSyncBackupError::InvalidFormat(format!(
+                "当前数据库缺少备份声明的表 {table_name}，已中止恢复"
+            )));
+        }
+    }
+    Ok(())
+}
+
 /// 从 `.orfullsync` 文件全量覆盖恢复（兼容遗留 `.waitfullsync`）
 ///
 /// 流程：
@@ -639,6 +667,8 @@ pub async fn import_full_sync_backup(
 
     // 4. 备份自洽性闸门（必须在开启事务**之前**判定，见 `ensure_backup_self_consistent`）
     ensure_backup_self_consistent(&decoded.manifest, &decoded.table_data)?;
+    // 表存在性/白名单同样前置检查，失败时原库尚未被 DELETE
+    ensure_restore_manifest_tables(pool, &decoded.manifest.table_counts).await?;
 
     // 5. 开启事务：全量覆盖恢复
     let mut tx = pool.begin().await?;
@@ -674,27 +704,40 @@ pub async fn import_full_sync_backup(
         }
     }
 
-    // 遍历 business/*.json，逐条直接 INSERT（保留备份原始字段）
-    for (table_name, json_str) in &decoded.table_data {
-        // 校验表名在白名单内
-        if !business_api::FULL_BACKUP_TABLES.contains(&table_name.as_str()) {
+    // 按 FULL_BACKUP_TABLES 的父先子后顺序写入——business/*.json 收集在
+    // BTreeMap 中天然是字母序，子表会先于 todo_tasks 插入并触发外键失败。
+    for table_name in business_api::FULL_BACKUP_TABLES {
+        let Some(json_str) = decoded.table_data.get(*table_name) else {
             continue;
-        }
+        };
 
         let records: Vec<serde_json::Map<String, serde_json::Value>> =
             match serde_json::from_str(json_str) {
                 Ok(v) => v,
                 Err(e) => {
-                    total_errors.push(format!("{}: JSON 解析失败: {}", table_name, e));
+                    total_errors.push(format!("{table_name}: JSON 解析失败: {e}"));
                     continue;
                 }
             };
+        let declared = decoded
+            .manifest
+            .table_counts
+            .get(*table_name)
+            .copied()
+            .unwrap_or(0);
+        if records.len() != declared {
+            total_errors.push(format!(
+                "{table_name}: 清单声明 {declared} 条，实际 {} 条",
+                records.len()
+            ));
+            continue;
+        }
 
         // 加载该表列元数据，用于对导入字段按声明类型规范化
         let columns = match load_table_columns_in_tx(&mut tx, table_name).await {
             Ok(cols) => cols,
             Err(e) => {
-                total_errors.push(format!("{}: 加载表结构失败: {}", table_name, e));
+                total_errors.push(format!("{table_name}: 加载表结构失败: {e}"));
                 continue;
             }
         };
@@ -703,10 +746,26 @@ pub async fn import_full_sync_backup(
             match insert_record_raw_in_tx(&mut tx, table_name, record, &columns).await {
                 Ok(()) => total_success += 1,
                 Err(e) => {
-                    total_errors.push(format!("{} 第 {} 条: {}", table_name, idx + 1, e));
+                    total_errors.push(format!("{table_name} 第 {} 条: {e}", idx + 1));
                 }
             }
         }
+    }
+
+    // 恢复是全量覆盖：任何一行写失败都只能整体回滚，绝不能把已 DELETE
+    // 的空库/半库提交出去（错误详情仍随 Err 文本返回给壳层）
+    if !total_errors.is_empty() {
+        let detail = total_errors
+            .iter()
+            .take(20)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("; ");
+        let count = total_errors.len();
+        tx.rollback().await?;
+        return Err(FullSyncBackupError::InvalidFormat(format!(
+            "恢复失败（{count} 处），已回滚，原数据未改动：{detail}"
+        )));
     }
 
     // 提交事务

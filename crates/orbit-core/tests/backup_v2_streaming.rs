@@ -471,9 +471,15 @@ async fn path_peek_reads_meta_and_preview() {
     seed_tasks(&src, 8).await;
     let dir = tmp_dir();
     let target = dir.join("peek-path.orfullsync");
-    export_v2_to_file(&src, &target, PASSWORD, "dev-path", Some("按路径设备".into()))
-        .await
-        .unwrap();
+    export_v2_to_file(
+        &src,
+        &target,
+        PASSWORD,
+        "dev-path",
+        Some("按路径设备".into()),
+    )
+    .await
+    .unwrap();
 
     let svc = SyncCryptoService::new(&dir);
     svc.init(PASSWORD).unwrap();
@@ -517,6 +523,285 @@ async fn is_v2_backup_path_reads_only_magic() {
     // 文件不存在：报 IO 错误
     assert!(is_v2_backup_path(&dir.join("missing.orfullsync")).is_err());
     std::fs::remove_dir_all(&dir).ok();
+}
+
+/// 构造 v1 加密备份（走旧格式解码路径）
+fn v1_backup_bytes(table_data: BTreeMap<String, String>, schema_version: i64) -> Vec<u8> {
+    use orbit_core::full_sync_backup::encoder::{EncodeParams, encode_backup};
+    use orbit_core::full_sync_backup::manifest::BackupManifest;
+
+    let mut counts = BTreeMap::new();
+    for (table, json) in &table_data {
+        let n = serde_json::from_str::<Vec<serde_json::Value>>(json)
+            .unwrap()
+            .len();
+        counts.insert(table.clone(), n);
+    }
+    let manifest = BackupManifest::new(
+        "dev-v1".into(),
+        Some("v1 设备".into()),
+        schema_version,
+        counts,
+        1_700_000_000,
+        "0.1.0".into(),
+    );
+    let schema_json = serde_json::to_string(&serde_json::json!({
+        "version": schema_version
+    }))
+    .unwrap();
+    encode_backup(EncodeParams {
+        sync_password: PASSWORD,
+        manifest: &manifest,
+        table_data: &table_data,
+        schema_version_json: &schema_json,
+    })
+    .unwrap()
+    .bytes
+}
+
+#[tokio::test]
+async fn v1_restore_imports_child_tables_after_parents() {
+    use orbit_core::sync_crypto::SyncCryptoService;
+
+    let src = setup_db().await;
+    let task_id: i64 = sqlx::query_scalar(
+        "INSERT INTO todo_tasks \
+         (uuid, title, project_id, status, done, is_deleted, created_at, updated_at, version) \
+         VALUES ('v1-parent', 'v1 父任务', 1, 'pending', 0, 0, 10, 10, 1) \
+         RETURNING id",
+    )
+    .fetch_one(&src)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO todo_subtasks \
+         (uuid, task_id, title, is_deleted, created_at, updated_at, version) \
+         VALUES ('v1-child', ?, 'v1 子任务', 0, 11, 11, 1)",
+    )
+    .bind(task_id)
+    .execute(&src)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO todo_comments \
+         (uuid, task_id, content, is_deleted, created_at, updated_at, version) \
+         VALUES ('v1-comment', ?, 'v1 评论', 0, 12, 12, 1)",
+    )
+    .bind(task_id)
+    .execute(&src)
+    .await
+    .unwrap();
+
+    let mut table_data = BTreeMap::new();
+    for table in [
+        "todo_projects",
+        "todo_tasks",
+        "todo_subtasks",
+        "todo_comments",
+    ] {
+        let json = business_api::list_records_as_json(&src, table)
+            .await
+            .unwrap();
+        table_data.insert(table.to_string(), json);
+    }
+    let schema = query_schema_version(&src).await.unwrap();
+    let bytes = v1_backup_bytes(table_data, schema);
+
+    let dst = setup_db().await;
+    let dir = tmp_dir();
+    let svc = SyncCryptoService::new(&dir);
+    svc.init(PASSWORD).unwrap();
+    let result = import_full_sync_backup(&dst, &svc, &bytes, false)
+        .await
+        .unwrap();
+    assert_eq!(
+        result.error_count, 0,
+        "v1 恢复不应有错误：{:?}",
+        result.errors
+    );
+
+    let subtask_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM todo_subtasks WHERE uuid='v1-child'")
+            .fetch_one(&dst)
+            .await
+            .unwrap();
+    let comment_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM todo_comments WHERE uuid='v1-comment'")
+            .fetch_one(&dst)
+            .await
+            .unwrap();
+    assert_eq!(subtask_count, 1, "子任务必须随父任务一起恢复");
+    assert_eq!(comment_count, 1, "评论必须随父任务一起恢复");
+
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[tokio::test]
+async fn v1_restore_rolls_back_when_any_row_fails() {
+    use orbit_core::sync_crypto::SyncCryptoService;
+
+    let dir = tmp_dir();
+    let svc = SyncCryptoService::new(&dir);
+    svc.init(PASSWORD).unwrap();
+
+    let dst = setup_db().await;
+    sqlx::query(
+        "INSERT INTO todo_tasks \
+         (uuid, title, status, done, is_deleted, created_at, updated_at, version) \
+         VALUES ('keep-v1', '原有任务', 'pending', 0, 0, 1, 1, 1)",
+    )
+    .execute(&dst)
+    .await
+    .unwrap();
+    let before = count_tasks(&dst).await;
+
+    let bad_task = serde_json::json!([{
+        "uuid": "bad-v1",
+        "title": "外键不存在的任务",
+        "project_id": 999_999,
+        "priority": 0,
+        "status": "pending",
+        "done": 0,
+        "is_deleted": 0,
+        "created_at": 1,
+        "updated_at": 1,
+        "version": 1
+    }]);
+    let mut table_data = BTreeMap::new();
+    table_data.insert("todo_tasks".to_string(), bad_task.to_string());
+    let schema = query_schema_version(&dst).await.unwrap();
+    let bytes = v1_backup_bytes(table_data, schema);
+
+    let result = import_full_sync_backup(&dst, &svc, &bytes, false).await;
+    assert!(
+        result.is_err(),
+        "任一行写入失败时必须整体失败，不能返回成功"
+    );
+
+    assert_eq!(count_tasks(&dst).await, before, "失败恢复不得清空原有数据");
+    let keep: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM todo_tasks WHERE uuid='keep-v1'")
+        .fetch_one(&dst)
+        .await
+        .unwrap();
+    assert_eq!(keep, 1, "原任务必须随事务回滚保留");
+
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[tokio::test]
+async fn v2_restore_rolls_back_when_any_row_fails() {
+    let dst = setup_db().await;
+    sqlx::query(
+        "INSERT INTO todo_tasks \
+         (uuid, title, status, done, is_deleted, created_at, updated_at, version) \
+         VALUES ('keep-v2', '原有任务', 'pending', 0, 0, 1, 1, 1)",
+    )
+    .execute(&dst)
+    .await
+    .unwrap();
+    let before = count_tasks(&dst).await;
+
+    use orbit_core::full_sync_backup::manifest::BackupManifest;
+    let schema = query_schema_version(&dst).await.unwrap();
+    let mut counts = BTreeMap::new();
+    counts.insert("todo_tasks".to_string(), 1usize);
+    let manifest = BackupManifest::new(
+        "dev-bad-v2".into(),
+        None,
+        schema,
+        counts,
+        1_700_000_000,
+        "0.1.0".into(),
+    );
+
+    let mut writer = FrameWriter::new(Vec::new(), PASSWORD, ITERATIONS, FRAME_PLAIN_MAX).unwrap();
+    let meta = serde_json::to_vec(&serde_json::json!({
+        "kind": "meta",
+        "manifest": manifest,
+        "schema_version": {"version": schema},
+    }))
+    .unwrap();
+    writer.write(&meta).unwrap();
+    writer.flush_frame().unwrap();
+    writer
+        .write(br#"{"kind":"table","name":"todo_tasks"}"#)
+        .unwrap();
+    writer.flush_frame().unwrap();
+    let bad_task = serde_json::json!({
+        "uuid": "bad-v2",
+        "title": "外键不存在的任务",
+        "project_id": 999_999,
+        "priority": 0,
+        "status": "pending",
+        "done": 0,
+        "is_deleted": 0,
+        "created_at": 1,
+        "updated_at": 1,
+        "version": 1
+    });
+    writer.write(bad_task.to_string().as_bytes()).unwrap();
+    writer.flush_frame().unwrap();
+    writer
+        .write(br#"{"kind":"table_end","name":"todo_tasks"}"#)
+        .unwrap();
+    writer.flush_frame().unwrap();
+    writer.write(br#"{"kind":"end"}"#).unwrap();
+    writer.flush_frame().unwrap();
+    let bytes = writer.finish().unwrap();
+
+    let result = import_v2_bytes(&dst, &bytes, PASSWORD, false).await;
+    assert!(result.is_err(), "v2 任一行写入失败时必须整体回滚");
+
+    assert_eq!(count_tasks(&dst).await, before, "失败恢复不得清空原有数据");
+    let keep: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM todo_tasks WHERE uuid='keep-v2'")
+        .fetch_one(&dst)
+        .await
+        .unwrap();
+    assert_eq!(keep, 1, "原任务必须随事务回滚保留");
+}
+
+#[tokio::test]
+async fn v2_restore_rejects_manifest_table_without_frames() {
+    let dst = setup_db().await;
+    sqlx::query(
+        "INSERT INTO todo_tasks \
+         (uuid, title, status, done, is_deleted, created_at, updated_at, version) \
+         VALUES ('keep-empty-v2', '原有任务', 'pending', 0, 0, 1, 1, 1)",
+    )
+    .execute(&dst)
+    .await
+    .unwrap();
+    let before = count_tasks(&dst).await;
+
+    use orbit_core::full_sync_backup::manifest::BackupManifest;
+    let schema = query_schema_version(&dst).await.unwrap();
+    let mut counts = BTreeMap::new();
+    counts.insert("todo_tasks".to_string(), 1usize);
+    let manifest = BackupManifest::new(
+        "dev-missing-frames".into(),
+        None,
+        schema,
+        counts,
+        1_700_000_000,
+        "0.1.0".into(),
+    );
+
+    let mut writer = FrameWriter::new(Vec::new(), PASSWORD, ITERATIONS, FRAME_PLAIN_MAX).unwrap();
+    let meta = serde_json::to_vec(&serde_json::json!({
+        "kind": "meta",
+        "manifest": manifest,
+        "schema_version": {"version": schema},
+    }))
+    .unwrap();
+    writer.write(&meta).unwrap();
+    writer.flush_frame().unwrap();
+    writer.write(br#"{"kind":"end"}"#).unwrap();
+    writer.flush_frame().unwrap();
+    let bytes = writer.finish().unwrap();
+
+    let result = import_v2_bytes(&dst, &bytes, PASSWORD, false).await;
+    assert!(result.is_err(), "清单声明有表但正文缺帧时必须拒绝恢复");
+    assert_eq!(count_tasks(&dst).await, before, "拒绝恢复不得清空原有数据");
 }
 
 #[allow(dead_code)]

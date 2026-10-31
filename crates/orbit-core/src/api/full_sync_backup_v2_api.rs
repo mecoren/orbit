@@ -8,7 +8,7 @@
 //!
 //! v1 读兼容由调用方按 magic 分流（`is_v2_backup`）。
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::io::BufWriter;
 use std::path::Path;
 
@@ -211,7 +211,8 @@ pub fn peek_v2_meta(bytes: &[u8], sync_password: &str) -> FullSyncBackupResult<V
 
 /// v2 导入：逐帧解密 → 逐条写库（同一事务内先 DELETE 再 INSERT）
 ///
-/// 内存只保留当前帧明文与当前记录。单条失败记入 errors 不中断（与 v1 同口径）。
+/// 内存只保留当前帧明文与当前记录。任一行失败或表帧不完整都会整体回滚，
+/// 不允许提交半恢复结果（与 v1 同口径）。
 pub async fn import_v2_bytes(
     pool: &SqlitePool,
     bytes: &[u8],
@@ -533,24 +534,14 @@ async fn import_frames_into_pool(
     mut reader: FrameReader<impl std::io::Read>,
     manifest: BackupManifest,
 ) -> FullSyncBackupResult<crate::api::full_sync_backup_api::ImportResult> {
+    // 表存在性/白名单预检必须在 DELETE 之前完成，失败时原库未被触碰
+    crate::api::full_sync_backup_api::ensure_restore_manifest_tables(pool, &manifest.table_counts)
+        .await?;
+
     let mut tx = pool.begin().await?;
     let mut total_errors: Vec<String> = Vec::new();
 
     for table_name in manifest.table_counts.keys() {
-        if !business_api::FULL_BACKUP_TABLES.contains(&table_name.as_str()) {
-            total_errors.push(format!("{table_name}: 表名不在白名单"));
-            continue;
-        }
-        let exists: (i64,) =
-            sqlx::query_as("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?")
-                .bind(table_name)
-                .fetch_one(&mut *tx)
-                .await
-                .map_err(FullSyncBackupError::Db)?;
-        if exists.0 == 0 {
-            total_errors.push(format!("{table_name}: 表不存在，跳过"));
-            continue;
-        }
         sqlx::query(&format!("DELETE FROM \"{table_name}\""))
             .execute(&mut *tx)
             .await
@@ -560,6 +551,9 @@ async fn import_frames_into_pool(
     let mut current_table: Option<String> = None;
     let mut total_success: i64 = 0;
     let mut saw_end = false;
+    let mut last_table_index: Option<usize> = None;
+    let mut seen_tables: BTreeSet<String> = BTreeSet::new();
+    let mut row_counts: BTreeMap<String, usize> = BTreeMap::new();
     let mut columns_cache: BTreeMap<String, HashMap<String, ColumnMeta>> = BTreeMap::new();
 
     while let Some(frame) = reader.next_frame()? {
@@ -577,14 +571,46 @@ async fn import_frames_into_pool(
         if let Some(kind) = parsed.get("kind").and_then(|k| k.as_str()) {
             match kind {
                 "table" => {
-                    current_table = Some(parsed["name"].as_str().unwrap_or_default().to_string());
+                    let name = parsed["name"].as_str().unwrap_or_default().to_string();
+                    if !manifest.table_counts.contains_key(&name) {
+                        total_errors.push(format!("表 {name}: 帧未在清单中声明"));
+                        current_table = None;
+                        continue;
+                    }
+                    if !seen_tables.insert(name.clone()) {
+                        total_errors.push(format!("表 {name}: 重复的表边界帧"));
+                        current_table = None;
+                        continue;
+                    }
+                    let pos = business_api::FULL_BACKUP_TABLES
+                        .iter()
+                        .position(|t| *t == name.as_str())
+                        .unwrap_or(usize::MAX);
+                    if last_table_index.is_some_and(|prev| pos <= prev) {
+                        total_errors.push(format!("表 {name}: 帧顺序不符合父先子后的恢复顺序"));
+                    }
+                    last_table_index = Some(pos);
+                    row_counts.insert(name.clone(), 0);
+                    current_table = Some(name);
                 }
-                "table_end" => current_table = None,
+                "table_end" => {
+                    let name = parsed["name"].as_str().unwrap_or_default();
+                    if current_table.as_deref() == Some(name) {
+                        current_table = None;
+                    } else {
+                        total_errors.push(format!("表 {name}: 结束帧与当前表不匹配"));
+                        current_table = None;
+                    }
+                }
                 "end" => {
+                    if current_table.is_some() {
+                        total_errors.push("备份结束时仍有未闭合的表帧".to_string());
+                    }
                     saw_end = true;
                     break;
                 }
                 "meta" => {
+                    tx.rollback().await?;
                     return Err(FullSyncBackupError::InvalidFormat(
                         "v2 正文出现重复元数据帧".into(),
                     ));
@@ -599,7 +625,11 @@ async fn import_frames_into_pool(
             continue;
         };
         if !business_api::FULL_BACKUP_TABLES.contains(&table.as_str()) {
+            total_errors.push(format!("表 {table}: 不在恢复白名单"));
             continue;
+        }
+        if let Some(count) = row_counts.get_mut(&table) {
+            *count += 1;
         }
         if !columns_cache.contains_key(&table) {
             match load_table_columns_in_tx(&mut tx, &table).await {
@@ -624,9 +654,35 @@ async fn import_frames_into_pool(
     }
 
     if !saw_end {
+        tx.rollback().await?;
         return Err(FullSyncBackupError::InvalidFormat(
             "v2 备份缺少结束标记（可能被截断）".into(),
         ));
+    }
+    for (table_name, declared) in &manifest.table_counts {
+        if !seen_tables.contains(table_name) {
+            total_errors.push(format!("{table_name}: 清单声明有表但正文缺少表帧"));
+            continue;
+        }
+        let actual = row_counts.get(table_name).copied().unwrap_or(0);
+        if actual != *declared {
+            total_errors.push(format!(
+                "{table_name}: 清单声明 {declared} 条，实际 {actual} 条"
+            ));
+        }
+    }
+    if !total_errors.is_empty() {
+        let detail = total_errors
+            .iter()
+            .take(20)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("; ");
+        let count = total_errors.len();
+        tx.rollback().await?;
+        return Err(FullSyncBackupError::InvalidFormat(format!(
+            "v2 恢复失败（{count} 处），已回滚，原数据未改动：{detail}"
+        )));
     }
     tx.commit().await?;
 
