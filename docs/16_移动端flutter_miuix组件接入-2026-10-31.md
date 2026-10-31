@@ -85,6 +85,43 @@ OrbitGlassScope（向下暴露同一个 backdrop）
   `orbit_empty_state_test`（断言从「内部 painter 字段」收敛到「组件契约」）；
 - 依赖解析：`pubspec.lock` 记录 `flutter_miuix 1.3.0`（hosted，sha256 与 pub.dev 一致）。
 
+### 3.1 构建与资源验证（Android）
+
+- `flutter build apk --debug` 通过；
+- **7 个 OS4 shader 确认打进 APK**：
+  `assets/flutter_assets/packages/flutter_miuix/shaders/` 下
+  `miuix_os4_glass/mask/stroke/shadow/rim/blend.frag` + `miuix_bloom_stroke.frag` 全部存在
+  ——玻璃路径在真机上可加载，不是"只有回退实色"。
+
+### 3.2 实机验收（Pixel 9 Pro XL 模拟器，Android 17 / API 37，1080×2400）
+
+逐页截图核对，主路径无回归：
+
+| 场景 | 结果 |
+|---|---|
+| 解锁页 | squircle 主按钮 + 描边按钮正常 |
+| 首页（今天） | OS4 玻璃底栏（滑动指示器胶囊、选中态强调色）+ 玻璃页头 + squircle「新建任务」 |
+| 清单页 | 分段卡片（首/中/末段圆角拼接）+ 玻璃页头（内容滚过时磨砂可见） |
+| 任务列表（300 条示例数据） | 圆形勾选框（空心环 + 优先级红/橙/蓝/灰配色）+ 角标 90 |
+| 勾选交互 | 计数 90→89、今日已完成 1→2、底栏角标同步（写路径 + 失效链正常） |
+| 详情页 | squircle 卡片、圆头进度条（子任务 1/2）、已完成灰填充勾选框 |
+| 优先级抽屉 | 选项行/色点/当前值对勾齐全，点选即关 |
+| 日历页 | squircle 选中日块、农历/休班徽标、圆形勾选框 |
+| 四象限 | 四张 squircle 卡片 + 圆形勾选框 + 分隔线 |
+| 统计页 | 热力图、条形图、squircle 卡片正常 |
+| 「更多」面板 | 玻璃浮层锚在「更多」页签上方，条目/编辑入口齐全 |
+| 暗色主题 | 深色玻璃底栏/页头、角标与文字对比度正常 |
+
+**验收中发现并修复的一处真机问题**：OS4 玻璃导航栏自身只画 54 高玻璃条 +
+3dp 悬浮边距，**不吃 `viewPadding.bottom`**，系统手势条与页签图标叠在一起
+（`cad2800` 已补 `EdgeInsets.only(bottom: viewPadding.bottom)`，等价旧实现的
+`SafeArea(top: false)`）。
+
+**对照基线确认的非回归项**：底部抽屉（快速添加 / 选择 / 确认）在 `main` HEAD
+上同样是「全屏白底 + 内容贴底」的观感——这是 `showModalBottomSheet` +
+`isScrollControlled: true` 的既有行为（基线 APK 同点位截图一致，widget 测试
+中两者的 `BottomSheet` rect 也完全相同），不是本次换组件引入的。
+
 ## 四、已知取舍（改前必读）
 
 1. **勾选框形态**：方角 → 圆形（HyperOS 语言）。若产品要回方角，改
