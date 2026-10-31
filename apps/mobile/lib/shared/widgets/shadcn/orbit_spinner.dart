@@ -1,26 +1,23 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
+import 'package:flutter_miuix/miuix.dart';
 
-import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/orbit_accents.dart';
 
-// ── 几何比例（与参考实现 PiggyCount `piggy_spinner.dart` 同源）──
-// 全部按环半径 / 边长比例表达，任意 [OrbitSpinner.size] 下观感一致；
-// 禁止改成裸数字（布局尺寸一律走 token / 具名常量，见 AGENTS.md）。
-/// 环描边宽度 / 边长。
+// ── 几何比例（HyperOS `InfiniteProgressIndicator` 同源口径）──
+// 全部按边长比例表达，任意 [OrbitSpinner.size] 下观感一致；禁止改成裸数字
+//（布局尺寸一律走 token / 具名常量，见 AGENTS.md）。
+/// 环描边宽度 / 边长（Miuix 默认 2/20 = 0.1，取 0.08 与本仓更细的图标线宽同档）
 const double _kSpinnerStrokeRatio = 0.08;
 
-/// 点心到圆心的距离 / 环半径。
-const double _kSpinnerOrbitRatio = 0.42;
+/// 绕行点半径 / 边长（Miuix 默认 2/20 = 0.1）
+const double _kSpinnerDotRatio = 0.10;
 
-/// 点半径 / 环半径。
-const double _kSpinnerDotRatio = 0.34;
-
-/// 轨道（环）相对前景色的透明度；点用实色，两者拉开层次。
-const double _kSpinnerTrackAlpha = 0.28;
-
-/// 加载指示器（设计系统 v3 原语层）：静止的细环 + 一个沿环内轨道匀速绕行的实心点。
+/// 加载指示器（原语层：flutter_miuix `MiuixInfiniteProgressIndicator` 承载）
+///
+/// **2026-10-31 换承载**：原实现是自绘 CustomPainter（细环 + 绕行实心点），
+/// 现改为 HyperOS 的 `MiuixInfiniteProgressIndicator`——同一套「静止细环 +
+/// 环内绕行圆点」语义，但描边圆头、点尺寸与轨道内缩按 miuix 原版标定
+/// （源端 Compose `InfiniteProgressIndicator`），是系统加载态的直观观感对齐。
 ///
 /// 与 [CircularProgressIndicator] 的区别是**不画进度弧** —— 环只作轨道，
 /// 动效全在点上。因此它只能表达「在动」，无法表达「完成了多少」。
@@ -39,12 +36,15 @@ const double _kSpinnerTrackAlpha = 0.28;
 /// **不要**用它替代语义进度：有确切百分比的东西（预算 / 额度 / 下载进度 /
 /// 同步 checked/total 环）继续用 [LinearProgressIndicator] 或带 `value` 的
 /// [CircularProgressIndicator]，换掉会丢失进度信息。
-class OrbitSpinner extends StatefulWidget {
+///
+/// **动效时长不再可配**：HyperOS 版本把绕行周期固定在库内（800ms），旧实现
+/// 的 `duration` 参数（唯一调用点是测试）随之移除——周期是 miuix 观感的一部分，
+/// 逐处可调只会让加载态在页面之间不一致。
+class OrbitSpinner extends StatelessWidget {
   const OrbitSpinner({
     super.key,
     this.size = 20,
     this.color,
-    this.duration = AppMotion.spinnerOrbit,
     this.semanticLabel,
   });
 
@@ -57,96 +57,38 @@ class OrbitSpinner extends StatefulWidget {
   /// 否则默认色可能与底色撞色而看不见。
   final Color? color;
 
-  /// 点绕行一圈的时长。
-  final Duration duration;
-
-  /// 无障碍标签。null → 不包 [Semantics]。
+  /// 无障碍标签。null → 库内置的「进度」语义。
   final String? semanticLabel;
 
   @override
-  State<OrbitSpinner> createState() => _OrbitSpinnerState();
-}
-
-class _OrbitSpinnerState extends State<OrbitSpinner>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: widget.duration,
-  )..repeat();
-
-  @override
-  void didUpdateWidget(covariant OrbitSpinner oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.duration != oldWidget.duration) {
-      _controller.duration = widget.duration;
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final child = SizedBox(
-      width: widget.size,
-      height: widget.size,
-      child: RepaintBoundary(
-        child: CustomPaint(
-          painter: _OrbitSpinnerPainter(
-            color: widget.color ?? OrbitAccents.themeAccent,
-            strokeWidth: widget.size * _kSpinnerStrokeRatio,
-            animation: _controller,
-          ),
-        ),
-      ),
+    final child = MiuixInfiniteProgressIndicator(
+      color: color ?? OrbitAccents.themeAccent,
+      size: size,
+      strokeWidth: size * _kSpinnerStrokeRatio,
+      orbitingDotSize: size * _kSpinnerDotRatio,
     );
-    final label = widget.semanticLabel;
+    final label = semanticLabel;
     if (label == null) return child;
-    return Semantics(label: label, liveRegion: true, child: child);
+    // 库内已包 `Semantics(label: '进度')`：调用方给了更具体的文案时，用
+    // [ExcludeSemantics] 把内层丢掉再挂自己的标签，避免读屏把「进度」与
+    // 调用方文案播报两遍（合并成「正在加载\n进度」同样别扭）。
+    return Semantics(
+      label: label,
+      liveRegion: true,
+      child: ExcludeSemantics(child: child),
+    );
   }
 }
 
-/// 动画经 `super(repaint:)` 驱动重绘，**不触发 setState / rebuild**。
-class _OrbitSpinnerPainter extends CustomPainter {
-  _OrbitSpinnerPainter({
-    required this.color,
-    required this.strokeWidth,
-    required this.animation,
-  }) : super(repaint: animation);
+/// 组件几何（供测试与文档读取，避免在断言里硬编码裸数字）
+abstract final class OrbitSpinnerMetrics {
+  /// 环描边宽度 / 边长
+  static const double strokeRatio = _kSpinnerStrokeRatio;
 
-  final Color color;
-  final double strokeWidth;
-  final Animation<double> animation;
+  /// 绕行点半径 / 边长
+  static const double dotRatio = _kSpinnerDotRatio;
 
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = size.center(Offset.zero);
-    final radius = (size.shortestSide - strokeWidth) / 2;
-
-    // 轨道：低透明度细环，不画进度弧。
-    canvas.drawCircle(
-      center,
-      radius,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = strokeWidth
-        ..color = color.withValues(alpha: _kSpinnerTrackAlpha),
-    );
-
-    // 绕行点：12 点方向起、顺时针匀速。
-    final angle = animation.value * 2 * math.pi - math.pi / 2;
-    final dotCenter = center +
-        Offset(math.cos(angle), math.sin(angle)) *
-            (radius * _kSpinnerOrbitRatio);
-    canvas.drawCircle(
-        dotCenter, radius * _kSpinnerDotRatio, Paint()..color = color);
-  }
-
-  /// 相位变化不走这里 —— 由 `super(repaint: animation)` 通知重绘。
-  @override
-  bool shouldRepaint(covariant _OrbitSpinnerPainter old) =>
-      old.color != color || old.strokeWidth != strokeWidth;
+  /// 给定边长下的实际描边宽度
+  static double strokeWidthOf(double size) => size * strokeRatio;
 }
