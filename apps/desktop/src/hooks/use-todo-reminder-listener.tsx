@@ -115,6 +115,15 @@ export function useTodoReminderListener() {
       // 一片过期卡片（「8 点的提醒 12 点打开还在」的另一半根因）。
       // WebView 隐藏时 visibilityState=hidden（Win/mac 实测语义）
       if (document.visibilityState !== "visible") return;
+      // 持续提醒顺延后同一 id 会再次到期（G2）：先关上一轮常驻卡再挂新的。
+      // 不关则 Infinity toast 逐轮堆积；更糟的是旧卡的 onDismiss 闭包里
+      // 持有同一个 r.id，用户划掉旧卡会把新卡的映射一并删掉，
+      // 后续 snoozed/completed 事件再也关不掉新卡。
+      const prevToastId = reminderToastIds.get(r.id);
+      if (prevToastId != null) {
+        toast.dismiss(prevToastId);
+        reminderToastIds.delete(r.id);
+      }
       // toast.custom 支持 jsx 内容（sonner 单 action 按钮装不下三个推迟档）
       toast.custom(
         (id) => {

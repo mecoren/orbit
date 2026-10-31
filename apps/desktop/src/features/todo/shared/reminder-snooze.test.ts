@@ -13,7 +13,6 @@ vi.mock("@/lib/tauri", () => ({
 
 import {
   SNOOZE_PRESETS,
-  remindAtClockLabel,
   snoozeRemindAt,
   snoozeReminder,
   snoozeTargetLabel,
@@ -34,9 +33,15 @@ beforeEach(() => {
 });
 
 describe("snoozeRemindAt", () => {
-  it("锚点为原 remind_at 而非 now：10:00 推迟 30 分钟 = 10:30", () => {
+  it("提醒未过期时锚点为原 remind_at 而非 now：10:00 推迟 30 分钟 = 10:30", () => {
     const base = new Date(2026, 8, 5, 10, 0).getTime();
-    expect(snoozeRemindAt(base, 30)).toBe(base + 30 * MIN);
+    expect(snoozeRemindAt(base, 30, base - 5 * MIN)).toBe(base + 30 * MIN);
+  });
+
+  it("提醒已过期：锚点回落到 now，新时间不再落在过去", () => {
+    const base = new Date(2026, 8, 5, 10, 0).getTime();
+    const now = base + 3 * 60 * MIN; // 常驻卡片挂了三小时后才被点
+    expect(snoozeRemindAt(base, 10, now)).toBe(now + 10 * MIN);
   });
 
   it("三档预设为 10 / 30 / 60 分钟", () => {
@@ -48,7 +53,8 @@ describe("snoozeReminder", () => {
   it("删旧建新：新行 remind_at = 原时间 + N 分钟，失效详情缓存", async () => {
     deleteMock.mockResolvedValue(undefined);
     createMock.mockResolvedValue({});
-    const base = new Date(2026, 8, 5, 10, 0).getTime();
+    // 未来时刻：锚点仍取原 remind_at（过期场景由纯函数用例单独覆盖）
+    const base = Date.now() + 60 * MIN;
 
     const ok = await snoozeReminder(7, 3, base, 10, qcLike);
 
@@ -65,7 +71,7 @@ describe("snoozeReminder", () => {
   it("持续提醒标记随行传递（G2）：推迟不把持续提醒降级成一次性", async () => {
     deleteMock.mockResolvedValue(undefined);
     createMock.mockResolvedValue({});
-    const base = new Date(2026, 8, 5, 10, 0).getTime();
+    const base = Date.now() + 60 * MIN;
 
     const ok = await snoozeReminder(9, 5, base, 30, qcLike, 1);
 
@@ -80,7 +86,7 @@ describe("snoozeReminder", () => {
   it("删除失败（续排竞态下行已消失）不阻断：仍新建推迟行", async () => {
     deleteMock.mockRejectedValue(new Error("row gone"));
     createMock.mockResolvedValue({});
-    const base = new Date(2026, 8, 5, 10, 0).getTime();
+    const base = Date.now() + 60 * MIN;
 
     const ok = await snoozeReminder(7, 3, base, 60, qcLike);
 
@@ -103,18 +109,16 @@ describe("snoozeReminder", () => {
 });
 
 describe("snoozeTargetLabel", () => {
-  it("未来目标显示相对分钟；已过期目标回退钟点串", () => {
+  it("未过期按原时刻、已过期按 now 起算，都显示相对分钟", () => {
     const now = Date.now();
     vi.useFakeTimers();
     try {
       vi.setSystemTime(new Date(2026, 8, 5, 10, 0));
-      const base = new Date(2026, 8, 5, 9, 55).getTime();
-      // 9:55 推迟 10 分钟 → 10:05，距 now 5 分钟
-      expect(snoozeTargetLabel(base, 10)).toBe("5 分钟后");
-      // 8:00 推迟 30 分钟 → 8:30 已过期 → 回退钟点
-      expect(snoozeTargetLabel(new Date(2026, 8, 5, 8, 0).getTime(), 30)).toBe(
-        remindAtClockLabel(new Date(2026, 8, 5, 8, 30).getTime()),
-      );
+      // 10:30 的提醒尚未到期：锚定原时刻 → 10:40，距 now 40 分钟
+      expect(snoozeTargetLabel(new Date(2026, 8, 5, 10, 30).getTime(), 10)).toBe("40 分钟后");
+      // 8:00 的旧提醒：锚点回落到 now → 10:30，仍是「30 分钟后」
+      // （旧口径会落在 8:30 回退钟点串，但那个时间一落地就再次到期）
+      expect(snoozeTargetLabel(new Date(2026, 8, 5, 8, 0).getTime(), 30)).toBe("30 分钟后");
     } finally {
       vi.useRealTimers();
     }

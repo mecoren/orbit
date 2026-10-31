@@ -85,7 +85,7 @@ export function ReminderToast({
           <button
             type="button"
             data-testid="view-task"
-            title="打开任务详情"
+            aria-label="打开任务详情"
             onClick={viewTask}
             className="inline-flex h-7 items-center gap-1 rounded-md bg-accent px-2.5 text-xs font-medium text-accent-foreground transition-colors hover:bg-accent/85"
           >
@@ -98,7 +98,7 @@ export function ReminderToast({
               type="button"
               disabled={busy}
               data-testid={`snooze-${p.minutes}`}
-              title={`推迟到 ${snoozeTargetLabel(remindAt, p.minutes)}`}
+              aria-label={`推迟到 ${snoozeTargetLabel(remindAt, p.minutes)}`}
               onClick={() => void snooze(p.minutes)}
               className="h-7 rounded-md border px-2.5 text-xs font-medium transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
             >

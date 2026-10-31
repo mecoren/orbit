@@ -514,12 +514,22 @@ export function TaskContextMenu({
                       setReminderError("时间格式不正确");
                       return;
                     }
-                    void todoReminderCreate({ task_id: task.id, remind_at: ms }).then(() => {
-                      toast.success("提醒已创建");
-                      refetch();
-                    });
-                    setReminderOpen(false);
-                    setReminderDraft("");
+                    // 失败不关窗不留假成功态：此前 `.then` 无 catch + 立即关窗，
+                    // IPC 失败时用户以为提醒已建，实际永不响
+                    void (async () => {
+                      try {
+                        await todoReminderCreate({ task_id: task.id, remind_at: ms });
+                        toast.success("提醒已创建");
+                        refetch();
+                        setReminderOpen(false);
+                        setReminderDraft("");
+                        setReminderError(null);
+                      } catch (e) {
+                        setReminderError(
+                          `提醒创建失败：${e instanceof Error ? e.message : String(e)}`,
+                        );
+                      }
+                    })();
                   }}
                 >
                   保存
@@ -556,9 +566,19 @@ export function TaskContextMenu({
                 <Button
                   disabled={!commentDraft.trim()}
                   onClick={() => {
-                    void todoCommentCreate({ task_id: task.id, content: commentDraft.trim() }).then(refetch);
-                    setCommentOpen(false);
-                    setCommentDraft("");
+                    // 同提醒：失败保留弹层与草稿，不制造「已保存」的假象
+                    void (async () => {
+                      try {
+                        await todoCommentCreate({ task_id: task.id, content: commentDraft.trim() });
+                        refetch();
+                        setCommentOpen(false);
+                        setCommentDraft("");
+                      } catch (e) {
+                        toast.error(
+                          `评论添加失败：${e instanceof Error ? e.message : String(e)}`,
+                        );
+                      }
+                    })();
                   }}
                 >
                   保存

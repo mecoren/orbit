@@ -20,9 +20,17 @@ export const SNOOZE_PRESETS = [
   { minutes: 60, label: "1 小时" },
 ] as const;
 
-/** 推迟后的新 remind_at（= 原 remind_at + N 分钟），纯函数便于单测 */
-export function snoozeRemindAt(remindAt: number, minutes: number): number {
-  return remindAt + minutes * 60_000;
+/**
+ * 推迟后的新 remind_at，纯函数便于单测。
+ *
+ * 锚点取 `max(原 remind_at, now)`：in-app 卡片是 duration Infinity 常驻的，
+ * 提醒到点后用户可能几小时后才回来点「推迟 10 分钟」——此时用过去的
+ * remind_at 加偏移，新时间仍在过去，下一轮轮询（≤20s）立刻再响，形成连环弹卡。
+ * 提醒尚未过期时仍锚定原时刻，保持「10:00 的提醒推迟 3 次落在整点后第 n 个
+ * 偏移」的既有语义，不从每次点击时刻滚雪球。
+ */
+export function snoozeRemindAt(remindAt: number, minutes: number, now = Date.now()): number {
+  return Math.max(remindAt, now) + minutes * 60_000;
 }
 
 type QueryClientLike = ReturnType<typeof useQueryClient>;
