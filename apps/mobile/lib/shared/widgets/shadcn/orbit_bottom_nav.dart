@@ -108,25 +108,31 @@ class _OrbitBottomNavState extends State<OrbitBottomNav> {
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
-    return MiuixGlassNavigationBar(
-      key: _barKey,
-      backdrop: widget.backdrop,
-      selectedIndex: widget.currentIndex,
-      // 「更多」动作位：OS4 的 isAction 项只触发回调、不移动指示器
-      onSelect: _handleTap,
-      height: OrbitBottomNav.barHeight,
-      // 选中项图标走主题强调色，未选中走次要文字色
-      selectedColor: OrbitAccents.themeAccent,
-      unselectedColor: colors.secondaryText,
-      items: [
-        for (var i = 0; i < widget.items.length; i++)
-          MiuixGlassNavigationItem(
-            icon: _buildIcon(colors, i),
-            // label 不传 → 栏体纯图标（本仓既有形态）；语义文案走 contentDescription
-            contentDescription: widget.items[i].label,
-            isAction: i == widget.moreTabIndex,
-          ),
-      ],
+    // 手势区让位：OS4 玻璃栏自身不吃 `viewPadding.bottom`（库内只画 54 高的
+    // 玻璃条 + 3dp 悬浮边距），系统手势条/三键导航会与图标叠在一起。旧实现用
+    // `SafeArea(top: false)` 兜的正是这段高度，这里显式补一层。
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewPaddingOf(context).bottom),
+      child: MiuixGlassNavigationBar(
+        key: _barKey,
+        backdrop: widget.backdrop,
+        selectedIndex: widget.currentIndex,
+        // 「更多」动作位：OS4 的 isAction 项只触发回调、不移动指示器
+        onSelect: _handleTap,
+        height: OrbitBottomNav.barHeight,
+        // 选中项图标走主题强调色，未选中走次要文字色
+        selectedColor: OrbitAccents.themeAccent,
+        unselectedColor: colors.secondaryText,
+        items: [
+          for (var i = 0; i < widget.items.length; i++)
+            MiuixGlassNavigationItem(
+              icon: _buildIcon(colors, i),
+              // label 不传 → 栏体纯图标（本仓既有形态）；语义文案走 contentDescription
+              contentDescription: widget.items[i].label,
+              isAction: i == widget.moreTabIndex,
+            ),
+        ],
+      ),
     );
   }
 
