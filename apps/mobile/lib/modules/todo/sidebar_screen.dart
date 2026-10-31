@@ -21,6 +21,8 @@ import '../../shared/widgets/controller_disposer.dart';
 import '../../services/shortcut_receiver.dart';
 import '../../shared/widgets/sync_status_button.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
+import '../../shared/widgets/shadcn/orbit_button.dart';
+import '../../shared/widgets/shadcn/orbit_icon_button.dart';
 import 'logic/project_actions.dart';
 import 'logic/project_palette.dart';
 import 'logic/project_tree.dart';
@@ -668,7 +670,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                 // 左端云同步图标（未配置/未解锁直达配置页；就绪弹信息面板）
                 leading: const SyncStatusButton(),
                 actions: [
-                  IconButton(
+                  OrbitIconButton(
                     tooltip: '设置',
                     icon: const Icon(
                       OrbitIcons.settings,
@@ -889,7 +891,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
           style: TextStyle(fontSize: 15, color: colors.secondaryText),
         ),
         dense: true,
-        trailing: TextButton(
+        trailing: OrbitButton.text(
           onPressed: () => toggleProjectArchive(ref, context, project),
           child: const Text('恢复'),
         ),
@@ -1106,3 +1108,5 @@ class CountBadge extends StatelessWidget {
     );
   }
 }
+
+

@@ -13,6 +13,7 @@ import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
+import '../../shared/widgets/shadcn/orbit_button.dart';
 import 'diagnostics_page.dart' show formatBytes;
 
 /// 存储清理页 /settings/storage（#107）
@@ -140,7 +141,7 @@ class _StorageCleanupPageState extends ConsumerState<StorageCleanupPage> {
                           ),
                         ),
                         const Spacer(),
-                        TextButton.icon(
+                        OrbitButton.icon(variant: OrbitButtonVariant.text, 
                           onPressed: _busy ? null : () => _load(),
                           icon: Icon(
                             OrbitIcons.refresh,
@@ -182,7 +183,7 @@ class _StorageCleanupPageState extends ConsumerState<StorageCleanupPage> {
                 const SizedBox(height: AppDimens.cardGap),
                 SizedBox(
                   width: double.infinity,
-                  child: FilledButton(
+                  child: OrbitButton.primary(
                     onPressed: _busy || _selected.isEmpty
                         ? null
                         : _deleteSelected,
@@ -257,3 +258,4 @@ class _StorageCleanupPageState extends ConsumerState<StorageCleanupPage> {
     );
   }
 }
+

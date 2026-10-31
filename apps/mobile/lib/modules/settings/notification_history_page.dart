@@ -15,6 +15,7 @@ import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
+import '../../shared/widgets/shadcn/orbit_button.dart';
 import '../../core/theme/icon_map.dart';
 
 /// 通知历史页 /settings/notifications
@@ -163,7 +164,7 @@ class _NotificationHistoryPageState
                     Row(
                       children: [
                         Expanded(
-                          child: OutlinedButton.icon(
+                          child: OrbitButton.icon(variant: OrbitButtonVariant.outline, 
                             onPressed: _pickKind,
                             icon: const Icon(OrbitIcons.filter, size: 18),
                             label: Text('类型：${kindLabel(_kind)}'),
@@ -171,7 +172,7 @@ class _NotificationHistoryPageState
                         ),
                         const SizedBox(width: AppDimens.space8),
                         Expanded(
-                          child: OutlinedButton.icon(
+                          child: OrbitButton.icon(variant: OrbitButtonVariant.outline, 
                             onPressed: _clear,
                             icon: const Icon(OrbitIcons.delete, size: 18),
                             label: const Text('清空'),
@@ -241,7 +242,7 @@ class _NotificationHistoryPageState
                 ),
                 if (_limit < 200)
                   Center(
-                    child: TextButton(
+                    child: OrbitButton.text(
                       onPressed: () {
                         setState(() => _limit = (_limit + 50).clamp(50, 200));
                         _load();
@@ -303,3 +304,4 @@ class _NotificationHistoryPageState
     );
   }
 }
+

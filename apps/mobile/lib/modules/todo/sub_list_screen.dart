@@ -31,6 +31,10 @@ import '../../shared/widgets/shadcn/orbit_actions_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
+import '../../shared/widgets/shadcn/orbit_switch.dart';
+import '../../shared/widgets/shadcn/orbit_button.dart';
+import '../../shared/widgets/shadcn/orbit_icon_button.dart';
+import '../../shared/widgets/shadcn/orbit_filter_chip.dart';
 import '../../services/local_prefs.dart';
 import 'kanban_view.dart';
 import 'matrix_view.dart';
@@ -589,7 +593,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                       ),
                     ),
                   ),
-                  Switch(value: value, onChanged: enabled ? onChanged : null),
+                  OrbitSwitch(value: value, onChanged: enabled ? onChanged : null),
                 ],
               ),
             ),
@@ -873,47 +877,12 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     VoidCallback onTap, {
     String? dotHex,
   }) {
-    final colors = AppColors.ofContext(context);
-    return GestureDetector(
+    // 统一到原语层（squircle 表面 + 强调色 16% 选中底），不再各页手搓容器
+    return OrbitFilterChip(
+      label: label,
+      selected: selected,
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppDimens.space12,
-          vertical: AppDimens.space8,
-        ),
-        decoration: BoxDecoration(
-          color: selected
-              ? OrbitAccents.themeAccent.withValues(alpha: 0.16)
-              : Colors.transparent,
-          borderRadius: AppShapes.small,
-          border: Border.all(
-            color: selected ? OrbitAccents.themeAccent : colors.divider,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (dotHex != null) ...[
-              Container(
-                width: AppDimens.colorDotSize - 4,
-                height: AppDimens.colorDotSize - 4,
-                decoration: BoxDecoration(
-                  color: hexToColor(dotHex),
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: AppDimens.space6),
-            ],
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                color: selected ? OrbitAccents.themeAccent : colors.bodyText,
-              ),
-            ),
-          ],
-        ),
-      ),
+      dotColor: dotHex == null ? null : hexToColor(dotHex),
     );
   }
 
@@ -2440,7 +2409,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                   : null,
               actions: _selectionMode
                   ? [
-                      TextButton(
+                      OrbitButton.text(
                         onPressed: _batchBusy
                             ? null
                             // 全选只选**看得见**的：未完成区 = 已加载窗口；
@@ -2453,7 +2422,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                               ),
                         child: const Text('全选'),
                       ),
-                      IconButton(
+                      OrbitIconButton(
                         onPressed: _batchBusy ? null : _exitSelection,
                         tooltip: '退出多选',
                         icon: Icon(
@@ -2467,7 +2436,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                       // 视图 / 筛选 / 排序三档收进 ⋮ 溢出菜单：四枚图标并排会把
                       // 动态标题挤到只剩半行；筛选生效时 ⋮ 挂角标（否则列表莫名
                       // 变少没有出处）。选择类交互仍走底部抽屉，非 PopupMenu
-                      IconButton(
+                      OrbitIconButton(
                         onPressed: _showOverflowPanel,
                         tooltip: '更多操作',
                         icon: _filters.isEmpty
@@ -2620,14 +2589,9 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
           ),
           const Spacer(),
           if (onPostpone != null)
-            TextButton(
-              // 头行里的轻量动作：收掉默认内边距，主题蓝与行内链接同档
-              style: TextButton.styleFrom(
-                visualDensity: VisualDensity.compact,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppDimens.space8,
-                ),
-              ),
+            OrbitButton.text(
+              // 头行里的轻量动作：紧凑档，主题蓝与行内链接同档
+              compact: true,
               onPressed: _batchBusy ? null : onPostpone,
               child: Text(
                 '顺延',
@@ -3583,3 +3547,6 @@ class _SelectionRow extends StatelessWidget {
     );
   }
 }
+
+
+

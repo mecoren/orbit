@@ -21,6 +21,7 @@ import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
+import '../../shared/widgets/shadcn/orbit_icon_button.dart';
 import 'logic/project_actions.dart';
 import 'logic/project_palette.dart';
 import 'logic/project_review.dart';
@@ -232,7 +233,7 @@ class _ProjectEditPageState extends ConsumerState<ProjectEditPage> {
             right: 0,
             child: OrbitPageHeader(
               showBack: false,
-              leading: IconButton(
+              leading: OrbitIconButton(
                 tooltip: '关闭',
                 padding: const EdgeInsets.only(right: AppDimens.space8),
                 icon: Icon(
@@ -247,7 +248,7 @@ class _ProjectEditPageState extends ConsumerState<ProjectEditPage> {
               title: '编辑项目',
               actions: [
                 // 保存：无改动时置灰（避免「点了没反应」的空提交）
-                IconButton(
+                OrbitIconButton(
                   tooltip: '保存',
                   onPressed: project == null || _saving || !_isDirty(project)
                       ? null
@@ -262,7 +263,7 @@ class _ProjectEditPageState extends ConsumerState<ProjectEditPage> {
                               : colors.deactivatedText,
                         ),
                 ),
-                IconButton(
+                OrbitIconButton(
                   tooltip: '更多操作',
                   onPressed: project == null
                       ? null
@@ -789,3 +790,4 @@ class _ViewPreview extends StatelessWidget {
         ),
       );
 }
+

@@ -21,6 +21,9 @@ import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
+import '../../shared/widgets/shadcn/orbit_switch.dart';
+import '../../shared/widgets/shadcn/orbit_button.dart';
+import '../../shared/widgets/shadcn/orbit_divider.dart';
 import '../todo/providers/todo_providers.dart';
 import '../../core/theme/icon_map.dart';
 
@@ -427,7 +430,7 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
         // 定时同步：开关 + 间隔（移动端无调度器，仅存档；桌面端生效）
         Row(
           children: [
-            Switch(
+            OrbitSwitch(
               value: _autoEnabled,
               onChanged: (v) => setState(() => _autoEnabled = v),
             ),
@@ -501,12 +504,12 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
             if (_config != null)
-              TextButton(
+              OrbitButton.text(
                 onPressed: _busy ? null : () => _confirmDisconnect(context),
                 child: Text('断开', style: TextStyle(color: colors.destructive)),
               ),
             const SizedBox(width: AppDimens.space8),
-            OutlinedButton(
+            OrbitButton.outline(
               onPressed: (_testing || _busy || endpointEmpty)
                   ? null
                   : _testConnection,
@@ -515,7 +518,7 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
                   : const Text('测试连接'),
             ),
             const SizedBox(width: AppDimens.space8),
-            FilledButton(
+            OrbitButton.primary(
               onPressed: (_busy || endpointEmpty) ? null : _save,
               child: _busy
                   ? const OrbitSpinner(
@@ -538,7 +541,7 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
   }) {
     return Row(
       children: [
-        Switch(value: value, onChanged: onChanged),
+        OrbitSwitch(value: value, onChanged: onChanged),
         const SizedBox(width: AppDimens.space8),
         Expanded(
           child: Column(
@@ -942,7 +945,7 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
                   const SizedBox(height: AppDimens.space12),
                   SizedBox(
                     width: double.infinity,
-                    child: FilledButton(
+                    child: OrbitButton.primary(
                       onPressed: _busy ? null : _setup,
                       child: _busy
                           ? const OrbitSpinner(
@@ -989,7 +992,7 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
                     const SizedBox(height: AppDimens.space12),
                     SizedBox(
                       width: double.infinity,
-                      child: FilledButton(
+                      child: OrbitButton.primary(
                         onPressed: _busy ? null : _unlock,
                         child: _busy
                             ? const OrbitSpinner(
@@ -1000,7 +1003,7 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
                   ] else
                     SizedBox(
                       width: double.infinity,
-                      child: OutlinedButton(
+                      child: OrbitButton.outline(
                         onPressed: _lock,
                         child: const Text('锁定'),
                       ),
@@ -1013,7 +1016,7 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
                   const SizedBox(height: AppDimens.space8),
                   SizedBox(
                     width: double.infinity,
-                    child: OutlinedButton(
+                    child: OrbitButton.outline(
                       onPressed: _busy ? null : _importBundle,
                       child: const Text('导入密钥包恢复（换机 / 密钥不匹配）'),
                     ),
@@ -1021,7 +1024,7 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
                   const SizedBox(height: AppDimens.space8),
                   SizedBox(
                     width: double.infinity,
-                    child: OutlinedButton(
+                    child: OrbitButton.outline(
                       onPressed: _busy ? null : _exportBundle,
                       child: const Text('导出密钥包（备份到本机 exports/）'),
                     ),
@@ -1029,7 +1032,7 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
                   const SizedBox(height: AppDimens.space8),
                   SizedBox(
                     width: double.infinity,
-                    child: OutlinedButton(
+                    child: OrbitButton.outline(
                       onPressed: _busy ? null : _changePassword,
                       child: const Text('修改同步密码'),
                     ),
@@ -1037,7 +1040,7 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
                   const SizedBox(height: AppDimens.space8),
                   SizedBox(
                     width: double.infinity,
-                    child: OutlinedButton(
+                    child: OrbitButton.outline(
                       onPressed: _busy ? null : _forgetSession,
                       child: const Text('清除本机同步密码缓存'),
                     ),
@@ -1053,7 +1056,7 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
                     const SizedBox(height: AppDimens.space8),
                     SizedBox(
                       width: double.infinity,
-                      child: OutlinedButton(
+                      child: OrbitButton.outline(
                         onPressed: _busy ? null : _upgradeV2,
                         child: const Text('升级密钥方案到 v2'),
                       ),
@@ -1062,12 +1065,9 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
                   const SizedBox(height: AppDimens.space8),
                   SizedBox(
                     width: double.infinity,
-                    child: OutlinedButton(
+                    child: OrbitButton.outline(
+                      destructive: true,
                       onPressed: _busy ? null : _rekeyCloud,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: colors.destructive,
-                        side: BorderSide(color: colors.destructive),
-                      ),
                       child: const Text('以本机为准重置云端'),
                     ),
                   ),
@@ -1158,7 +1158,7 @@ class _SyncHistoryCardState extends ConsumerState<_SyncHistoryCard> {
     return SectionCard(
       title: '同步历史',
       subtitle: _loading ? null : '近 ${_rows.length} 次',
-      trailing: TextButton(
+      trailing: OrbitButton.text(
         onPressed: _loading ? null : _load,
         child: const Text('刷新'),
       ),
@@ -1353,7 +1353,7 @@ class _SyncLedgerCardState extends ConsumerState<_SyncLedgerCard> {
     return SectionCard(
       title: '同步账本',
       subtitle: '桶指纹与水位线（排障用）',
-      trailing: TextButton(
+      trailing: OrbitButton.text(
         onPressed: _loading ? null : _load,
         child: const Text('刷新'),
       ),
@@ -1581,7 +1581,7 @@ class _CloudCleanupCardState extends ConsumerState<_CloudCleanupCard> {
                   const SizedBox(height: AppDimens.space8),
                   Row(
                     children: [
-                      TextButton(
+                      OrbitButton.text(
                         onPressed: busy
                             ? null
                             : () => setSheetState(() {
@@ -1611,7 +1611,7 @@ class _CloudCleanupCardState extends ConsumerState<_CloudCleanupCard> {
                       shrinkWrap: true,
                       itemCount: result.items.length,
                       separatorBuilder: (_, _) =>
-                          Divider(height: 1, color: colors.divider),
+                          OrbitDivider(height: 1, color: colors.divider),
                       itemBuilder: (context, index) {
                         final item = result.items[index];
                         final checked = selected.contains(item.hash);
@@ -1655,7 +1655,7 @@ class _CloudCleanupCardState extends ConsumerState<_CloudCleanupCard> {
                   const SizedBox(height: AppDimens.space8),
                   Row(
                     children: [
-                      OutlinedButton(
+                      OrbitButton.outline(
                         onPressed: busy
                             ? null
                             : () => Navigator.pop(sheetContext),
@@ -1663,7 +1663,7 @@ class _CloudCleanupCardState extends ConsumerState<_CloudCleanupCard> {
                       ),
                       const SizedBox(width: AppDimens.space12),
                       Expanded(
-                        child: FilledButton(
+                        child: OrbitButton.primary(
                           onPressed: busy || selected.isEmpty
                               ? null
                               : () async {
@@ -1759,14 +1759,14 @@ class _CloudCleanupCardState extends ConsumerState<_CloudCleanupCard> {
             style: TextStyle(fontSize: 12, color: colors.secondaryText),
           ),
           const SizedBox(height: AppDimens.space12),
-          OutlinedButton(
+          OrbitButton.outline(
             onPressed: _scanning ? null : _scan,
             child: _scanning
                 ? const OrbitSpinner(size: 16)
                 : const Text('清理云端孤儿附件'),
           ),
           const SizedBox(height: AppDimens.space8),
-          OutlinedButton(
+          OrbitButton.outline(
             onPressed: _chunkGcBusy ? null : _chunkGc,
             child: _chunkGcBusy
                 ? const OrbitSpinner(size: 16)
@@ -1848,7 +1848,7 @@ class _SyncDiagnosticCardState extends ConsumerState<_SyncDiagnosticCard> {
           Row(
             children: [
               Expanded(
-                child: OutlinedButton(
+                child: OrbitButton.outline(
                   onPressed: _busy == null ? () => _run('push') : null,
                   child: _busy == 'push'
                       ? const OrbitSpinner(size: 16)
@@ -1857,7 +1857,7 @@ class _SyncDiagnosticCardState extends ConsumerState<_SyncDiagnosticCard> {
               ),
               const SizedBox(width: AppDimens.space12),
               Expanded(
-                child: OutlinedButton(
+                child: OrbitButton.outline(
                   onPressed: _busy == null ? () => _run('pull') : null,
                   child: _busy == 'pull'
                       ? const OrbitSpinner(size: 16)
@@ -1871,3 +1871,6 @@ class _SyncDiagnosticCardState extends ConsumerState<_SyncDiagnosticCard> {
     );
   }
 }
+
+
+

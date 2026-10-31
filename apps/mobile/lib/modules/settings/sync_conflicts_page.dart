@@ -15,6 +15,8 @@ import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
+import '../../shared/widgets/shadcn/orbit_button.dart';
+import '../../shared/widgets/shadcn/orbit_filter_chip.dart';
 import '../../core/theme/icon_map.dart';
 
 /// 冲突记录页 /settings/conflicts（03 文档 §八 遗留项兑现）
@@ -187,7 +189,7 @@ class _SyncConflictsPageState extends ConsumerState<SyncConflictsPage> {
                           const SizedBox(width: AppDimens.space8),
                           _filterChip('全部', null),
                           const Spacer(),
-                          TextButton(
+                          OrbitButton.text(
                             onPressed: (_busy || _rows.isEmpty) ? null : _clear,
                             child: Text(
                               '清空',
@@ -241,35 +243,12 @@ class _SyncConflictsPageState extends ConsumerState<SyncConflictsPage> {
   }
 
   Widget _filterChip(String label, String? value) {
-    final selected = _resolution == value;
-    return GestureDetector(
+    // 统一到原语层（squircle 表面 + 强调色 16% 选中底，紧凑档）
+    return OrbitFilterChip(
+      label: label,
+      selected: _resolution == value,
       onTap: () => _switchFilter(value),
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppDimens.space12,
-          vertical: AppDimens.space6,
-        ),
-        decoration: BoxDecoration(
-          color: selected
-              ? OrbitAccents.themeAccent.withValues(alpha: 0.16)
-              : Colors.transparent,
-          borderRadius: AppShapes.small,
-          border: Border.all(
-            color: selected
-                ? OrbitAccents.themeAccent
-                : AppColors.ofContext(context).divider,
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            color: selected
-                ? OrbitAccents.themeAccent
-                : AppColors.ofContext(context).bodyText,
-          ),
-        ),
-      ),
+      compact: true,
     );
   }
 
@@ -327,19 +306,19 @@ class _SyncConflictsPageState extends ConsumerState<SyncConflictsPage> {
             const SizedBox(height: AppDimens.space8),
             Row(
               children: [
-                TextButton(
+                OrbitButton.text(
                   onPressed: () =>
                       setState(() => _expanded = open ? null : r.id),
                   child: Text(open ? '收起' : '查看差异（${diffs.length}）'),
                 ),
                 const Spacer(),
                 if (r.resolution == 'unresolved') ...[
-                  OutlinedButton(
+                  OrbitButton.outline(
                     onPressed: _busy ? null : () => _restore(r),
                     child: const Text('恢复'),
                   ),
                   const SizedBox(width: AppDimens.space8),
-                  TextButton(
+                  OrbitButton.text(
                     onPressed: _busy ? null : () => _dismiss(r),
                     child: const Text('忽略'),
                   ),
@@ -519,3 +498,4 @@ class _FieldDiff {
 
   const _FieldDiff(this.key, this.after, this.before);
 }
+

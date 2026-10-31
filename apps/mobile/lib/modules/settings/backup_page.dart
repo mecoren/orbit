@@ -15,6 +15,8 @@ import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
+import '../../shared/widgets/shadcn/orbit_button.dart';
+import '../../shared/widgets/shadcn/orbit_icon_button.dart';
 import '../todo/logic/task_logic.dart' show formatDateTime;
 import '../../core/theme/icon_map.dart';
 
@@ -488,7 +490,7 @@ class _BackupPageState extends ConsumerState<BackupPage> {
           Row(
             children: [
               Expanded(
-                child: OutlinedButton.icon(
+                child: OrbitButton.icon(variant: OrbitButtonVariant.outline, 
                   onPressed: busy ? null : () => _export(uploadCloud: false),
                   icon: _busy == 'export'
                       ? const _MiniSpinner()
@@ -501,7 +503,7 @@ class _BackupPageState extends ConsumerState<BackupPage> {
               ),
               const SizedBox(width: AppDimens.space8),
               Expanded(
-                child: FilledButton.icon(
+                child: OrbitButton.icon(variant: OrbitButtonVariant.primary, 
                   onPressed: busy ? null : () => _export(uploadCloud: true),
                   icon: _busy == 'exportCloud'
                       ? const _MiniSpinner()
@@ -712,7 +714,7 @@ class _BackupPageState extends ConsumerState<BackupPage> {
                 ],
               ),
             ),
-            IconButton(
+            OrbitIconButton(
               onPressed: _busy != null ? null : () => _deleteLocal(e),
               icon: Icon(
                 OrbitIcons.delete,
@@ -869,3 +871,5 @@ class _MiniSpinner extends StatelessWidget {
     color: OrbitAccents.themeAccent,
   );
 }
+
+

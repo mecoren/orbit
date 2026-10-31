@@ -27,6 +27,11 @@ import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
+import '../../shared/widgets/shadcn/orbit_switch.dart';
+import '../../shared/widgets/shadcn/orbit_button.dart';
+import '../../shared/widgets/shadcn/orbit_progress_bar.dart';
+import '../../shared/widgets/shadcn/orbit_filter_chip.dart';
+import '../../shared/widgets/shadcn/orbit_divider.dart';
 import '../shell/db_invalidation.dart';
 import '../todo/logic/task_logic.dart' show formatDateTime;
 import '../todo/providers/todo_providers.dart';
@@ -1048,7 +1053,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         // N33：运行中把「立即同步」换成「取消同步」——大附件
                         // 分片上传可持续数十秒，只留转环等于让用户干等
                         child: _syncing
-                            ? OutlinedButton.icon(
+                            ? OrbitButton.icon(variant: OrbitButtonVariant.outline, 
                                 onPressed: _cancellingSync
                                     ? null
                                     : () => _cancelSync(),
@@ -1065,7 +1070,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                   _cancellingSync ? '取消中…' : '取消同步',
                                 ),
                               )
-                            : FilledButton.icon(
+                            : OrbitButton.icon(variant: OrbitButtonVariant.primary, 
                                 onPressed: config == null ? null : _syncNow,
                                 icon: const Icon(
                                   OrbitIcons.refresh,
@@ -1296,7 +1301,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               ),
                             ),
                           ),
-                          Switch(
+                          OrbitSwitch(
                             value: holidayAuto,
                             onChanged: _holidayAutoBusy
                                 ? null
@@ -1393,7 +1398,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       Row(
                         children: [
                           Expanded(
-                            child: OutlinedButton.icon(
+                            child: OrbitButton.icon(variant: OrbitButtonVariant.outline, 
                               onPressed: _exporting != null
                                   ? null
                                   : () => _exportData('json'),
@@ -1411,7 +1416,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           ),
                           const SizedBox(width: AppDimens.space8),
                           Expanded(
-                            child: OutlinedButton.icon(
+                            child: OrbitButton.icon(variant: OrbitButtonVariant.outline, 
                               onPressed: _exporting != null
                                   ? null
                                   : () => _exportData('csv'),
@@ -1432,7 +1437,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       const SizedBox(height: AppDimens.space8),
                       SizedBox(
                         width: double.infinity,
-                        child: OutlinedButton.icon(
+                        child: OrbitButton.icon(variant: OrbitButtonVariant.outline, 
                           onPressed: _exporting != null
                               ? null
                               : () => _exportData('ics'),
@@ -1487,7 +1492,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ),
                       SizedBox(
                         width: double.infinity,
-                        child: OutlinedButton.icon(
+                        child: OrbitButton.icon(variant: OrbitButtonVariant.outline, 
                           onPressed: _maintaining ? null : _runMaintenance,
                           icon: _maintaining
                               ? OrbitSpinner(
@@ -1527,12 +1532,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         runSpacing: AppDimens.space8,
                         children: [
                           for (final entry in _importPresets.entries)
-                            ChoiceChip(
-                              label: Text(entry.value),
+                            OrbitFilterChip(
+                              label: entry.value,
                               selected: _importPreset == entry.key,
-                              onSelected: _importing != null
+                              onTap: _importing != null
                                   ? null
-                                  : (_) => setState(() {
+                                  : () => setState(() {
                                       _importPreset = entry.key;
                                       _importPreview = null;
                                       _importResult = null;
@@ -1544,7 +1549,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       Row(
                         children: [
                           Expanded(
-                            child: OutlinedButton.icon(
+                            child: OrbitButton.icon(variant: OrbitButtonVariant.outline, 
                               onPressed: _importing != null
                                   ? null
                                   : _pickImportFile,
@@ -1560,7 +1565,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           ),
                           const SizedBox(width: AppDimens.space8),
                           Expanded(
-                            child: OutlinedButton.icon(
+                            child: OrbitButton.icon(variant: OrbitButtonVariant.outline, 
                               onPressed:
                                   _importContent == null || _importing != null
                                   ? null
@@ -1583,7 +1588,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       if (_importPreview != null &&
                           _importPreview!.stats.success > 0) ...[
                         const SizedBox(height: AppDimens.space8),
-                        FilledButton.icon(
+                        OrbitButton.icon(variant: OrbitButtonVariant.primary, 
                           onPressed: _importing != null ? null : _executeImport,
                           icon: _importing == 'execute'
                               ? const OrbitSpinner(
@@ -1615,23 +1620,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 ),
                               ),
                             ),
-                            TextButton(
+                            OrbitButton.text(
                               onPressed: _cancelImport,
                               child: const Text('取消导入'),
                             ),
                           ],
                         ),
                         const SizedBox(height: AppDimens.space4),
-                        ClipRRect(
-                          borderRadius: AppShapes.full,
-                          child: LinearProgressIndicator(
-                            minHeight: 6,
-                            value: (_importProgress!.total ?? 0) > 0
-                                ? (_importProgress!.processed /
-                                          _importProgress!.total!)
-                                      .clamp(0.0, 1.0)
-                                : null,
-                          ),
+                        OrbitProgressBar(
+                          height: 6,
+                          value: (_importProgress!.total ?? 0) > 0
+                              ? (_importProgress!.processed /
+                                        _importProgress!.total!)
+                                    .clamp(0.0, 1.0)
+                              : null,
                         ),
                       ],
                       // 预览结果
@@ -1749,7 +1751,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           Row(
             children: [
               Expanded(
-                child: OutlinedButton.icon(
+                child: OrbitButton.icon(variant: OrbitButtonVariant.outline, 
                   onPressed: _widgetBusy ? null : _widgetRefresh,
                   icon: _widgetBusy
                       ? OrbitSpinner(
@@ -1765,7 +1767,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               const SizedBox(width: AppDimens.space8),
               Expanded(
-                child: OutlinedButton.icon(
+                child: OrbitButton.icon(variant: OrbitButtonVariant.outline, 
                   onPressed: _pinTile,
                   icon: const Icon(OrbitIcons.grid, size: AppDimens.iconSizeSm),
                   label: const Text('添加快捷磁贴'),
@@ -1830,7 +1832,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 style: TextStyle(fontSize: 14, color: colors.bodyText),
               ),
             ),
-            Switch(
+            OrbitSwitch(
               value: prefs.enabled,
               onChanged: _digestBusy ? null : (v) => _toggleDigest(v),
             ),
@@ -2039,7 +2041,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
             ),
           ),
-        const Divider(height: AppDimens.space24),
+        const OrbitDivider(height: AppDimens.space24),
         if (_bioAvailable == true) ...[
           Row(
             children: [
@@ -2049,7 +2051,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   style: TextStyle(fontSize: 14, color: colors.bodyText),
                 ),
               ),
-              Switch(
+              OrbitSwitch(
                 value: _bioEnabled == true,
                 // 明文库无需解锁，指纹开关不可用（_masterAuthSet 探测中同样置灰）
                 onChanged:
@@ -2098,3 +2100,7 @@ String engineSummary(SyncConfigView config) {
   if (host.isEmpty) host = config.endpoint;
   return 'WebDAV · $host';
 }
+
+
+
+

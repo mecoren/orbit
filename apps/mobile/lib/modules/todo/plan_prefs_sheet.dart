@@ -10,6 +10,7 @@ import '../../core/theme/icon_map.dart';
 import '../../data/api/dto.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_button.dart';
 
 /// 时间档位（半小时粒度 00:00–23:30）
 const List<int> _kTimeOptions = [
@@ -133,7 +134,7 @@ class _PrefsSheetState extends State<_PrefsSheet> {
                   () => _draft = _copy(p, includeOverdue: !p.includeOverdue));
             }),
             const SizedBox(height: AppDimens.space8),
-            FilledButton(
+            OrbitButton.primary(
               onPressed: () => Navigator.of(context).pop(_draft),
               child: const Text('保存作息', textAlign: TextAlign.center),
             ),
@@ -189,3 +190,4 @@ class _PrefsSheetState extends State<_PrefsSheet> {
     );
   }
 }
+

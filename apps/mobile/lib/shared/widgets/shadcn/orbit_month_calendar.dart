@@ -7,6 +7,7 @@ import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_shapes.dart';
 import '../../../core/theme/icon_map.dart';
 import '../../../core/theme/orbit_accents.dart';
+import 'orbit_icon_button.dart';
 
 /// 月历尺寸档位
 enum AppCalendarSize { large, medium, small }
@@ -242,7 +243,7 @@ class OrbitMonthCalendar extends StatelessWidget {
     required IconData icon,
   }) => sh.Tooltip(
     tooltip: (context) => Text(tooltip),
-    child: IconButton(
+    child: OrbitIconButton(
       onPressed: onPressed,
       icon: Icon(icon, size: _navIconSize + 4),
       visualDensity: VisualDensity.compact,
@@ -790,3 +791,4 @@ class _VerticalFormatSwipeGateState extends State<_VerticalFormatSwipeGate> {
     );
   }
 }
+

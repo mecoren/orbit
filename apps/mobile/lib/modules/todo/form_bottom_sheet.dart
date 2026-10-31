@@ -18,6 +18,9 @@ import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_date_picker.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
+import '../../shared/widgets/shadcn/orbit_switch.dart';
+import '../../shared/widgets/shadcn/orbit_button.dart';
+import '../../shared/widgets/shadcn/orbit_icon_button.dart';
 // as rep：规避 Flutter widgets 自带 RepeatMode 类名冲突
 import 'logic/parse_quick_input.dart';
 import 'logic/repeat_logic.dart' as rep;
@@ -964,7 +967,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                 ),
                               ),
                             ),
-                            IconButton(
+                            OrbitIconButton(
                               tooltip: '保存',
                               icon: _saving
                                   ? OrbitSpinner(
@@ -1234,7 +1237,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                               ),
                                             ),
                                           ),
-                                          Switch(
+                                          OrbitSwitch(
                                             value: _remindConstant,
                                             onChanged: (v) => setState(
                                               () => _remindConstant = v,
@@ -1253,7 +1256,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                               const SizedBox(height: AppDimens.space16),
                               SectionCard(
                                 title: '标签',
-                                trailing: TextButton(
+                                trailing: OrbitButton.text(
                                   onPressed: _pickFormLabels,
                                   child: const Text('选择'),
                                 ),
@@ -1340,7 +1343,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                                 ),
                                               ),
                                             ),
-                                            IconButton(
+                                            OrbitIconButton(
                                               visualDensity:
                                                   VisualDensity.compact,
                                               tooltip: '移除子任务',
@@ -1373,7 +1376,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                                 _addSubtaskTitle(),
                                           ),
                                         ),
-                                        TextButton(
+                                        OrbitButton.text(
                                           onPressed: _addSubtaskTitle,
                                           child: const Text('添加'),
                                         ),
@@ -1462,7 +1465,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                         ),
                       ),
                       const SizedBox(width: AppDimens.space8),
-                      TextButton(
+                      OrbitButton.text(
                         onPressed: createLabel,
                         child: const Text('新建'),
                       ),
@@ -1577,7 +1580,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
           style: TextStyle(fontSize: 14, color: colors.secondaryText),
         ),
         const SizedBox(height: AppDimens.space16),
-        TextButton(
+        OrbitButton.text(
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('返回'),
         ),
@@ -1650,7 +1653,7 @@ class _FormDateTile extends StatelessWidget {
             const SizedBox(width: AppDimens.space8),
             // 裸 Icon 热区不足：换 IconButton（48 约束 + 波纹 + 读屏语义），
             // 视觉仍是小叉（口径同 orbit_info_row 的清除钮）
-            IconButton(
+            OrbitIconButton(
               tooltip: '清除',
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(
@@ -1869,3 +1872,5 @@ class _TitleParseChips extends StatelessWidget {
     );
   }
 }
+
+

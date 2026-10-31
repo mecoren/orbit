@@ -20,6 +20,7 @@ import '../../shared/widgets/shadcn/orbit_actions_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_empty_state.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
+import '../../shared/widgets/shadcn/orbit_button.dart';
 import 'plan_prefs_sheet.dart';
 import 'providers/todo_providers.dart';
 
@@ -187,7 +188,7 @@ class _PlanDaySheetState extends ConsumerState<_PlanDaySheet> {
                             ),
                           ),
                           const SizedBox(width: AppDimens.space8),
-                          TextButton(
+                          OrbitButton.text(
                             onPressed: _pickPrefs,
                             child: const Text('作息'),
                           ),
@@ -344,3 +345,4 @@ class _PlanDaySheetState extends ConsumerState<_PlanDaySheet> {
     );
   }
 }
+

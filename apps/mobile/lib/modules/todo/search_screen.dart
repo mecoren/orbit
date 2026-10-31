@@ -13,6 +13,7 @@ import '../../shared/widgets/shadcn/orbit_strikethrough.dart';
 import '../../shared/widgets/shadcn/orbit_empty_state.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_header.dart';
+import '../../shared/widgets/shadcn/orbit_icon_button.dart';
 import 'logic/task_logic.dart';
 import 'providers/todo_providers.dart';
 import '../../core/theme/icon_map.dart';
@@ -100,7 +101,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                         color: colors.secondaryText,
                       ),
                       suffixIcon: _keyword.isNotEmpty
-                          ? IconButton(
+                          ? OrbitIconButton(
                               tooltip: '清除搜索',
                               icon: Icon(
                                 OrbitIcons.close,
@@ -338,3 +339,4 @@ class _TaskResultRow extends StatelessWidget {
     );
   }
 }
+

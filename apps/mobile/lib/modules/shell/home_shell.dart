@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_miuix/miuix.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/layout/orbit_breakpoints.dart';
@@ -9,6 +10,7 @@ import '../../data/providers/bridge_provider.dart';
 import '../../shared/widgets/shadcn/orbit_bottom_nav.dart';
 import '../../shared/widgets/shadcn/orbit_dropdown_panel.dart';
 import '../../shared/widgets/shadcn/orbit_fab.dart';
+import '../../shared/widgets/shadcn/orbit_divider.dart';
 import '../todo/form_bottom_sheet.dart';
 import '../todo/logic/quick_add_context.dart';
 import '../todo/logic/task_logic.dart';
@@ -17,7 +19,7 @@ import '../todo/quick_add_sheet.dart' show showQuickAddSheet;
 import '../todo/sidebar_screen.dart';
 import 'nav_modules.dart';
 
-/// 主导航壳（底部页签 + 右下悬浮新建钮 + 「更多」面板）
+/// 主导航壳（OS4 玻璃底栏 + 右下悬浮新建钮 + 「更多」面板）
 ///
 /// 对齐竞品主导航形态：模块页签经 StatefulShellRoute 各自持有导航栈，切页签
 /// 互不丢栈，页签内入栈（任务列表、项目编辑等）时底栏常驻；任务详情等根级
@@ -28,11 +30,43 @@ import 'nav_modules.dart';
 /// 条目点击 = 切到对应模块分支。「新建」上收右下悬浮钮（[OrbitFab]）：落点
 /// 跟随当前列表页（[QuickAddContext] 登记的筛选入参），长按直达模板新建；
 /// 「今天」页签挂今日未完成计数角标（不在底栏时不挂）。
-class HomeShell extends ConsumerWidget {
+///
+/// **OS4 玻璃接线（2026-10-31）**：底栏换成 `MiuixGlassNavigationBar` 后需要
+/// 「栏体背后的内容」采样快照。按库内约束，**捕获树与玻璃消费方必须是兄弟
+/// 节点**——这里用 `Stack` 把页面内容包进 [MiuixLayerBackdropCapture]，
+/// 底栏与悬浮钮作为 `Scaffold` 的兄弟层挂在捕获树之外，两者共享同一个
+/// [MiuixLayerBackdrop]。反之（捕获树包住玻璃组件）会自采样：栏体把自己
+/// 也拍进背景，越糊越实。
+///
+/// 页头（各页 `OrbitPageHeader`）本身不在本壳的捕获树内（各页自持 Stack），
+/// 故默认仍走实时 `BackdropFilter` 路径；需要 OS4 采样的页头可显式传
+/// `backdrop`——本壳把同一实例经 [OrbitGlassScope] 向下暴露。
+class HomeShell extends ConsumerStatefulWidget {
   const HomeShell({super.key, required this.navigationShell});
 
   /// go_router 的页签容器（IndexedStack 语义，切换保留各页签状态）
   final StatefulNavigationShell navigationShell;
+
+  @override
+  ConsumerState<HomeShell> createState() => _HomeShellState();
+}
+
+class _HomeShellState extends ConsumerState<HomeShell> {
+  /// OS4 玻璃背景采样器（随 State 生命周期持有，dispose 释放快照图像）
+  final MiuixLayerBackdrop _backdrop = MiuixLayerBackdrop();
+
+  @override
+  void initState() {
+    super.initState();
+    // 预热 OS4 shader：首帧就绪可避免"第一下看到实色带、再变玻璃"的跳变
+    MiuixGlassRendering.load();
+  }
+
+  @override
+  void dispose() {
+    _backdrop.dispose();
+    super.dispose();
+  }
 
   /// 「更多」面板：当前配置下未进底栏的启用模块（[NavModulesState.morePanelItems]）
   ///
@@ -56,7 +90,7 @@ class HomeShell extends ConsumerWidget {
             OrbitPanelItem(
               icon: m.icon,
               label: m.label,
-              onTap: () => navigationShell.goBranch(m.branchIndex),
+              onTap: () => widget.navigationShell.goBranch(m.branchIndex),
             ),
         ],
       ],
@@ -64,7 +98,7 @@ class HomeShell extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final nav = ref.watch(navModulesProvider);
     final tabs = nav.bottomTabs;
     // 「今天」角标 = 今天截止视图的未完成数（0 不显示，见 [OrbitBottomNav]）；
@@ -76,14 +110,14 @@ class HomeShell extends ConsumerWidget {
     final todayPos = tabs.indexOf(OrbitNavModule.today);
     // 当前分支对应模块不在底栏（经「更多」面板/侧栏内跳进入）时，选中态落
     // 「更多」动作位（竞品同款：面板进入的模块页高亮「更多」）
-    final currentModule = OrbitNavModule.values[navigationShell.currentIndex];
+    final currentModule = OrbitNavModule.values[widget.navigationShell.currentIndex];
     final currentTabPos = tabs.indexOf(currentModule);
 
     // 配置变化后当前模块被停用：回落到启用序第一个模块（配置页在全屏路由
     // 之上操作，返回壳前兜底，避免停在「无页签指向」的分支上）
     ref.listen(navModulesProvider, (prev, next) {
       if (!next.enabled.contains(currentModule)) {
-        navigationShell.goBranch(next.enabled.first.branchIndex);
+        widget.navigationShell.goBranch(next.enabled.first.branchIndex);
       }
     });
 
@@ -95,56 +129,97 @@ class HomeShell extends ConsumerWidget {
         OrbitBreakpoints.isExpanded(context) &&
         currentModule != OrbitNavModule.sidebar;
 
-    return Scaffold(
-      body: showEmbeddedSidebar
+    // 页面内容统一包进捕获树：底栏/页头消费同一 backdrop 的玻璃材质
+    final content = MiuixLayerBackdropCapture(
+      backdrop: _backdrop,
+      child: showEmbeddedSidebar
           ? Row(
               children: [
                 const SizedBox(
                   width: OrbitBreakpoints.sidebarWidth,
                   child: SidebarScreen(embedded: true),
                 ),
-                const VerticalDivider(width: 1),
-                Expanded(child: navigationShell),
+                const OrbitVerticalDivider(width: 1),
+                Expanded(child: widget.navigationShell),
               ],
             )
-          : navigationShell,
-      floatingActionButton: OrbitFab(
-        accentColor: OrbitAccents.themeAccent,
-        // 新建落点跟随当前列表（无页面语境时面板内自选）
-        onPressed: () {
-          final target = QuickAddContext.current;
-          showQuickAddSheet(
-            context,
-            defaultProjectId: target?.projectId,
-            quickView: target?.quickView,
-          );
-        },
-        // 长按 = 从模板新建（与列表页长按加号同源；无模板静默返回）
-        onLongPress: () =>
-            showTemplateCreateFlow(context, ref.read(orbitBridgeProvider)),
-      ),
-      bottomNavigationBar: OrbitBottomNav(
-        currentIndex: currentTabPos >= 0 ? currentTabPos : tabs.length,
-        moreTabIndex: tabs.length,
-        onMoreTap: (anchor) =>
-            _showMorePanel(context, anchor, nav.morePanelItems),
-        // 重复点击当前页签回退到该页签根（go_router 惯例：保留栈内其余状态）
-        onTap: (index) {
-          final module = tabs[index];
-          navigationShell.goBranch(
-            module.branchIndex,
-            initialLocation: module.branchIndex == navigationShell.currentIndex,
-          );
-        },
-        badges: todayPos >= 0
-            ? {todayPos: counts.quickView[QuickViewKey.today] ?? 0}
-            : const <int, int>{},
-        items: [
-          for (final m in tabs)
-            OrbitBottomNavItem(icon: m.icon, label: m.label),
-          const OrbitBottomNavItem(icon: OrbitIcons.more, label: '更多'),
-        ],
+          : widget.navigationShell,
+    );
+
+    return OrbitGlassScope(
+      backdrop: _backdrop,
+      child: Scaffold(
+        body: content,
+        floatingActionButton: OrbitFab(
+          accentColor: OrbitAccents.themeAccent,
+          // 新建落点跟随当前列表（无页面语境时面板内自选）
+          onPressed: () {
+            final target = QuickAddContext.current;
+            showQuickAddSheet(
+              context,
+              defaultProjectId: target?.projectId,
+              quickView: target?.quickView,
+            );
+          },
+          // 长按 = 从模板新建（与列表页长按加号同源；无模板静默返回）
+          onLongPress: () =>
+              showTemplateCreateFlow(context, ref.read(orbitBridgeProvider)),
+        ),
+        bottomNavigationBar: OrbitBottomNav(
+          backdrop: _backdrop,
+          currentIndex: currentTabPos >= 0 ? currentTabPos : tabs.length,
+          moreTabIndex: tabs.length,
+          onMoreTap: (anchor) =>
+              _showMorePanel(context, anchor, nav.morePanelItems),
+          // 重复点击当前页签回退到该页签根（go_router 惯例：保留栈内其余状态）
+          onTap: (index) {
+            final module = tabs[index];
+            widget.navigationShell.goBranch(
+              module.branchIndex,
+              initialLocation:
+                  module.branchIndex == widget.navigationShell.currentIndex,
+            );
+          },
+          badges: todayPos >= 0
+              ? {todayPos: counts.quickView[QuickViewKey.today] ?? 0}
+              : const <int, int>{},
+          items: [
+            for (final m in tabs)
+              OrbitBottomNavItem(icon: m.icon, label: m.label),
+            const OrbitBottomNavItem(icon: OrbitIcons.more, label: '更多'),
+          ],
+        ),
       ),
     );
   }
 }
+
+/// OS4 玻璃采样器的向下传递通道
+///
+/// 页面（如 `SubListScreen`）在自己的 `OrbitPageHeader` 上传 `backdrop` 时
+/// 取这里暴露的实例——这样页头、底栏采样的是**同一份**快照，观感一致且
+/// 不多录一份图层（每次捕获都是一个额外的 `toImageSync`）。
+///
+/// 注意：消费方必须在捕获树**之外**。页面自身就在捕获树内，但页头是页面
+/// Stack 的顶层兄弟（不在滚动内容子树里），它的玻璃采样的是"页面内容"，
+/// 不会把自己拍进去——前提是页头本身别被包进 `MiuixLayerBackdropCapture`。
+class OrbitGlassScope extends InheritedWidget {
+  const OrbitGlassScope({
+    super.key,
+    required this.backdrop,
+    required super.child,
+  });
+
+  /// 当前壳的玻璃背景采样器
+  final MiuixLayerBackdrop backdrop;
+
+  /// 取最近的采样器（无壳/测试裸页时返回 null，页头自动回落实时模糊）
+  static MiuixLayerBackdrop? maybeOf(BuildContext context) => context
+      .dependOnInheritedWidgetOfExactType<OrbitGlassScope>()
+      ?.backdrop;
+
+  @override
+  bool updateShouldNotify(OrbitGlassScope oldWidget) =>
+      backdrop != oldWidget.backdrop;
+}
+

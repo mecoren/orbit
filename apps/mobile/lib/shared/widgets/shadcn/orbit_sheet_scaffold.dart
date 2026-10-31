@@ -24,6 +24,7 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sh;
 import '../../../core/layout/orbit_breakpoints.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimens.dart';
+import 'orbit_divider.dart';
 
 /// 抽屉骨架：[title]/[header] + 可滚 [content] + 固定 [actions] 尾栏
 class OrbitSheetScaffold extends StatelessWidget {
@@ -103,7 +104,7 @@ class OrbitSheetScaffold extends StatelessWidget {
                 ),
                 // 尾栏固定在底部：与内容区之间用 1px 分隔线划界（不随内容滚动）
                 if (actions != null) ...[
-                  Divider(height: 1, color: colors.divider),
+                  OrbitDivider(height: 1, color: colors.divider),
                   actions!,
                 ],
               ],
@@ -219,3 +220,4 @@ class OrbitSheetActions extends StatelessWidget {
     );
   }
 }
+

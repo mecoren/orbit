@@ -32,6 +32,7 @@ import '../../core/theme/icon_map.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
+import '../../shared/widgets/shadcn/orbit_icon_button.dart';
 import '../todo/logic/quick_actions.dart';
 import '../todo/quick_add_sheet.dart' show quickActionIcon;
 
@@ -730,7 +731,7 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
       height: AppDimens.touchTarget,
       child: Row(
         children: [
-          IconButton(
+          OrbitIconButton(
             tooltip: enabled ? '收到「更多」' : '加到工具栏',
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints.tightFor(width: 32, height: 32),
@@ -823,3 +824,4 @@ class _EnterTransition extends StatelessWidget {
     );
   }
 }
+

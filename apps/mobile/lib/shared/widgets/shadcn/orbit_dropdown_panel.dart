@@ -4,10 +4,10 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimens.dart';
-import '../../../core/theme/app_elevation.dart';
 import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_shapes.dart';
 import '../../../core/theme/icon_map.dart';
+import 'package:flutter_miuix/miuix.dart';
 
 /// 面板宽度上限（px）
 ///
@@ -84,28 +84,37 @@ class OrbitFloatCard extends StatelessWidget {
     final screen = MediaQuery.of(context).size;
     // 宽度走统入口（含小屏钳制），与锚点定位用同一数值
     final w = orbitFloatCardWidth(context, width);
+    // OS4 玻璃浮层：库内 `miuixGlassSurface` 的材质档（菜单/面板类表面，
+    // `shading: false` 不做仿生折射）+ 浮层阴影。没有背景采样器时库内自动
+    // 回退实色填充，观感与旧版 `popup` 底一致。
+    final surface = miuixGlassSurface(
+      shadow: MiuixGlassShadows.floating,
+      alpha: 1,
+    );
     return Padding(
       // 外留白既作面板与屏幕边的间距，也给投影留出空间（否则被裁剪）
       padding: const EdgeInsets.all(AppDimens.space8),
-      child: Container(
+      child: SizedBox(
         width: w,
-        decoration: BoxDecoration(
-          borderRadius: AppShapes.large,
-          boxShadow: AppElevation.ofContext(context, level: 4),
-        ),
-        // 表面与「按下水波纹」都由这层 Material 承担（圆角裁切）
-        child: Material(
-          color: colors.popup,
-          borderRadius: AppShapes.large,
-          clipBehavior: Clip.antiAlias,
-          child: Container(
-            decoration: BoxDecoration(
+        // 条目多时卡片可滚：整屏高度上限内不出屏
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: screen.height * 0.7),
+          child: surface(
+            context,
+            RoundedRectangleBorder(borderRadius: AppShapes.large),
+            // 表面与「按下水波纹」都由这层 Material 承担（圆角裁切）
+            Material(
+              color: colors.popup.withValues(alpha: 0.0),
               borderRadius: AppShapes.large,
-              border: Border.all(color: colors.outline),
+              clipBehavior: Clip.antiAlias,
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: AppShapes.large,
+                  border: Border.all(color: colors.outline),
+                ),
+                child: child,
+              ),
             ),
-            // 条目多时卡片可滚：整屏高度上限内不出屏
-            constraints: BoxConstraints(maxHeight: screen.height * 0.7),
-            child: child,
           ),
         ),
       ),
@@ -565,3 +574,4 @@ class OrbitDropdownPanelViewState extends State<OrbitDropdownPanelView> {
     );
   }
 }
+

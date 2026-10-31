@@ -14,6 +14,7 @@ import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
+import '../../shared/widgets/shadcn/orbit_button.dart';
 import 'update_check.dart';
 
 /// 关于页 /about（设置页关于卡入口）
@@ -158,7 +159,7 @@ class _AboutPageState extends ConsumerState<AboutPage> {
                       ),
                     ),
                     const SizedBox(height: AppDimens.space4),
-                    TextButton.icon(
+                    OrbitButton.icon(variant: OrbitButtonVariant.text, 
                       onPressed: _checking ? null : _checkUpdate,
                       icon: _checking
                           ? const OrbitSpinner(size: 14)
@@ -207,7 +208,7 @@ class _AboutPageState extends ConsumerState<AboutPage> {
                   title: '开源许可',
                   child: SizedBox(
                     width: double.infinity,
-                    child: OutlinedButton.icon(
+                    child: OrbitButton.icon(variant: OrbitButtonVariant.outline, 
                       onPressed: () => showLicensePage(context: context),
                       icon: const Icon(OrbitIcons.fileText, size: 18),
                       label: const Text('查看开源许可'),
@@ -240,3 +241,4 @@ class _AboutPageState extends ConsumerState<AboutPage> {
     );
   }
 }
+

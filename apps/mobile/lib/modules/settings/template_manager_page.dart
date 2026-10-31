@@ -18,6 +18,8 @@ import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
+import '../../shared/widgets/shadcn/orbit_button.dart';
+import '../../shared/widgets/shadcn/orbit_icon_button.dart';
 import '../todo/logic/task_logic.dart' show priorityLabel;
 import '../todo/logic/template_apply.dart';
 import '../todo/providers/todo_providers.dart';
@@ -357,7 +359,7 @@ class _TemplateManagerPageState extends ConsumerState<TemplateManagerPage> {
                       const SizedBox(height: AppDimens.space8),
                       SizedBox(
                         width: double.infinity,
-                        child: OutlinedButton.icon(
+                        child: OrbitButton.icon(variant: OrbitButtonVariant.outline, 
                           onPressed: _busy ? null : () => _upsert(),
                           icon: const Icon(OrbitIcons.add,
                               size: AppDimens.iconSizeSm + 2),
@@ -438,13 +440,13 @@ class _TemplateManagerPageState extends ConsumerState<TemplateManagerPage> {
               ),
             ),
           ),
-          IconButton(
+          OrbitIconButton(
             onPressed: _busy ? null : () => _upsert(editing: tpl),
             tooltip: '编辑',
             icon: Icon(OrbitIcons.edit,
                 size: AppDimens.iconSizeMd, color: colors.secondaryText),
           ),
-          IconButton(
+          OrbitIconButton(
             onPressed: _busy ? null : () => _delete(tpl),
             tooltip: '删除',
             icon: Icon(OrbitIcons.delete,
@@ -459,3 +461,5 @@ class _TemplateManagerPageState extends ConsumerState<TemplateManagerPage> {
 
 // 表单控制器的释放交给 shared/widgets/controller_disposer.dart 的
 // ControllerDisposer（见该文件顶部关于「弹层退出动画期重建」的说明）。
+
+

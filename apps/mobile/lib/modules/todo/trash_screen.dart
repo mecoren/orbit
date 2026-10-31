@@ -14,6 +14,8 @@ import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_skeleton.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
+import '../../shared/widgets/shadcn/orbit_button.dart';
+import '../../shared/widgets/shadcn/orbit_icon_button.dart';
 import 'providers/todo_providers.dart';
 import '../../core/theme/icon_map.dart';
 
@@ -297,7 +299,7 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
               showBack: widget.showBack,
               actions: [
                 if (visible.isNotEmpty)
-                  TextButton(
+                  OrbitButton.text(
                     onPressed: () => _purgeAll(
                       visible.length,
                       [for (final t in visible) t.id],
@@ -393,7 +395,7 @@ class _TrashTaskTile extends StatelessWidget {
         subtitle,
         style: TextStyle(fontSize: 12, color: colors.secondaryText),
       ),
-      trailing: IconButton(
+      trailing: OrbitIconButton(
         icon: Icon(
           OrbitIcons.archiveRestore,
           size: AppDimens.iconSizeMd,
@@ -405,3 +407,5 @@ class _TrashTaskTile extends StatelessWidget {
     );
   }
 }
+
+

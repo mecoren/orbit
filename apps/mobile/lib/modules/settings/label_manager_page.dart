@@ -15,6 +15,8 @@ import '../../shared/widgets/shadcn/orbit_actions_sheet.dart' show bottomSheetMo
 import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
+import '../../shared/widgets/shadcn/orbit_button.dart';
+import '../../shared/widgets/shadcn/orbit_icon_button.dart';
 import '../todo/logic/task_logic.dart' show labelPaletteHexes;
 import '../todo/providers/todo_providers.dart';
 import '../../core/theme/icon_map.dart';
@@ -371,7 +373,7 @@ class _LabelManagerPageState extends ConsumerState<LabelManagerPage> {
                       const SizedBox(height: AppDimens.space8),
                       SizedBox(
                         width: double.infinity,
-                        child: OutlinedButton.icon(
+                        child: OrbitButton.icon(variant: OrbitButtonVariant.outline, 
                           onPressed: _busy ? null : _createLabel,
                           icon: const Icon(OrbitIcons.add,
                               size: AppDimens.iconSizeSm + 2),
@@ -436,13 +438,13 @@ class _LabelManagerPageState extends ConsumerState<LabelManagerPage> {
               style: TextStyle(fontSize: 14, color: colors.bodyText),
             ),
           ),
-          IconButton(
+          OrbitIconButton(
             onPressed: _busy ? null : () => _rename(label),
             tooltip: '编辑',
             icon: Icon(OrbitIcons.edit,
                 size: AppDimens.iconSizeMd, color: colors.secondaryText),
           ),
-          IconButton(
+          OrbitIconButton(
             onPressed: _busy ? null : () => _delete(label),
             tooltip: '删除',
             icon: Icon(OrbitIcons.delete,
@@ -454,3 +456,5 @@ class _LabelManagerPageState extends ConsumerState<LabelManagerPage> {
     );
   }
 }
+
+

@@ -18,6 +18,7 @@ import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
+import '../../shared/widgets/shadcn/orbit_icon_button.dart';
 import 'logic/task_logic.dart';
 import '../../shared/utils/hex_color.dart';
 import 'providers/todo_providers.dart';
@@ -683,7 +684,7 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
                                 trailing: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    IconButton(
+                                    OrbitIconButton(
                                       visualDensity: VisualDensity.compact,
                                       tooltip: '编辑',
                                       icon: Icon(
@@ -846,7 +847,7 @@ class _FilterDateRow extends StatelessWidget {
             ),
           ),
           if (value != null)
-            IconButton(
+            OrbitIconButton(
               visualDensity: VisualDensity.compact,
               tooltip: '清除',
               icon: Icon(
@@ -915,3 +916,4 @@ class _FilterTriRow extends StatelessWidget {
     );
   }
 }
+

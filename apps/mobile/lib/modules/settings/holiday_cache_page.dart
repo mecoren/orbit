@@ -16,6 +16,10 @@ import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
+import '../../shared/widgets/shadcn/orbit_switch.dart';
+import '../../shared/widgets/shadcn/orbit_button.dart';
+import '../../shared/widgets/shadcn/orbit_progress_bar.dart';
+import '../../shared/widgets/shadcn/orbit_divider.dart';
 import '../todo/logic/task_logic.dart' show formatDateTime;
 import '../todo/providers/todo_providers.dart';
 
@@ -324,7 +328,7 @@ class _HolidayCachePageState extends ConsumerState<HolidayCachePage> {
               style: TextStyle(fontSize: 12, color: colors.warning),
             ),
           ],
-          const Divider(height: AppDimens.space24),
+          const OrbitDivider(height: AppDimens.space24),
           Row(
             children: [
               Expanded(
@@ -333,7 +337,7 @@ class _HolidayCachePageState extends ConsumerState<HolidayCachePage> {
                   style: TextStyle(fontSize: 14, color: colors.bodyText),
                 ),
               ),
-              Switch(
+              OrbitSwitch(
                 value: autoEnabled,
                 onChanged: _autoBusy ? null : _toggleAuto,
               ),
@@ -349,7 +353,7 @@ class _HolidayCachePageState extends ConsumerState<HolidayCachePage> {
           const SizedBox(height: AppDimens.space12),
           SizedBox(
             width: double.infinity,
-            child: FilledButton.icon(
+            child: OrbitButton.icon(variant: OrbitButtonVariant.primary, 
               onPressed: _updating ? null : _update,
               icon: _updating
                   ? const OrbitSpinner(size: 16)
@@ -360,7 +364,7 @@ class _HolidayCachePageState extends ConsumerState<HolidayCachePage> {
           const SizedBox(height: AppDimens.space8),
           SizedBox(
             width: double.infinity,
-            child: OutlinedButton.icon(
+            child: OrbitButton.icon(variant: OrbitButtonVariant.outline, 
               onPressed: busy ? null : _pickRange,
               icon: const Icon(OrbitIcons.calendarRange, size: 16),
               label: const Text('按年份范围获取'),
@@ -382,7 +386,7 @@ class _HolidayCachePageState extends ConsumerState<HolidayCachePage> {
   Widget _yearCard(AppColorSet colors, int year, List<HolidayInfo> items) {
     return SectionCard(
       title: '$year 年（${items.length} 条）',
-      trailing: TextButton(
+      trailing: OrbitButton.text(
         onPressed:
             (_yearBusy != null || _rangeBusy) ? null : () => _updateYear(year),
         child: _yearBusy == year
@@ -499,18 +503,11 @@ class _HolidayProgressDialog extends ConsumerWidget {
             if (phase == 'starting' || ratio == null)
               const Center(child: OrbitSpinner(size: AppDimens.iconSizeLg))
             else
-              ClipRRect(
-                borderRadius: AppShapes.full,
-                child: LinearProgressIndicator(
-                  value: ratio,
-                  minHeight: 6,
-                  backgroundColor: colors.surfaceSecondary,
-                ),
-              ),
+              OrbitProgressBar(value: ratio, height: 6),
             const SizedBox(height: AppDimens.space16),
             Align(
               alignment: Alignment.centerRight,
-              child: TextButton(
+              child: OrbitButton.text(
                 onPressed: () =>
                     ref.read(orbitBridgeProvider).holidayCancelFetch(),
                 child: const Text('取消'),
@@ -542,3 +539,6 @@ class _HolidayProgressDialog extends ConsumerWidget {
     }
   }
 }
+
+
+

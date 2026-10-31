@@ -27,6 +27,7 @@ import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_timeline_day.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
+import '../../shared/widgets/shadcn/orbit_icon_button.dart';
 import '../../services/local_prefs.dart';
 import 'logic/reschedule_due.dart';
 import 'logic/task_logic.dart';
@@ -792,7 +793,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               showBack: false,
               titleWidget: Row(
                 children: [
-                  IconButton(
+                  OrbitIconButton(
                     icon: const Icon(
                       OrbitIcons.chevronLeft,
                       size: AppDimens.iconSizeLg,
@@ -851,7 +852,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                       ),
                     ),
                   ),
-                  IconButton(
+                  OrbitIconButton(
                     icon: const Icon(
                       OrbitIcons.chevronRight,
                       size: AppDimens.iconSizeLg,
@@ -862,7 +863,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 ],
               ),
               actions: [
-                IconButton(
+                OrbitIconButton(
                   icon: const Icon(
                     OrbitIcons.calendarCheck,
                     size: AppDimens.iconSizeMd,
@@ -872,7 +873,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 ),
                 // 视图档抽屉（月历 / 议程 / 时间；年档由标题点击进入，
                 // 见 _openYearOverview）——「从一组值里挑一个」走底部抽屉
-                IconButton(
+                OrbitIconButton(
                   icon: Icon(_viewModeIcon, size: AppDimens.iconSizeMd),
                   onPressed: _pickViewMode,
                   tooltip: '切换视图（当前：$_viewModeLabel）',
@@ -1099,7 +1100,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         ? '上次更新：${DateFormat('M月d日 HH:mm').format(DateTime.fromMillisecondsSinceEpoch(lastUpdate))}'
         : '尚未更新过';
     final tip = auto ? '$lastText（每月自动更新）' : '$lastText（自动更新已关闭）';
-    return IconButton(
+    return OrbitIconButton(
       icon: _updating
           ? const OrbitSpinner(size: AppDimens.iconSizeSm)
           : const Icon(OrbitIcons.refresh, size: AppDimens.iconSizeMd),
@@ -1602,7 +1603,7 @@ class _SelectedDayList extends StatelessWidget {
                 ),
                 const SizedBox(width: AppDimens.space4),
                 // 卡片 ⇄ 时间线切换（图标 = 切过去的目标样式，与议程切换钮同口径）
-                IconButton(
+                OrbitIconButton(
                   // 内容行高 ~24：默认 48 热区会把头行撑高一倍，取 40 折中
                   // （图标 18 + 上下各 11，点按面积仍是视觉字形的四倍）
                   padding: EdgeInsets.zero,
@@ -1898,3 +1899,4 @@ const double _kSwipeVelocity = 280;
 
 String _ymd(DateTime d) =>
     '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+

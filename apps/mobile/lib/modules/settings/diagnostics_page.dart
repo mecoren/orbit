@@ -13,6 +13,8 @@ import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_button.dart';
+import '../../shared/widgets/shadcn/orbit_icon_button.dart';
 
 /// 诊断页 /settings/diagnostics（docs/09 内存专项「应用内诊断分区」）
 ///
@@ -228,7 +230,7 @@ class _DiagnosticsPageState extends ConsumerState<DiagnosticsPage> {
                               ),
                             ),
                           ),
-                          TextButton(
+                          OrbitButton.text(
                             onPressed: _sampleNow,
                             child: const Text('采样'),
                           ),
@@ -253,7 +255,7 @@ class _DiagnosticsPageState extends ConsumerState<DiagnosticsPage> {
             child: OrbitPageHeader(
               title: '诊断',
               actions: [
-                IconButton(
+                OrbitIconButton(
                   tooltip: '刷新',
                   onPressed:
                       _loading ? null : () => _load(),
@@ -325,3 +327,5 @@ String formatCount(num? n) {
   }
   return buf.toString();
 }
+
+

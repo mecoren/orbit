@@ -35,6 +35,7 @@ import '../../core/theme/icon_map.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
+import '../../shared/widgets/shadcn/orbit_icon_button.dart';
 import '../shell/nav_modules.dart';
 
 /// 横滑换段的滑动阈值（与编辑操作页同值）：`Dismissible.dismissThresholds`
@@ -740,7 +741,7 @@ class _NavModulesPageState extends ConsumerState<NavModulesPage> {
         : true;
     return Row(
       children: [
-        IconButton(
+        OrbitIconButton(
           tooltip: enabled ? '停用' : '启用',
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints.tightFor(width: 32, height: 32),
@@ -854,3 +855,4 @@ class _EnterTransition extends StatelessWidget {
     );
   }
 }
+

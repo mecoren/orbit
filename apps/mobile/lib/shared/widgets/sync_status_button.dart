@@ -32,6 +32,8 @@ import 'shadcn/orbit_actions_sheet.dart' show bottomSheetTopShape;
 import 'shadcn/orbit_sheet_scaffold.dart';
 import 'shadcn/orbit_spinner.dart';
 import 'shadcn/orbit_toast.dart';
+import 'shadcn/orbit_progress_bar.dart';
+import 'shadcn/orbit_icon_button.dart';
 import '../../core/theme/icon_map.dart';
 
 /// 云同步配置页路由（未配置 / 未解锁时的引导目标）
@@ -153,7 +155,7 @@ class _SyncStatusButtonState extends ConsumerState<SyncStatusButton> {
     return Semantics(
       button: true,
       label: '云同步：$statusText',
-      child: IconButton(
+      child: OrbitIconButton(
         onPressed: () => unawaited(_onTap(status)),
         icon: _buildIcon(status, colors),
         tooltip: statusText,
@@ -421,14 +423,10 @@ class _SyncInfoSheetState extends ConsumerState<_SyncInfoSheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(2),
-                    child: LinearProgressIndicator(
-                      value: progress.percent / 100,
-                      minHeight: 4,
-                      backgroundColor: colors.surfaceSecondary,
-                      color: OrbitAccents.themeAccent,
-                    ),
+                  OrbitProgressBar(
+                    value: progress.percent / 100,
+                    color: OrbitAccents.themeAccent,
+                    height: 4,
                   ),
                   const SizedBox(height: AppDimens.space6),
                   Text(
@@ -461,3 +459,5 @@ class _SyncInfoSheetState extends ConsumerState<_SyncInfoSheet> {
     );
   }
 }
+
+

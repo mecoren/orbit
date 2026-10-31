@@ -10,6 +10,7 @@ import '../../core/theme/app_motion.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../shared/widgets/shadcn/orbit_month_calendar.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
+import '../../shared/widgets/shadcn/orbit_icon_button.dart';
 import '../../core/theme/icon_map.dart';
 
 /// 年份边界（与 LunarCalendar 压缩表覆盖范围一致）
@@ -219,12 +220,12 @@ class _YearOverviewPageState extends State<YearOverviewPage> {
                     padding: const EdgeInsets.only(top: AppDimens.space6),
                     child: Row(
                       children: [
-                        IconButton(
+                        OrbitIconButton(
                           onPressed: () => _shiftYear(-1),
                           icon: const Icon(OrbitIcons.chevronLeft),
                           tooltip: '上一年',
                         ),
-                        IconButton(
+                        OrbitIconButton(
                           onPressed: () => _shiftYear(1),
                           icon: const Icon(OrbitIcons.chevronRight),
                           tooltip: '下一年',
@@ -485,3 +486,4 @@ class _Day extends StatelessWidget {
     );
   }
 }
+

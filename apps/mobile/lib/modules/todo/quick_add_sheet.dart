@@ -40,6 +40,7 @@ import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
+import '../../shared/widgets/shadcn/orbit_icon_button.dart';
 import 'form_bottom_sheet.dart';
 import 'logic/parse_quick_input.dart';
 import 'logic/quick_actions.dart';
@@ -853,7 +854,7 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
     final tone = _actionTone(id, colors, active);
     if (value == null) {
       return Builder(
-        builder: (btnContext) => IconButton(
+        builder: (btnContext) => OrbitIconButton(
           // 优先级无文字值但仍有已选态：tooltip 显示已选值
           tooltip: active ? _actionTooltip(id) : id.label,
           padding: EdgeInsets.zero,
@@ -977,7 +978,7 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
 
   Widget _moreButton() {
     final colors = AppColors.ofContext(context);
-    return IconButton(
+    return OrbitIconButton(
       key: _moreKey,
       tooltip: '更多',
       padding: EdgeInsets.zero,
@@ -1018,3 +1019,4 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
     );
   }
 }
+

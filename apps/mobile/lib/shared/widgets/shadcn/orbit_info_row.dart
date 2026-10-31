@@ -4,6 +4,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimens.dart';
 import '../../../core/theme/icon_map.dart';
 import '../../utils/hex_color.dart';
+import 'orbit_icon_button.dart';
 
 /// 信息行（详情页信息区与新�?编辑表单字段行共用，docs/05 §4.3�?
 ///
@@ -77,7 +78,7 @@ class InfoTile extends StatelessWidget {
             ),
           ),
           if (onClear != null)
-            IconButton(
+            OrbitIconButton(
               tooltip: '清除',
               onPressed: onClear,
               icon: Icon(
@@ -85,8 +86,7 @@ class InfoTile extends StatelessWidget {
                 size: AppDimens.iconSizeSm,
                 color: colors.iconText,
               ),
-              visualDensity: VisualDensity.compact,
-              padding: EdgeInsets.zero,
+              compact: true,
               constraints: const BoxConstraints(
                 minWidth: AppDimens.touchTarget,
                 minHeight: AppDimens.touchTarget,
@@ -110,3 +110,4 @@ class InfoTile extends StatelessWidget {
     );
   }
 }
+

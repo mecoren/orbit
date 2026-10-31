@@ -33,6 +33,9 @@ import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_date_picker.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
+import '../../shared/widgets/shadcn/orbit_button.dart';
+import '../../shared/widgets/shadcn/orbit_progress_bar.dart';
+import '../../shared/widgets/shadcn/orbit_icon_button.dart';
 import 'form_bottom_sheet.dart' show showTodoDatePicker, syncTaskReminder;
 // as rep：规避 Flutter widgets 自带 RepeatMode 类名冲突
 import 'logic/activity_format.dart';
@@ -299,7 +302,7 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
               actions: detail == null
                   ? null
                   : [
-                      IconButton(
+                      OrbitIconButton(
                         onPressed: () => _showTaskActions(detail),
                         tooltip: '任务操作',
                         icon: Icon(
@@ -333,7 +336,7 @@ class _ErrorView extends StatelessWidget {
             style: TextStyle(fontSize: 14, color: colors.secondaryText),
           ),
           const SizedBox(height: AppDimens.space16),
-          TextButton(onPressed: () => context.pop(), child: const Text('返回')),
+          OrbitButton.text(onPressed: () => context.pop(), child: const Text('返回')),
         ],
       ),
     );
@@ -833,7 +836,7 @@ class _DescriptionSectionState extends State<_DescriptionSection> {
     // 行内代码/链接/列表；原文编辑入口在「编辑」按钮的底部抽屉，不受影响）
     return SectionCard(
       title: '描述',
-      trailing: TextButton(
+      trailing: OrbitButton.text(
         onPressed: () => _openEditor(context),
         child: const Text('编辑'),
       ),
@@ -1067,18 +1070,10 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (subtasks.isNotEmpty) ...[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: progress,
-                minHeight: 6,
-                backgroundColor: OrbitAccents.todoAccent.withValues(
-                  alpha: 0.15,
-                ),
-                valueColor: const AlwaysStoppedAnimation<Color>(
-                  OrbitAccents.todoAccent,
-                ),
-              ),
+            OrbitProgressBar(
+              value: progress,
+              color: OrbitAccents.todoAccent,
+              trackColor: OrbitAccents.todoAccent.withValues(alpha: 0.15),
             ),
             const SizedBox(height: AppDimens.space8),
           ],
@@ -1123,7 +1118,7 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
                         ),
                       ),
                       // M10：行内「加子级」——在当前行下建嵌套子任务
-                      IconButton(
+                      OrbitIconButton(
                         visualDensity: VisualDensity.compact,
                         tooltip: '添加子级',
                         icon: Icon(
@@ -1140,7 +1135,7 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
                       ),
                       // M10：提到顶层（仅嵌套行出现）
                       if (node.depth > 0)
-                        IconButton(
+                        OrbitIconButton(
                           visualDensity: VisualDensity.compact,
                           tooltip: '提到顶层',
                           icon: Icon(
@@ -1151,7 +1146,7 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
                           onPressed: () => _liftToTop(node.subtask),
                         ),
                       // 转独立任务（承接父任务上下文；对齐桌面行尾入口）
-                      IconButton(
+                      OrbitIconButton(
                         visualDensity: VisualDensity.compact,
                         tooltip: '转为独立任务',
                         icon: Icon(
@@ -1162,7 +1157,7 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
                         onPressed: () => _promote(node.subtask),
                       ),
                       // close 删除（确认弹窗防误触，对齐桌面/评论删除惯例）
-                      IconButton(
+                      OrbitIconButton(
                         tooltip: '删除子任务',
                         visualDensity: VisualDensity.compact,
                         icon: Icon(
@@ -1202,7 +1197,7 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
                               onSubmitted: (_) => _submitDraft(),
                             ),
                           ),
-                          IconButton(
+                          OrbitIconButton(
                             tooltip: '确定',
                             icon: const Icon(
                               OrbitIcons.check,
@@ -1236,7 +1231,7 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
                         onSubmitted: (_) => _submitDraft(),
                       ),
                     ),
-                    IconButton(
+                    OrbitIconButton(
                       tooltip: '确定',
                       icon: const Icon(
                         OrbitIcons.check,
@@ -1247,7 +1242,7 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
                     ),
                   ],
                 )
-              : TextButton.icon(
+              : OrbitButton.icon(variant: OrbitButtonVariant.text, 
                   onPressed: () => setState(() => _adding = true),
                   icon: const Icon(
                     OrbitIcons.add,
@@ -1273,7 +1268,7 @@ class _LabelsSection extends StatelessWidget {
     final colors = AppColors.ofContext(context);
     return SectionCard(
       title: '标签',
-      trailing: TextButton(
+      trailing: OrbitButton.text(
         onPressed: () => _openEditor(context),
         child: const Text('编辑'),
       ),
@@ -1541,7 +1536,7 @@ class _LabelEditSheetState extends ConsumerState<_LabelEditSheet> {
                             onSubmitted: (_) => _createLabel(),
                           ),
                         ),
-                        IconButton(
+                        OrbitIconButton(
                           tooltip: '新建标签',
                           icon: Icon(
                             OrbitIcons.add,
@@ -1746,7 +1741,7 @@ class _RemindersSection extends ConsumerWidget {
     final colors = AppColors.ofContext(context);
     return SectionCard(
       title: '提醒',
-      trailing: TextButton(
+      trailing: OrbitButton.text(
         onPressed: () => _add(context, ref),
         child: const Text('添加提醒'),
       ),
@@ -1877,7 +1872,7 @@ class _RemindersSection extends ConsumerWidget {
                         ),
                         // 删除（二次确认抽屉，对齐桌面提醒行 ConfirmPopover；
                         // 确认文案点名时刻并说明后果，措辞与桌面一致）
-                        IconButton(
+                        OrbitIconButton(
                           tooltip: '删除提醒',
                           visualDensity: VisualDensity.compact,
                           icon: Icon(
@@ -2139,7 +2134,7 @@ class _RelationsSectionState extends ConsumerState<_RelationsSection> {
   Widget build(BuildContext context) {
     return SectionCard(
       title: '关联',
-      trailing: IconButton(
+      trailing: OrbitIconButton(
         visualDensity: VisualDensity.compact,
         tooltip: '添加关联',
         icon: const Icon(
@@ -2349,7 +2344,7 @@ class _CommentsSectionState extends ConsumerState<_CommentsSection> {
                     onSubmitted: (_) => _submit(),
                   ),
                 ),
-                IconButton(
+                OrbitIconButton(
                   tooltip: '发送',
                   icon: const Icon(
                     OrbitIcons.send,
@@ -2672,7 +2667,7 @@ class _AttachmentsSectionState extends ConsumerState<_AttachmentsSection> {
       title: '附件',
       trailing: _busy
           ? const OrbitSpinner(size: 16)
-          : IconButton(
+          : OrbitIconButton(
               tooltip: '添加附件',
               icon: const Icon(OrbitIcons.add),
               iconSize: 18,
@@ -2856,15 +2851,9 @@ class _HistorySectionState extends ConsumerState<_HistorySection> {
                           ),
                         ),
                         if (_limit < _maxLimit)
-                          TextButton(
+                          OrbitButton.text(
+                            compact: true,
                             onPressed: () => setState(() => _limit = _maxLimit),
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                              ),
-                              minimumSize: Size.zero,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
                             child: const Text(
                               '显示更多',
                               style: TextStyle(fontSize: 12),
@@ -2878,3 +2867,8 @@ class _HistorySectionState extends ConsumerState<_HistorySection> {
     );
   }
 }
+
+
+
+
+

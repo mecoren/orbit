@@ -9,6 +9,7 @@ import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
+import '../../shared/widgets/shadcn/orbit_button.dart';
 import '../../core/theme/icon_map.dart';
 import '../../modules/todo/logic/task_logic.dart' show labelPaletteHexes;
 import '../../shared/utils/hex_color.dart';
@@ -304,7 +305,7 @@ class _AccentPickerSheetState extends State<_AccentPickerSheet> {
                     ),
                   ),
                   const SizedBox(width: AppDimens.space8),
-                  FilledButton(onPressed: _applyHex, child: const Text('应用')),
+                  OrbitButton.primary(onPressed: _applyHex, child: const Text('应用')),
                 ],
               ),
             ],
@@ -336,3 +337,4 @@ class _AccentPickerSheetState extends State<_AccentPickerSheet> {
     );
   }
 }
+

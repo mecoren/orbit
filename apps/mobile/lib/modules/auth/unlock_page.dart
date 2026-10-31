@@ -7,6 +7,7 @@ import '../../data/providers/biometric_provider.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../core/theme/icon_map.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
+import '../../shared/widgets/shadcn/orbit_button.dart';
 
 /// 主密码解锁页（原 React 版 unlock-page.tsx 同构）
 ///
@@ -152,7 +153,7 @@ class _UnlockPageState extends ConsumerState<UnlockPage> {
                 const SizedBox(height: AppDimens.space16),
                 SizedBox(
                   width: double.infinity,
-                  child: FilledButton(
+                  child: OrbitButton.primary(
                     onPressed: (_loading || _controller.text.isEmpty)
                         ? null
                         : _submit,
@@ -163,7 +164,7 @@ class _UnlockPageState extends ConsumerState<UnlockPage> {
                   const SizedBox(height: AppDimens.space16),
                   SizedBox(
                     width: double.infinity,
-                    child: OutlinedButton.icon(
+                    child: OrbitButton.icon(variant: OrbitButtonVariant.outline, 
                       onPressed: _loading ? null : _biometricSubmit,
                       icon: _loading
                           ? OrbitSpinner(
@@ -184,3 +185,4 @@ class _UnlockPageState extends ConsumerState<UnlockPage> {
     );
   }
 }
+

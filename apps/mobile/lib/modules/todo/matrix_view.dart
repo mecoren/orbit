@@ -11,6 +11,7 @@ import '../../shared/widgets/shadcn/orbit_card.dart';
 import '../../shared/widgets/shadcn/orbit_checkbox.dart';
 import '../../shared/widgets/shadcn/orbit_row_toggle.dart';
 import '../../shared/widgets/shadcn/orbit_strikethrough.dart';
+import '../../shared/widgets/shadcn/orbit_divider.dart';
 import 'logic/task_logic.dart';
 
 /// 四象限视图（Eisenhower Matrix，竞品口径版式）
@@ -183,7 +184,7 @@ class EisenhowerMatrixBoard extends StatelessWidget {
               ],
             ),
           ),
-          Divider(height: 1, thickness: 1, color: colors.divider),
+          OrbitDivider(height: 1, thickness: 1, color: colors.divider),
           Expanded(
             child: tasks.isEmpty
                 ? Center(
@@ -392,3 +393,4 @@ class _QuadrantRow extends StatelessWidget {
     );
   }
 }
+

@@ -16,7 +16,6 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../core/theme/app_shapes.dart';
 import '../../core/theme/icon_map.dart';
-import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/utils/hex_color.dart';
@@ -26,6 +25,8 @@ import '../../shared/widgets/shadcn/orbit_empty_state.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
+import '../../shared/widgets/shadcn/orbit_button.dart';
+import '../../shared/widgets/shadcn/orbit_progress_bar.dart';
 import 'logic/reschedule_due.dart';
 import 'logic/task_logic.dart'
     show formatDueShort, priorityColorHex, priorityLabel;
@@ -359,7 +360,7 @@ class _TriagePageState extends ConsumerState<TriagePage> {
               actions: [
                 Padding(
                   padding: const EdgeInsets.only(right: AppDimens.space12),
-                  child: TextButton(
+                  child: OrbitButton.text(
                     onPressed: _history.isEmpty || _busy ? null : _undoLast,
                     child: const Text('撤销'),
                   ),
@@ -385,12 +386,9 @@ class _TriagePageState extends ConsumerState<TriagePage> {
         Row(
           children: [
             Expanded(
-              child: ClipRRect(
-                borderRadius: AppShapes.xs,
-                child: LinearProgressIndicator(
-                  value: _queue!.isEmpty ? 1 : _idx / _queue!.length,
-                  minHeight: 3,
-                ),
+              child: OrbitProgressBar(
+                value: _queue!.isEmpty ? 1 : _idx / _queue!.length,
+                height: 3,
               ),
             ),
             const SizedBox(width: AppDimens.space8),
@@ -472,18 +470,16 @@ class _TriagePageState extends ConsumerState<TriagePage> {
               // 次级动作：跳过 / 删除（纯文本动作走 Material 文本钮，删除红色）
               Row(
                 children: [
-                  TextButton(
+                  OrbitButton.text(
                     onPressed: _busy
                         ? null
                         : () => setState(() { _skipped++; _idx++; }),
                     child: const Text('跳过'),
                   ),
                   const Spacer(),
-                  TextButton(
+                  OrbitButton.text(
+                    destructive: true,
                     onPressed: _busy ? null : () => _delete(task),
-                    style: TextButton.styleFrom(
-                      foregroundColor: OrbitAccents.overdueRed,
-                    ),
                     child: const Text('删除'),
                   ),
                 ],
@@ -495,3 +491,7 @@ class _TriagePageState extends ConsumerState<TriagePage> {
     );
   }
 }
+
+
+
+

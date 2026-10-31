@@ -12,6 +12,8 @@ import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
+import '../../shared/widgets/shadcn/orbit_button.dart';
+import '../../shared/widgets/shadcn/orbit_filter_chip.dart';
 
 /// 三档规模：首屏联调 / 常规翻页与看板 / 统计与滚动压力（与桌面同档）
 const _scales = [300, 1200, 5000];
@@ -104,11 +106,11 @@ class _TestDataPageState extends ConsumerState<TestDataPage> {
                 runSpacing: AppDimens.space8,
                 children: [
                   for (final n in _scales)
-                    ChoiceChip(
-                      label: Text('${_formatCount(n)} 条任务'),
+                    OrbitFilterChip(
+                      label: '${_formatCount(n)} 条任务',
                       selected: _tasks == n,
-                      onSelected: _busy == null
-                          ? (_) => setState(() => _tasks = n)
+                      onTap: _busy == null
+                          ? () => setState(() => _tasks = n)
                           : null,
                     ),
                 ],
@@ -117,7 +119,7 @@ class _TestDataPageState extends ConsumerState<TestDataPage> {
               Row(
                 children: [
                   Expanded(
-                    child: FilledButton.icon(
+                    child: OrbitButton.icon(variant: OrbitButtonVariant.primary, 
                       onPressed: _busy == null ? _seed : null,
                       icon: _busy == 'seed'
                           ? _spinner()
@@ -128,11 +130,10 @@ class _TestDataPageState extends ConsumerState<TestDataPage> {
                   ),
                   const SizedBox(width: AppDimens.space8),
                   Expanded(
-                    child: OutlinedButton.icon(
+                    child: OrbitButton.icon(
+                      variant: OrbitButtonVariant.outline,
+                      destructive: true,
                       onPressed: _busy == null ? _clear : null,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: colors.destructive,
-                      ),
                       icon: _busy == 'clear'
                           ? _spinner()
                           : const Icon(OrbitIcons.delete,
@@ -370,3 +371,6 @@ String _formatCount(int n) {
   }
   return buf.toString();
 }
+
+
+

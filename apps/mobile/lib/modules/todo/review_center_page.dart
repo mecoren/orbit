@@ -19,6 +19,7 @@ import '../../shared/utils/hex_color.dart';
 import '../../shared/widgets/shadcn/orbit_empty_state.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
+import '../../shared/widgets/shadcn/orbit_button.dart';
 import 'logic/project_review.dart';
 import 'providers/todo_providers.dart';
 import 'weekly_review_sheet.dart';
@@ -245,19 +246,15 @@ class _ReviewRow extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              OutlinedButton(
+              OrbitButton.outline(
+                compact: true,
                 onPressed: onSnooze,
-                style: OutlinedButton.styleFrom(
-                  visualDensity: VisualDensity.compact,
-                ),
                 child: const Text('稍后一周'),
               ),
               const SizedBox(width: AppDimens.space8),
-              OutlinedButton(
+              OrbitButton.outline(
+                compact: true,
                 onPressed: onMarked,
-                style: OutlinedButton.styleFrom(
-                  visualDensity: VisualDensity.compact,
-                ),
                 child: const Text('已回顾'),
               ),
               const SizedBox(width: AppDimens.space8),
@@ -272,3 +269,5 @@ class _ReviewRow extends StatelessWidget {
     );
   }
 }
+
+
