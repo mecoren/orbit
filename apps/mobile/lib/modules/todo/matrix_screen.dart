@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
+import '../../shared/widgets/shadcn/orbit_bottom_nav.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_skeleton.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
@@ -72,7 +73,8 @@ class MatrixScreen extends ConsumerWidget {
                       AppDimens.space12,
                       topInset + AppDimens.space8,
                       AppDimens.space12,
-                      AppDimens.space16,
+                      // 悬浮底栏净空 + 呼吸留白
+                      OrbitBottomNav.clearanceOf(context) + AppDimens.space16,
                     ),
                     child: Column(
                       children: [
@@ -105,7 +107,7 @@ class MatrixScreen extends ConsumerWidget {
                       AppDimens.space12,
                       topInset + AppDimens.space8,
                       AppDimens.space12,
-                      AppDimens.space16,
+                      OrbitBottomNav.clearanceOf(context) + AppDimens.space16,
                     ),
                     remindersByTask: remindersByTask,
                     onOpen: (t) => context.push('/todo/${t.id}'),

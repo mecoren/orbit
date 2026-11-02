@@ -2,6 +2,7 @@
 // 「更多」面板（编辑入口 + 条目切分支）、「今天」页签角标、功能模块配置联动
 // （MockOrbitBridge 注入 + 生产路由表全链路）。
 import 'package:flutter/material.dart';
+import 'package:flutter_miuix/miuix.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/core/routing/app_router.dart';
@@ -59,6 +60,26 @@ void main() {
     expect(_navIcon(OrbitIcons.more), findsOneWidget);
     // 悬浮新建钮 = 壳里唯一的 OrbitFab 实例
     expect(find.byType(OrbitFab), findsOneWidget);
+  });
+
+  testWidgets('底栏悬浮：离屏边胶囊 + 壳层 extendBody 让内容铺到屏底', (tester) async {
+    await _pump(tester, _seededBridge());
+
+    final screen = tester.view.physicalSize / tester.view.devicePixelRatio;
+    final bar = tester.getRect(find.byType(MiuixGlassNavigationBar));
+    // 栏体离屏幕左右边（OS4 悬浮形态），且高度未被 Center 撑满
+    expect(bar.left, greaterThanOrEqualTo(OrbitBottomNav.sideGap));
+    expect(
+      screen.width - bar.right,
+      greaterThanOrEqualTo(OrbitBottomNav.sideGap),
+    );
+    expect(bar.height, OrbitBottomNav.barHeight);
+    // 底边距 = 悬浮留白 + 手势区（测试环境 viewPadding 为 0）
+    expect(bar.bottom, screen.height - OrbitBottomNav.bottomGap);
+
+    // 内容必须铺到屏底，玻璃才采样得到背后的内容（底栏不是布局占位条）
+    final scaffold = tester.widget<Scaffold>(find.byType(Scaffold).first);
+    expect(scaffold.extendBody, isTrue);
   });
 
   testWidgets('切页签：清单 → 日历 → 四象限 → 回今天，各自页面渲染', (tester) async {

@@ -41,6 +41,11 @@ import 'nav_modules.dart';
 /// 页头（各页 `OrbitPageHeader`）本身不在本壳的捕获树内（各页自持 Stack），
 /// 故默认仍走实时 `BackdropFilter` 路径；需要 OS4 采样的页头可显式传
 /// `backdrop`——本壳把同一实例经 [OrbitGlassScope] 向下暴露。
+///
+/// **2026-11-02 悬浮底栏**：壳层 Scaffold 改 `extendBody: true`，配合
+/// [OrbitBottomNav] 的悬浮留白，底栏才真正浮在页面内容之上（玻璃采样有东西）。
+/// 代价是页面内容会铺到屏幕底边：各页滚动尾部必须补
+/// `OrbitBottomNav.clearanceOf(context)`，否则末行停在栏体背后。
 class HomeShell extends ConsumerStatefulWidget {
   const HomeShell({super.key, required this.navigationShell});
 
@@ -149,6 +154,10 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     return OrbitGlassScope(
       backdrop: _backdrop,
       child: Scaffold(
+        // 详情见 [OrbitBottomNav]：底栏是悬浮胶囊，内容必须铺到屏幕底边，玻璃才
+        // 采样得到背后的列表/卡片；各页滚动尾部按 `OrbitBottomNav.clearanceOf`
+        // 自带净空，末行不会被栏体扣住。
+        extendBody: true,
         body: content,
         floatingActionButton: OrbitFab(
           accentColor: OrbitAccents.themeAccent,

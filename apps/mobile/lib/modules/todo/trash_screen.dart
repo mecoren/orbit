@@ -8,9 +8,11 @@ import '../../core/theme/app_dimens.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
+import '../../shared/widgets/shadcn/orbit_bottom_nav.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_empty_state.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
+import '../../shared/widgets/shadcn/orbit_pull_to_refresh.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_skeleton.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
@@ -259,8 +261,9 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
                       icon: OrbitIcons.delete,
                     ),
                   )
-                : RefreshIndicator(
-                    // 下拉刷新：本地重读 + 已配置时跑一轮云同步（共用回调见 pullToRefresh）。
+                : OrbitPullToRefresh(
+                    // 下拉刷新（2026-11-01：RefreshIndicator → miuix 承载）：
+                    // 本地重读 + 已配置时跑一轮云同步（共用回调见 pullToRefresh）。
                     // edgeOffset 下移到页头之下，否则指示条被 OrbitPageHeader 盖住。
                     onRefresh: () => pullToRefresh(ref),
                     color: OrbitAccents.themeAccent,
@@ -273,8 +276,10 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
                         top: MediaQuery.of(context).padding.top +
                             OrbitPageHeader.rowHeight +
                             AppDimens.space8,
-                        // 底栏页签常驻：页尾只留呼吸留白
-                        bottom: AppDimens.space16,
+                        // 悬浮底栏净空 + 呼吸留白（末条墓碑行不被玻璃栏扣住）
+                        bottom:
+                            OrbitBottomNav.clearanceOf(context) +
+                            AppDimens.space16,
                       ),
                       itemCount: visible.length,
                       itemBuilder: (context, index) {

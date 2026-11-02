@@ -16,6 +16,7 @@ import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/utils/hex_color.dart';
+import '../../shared/widgets/shadcn/orbit_bottom_nav.dart';
 import '../../shared/widgets/shadcn/orbit_empty_state.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
@@ -61,7 +62,9 @@ class _ReviewCenterPageState extends ConsumerState<ReviewCenterPage> {
                       AppDimens.space16,
                       topInset + AppDimens.space8,
                       AppDimens.space16,
-                      AppDimens.pageInline,
+                      // 悬浮底栏净空 + 呼吸留白（末张回顾卡不被玻璃栏扣住）
+                      OrbitBottomNav.clearanceOf(context) +
+                          AppDimens.pageInline,
                     ),
                     itemCount: due.length,
                     itemBuilder: (context, i) => _ReviewRow(

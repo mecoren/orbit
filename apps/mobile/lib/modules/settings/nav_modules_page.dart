@@ -605,8 +605,10 @@ class _NavModulesPageState extends ConsumerState<NavModulesPage> {
   }
 
   /// 底栏落位预览（只读）：启用序前 [NavModulesState.bottomTabLimit] 个模块 +
-  /// 固定「更多」位，与真实底栏同形（56 高 + 表面 + 描边 + 页签均分 + 22 图标，
-  /// 图标独立展示无文字——与 [OrbitBottomNav] 同口径）。
+  /// 固定「更多」位。此处是**实色卡片示意图**（56 高 + 表面 + 描边 + 页签均分
+  /// + 22 图标、图标独立无文字），不复刻真实底栏的悬浮胶囊与玻璃材质——玻璃靠
+  /// 宿主 `MiuixLayerBackdrop` 采样页面内容，配置页里没有可采样的背景。
+  /// 页签排布口径仍与 [OrbitBottomNav] 同源（图标等分、无文字）。
   ///
   /// 落位即所见：调用方传拖拽实时顺序（[_liveOrder]），横滑/拖拽经
   /// [_swipeLive] 逐帧给出插值进度——滑出项淡出、后项实时让位；滑入项以

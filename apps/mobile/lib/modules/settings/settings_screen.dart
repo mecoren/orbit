@@ -19,6 +19,7 @@ import '../../data/api/orbit_bridge.dart'
 import '../../data/providers/biometric_provider.dart';
 import '../../data/providers/todo_widget_provider.dart';
 import '../../data/providers/bridge_provider.dart';
+import '../../shared/widgets/shadcn/orbit_bottom_nav.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_password_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
@@ -926,7 +927,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     AppDimens.space16,
                 left: AppDimens.space16,
                 right: AppDimens.space16,
-                bottom: AppDimens.gestureInsetFallback + AppDimens.space32,
+                // 悬浮底栏净空 + 呼吸留白（末张设置卡不被玻璃栏扣住）
+                bottom:
+                    OrbitBottomNav.clearanceOf(context) + AppDimens.space32,
               ),
               children: [
                 // 一、同步卡

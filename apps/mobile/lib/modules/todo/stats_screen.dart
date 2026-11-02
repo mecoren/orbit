@@ -6,9 +6,11 @@ import '../../core/theme/app_dimens.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../shared/utils/hex_color.dart';
+import '../../shared/widgets/shadcn/orbit_bottom_nav.dart';
 import '../../shared/widgets/shadcn/orbit_empty_state.dart';
 import '../../shared/widgets/shadcn/orbit_card.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
+import '../../shared/widgets/shadcn/orbit_pull_to_refresh.dart';
 import '../../shared/widgets/shadcn/orbit_skeleton.dart';
 import 'logic/task_logic.dart';
 import 'providers/todo_providers.dart';
@@ -79,8 +81,9 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
                           icon: OrbitIcons.trending,
                         ),
                       )
-                    : RefreshIndicator(
-                        // 下拉刷新：本地重读 + 已配置时跑一轮云同步（共用回调见 pullToRefresh）。
+                    : OrbitPullToRefresh(
+                        // 下拉刷新（2026-11-01：RefreshIndicator → miuix 承载）：
+                        // 本地重读 + 已配置时跑一轮云同步（共用回调见 pullToRefresh）。
                         // edgeOffset 下移到页头之下，否则指示条被 OrbitPageHeader 盖住。
                         onRefresh: () => pullToRefresh(ref),
                         color: OrbitAccents.themeAccent,
@@ -95,7 +98,8 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
                                 AppDimens.space8,
                             left: AppDimens.pageInline,
                             right: AppDimens.pageInline,
-                            bottom: AppDimens.gestureInsetFallback +
+                            // 悬浮底栏净空 + 呼吸留白（热力图尾部不被玻璃栏扣住）
+                            bottom: OrbitBottomNav.clearanceOf(context) +
                                 AppDimens.space32,
                           ),
                           children: [
