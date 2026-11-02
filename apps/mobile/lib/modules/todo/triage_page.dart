@@ -18,6 +18,7 @@ import '../../core/theme/icon_map.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/utils/hex_color.dart';
+import '../../shared/widgets/shadcn/orbit_bottom_nav.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_empty_state.dart';
@@ -378,7 +379,8 @@ class _TriagePageState extends ConsumerState<TriagePage> {
         AppDimens.space16,
         topInset + AppDimens.space8,
         AppDimens.space16,
-        AppDimens.pageInline,
+        // 悬浮底栏净空 + 呼吸留白（末张分诊卡不被玻璃栏扣住）
+        OrbitBottomNav.clearanceOf(context) + AppDimens.pageInline,
       ),
       children: [
         // 进度
