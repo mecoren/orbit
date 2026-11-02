@@ -76,8 +76,14 @@ class OrbitSheetScaffold extends StatelessWidget {
         top: false,
         // #107 平板：抽屉内容限宽居中（640），避免输入框/按钮横贯 1200dp；
         // 外层背景与圆角仍由 showModalBottomSheet 承载，观感不变
+        //
+        // `heightFactor: 1` 不是可选项：`showModalBottomSheet` 给的是
+        // `maxHeight = 屏高` 的松约束，裸 `Align` 会铺满整屏 —— 抽屉背板变成
+        // 一整页白（内容贴在屏底，背后页面全被盖住，2026-11-02 云同步「同步引擎」
+        // 抽屉实测）。钉住高度后抽屉才按内容收缩、仍由底部弹层贴屏底锚定。
         child: Align(
           alignment: Alignment.bottomCenter,
+          heightFactor: 1,
           child: ConstrainedBox(
             constraints: BoxConstraints(
               // 只订阅 height 字段（同文件 viewInsetsOf 口径）：键盘开合不应

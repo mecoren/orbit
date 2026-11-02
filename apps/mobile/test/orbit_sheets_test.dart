@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/core/theme/app_colors.dart';
 import 'package:orbit/core/theme/app_dimens.dart';
 import 'package:orbit/core/theme/icon_map.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_sheet_scaffold.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_sheets.dart';
 import 'support/orbit_test_app.dart';
 
@@ -71,6 +72,35 @@ void main() {
     expect(sheet.shape, bottomSheetTopShape, reason: '顶部圆角唯一来源');
     expect(sheet.backgroundColor, AppColors.light.popup, reason: '弹层表面色');
     expect(find.text('视图模式'), findsOneWidget);
+  });
+
+  testWidgets('弹层按内容收缩、贴屏底——不铺满整屏（2026-11-02 云同步引擎抽屉回归）',
+      (tester) async {
+    final ctx = await pumpHost(tester);
+    showSelectBottomSheet<String>(
+      ctx,
+      title: '同步引擎',
+      items: const [
+        SelectItem(value: 'webdav', label: 'WebDAV'),
+        SelectItem(value: 's3', label: 'S3 兼容存储'),
+      ],
+      current: 'webdav',
+      onSelect: (_) {},
+    );
+    await tester.pumpAndSettle();
+
+    final screen = tester.getSize(find.byType(Scaffold));
+    final sheet = tester.getRect(find.byType(OrbitSheetScaffold));
+    // 抽屉骨架限宽居中的 Align 曾漏 `heightFactor`：松高度约束下 Align 会铺满
+    // 整屏，抽屉背板变成一整页白、内容贴在屏底。锁死「按内容收缩 + 贴屏底」。
+    expect(sheet.top, greaterThan(0), reason: '抽屉不应铺满整屏');
+    expect(sheet.height, lessThan(screen.height * 0.5), reason: '短内容自适应收缩');
+    expect(sheet.bottom, screen.height, reason: '仍由底部弹层贴屏底锚定');
+    expect(
+      tester.getRect(find.text('S3 兼容存储')).bottom,
+      lessThanOrEqualTo(screen.height),
+      reason: '末项不能溢出屏幕',
+    );
   });
 
   testWidgets('单选弹层：icon 项渲染语义图标（快捷视图切换口径）', (tester) async {
