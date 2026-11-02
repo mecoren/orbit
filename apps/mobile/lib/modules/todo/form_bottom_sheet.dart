@@ -21,6 +21,7 @@ import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../shared/widgets/shadcn/orbit_switch.dart';
 import '../../shared/widgets/shadcn/orbit_button.dart';
 import '../../shared/widgets/shadcn/orbit_icon_button.dart';
+import '../../shared/widgets/shadcn/orbit_text_field.dart';
 // as rep：规避 Flutter widgets 自带 RepeatMode 类名冲突
 import 'logic/parse_quick_input.dart';
 import 'logic/repeat_logic.dart' as rep;
@@ -727,11 +728,11 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
       sheetAnimationStyle: bottomSheetMotion,
       builder: (sheetCtx) => OrbitSheetScaffold(
         title: '自定义时长',
-        content: TextField(
+        content: OrbitTextField(
           controller: _durationCtl,
           autofocus: true,
           keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: '分钟数（如 25、240）'),
+          label: '分钟数（如 25、240）',
         ),
         actions: OrbitSheetActions(
           cancelLabel: '取消',
@@ -857,43 +858,6 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
   Widget _tileDivider(AppColorSet colors) =>
       Container(height: 1, color: colors.divider);
 
-  /// 标题/描述输入框装饰：背景走 surface（亮色 #F9F9F9），
-  /// 边框与信息卡片同口径（divider@30%、radius 12）。
-  ///
-  /// 四态边框全部显式给出：主题的 `border` 是 `BorderSide.none`，只覆盖
-  /// enabledBorder 会让错误态回退到无边框（校验失败时框直接消失）。
-  InputDecoration _fieldDecoration({
-    required String label,
-    required String hint,
-    bool alignLabelWithHint = false,
-  }) {
-    final colors = AppColors.ofContext(context);
-    return InputDecoration(
-      labelText: label,
-      hintText: hint,
-      alignLabelWithHint: alignLabelWithHint,
-      counterText: '',
-      filled: true,
-      fillColor: colors.surface,
-      enabledBorder: OutlineInputBorder(
-        borderRadius: AppShapes.medium,
-        borderSide: BorderSide(color: colors.outline),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: AppShapes.medium,
-        borderSide: BorderSide(color: OrbitAccents.themeAccent, width: 1.5),
-      ),
-      errorBorder: OutlineInputBorder(
-        borderRadius: AppShapes.medium,
-        borderSide: BorderSide(color: colors.destructive),
-      ),
-      focusedErrorBorder: OutlineInputBorder(
-        borderRadius: AppShapes.medium,
-        borderSide: BorderSide(color: colors.destructive, width: 1.5),
-      ),
-    );
-  }
-
   // ── 截止日期快捷项（本地时区自然日零点；下周＝下周一，与桌面同口径）──
 
   int _midnightOf(int offsetDays) {
@@ -995,16 +959,13 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                           ),
                           children: [
                             // 1. 标题*（新建态实时 NLP 解析：明天/!3/#项目/@标签）
-                            TextFormField(
+                            OrbitTextField(
                               controller: _titleController,
                               maxLength: 200,
+                              label: '标题 *',
                               style: TextStyle(
                                 fontSize: 15,
                                 color: colors.bodyText,
-                              ),
-                              decoration: _fieldDecoration(
-                                label: '标题 *',
-                                hint: '请输入标题',
                               ),
                               validator: (v) => v == null || v.trim().isEmpty
                                   ? '请输入标题'
@@ -1055,20 +1016,16 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                             const SizedBox(height: AppDimens.space12),
                             // 2. 描述：默认 3 行起随内容长高，封顶 8 行后内部滚动
                             // （minLines+maxLines 而非固定行数——与桌面端 min-h/max-h 口径一致）
-                            TextFormField(
+                            OrbitTextField(
                               controller: _descriptionController,
                               minLines: 3,
                               maxLines: 8,
                               // 与桌面端 task-form-sheet description(5000) 统一
                               maxLength: 5000,
+                              label: '描述',
                               style: TextStyle(
                                 fontSize: 15,
                                 color: colors.bodyText,
-                              ),
-                              decoration: _fieldDecoration(
-                                label: '描述',
-                                hint: '请输入描述',
-                                alignLabelWithHint: true,
                               ),
                             ),
                             const SizedBox(height: AppDimens.space12),
@@ -1364,13 +1321,16 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                     Row(
                                       children: [
                                         Expanded(
-                                          child: TextField(
+                                          child: OrbitTextField(
+                                            inline: true,
                                             controller: _subtaskController,
+                                            hintText: '添加子任务',
                                             style: const TextStyle(
                                               fontSize: 14,
                                             ),
-                                            decoration: const InputDecoration(
-                                              hintText: '添加子任务',
+                                            insideMargin:
+                                                const EdgeInsets.symmetric(
+                                              vertical: AppDimens.space8,
                                             ),
                                             onSubmitted: (_) =>
                                                 _addSubtaskTitle(),
@@ -1454,14 +1414,15 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                   child: Row(
                     children: [
                       Expanded(
-                        child: TextField(
+                        child: OrbitTextField(
+                          inline: true,
                           controller: _newLabelCtl,
+                          hintText: '新建标签…',
                           textInputAction: TextInputAction.done,
-                          onSubmitted: (_) => createLabel(),
-                          decoration: const InputDecoration(
-                            hintText: '新建标签…',
-                            isDense: true,
+                          insideMargin: const EdgeInsets.symmetric(
+                            vertical: AppDimens.space8,
                           ),
+                          onSubmitted: (_) => createLabel(),
                         ),
                       ),
                       const SizedBox(width: AppDimens.space8),

@@ -9,6 +9,7 @@ import '../../shared/widgets/shadcn/orbit_actions_sheet.dart'
 import '../../shared/widgets/shadcn/orbit_card.dart';
 import '../../shared/widgets/shadcn/orbit_date_picker.dart';
 import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
+import '../../shared/widgets/shadcn/orbit_text_field.dart';
 // as rep：规避 Flutter widgets 自带 RepeatMode 类名冲突
 import 'logic/repeat_logic.dart' as rep;
 
@@ -588,23 +589,15 @@ class _NumberBox extends StatelessWidget {
         borderRadius: AppShapes.small,
         border: Border.all(color: colors.divider),
       ),
-      child: TextField(
+      // 外框由宿主 Container 提供，输入框走 inline（透明底/零内边距）；
+      // miuix 输入框不暴露 textAlign，数值不再强制居中
+      child: OrbitTextField(
         key: fieldKey,
+        inline: true,
         controller: controller,
         keyboardType: TextInputType.number,
-        textAlign: TextAlign.center,
+        hintText: hint,
         style: TextStyle(fontSize: 13, color: colors.bodyText),
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: TextStyle(fontSize: 13, color: colors.deactivatedText),
-          filled: false,
-          isDense: true,
-          counterText: '',
-          contentPadding: EdgeInsets.zero,
-          border: InputBorder.none,
-          enabledBorder: InputBorder.none,
-          focusedBorder: InputBorder.none,
-        ),
       ),
     );
   }

@@ -8,6 +8,7 @@ import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/settings/settings_screen.dart';
 import 'package:orbit/modules/settings/sync_settings_page.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_text_field.dart';
 import 'support/orbit_test_app.dart';
 
 void main() {
@@ -52,7 +53,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('云同步配置'), findsOneWidget);
-    expect(find.byType(TextFormField), findsAtLeast(4));
+    expect(find.byType(OrbitTextField), findsAtLeast(4));
   });
 
   // P1-20：已设置同步密码的设备，密码卡须提供密钥包导入恢复入口

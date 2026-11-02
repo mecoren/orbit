@@ -9,6 +9,7 @@ import 'package:orbit/modules/todo/form_bottom_sheet.dart';
 import 'package:orbit/modules/todo/logic/task_logic.dart'
     show QuickViewKey, formatDueShort, formatStampLabel;
 import 'package:orbit/shared/widgets/shadcn/orbit_section_card.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_text_field.dart';
 import 'support/orbit_test_app.dart';
 import 'package:orbit/core/theme/icon_map.dart';
 
@@ -119,27 +120,17 @@ void main() {
     expect(find.text('颜色'), findsNothing);
   });
 
-  testWidgets('校验失败：标题/描述框保留错误态边框（不回退到无边框）', (tester) async {
+  testWidgets('校验失败：标题空 → 错误文案出现且表单不关闭', (tester) async {
     await _openForm(tester);
 
     // 空标题直接保存 → 触发校验（不落库）
     await tester.tap(find.byIcon(OrbitIcons.check));
     await tester.pumpAndSettle();
 
-    // 回归保护：只覆盖 enabledBorder 时，错误态会回退到主题 BorderSide.none，
-    // 校验失败后输入框边框直接消失（2026-09-19 实机踩坑）
-    // TextFormField 不透出 decoration，取它构建出的内部 TextField
-    final decoration = tester
-        .widget<TextField>(find.descendant(
-          of: find.byType(TextFormField).first,
-          matching: find.byType(TextField),
-        ))
-        .decoration!;
-    final errorBorder = decoration.errorBorder! as OutlineInputBorder;
-    expect(errorBorder.borderSide.style, BorderStyle.solid);
-    expect(errorBorder.borderSide.color, isNot(Colors.transparent));
-    final focusedError = decoration.focusedErrorBorder! as OutlineInputBorder;
-    expect(focusedError.borderSide.style, BorderStyle.solid);
+    // 2026-11-02 输入框收口到 OrbitTextField（MiuixTextField 承载）：
+    // 错误态不再走 Material decoration 边框，改为框下红色错误文案
+    expect(find.text('请输入标题'), findsOneWidget);
+    expect(find.byType(OrbitTextField), findsWidgets);
   });
 
   testWidgets('日期与提醒卡片：截止/开始/提醒行齐备 + 截止行内快捷胶囊', (tester) async {
@@ -190,7 +181,7 @@ void main() {
   testWidgets('截止日期：快捷胶囊「今天」→ 落库当日零点', (tester) async {
     final bridge = await _openForm(tester);
 
-    await tester.enterText(find.byType(TextFormField).first, '快捷截止任务');
+    await tester.enterText(find.byType(OrbitTextField).first, '快捷截止任务');
     await _scrollTo(tester, find.text('截止日期'));
     await tester.tap(find
         .descendant(of: find.byType(SectionCard), matching: find.text('今天'))
@@ -213,7 +204,7 @@ void main() {
       (tester) async {
     final bridge = await _openForm(tester);
 
-    await tester.enterText(find.byType(TextFormField).first, '下周截止任务');
+    await tester.enterText(find.byType(OrbitTextField).first, '下周截止任务');
     await _scrollTo(tester, find.text('截止日期'));
     await tester.tap(find
         .descendant(of: find.byType(SectionCard), matching: find.text('下周')));
@@ -236,7 +227,7 @@ void main() {
 
   testWidgets('提醒：无截止 → 今天/明天 9:00 快捷档，落库绝对时刻', (tester) async {
     final bridge = await _openForm(tester);
-    await tester.enterText(find.byType(TextFormField).first, '带提醒任务');
+    await tester.enterText(find.byType(OrbitTextField).first, '带提醒任务');
 
     await _scrollTo(tester, find.text('提醒时间'));
     await tester.tap(find.text('提醒时间'));
@@ -295,7 +286,7 @@ void main() {
     final bridge = await _openForm(tester);
 
     // 输入带日期 + 优先级 token 的标题 → 预览 chips 出现
-    await tester.enterText(find.byType(TextFormField).first, '明天开会 !3');
+    await tester.enterText(find.byType(OrbitTextField).first, '明天开会 !3');
     await tester.pump();
 
     // chips：截止（明天日期）+ P3 优先级。
@@ -328,7 +319,7 @@ void main() {
   testWidgets('保存：重复行抽屉选「每天」落库 repeat_mode=1/repeat_after=1', (tester) async {
     final bridge = await _openForm(tester);
 
-    await tester.enterText(find.byType(TextFormField).first, '重复任务A');
+    await tester.enterText(find.byType(OrbitTextField).first, '重复任务A');
     // 重复行 → 共享重复编辑抽屉（预设档点选即回填并关闭，与桌面端同口径）
     await _scrollTo(tester, find.text('重复'));
     await tester.tap(find.text('重复'));
@@ -356,7 +347,7 @@ void main() {
   testWidgets('保存：重复抽屉自定义面板（每 3 天 + 剩 5 次）落库扩展字段', (tester) async {
     final bridge = await _openForm(tester);
 
-    await tester.enterText(find.byType(TextFormField).first, '重复任务B');
+    await tester.enterText(find.byType(OrbitTextField).first, '重复任务B');
     await _scrollTo(tester, find.text('重复'));
     await tester.tap(find.text('重复'));
     await tester.pumpAndSettle();
@@ -396,7 +387,7 @@ void main() {
       (tester) async {
     final bridge = await _openForm(tester);
 
-    await tester.enterText(find.byType(TextFormField).first, '重复任务Nth');
+    await tester.enterText(find.byType(OrbitTextField).first, '重复任务Nth');
     await _scrollTo(tester, find.text('重复'));
     await tester.tap(find.text('重复'));
     await tester.pumpAndSettle();
@@ -591,7 +582,7 @@ void main() {
   testWidgets('我的一天视图新建 → myDayDate=今天零点静默附加', (tester) async {
     final bridge = await openFormInView(tester, QuickViewKey.myDay);
 
-    await tester.enterText(find.byType(TextFormField).first, '我的一天快建任务');
+    await tester.enterText(find.byType(OrbitTextField).first, '我的一天快建任务');
     await tester.tap(find.byIcon(OrbitIcons.check));
     await _settlePastMockLatency(tester);
 
@@ -609,7 +600,7 @@ void main() {
   testWidgets('收藏视图新建 → isFavorite=1 静默附加', (tester) async {
     final bridge = await openFormInView(tester, QuickViewKey.favorite);
 
-    await tester.enterText(find.byType(TextFormField).first, '收藏快建任务');
+    await tester.enterText(find.byType(OrbitTextField).first, '收藏快建任务');
     await tester.tap(find.byIcon(OrbitIcons.check));
     await _settlePastMockLatency(tester);
 
@@ -623,7 +614,7 @@ void main() {
   testWidgets('今日截止视图新建 → 截止预填今天 18:00（#39 时刻口径）', (tester) async {
     final bridge = await openFormInView(tester, QuickViewKey.today);
 
-    await tester.enterText(find.byType(TextFormField).first, '今日截止快建任务');
+    await tester.enterText(find.byType(OrbitTextField).first, '今日截止快建任务');
     await tester.tap(find.byIcon(OrbitIcons.check));
     await _settlePastMockLatency(tester);
 
@@ -641,7 +632,7 @@ void main() {
   testWidgets('无视图入口新建 → 不带任何标记（回归保护）', (tester) async {
     final bridge = await _openForm(tester); // 侧栏 FAB：quickView=null
 
-    await tester.enterText(find.byType(TextFormField).first, '普通快建任务');
+    await tester.enterText(find.byType(OrbitTextField).first, '普通快建任务');
     await tester.tap(find.byIcon(OrbitIcons.check));
     await _settlePastMockLatency(tester);
 

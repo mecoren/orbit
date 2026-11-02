@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/todo/form_bottom_sheet.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_text_field.dart';
 import 'support/orbit_test_app.dart';
 
 Widget _wrap(Widget child, MockOrbitBridge bridge) => ProviderScope(
@@ -79,7 +80,7 @@ void main() {
 
   testWidgets('标签勾选 + 子任务添加 → 保存后挂载到新任务', (tester) async {
     final bridge = await _openForm(tester);
-    await tester.enterText(find.byType(TextFormField).first, '带标签的任务');
+    await tester.enterText(find.byType(OrbitTextField).first, '带标签的任务');
     await tester.pumpAndSettle();
 
     // 标签：点区块「选择」开多选抽屉 → 勾「阅读」（避开「紧急」——NLP 预览
@@ -94,7 +95,7 @@ void main() {
 
     // 子任务：输入 + 添加 → 行内可见
     await _scrollTo(tester, find.text('子任务'));
-    await tester.enterText(find.byType(TextField).last, '第一步调研');
+    await tester.enterText(find.byType(OrbitTextField).last, '第一步调研');
     await tester.tap(find.text('添加'));
     await tester.pumpAndSettle();
     expect(find.text('第一步调研'), findsOneWidget);
@@ -125,14 +126,14 @@ void main() {
 
   testWidgets('标签抽屉内就地新建 → 选中并随任务挂载', (tester) async {
     final bridge = await _openForm(tester);
-    await tester.enterText(find.byType(TextFormField).first, '就地建标签任务');
+    await tester.enterText(find.byType(OrbitTextField).first, '就地建标签任务');
     await tester.pumpAndSettle();
 
     await _scrollTo(tester, find.text('标签'));
     await tester.tap(find.text('选择'));
     await tester.pumpAndSettle();
     // 抽屉内新建：输入名称 → 「新建」→ 新标签出现在列表并自动选中
-    await tester.enterText(find.byType(TextField).last, '验收标签');
+    await tester.enterText(find.byType(OrbitTextField).last, '验收标签');
     await tester.tap(find.text('新建'));
     await _settlePastMockLatency(tester);
     expect(find.text('验收标签'), findsOneWidget);

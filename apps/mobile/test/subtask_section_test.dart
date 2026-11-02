@@ -11,6 +11,7 @@ import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/todo/detail_screen.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_icon_button.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_text_field.dart';
 import 'support/orbit_test_app.dart';
 
 Widget _wrap(Widget child, MockOrbitBridge bridge) => ProviderScope(
@@ -87,7 +88,7 @@ Finder _iconButton(String tooltip) => find.byWidgetPredicate(
 
 /// 行内/顶层添加框（hintText 定位；标题输入框在页面顶部，不能按类型取）
 Finder _subtitleInput() => find.byWidgetPredicate(
-      (w) => w is TextField && w.decoration?.hintText == '子任务标题',
+      (w) => w is OrbitTextField && w.hintText == '子任务标题',
     );
 
 void main() {

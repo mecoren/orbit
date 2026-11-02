@@ -8,6 +8,7 @@ import '../../data/providers/bridge_provider.dart';
 import '../../core/theme/icon_map.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_button.dart';
+import '../../shared/widgets/shadcn/orbit_text_field.dart';
 
 /// 主密码解锁页（原 React 版 unlock-page.tsx 同构）
 ///
@@ -140,15 +141,13 @@ class _UnlockPageState extends ConsumerState<UnlockPage> {
                   style: TextStyle(fontSize: 14, color: colors.secondaryText),
                 ),
                 const SizedBox(height: AppDimens.space24),
-                TextField(
+                OrbitTextField(
                   controller: _controller,
                   obscureText: true,
                   autofocus: true,
+                  label: '主密码',
+                  errorText: _error,
                   onSubmitted: (_) => _submit(),
-                  decoration: InputDecoration(
-                    labelText: '主密码',
-                    errorText: _error,
-                  ),
                 ),
                 const SizedBox(height: AppDimens.space16),
                 SizedBox(

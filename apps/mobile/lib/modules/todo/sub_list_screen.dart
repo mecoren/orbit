@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_miuix/miuix.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:go_router/go_router.dart';
@@ -10,7 +11,6 @@ import 'package:go_router/go_router.dart';
 import '../../core/layout/orbit_breakpoints.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
-import '../../core/theme/app_elevation.dart';
 import '../../core/theme/app_motion.dart';
 import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
@@ -25,6 +25,7 @@ import '../../shared/widgets/shadcn/orbit_empty_state.dart';
 import '../../shared/widgets/shadcn/orbit_list_card.dart';
 import '../../shared/widgets/shadcn/orbit_row_toggle.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
+import '../../shared/widgets/shadcn/orbit_pull_to_refresh.dart';
 import '../../shared/widgets/shadcn/orbit_skeleton.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart';
@@ -32,7 +33,9 @@ import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../shared/widgets/shadcn/orbit_switch.dart';
+import '../../shared/widgets/shadcn/orbit_bottom_nav.dart';
 import '../../shared/widgets/shadcn/orbit_button.dart';
+import '../../shared/widgets/shadcn/orbit_text_field.dart';
 import '../../shared/widgets/shadcn/orbit_icon_button.dart';
 import '../../shared/widgets/shadcn/orbit_filter_chip.dart';
 import '../../services/local_prefs.dart';
@@ -687,13 +690,11 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
         title: '每日容量（分钟）',
         content: Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppDimens.space16),
-          child: TextField(
+          child: OrbitTextField(
             controller: controller,
             autofocus: true,
             keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              hintText: '例如 480 = 8 小时；留空 = 不做超载判定',
-            ),
+            hintText: '例如 480 = 8 小时；留空 = 不做超载判定',
             onSubmitted: (v) =>
                 Navigator.of(sheetContext).pop(_parseBudget(v.trim())),
           ),
@@ -1841,15 +1842,18 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     // 今日上下文条（G2 正反馈 + G4 容量）：有内容才显示（今日已达成/
     // 今日已排/已设预算三者其一），列表顶部按其让位——与截断条幅同款约定
     final showTodayStrip = !isLogbook && _hasTodayStripContent(todayStripTasks);
-    // 底栏页签常驻（分支内容在其上方）：页尾只留呼吸留白；选择态另让出
-    // 批量工具条整段占位（条体 + 底距 + 呼吸），末行不被浮动工具条遮住
+    // 底栏是悬浮胶囊（壳层 extendBody）：页尾先让出栏体净空 + 呼吸留白；选择态
+    // 再让出批量工具条整段占位（条体 + 底距 + 呼吸），末行不被浮层遮住
     final listPadding = EdgeInsets.only(
       top:
           topInset +
           AppDimens.space8 +
           (truncated ? _TruncationBanner.height : 0) +
           (showTodayStrip ? TodayStrip.height : 0),
-      bottom: AppDimens.space16 + (_selectionMode ? _batchToolbarClearance : 0),
+      bottom:
+          OrbitBottomNav.clearanceOf(context) +
+          AppDimens.space16 +
+          (_selectionMode ? _batchToolbarClearance : 0),
     );
     // 卡片列表（标准列表 / 重排档 / 骨架）在满幅 padding 上再让出卡片外缘：
     // 卡片是「页面里的一张卡」而非通栏表格；看板 / 表格 / Logbook 维持满幅。
@@ -2233,7 +2237,8 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     // 指示条用 edgeOffset 下移到 OrbitPageHeader 之下，否则被页头盖住看不见。
     final Widget body = visible.isEmpty || showKanban || showTable || showMatrix
         ? list
-        : RefreshIndicator(
+        : OrbitPullToRefresh(
+            // 2026-11-01：RefreshIndicator → miuix 下拉刷新承载
             onRefresh: () => pullToRefresh(ref),
             color: OrbitAccents.themeAccent,
             edgeOffset: topInset,
@@ -2475,23 +2480,25 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   ///
   /// 一级动作横排 + 横向滚动：一屏放不下时横滑而非折行，避免工具条
   /// 高度随动作数增加挤压列表可视区。
+  ///
+  /// **2026-11-01 换承载**：手搓 `Container`（medium 圆角 + 1px 描边 + e3 阴影）
+  /// 换成 miuix `MiuixFloatingToolbar`——squircle 胶囊（cornerRadius 50 在
+  /// 48+16 高的条体上正好收成胶囊）、固定几何阴影（blur 10 / 黑 10%）、
+  /// 可选的 0.75dp `dividerLine` 描边，外层留白 12/8 由组件贡献（故本层
+  /// Positioned 贴边）。占位常量 [_batchToolbarClearance] 不变：条体触控高
+  /// + 内外各 8 的上下留白仍是 `touchTarget + space8*4`。
   Widget _batchToolbar(AppColorSet colors) {
     return Positioned(
-      left: AppDimens.space12,
-      right: AppDimens.space12,
-      bottom: AppDimens.space8,
-      child: Material(
-        color: Colors.transparent,
-        child: Container(
+      left: 0,
+      right: 0,
+      // 悬浮底栏占据屏幕底边这一整段：工具条叠在栏体上沿之上，不钻到玻璃后面
+      bottom: OrbitBottomNav.clearanceOf(context),
+      child: MiuixFloatingToolbar(
+        // 表面沿用应用 popup 档（与抽屉/浮层面同色），不取 miuix 默认
+        color: colors.popup,
+        showDivider: true,
+        child: Padding(
           padding: const EdgeInsets.symmetric(vertical: AppDimens.space8),
-          decoration: BoxDecoration(
-            color: colors.popup,
-            borderRadius: AppShapes.medium,
-            border: Border.all(color: colors.outline),
-            // 浮空工具条：阴影走 e3（底部浮层档，向上投影压住列表）；
-            // 原手写单阴影向下，在条下无内容处浪费、条上列表处缺投影
-            boxShadow: AppElevation.ofContext(context, level: 3),
-          ),
           child: Row(
             children: [
               Expanded(

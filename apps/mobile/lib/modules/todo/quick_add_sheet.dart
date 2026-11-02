@@ -41,6 +41,7 @@ import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../shared/widgets/shadcn/orbit_icon_button.dart';
+import '../../shared/widgets/shadcn/orbit_text_field.dart';
 import 'form_bottom_sheet.dart';
 import 'logic/parse_quick_input.dart';
 import 'logic/quick_actions.dart';
@@ -787,24 +788,15 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
                 AppDimens.space16,
                 0,
               ),
-              child: TextField(
+              child: OrbitTextField(
                 controller: _titleController,
                 focusNode: _titleFocus,
                 autofocus: true,
                 minLines: 1,
                 maxLines: 4,
                 maxLength: 200,
+                hintText: '准备做什么？',
                 style: TextStyle(fontSize: 15, color: colors.bodyText),
-                decoration: InputDecoration(
-                  hintText: '准备做什么？',
-                  counterText: '',
-                  border: InputBorder.none,
-                  isDense: true,
-                  hintStyle: TextStyle(
-                    fontSize: 15,
-                    color: colors.deactivatedText,
-                  ),
-                ),
                 onChanged: (_) => setState(() {}),
                 onSubmitted: (_) => _submit(),
               ),

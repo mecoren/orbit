@@ -20,6 +20,7 @@ import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../shared/widgets/shadcn/orbit_button.dart';
 import '../../shared/widgets/shadcn/orbit_icon_button.dart';
+import '../../shared/widgets/shadcn/orbit_text_field.dart';
 import '../todo/logic/task_logic.dart' show priorityLabel;
 import '../todo/logic/template_apply.dart';
 import '../todo/providers/todo_providers.dart';
@@ -152,22 +153,18 @@ class _TemplateManagerPageState extends ConsumerState<TemplateManagerPage> {
                     AppDimens.space16,
                   ),
                   children: [
-                      TextField(
+                      OrbitTextField(
                         key: const ValueKey('tpl-field-name'),
                         controller: nameCtrl,
-                        decoration: const InputDecoration(
-                          labelText: '模板名称',
-                          helperText: '列表里显示的名字',
-                        ),
+                        label: '模板名称',
+                        helperText: '列表里显示的名字',
                       ),
                       const SizedBox(height: AppDimens.space12),
-                      TextField(
+                      OrbitTextField(
                         key: const ValueKey('tpl-field-title'),
                         controller: titleCtrl,
-                        decoration: const InputDecoration(
-                          labelText: '任务标题',
-                          helperText: '套用时预填；留空则不预填',
-                        ),
+                        label: '任务标题',
+                        helperText: '套用时预填；留空则不预填',
                       ),
                       const SizedBox(height: AppDimens.space8),
                       _selectRow(
@@ -208,22 +205,18 @@ class _TemplateManagerPageState extends ConsumerState<TemplateManagerPage> {
                         },
                       ),
                       const SizedBox(height: AppDimens.space12),
-                      TextField(
+                      OrbitTextField(
                         key: const ValueKey('tpl-field-notes'),
                         controller: notesCtrl,
                         maxLines: 3,
-                        decoration: const InputDecoration(
-                          labelText: '备注（可选）',
-                        ),
+                        label: '备注（可选）',
                       ),
                       const SizedBox(height: AppDimens.space12),
-                      TextField(
+                      OrbitTextField(
                         key: const ValueKey('tpl-field-subtasks'),
                         controller: subtasksCtrl,
                         maxLines: 4,
-                        decoration: const InputDecoration(
-                          labelText: '子任务（每行一条，可选）',
-                        ),
+                        label: '子任务（每行一条，可选）',
                       ),
                   ],
                 ),

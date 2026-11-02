@@ -13,6 +13,7 @@ import '../../../core/theme/icon_map.dart';
 import '../../../shared/widgets/shadcn/orbit_date_picker.dart';
 import '../../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
+import '../../../shared/widgets/shadcn/orbit_text_field.dart';
 import '../../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../form_bottom_sheet.dart';
@@ -351,11 +352,11 @@ Future<void> _addComment(
         title: '添加评论',
         contentPadding: const EdgeInsets.fromLTRB(
             AppDimens.space16, 0, AppDimens.space16, AppDimens.space16),
-        content: TextField(
+        content: OrbitTextField(
           onChanged: (v) => draft = v,
           minLines: 3,
           maxLines: 6,
-          decoration: const InputDecoration(hintText: '输入评论...'),
+          hintText: '输入评论...',
         ),
         actions: OrbitSheetActions(
           confirmLabel: '保存',

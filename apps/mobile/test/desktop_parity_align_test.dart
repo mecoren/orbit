@@ -21,6 +21,7 @@ import 'package:orbit/modules/todo/detail_screen.dart';
 import 'package:orbit/modules/todo/form_bottom_sheet.dart';
 import 'package:orbit/modules/todo/saved_filters_screen.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_info_row.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_text_field.dart';
 
 import 'support/orbit_test_app.dart';
 
@@ -258,7 +259,7 @@ void main() {
       await tester.tap(find.text('新建任务'));
       await tester.pumpAndSettle();
 
-      await tester.enterText(find.byType(TextFormField).first, '新建即完成');
+      await tester.enterText(find.byType(OrbitTextField).first, '新建即完成');
       await tester.pumpAndSettle();
       await _scrollTo(tester, _tileValue('状态', '待办'));
       await tester.tap(_tileValue('状态', '待办'));

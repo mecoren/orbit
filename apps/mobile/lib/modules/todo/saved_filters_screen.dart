@@ -9,7 +9,9 @@ import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/widgets/shadcn/orbit_strikethrough.dart';
+import '../../shared/widgets/shadcn/orbit_bottom_nav.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_text_field.dart';
 import '../../shared/widgets/shadcn/orbit_empty_state.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart';
@@ -228,11 +230,9 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              TextField(
+              OrbitTextField(
                 controller: nameCtl,
-                decoration: const InputDecoration(
-                  labelText: '名称（如：本周 P0）',
-                ),
+                label: '名称（如：本周 P0）',
               ),
               const SizedBox(height: AppDimens.space8),
               SizedBox(
@@ -305,12 +305,10 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
                   ),
                 ),
               ),
-              TextField(
+              OrbitTextField(
                 controller: withinCtl,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: '天内截止（留空不限，如 7）',
-                ),
+                label: '天内截止（留空不限，如 7）',
               ),
               // 截止区间（绝对日期；与「天内截止/已逾期」叠加恒无命中——
               // 桌面构建器在 UI 层互斥，此处靠条件摘要人工核对）
@@ -779,6 +777,12 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
             ),
           ),
         ],
+      ),
+      // 本页自带 Scaffold：壳层底栏是悬浮胶囊（内容 extendBody 铺到屏底），
+      // 用等高的空底栏把本页 body 与 FAB 一起顶到胶囊上沿——FAB 不会叠进
+      // 玻璃栏、列表末行也不会停在栏体后面。
+      bottomNavigationBar: SizedBox(
+        height: OrbitBottomNav.clearanceOf(context),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _create,

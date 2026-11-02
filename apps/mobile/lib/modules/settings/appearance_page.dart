@@ -10,6 +10,7 @@ import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../shared/widgets/shadcn/orbit_button.dart';
+import '../../shared/widgets/shadcn/orbit_text_field.dart';
 import '../../core/theme/icon_map.dart';
 import '../../modules/todo/logic/task_logic.dart' show labelPaletteHexes;
 import '../../shared/utils/hex_color.dart';
@@ -291,16 +292,10 @@ class _AccentPickerSheetState extends State<_AccentPickerSheet> {
               Row(
                 children: [
                   Expanded(
-                    child: TextField(
+                    child: OrbitTextField(
                       controller: _hex,
                       textCapitalization: TextCapitalization.characters,
-                      decoration: InputDecoration(
-                        labelText: '自定义 #RRGGBB',
-                        isDense: true,
-                        border: OutlineInputBorder(
-                          borderRadius: AppShapes.medium,
-                        ),
-                      ),
+                      label: '自定义 #RRGGBB',
                       onSubmitted: (_) => _applyHex(),
                     ),
                   ),

@@ -17,6 +17,7 @@ import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../shared/widgets/shadcn/orbit_button.dart';
 import '../../shared/widgets/shadcn/orbit_icon_button.dart';
+import '../../shared/widgets/shadcn/orbit_text_field.dart';
 import '../todo/logic/task_logic.dart' show labelPaletteHexes;
 import '../todo/providers/todo_providers.dart';
 import '../../core/theme/icon_map.dart';
@@ -261,11 +262,11 @@ class _LabelManagerPageState extends ConsumerState<LabelManagerPage> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  TextField(
+                  OrbitTextField(
                     controller: controller,
                     autofocus: true,
                     textInputAction: TextInputAction.done,
-                    decoration: const InputDecoration(labelText: '标签名称'),
+                    label: '标签名称',
                     onChanged: (_) => setSheetState(() {}),
                     onSubmitted: (_) => submit(),
                   ),

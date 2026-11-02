@@ -22,6 +22,7 @@ import '../../../core/theme/app_dimens.dart';
 import '../controller_disposer.dart';
 import 'orbit_sheet_scaffold.dart';
 import 'orbit_sheets.dart' show bottomSheetMotion, bottomSheetTopShape;
+import 'orbit_text_field.dart';
 
 /// 密码输入抽屉；[labels] 与返回列表等长且同序
 Future<List<String>?> showPasswordSheet(
@@ -76,17 +77,15 @@ Future<List<String>?> showPasswordSheet(
                 if (message != null) const SizedBox(height: AppDimens.space12),
                 for (var i = 0; i < labels.length; i++) ...[
                   if (i > 0) const SizedBox(height: AppDimens.space8),
-                  TextField(
+                  OrbitTextField(
                     controller: controllers[i],
                     obscureText: true,
                     autofocus: i == 0,
+                    label: labels[i],
+                    helperText: hints?[i],
                     textInputAction: i == labels.length - 1
                         ? TextInputAction.done
                         : TextInputAction.next,
-                    decoration: InputDecoration(
-                      labelText: labels[i],
-                      hintText: hints?[i],
-                    ),
                     onSubmitted: (_) => submit(),
                   ),
                 ],

@@ -13,6 +13,7 @@ import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/utils/hex_color.dart';
 import '../../shared/widgets/shadcn/orbit_card.dart';
+import '../../shared/widgets/shadcn/orbit_bottom_nav.dart';
 import '../../shared/widgets/shadcn/orbit_color_picker.dart';
 import '../../shared/widgets/shadcn/orbit_dropdown_panel.dart';
 import '../../shared/widgets/shadcn/orbit_empty_state.dart';
@@ -20,6 +21,7 @@ import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
+import '../../shared/widgets/shadcn/orbit_text_field.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../shared/widgets/shadcn/orbit_icon_button.dart';
 import 'logic/project_actions.dart';
@@ -293,8 +295,8 @@ class _ProjectEditPageState extends ConsumerState<ProjectEditPage> {
         AppDimens.space16,
         topInset + AppDimens.space8,
         AppDimens.space16,
-        // 底栏页签常驻：页尾只留呼吸留白
-        AppDimens.space16,
+        // 悬浮底栏净空 + 呼吸留白（页尾末行不被玻璃栏扣住）
+        OrbitBottomNav.clearanceOf(context) + AppDimens.space16,
       ),
       children: [
         _nameRow(colors),
@@ -463,22 +465,14 @@ class _ProjectEditPageState extends ConsumerState<ProjectEditPage> {
           ),
           const SizedBox(width: AppDimens.space12),
           Expanded(
-            child: TextField(
+            // 无边框内联输入（同详情页标题原地编辑口径）
+            child: OrbitTextField(
+              inline: true,
               controller: _titleController,
               maxLength: 50,
               textInputAction: TextInputAction.done,
-              // 无边框内联输入（同详情页标题原地编辑口径）
+              hintText: '项目名称',
               style: TextStyle(fontSize: 16, color: colors.titleText),
-              decoration: InputDecoration(
-                border: InputBorder.none,
-                isDense: true,
-                counterText: '',
-                hintText: '项目名称',
-                hintStyle: TextStyle(
-                  fontSize: 16,
-                  color: colors.deactivatedText,
-                ),
-              ),
               onChanged: (_) => setState(() {}),
             ),
           ),

@@ -10,10 +10,12 @@ import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../shared/utils/hex_color.dart';
 import '../../shared/widgets/shadcn/orbit_strikethrough.dart';
+import '../../shared/widgets/shadcn/orbit_bottom_nav.dart';
 import '../../shared/widgets/shadcn/orbit_empty_state.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_header.dart';
 import '../../shared/widgets/shadcn/orbit_icon_button.dart';
+import '../../shared/widgets/shadcn/orbit_text_field.dart';
 import 'logic/task_logic.dart';
 import 'providers/todo_providers.dart';
 import '../../core/theme/icon_map.dart';
@@ -86,22 +88,30 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppDimens.space16,
                   ),
-                  child: TextField(
+                  child: OrbitTextField(
                     controller: _controller,
                     autofocus: true,
                     textInputAction: TextInputAction.search,
+                    hintText: '搜索任务 / 项目 / 评论',
                     style: TextStyle(fontSize: 15, color: colors.titleText),
-                    decoration: InputDecoration(
-                      hintText: '搜索任务 / 项目 / 评论',
-                      hintStyle:
-                          TextStyle(fontSize: 15, color: colors.secondaryText),
-                      prefixIcon: Icon(
+                    // 图标自带外距（miuix 的 leading/trailing 槽不吃 insideMargin）
+                    leadingIcon: Padding(
+                      padding: const EdgeInsets.only(
+                        left: AppDimens.space16,
+                        right: AppDimens.space8,
+                      ),
+                      child: Icon(
                         OrbitIcons.search,
                         size: AppDimens.iconSizeMd,
                         color: colors.secondaryText,
                       ),
-                      suffixIcon: _keyword.isNotEmpty
-                          ? OrbitIconButton(
+                    ),
+                    trailingIcon: _keyword.isNotEmpty
+                        ? Padding(
+                            padding: const EdgeInsets.only(
+                              right: AppDimens.space8,
+                            ),
+                            child: OrbitIconButton(
                               tooltip: '清除搜索',
                               icon: Icon(
                                 OrbitIcons.close,
@@ -112,9 +122,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                                 _controller.clear();
                                 setState(() => _keyword = '');
                               },
-                            )
-                          : null,
-                    ),
+                            ),
+                          )
+                        : null,
                   ),
                 ),
                 Expanded(
@@ -167,10 +177,10 @@ class _ResultList extends StatelessWidget {
 
     return ListView(
       controller: scrollController,
-      padding: const EdgeInsets.only(
+      padding: EdgeInsets.only(
         top: AppDimens.space8,
-        // 底栏页签常驻：页尾只留呼吸留白
-        bottom: AppDimens.space16,
+        // 悬浮底栏净空 + 呼吸留白（末条结果不被玻璃栏扣住）
+        bottom: OrbitBottomNav.clearanceOf(context) + AppDimens.space16,
       ),
       children: [
         if (result.tasks.isNotEmpty) ...[

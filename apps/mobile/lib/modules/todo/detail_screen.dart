@@ -36,6 +36,7 @@ import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../shared/widgets/shadcn/orbit_button.dart';
 import '../../shared/widgets/shadcn/orbit_progress_bar.dart';
 import '../../shared/widgets/shadcn/orbit_icon_button.dart';
+import '../../shared/widgets/shadcn/orbit_text_field.dart';
 import 'form_bottom_sheet.dart' show showTodoDatePicker, syncTaskReminder;
 // as rep：规避 Flutter widgets 自带 RepeatMode 类名冲突
 import 'logic/activity_format.dart';
@@ -526,17 +527,13 @@ class _TitleSectionState extends State<_TitleSection> {
           const SizedBox(width: AppDimens.space12),
           Expanded(
             child: _editing
-                ? TextField(
+                ? OrbitTextField(
+                    inline: true,
                     controller: _controller,
                     autofocus: true,
                     style: TextStyle(fontSize: 24, color: colors.titleText),
-                    decoration: const InputDecoration(
-                      isDense: true,
-                      border: InputBorder.none,
-                      filled: false,
-                    ),
                     onSubmitted: (_) => _commit(),
-                    onTapOutside: (_) => _commit(),
+                    onTapOutside: _commit,
                   )
                 : GestureDetector(
                     onTap: () => setState(() => _editing = true),
@@ -926,14 +923,14 @@ class _DescriptionEditSheetState extends State<_DescriptionEditSheet> {
           AppDimens.space16,
           AppDimens.space16,
         ),
-        child: TextField(
+        child: OrbitTextField(
           controller: _controller,
           maxLines: null,
           minLines: 6,
           maxLength: 5000,
           autofocus: true,
+          hintText: '请输入描述',
           style: TextStyle(fontSize: 15, color: colors.bodyText),
-          decoration: const InputDecoration(hintText: '请输入描述', counterText: ''),
         ),
       ),
       actions: OrbitSheetActions(
@@ -1179,20 +1176,18 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
                       child: Row(
                         children: [
                           Expanded(
-                            child: TextField(
+                            child: OrbitTextField(
+                              inline: true,
                               controller: _draftController,
                               autofocus: true,
+                              hintText: '子任务标题',
                               style: TextStyle(
                                 fontSize: 15,
                                 color: colors.bodyText,
                               ),
-                              decoration: const InputDecoration(
-                                hintText: '子任务标题',
-                                isDense: true,
-                                filled: false,
-                                contentPadding: EdgeInsets.symmetric(
-                                  vertical: AppDimens.space8,
-                                ),
+                              // 行内补 8 的纵向内边距，保持 40 左右的触控高度
+                              insideMargin: const EdgeInsets.symmetric(
+                                vertical: AppDimens.space8,
                               ),
                               onSubmitted: (_) => _submitDraft(),
                             ),
@@ -1216,17 +1211,14 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
               ? Row(
                   children: [
                     Expanded(
-                      child: TextField(
+                      child: OrbitTextField(
+                        inline: true,
                         controller: _draftController,
                         autofocus: true,
+                        hintText: '子任务标题',
                         style: TextStyle(fontSize: 15, color: colors.bodyText),
-                        decoration: const InputDecoration(
-                          hintText: '子任务标题',
-                          isDense: true,
-                          filled: false,
-                          contentPadding: EdgeInsets.symmetric(
-                            vertical: AppDimens.space8,
-                          ),
+                        insideMargin: const EdgeInsets.symmetric(
+                          vertical: AppDimens.space8,
                         ),
                         onSubmitted: (_) => _submitDraft(),
                       ),
@@ -1521,17 +1513,17 @@ class _LabelEditSheetState extends ConsumerState<_LabelEditSheet> {
                     Row(
                       children: [
                         Expanded(
-                          child: TextField(
+                          child: OrbitTextField(
+                            inline: true,
                             controller: _titleController,
                             maxLength: 50,
+                            hintText: '新建标签',
                             style: TextStyle(
                               fontSize: 15,
                               color: colors.bodyText,
                             ),
-                            decoration: const InputDecoration(
-                              hintText: '新建标签',
-                              counterText: '',
-                              isDense: true,
+                            insideMargin: const EdgeInsets.symmetric(
+                              vertical: AppDimens.space8,
                             ),
                             onSubmitted: (_) => _createLabel(),
                           ),
@@ -2031,13 +2023,11 @@ class _RelationsSectionState extends ConsumerState<_RelationsSection> {
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: AppDimens.space8),
-                TextField(
+                OrbitTextField(
                   controller: queryCtl,
                   autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: '搜索任务标题',
-                    hintText: '输入关键词后点搜索',
-                  ),
+                  label: '搜索任务标题',
+                  helperText: '输入关键词后点搜索',
                   onSubmitted: (_) async {
                     setSheet(() => searching = true);
                     try {
@@ -2332,14 +2322,13 @@ class _CommentsSectionState extends ConsumerState<_CommentsSection> {
             child: Row(
               children: [
                 Expanded(
-                  child: TextField(
+                  child: OrbitTextField(
+                    inline: true,
                     controller: _inputController,
+                    hintText: '输入评论...',
                     style: TextStyle(fontSize: 15, color: colors.bodyText),
-                    decoration: const InputDecoration(
-                      hintText: '输入评论...',
-                      isDense: true,
-                      filled: false,
-                      border: InputBorder.none,
+                    insideMargin: const EdgeInsets.symmetric(
+                      vertical: AppDimens.space8,
                     ),
                     onSubmitted: (_) => _submit(),
                   ),

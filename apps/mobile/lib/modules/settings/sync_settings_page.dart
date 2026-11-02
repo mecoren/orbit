@@ -20,6 +20,7 @@ import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
+import '../../shared/widgets/shadcn/orbit_text_field.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../shared/widgets/shadcn/orbit_switch.dart';
 import '../../shared/widgets/shadcn/orbit_button.dart';
@@ -312,8 +313,11 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
   );
 
   /// 表单选择行：只读展示当前值 + 尾箭头，点行唤起底部抽屉
-  /// （选择类交互统一底部抽屉，AGENTS.md 移动端约定；装饰沿用表单
-  /// InputDecorator 口径，与相邻 TextFormField 视觉一致）。
+  /// （选择类交互统一底部抽屉，AGENTS.md 移动端约定）。
+  ///
+  /// 2026-11-02 起与 `OrbitTextField`（MiuixTextField filled）同形：灰底
+  /// 16 圆角胶囊 + 小号浮动标签在上 + 值在下。此前用 `InputDecorator` 模拟
+  /// Material 输入框，输入框换 miuix 后这一行会单独留在旧观感里。
   /// [onTap] 为 null 即禁用态（值文字降为次要色）。
   Widget _selectRow({
     required AppColorSet colors,
@@ -321,32 +325,66 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
     required String value,
     required VoidCallback? onTap,
     double fontSize = 15,
-  }) => InputDecorator(
-    decoration: InputDecoration(labelText: label),
-    child: InkWell(
-      onTap: onTap,
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: fontSize,
-                color: onTap == null ? colors.secondaryText : colors.bodyText,
+  }) {
+    // 与 MiuixTextFieldDefaults.cornerRadius 同档
+    const radius = BorderRadius.all(Radius.circular(16));
+    return Material(
+      color: colors.surfaceSecondary,
+      borderRadius: radius,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: radius,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 56),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppDimens.space16,
+            vertical: AppDimens.space8,
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // miuix 浮动标签档：填充态标签缩到 10
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 10,
+                        height: 1.4,
+                        color: colors.secondaryText,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: fontSize,
+                        height: 1.4,
+                        color: onTap == null
+                            ? colors.secondaryText
+                            : colors.bodyText,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
+              Icon(
+                OrbitIcons.chevronRight,
+                size: AppDimens.iconSizeSm + 2,
+                color: colors.secondaryText,
+              ),
+            ],
           ),
-          Icon(
-            OrbitIcons.chevronRight,
-            size: AppDimens.iconSizeSm + 2,
-            color: colors.secondaryText,
-          ),
-        ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 
   Widget _connectionForm(AppColorSet colors) {
     final isS3 = _engine == 's3';
@@ -363,68 +401,49 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
           onTap: _pickEngine,
         ),
         const SizedBox(height: AppDimens.space12),
-        TextFormField(
+        OrbitTextField(
           controller: _endpointController,
           keyboardType: TextInputType.url,
-          style: TextStyle(fontSize: 15, color: colors.bodyText),
-          decoration: InputDecoration(
-            labelText: isS3 ? 'Endpoint' : '服务器地址',
-            hintText: isS3
-                ? 'https://s3.example.com'
-                : 'https://dav.example.com/dav',
-          ),
+          label: isS3 ? 'Endpoint' : '服务器地址',
           onChanged: (_) => setState(() {}),
         ),
         if (isS3) ...[
           const SizedBox(height: AppDimens.space12),
-          TextFormField(
+          OrbitTextField(
             controller: _bucketController,
-            style: TextStyle(fontSize: 15, color: colors.bodyText),
-            decoration: const InputDecoration(labelText: '存储桶'),
+            label: '存储桶',
           ),
           const SizedBox(height: AppDimens.space12),
-          TextFormField(
+          OrbitTextField(
             controller: _regionController,
-            style: TextStyle(fontSize: 15, color: colors.bodyText),
-            decoration: const InputDecoration(
-              labelText: 'Region',
-              hintText: 'us-east-1',
-            ),
+            label: 'Region',
           ),
         ],
         const SizedBox(height: AppDimens.space12),
-        TextFormField(
+        OrbitTextField(
           controller: _usernameController,
-          style: TextStyle(fontSize: 15, color: colors.bodyText),
-          decoration: InputDecoration(labelText: isS3 ? 'Access Key' : '用户名'),
+          label: isS3 ? 'Access Key' : '用户名',
         ),
         const SizedBox(height: AppDimens.space12),
-        TextFormField(
+        OrbitTextField(
           controller: _passwordController,
           obscureText: true,
-          style: TextStyle(fontSize: 15, color: colors.bodyText),
-          decoration: InputDecoration(
-            labelText: isS3 ? 'Secret Key' : '密码',
-            hintText: _config?.passwordSet == true ? '已保存（修改请重新输入）' : null,
-          ),
+          label: isS3 ? 'Secret Key' : '密码',
+          helperText: _config?.passwordSet == true ? '已保存（修改请重新输入）' : null,
         ),
         if (isS3) ...[
           const SizedBox(height: AppDimens.space12),
-          TextFormField(
+          OrbitTextField(
             controller: _sessionTokenController,
             obscureText: true,
-            style: TextStyle(fontSize: 15, color: colors.bodyText),
-            decoration: InputDecoration(
-              labelText: '会话令牌（STS 临时凭据专用）',
-              hintText: _config?.sessionTokenSet == true ? '已设置，留空沿用' : null,
-            ),
+            label: '会话令牌（STS 临时凭据专用）',
+            helperText: _config?.sessionTokenSet == true ? '已设置，留空沿用' : null,
           ),
         ],
         const SizedBox(height: AppDimens.space12),
-        TextFormField(
+        OrbitTextField(
           controller: _basePathController,
-          style: TextStyle(fontSize: 15, color: colors.bodyText),
-          decoration: const InputDecoration(labelText: '远端路径'),
+          label: '远端路径',
         ),
         const SizedBox(height: AppDimens.space12),
         // 定时同步：开关 + 间隔（移动端无调度器，仅存档；桌面端生效）
@@ -473,14 +492,10 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
         Row(
           children: [
             Expanded(
-              child: TextFormField(
+              child: OrbitTextField(
                 controller: _timeoutController,
                 keyboardType: TextInputType.number,
-                style: TextStyle(fontSize: 15, color: colors.bodyText),
-                decoration: const InputDecoration(
-                  labelText: '请求超时（秒，5–600）',
-                  counterText: '',
-                ),
+                label: '请求超时（秒，5–600）',
               ),
             ),
           ],
@@ -983,11 +998,10 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
                   ),
                   const SizedBox(height: AppDimens.space12),
                   if (!status.isUnlocked) ...[
-                    TextFormField(
+                    OrbitTextField(
                       controller: _unlockController,
                       obscureText: true,
-                      style: TextStyle(fontSize: 15, color: colors.bodyText),
-                      decoration: const InputDecoration(labelText: '同步密码'),
+                      label: '同步密码',
                     ),
                     const SizedBox(height: AppDimens.space12),
                     SizedBox(

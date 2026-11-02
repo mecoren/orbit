@@ -11,7 +11,10 @@ import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/utils/hex_color.dart';
+import '../../shared/widgets/shadcn/orbit_bottom_nav.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
+import '../../shared/widgets/shadcn/orbit_pull_to_refresh.dart';
+import '../../shared/widgets/shadcn/orbit_text_field.dart';
 import '../../shared/widgets/shadcn/orbit_list_card.dart';
 import '../../shared/widgets/shadcn/orbit_skeleton.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart';
@@ -377,12 +380,12 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                 AppDimens.space16,
                 AppDimens.space16,
               ),
-              content: TextField(
+              content: OrbitTextField(
                 controller: controller,
                 autofocus: true,
                 maxLength: 50,
                 textInputAction: TextInputAction.done,
-                decoration: const InputDecoration(labelText: '项目名称'),
+                label: '项目名称',
                 onChanged: (_) => setSheetState(() {}),
                 onSubmitted: (_) => submit(),
               ),
@@ -426,9 +429,10 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // 下拉刷新：本地重读 + 已配置时跑一轮云同步（共用回调见 pullToRefresh）。
+          // 下拉刷新（2026-11-01：RefreshIndicator → miuix 承载）：
+          // 本地重读 + 已配置时跑一轮云同步（共用回调见 pullToRefresh）。
           // edgeOffset 下移到页头之下，否则指示条被 OrbitPageHeader 盖住。
-          RefreshIndicator(
+          OrbitPullToRefresh(
             onRefresh: () => pullToRefresh(ref),
             color: OrbitAccents.themeAccent,
             edgeOffset:
@@ -449,8 +453,10 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                           (widget.embedded
                               ? AppDimens.space8
                               : OrbitPageHeader.rowHeight + AppDimens.space8),
-                      // 底栏页签常驻：页尾只留呼吸留白
-                      bottom: AppDimens.space16,
+                      // 悬浮底栏净空 + 呼吸留白（末行不钻进玻璃后面）
+                      bottom:
+                          OrbitBottomNav.clearanceOf(context) +
+                          AppDimens.space16,
                     ),
                     children: [
                       // 一、快捷视图卡（今天任务列表同款卡片化：六行共拼一张卡——

@@ -7,7 +7,7 @@
 // 2. 页面字段多于一屏（视口 600）：交互/断言前用 _scrollTo（复用
 //    form_bottom_sheet_test 的 scrollUntilVisible + 底边余量补滚模式）；
 // 3. 首次设置走共享密码抽屉（`showPasswordSheet`）：点「设置密码」入口拉起
-//    抽屉，字段是抽屉内 TextField；页内仅剩解锁态一个「同步密码」TextFormField。
+//    抽屉，字段是抽屉内 OrbitTextField；页内仅剩解锁态一个「同步密码」输入框。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -16,6 +16,7 @@ import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/settings/sync_settings_page.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_button.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_text_field.dart';
 import 'support/orbit_test_app.dart';
 
 Widget _wrap(MockOrbitBridge bridge) => ProviderScope(
@@ -111,13 +112,13 @@ void main() {
     expect(await _probe(tester, bridge.syncConfigGet()), isNull);
 
     // 填写必填项后保存
-    await tester.enterText(find.widgetWithText(TextFormField, '服务器地址'),
+    await tester.enterText(find.widgetWithText(OrbitTextField, '服务器地址'),
         'https://dav.example.com');
     await tester.pump();
     await tester.enterText(
-        find.widgetWithText(TextFormField, '用户名'), 'demo');
+        find.widgetWithText(OrbitTextField, '用户名'), 'demo');
     await tester.pump();
-    await tester.enterText(find.widgetWithText(TextFormField, '密码'), 'pw123456');
+    await tester.enterText(find.widgetWithText(OrbitTextField, '密码'), 'pw123456');
     await tester.pump();
 
     await _tapAt(tester, find.widgetWithText(OrbitButton, '保存'));
@@ -182,9 +183,9 @@ void main() {
     // 点入口拉起共享密码抽屉（设置类输入统一走底部抽屉）
     await _tapAt(tester, find.text('设置密码'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.widgetWithText(TextField, '同步密码'), '123456');
+    await tester.enterText(find.widgetWithText(OrbitTextField, '同步密码'), '123456');
     await tester.pump();
-    await tester.enterText(find.widgetWithText(TextField, '确认密码'), '123456');
+    await tester.enterText(find.widgetWithText(OrbitTextField, '确认密码'), '123456');
     await tester.pump();
 
     await tester.tap(find.text('设置并解锁'));
@@ -202,9 +203,9 @@ void main() {
 
     await _tapAt(tester, find.text('设置密码'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.widgetWithText(TextField, '同步密码'), '123456');
+    await tester.enterText(find.widgetWithText(OrbitTextField, '同步密码'), '123456');
     await tester.pump();
-    await tester.enterText(find.widgetWithText(TextField, '确认密码'), '654321');
+    await tester.enterText(find.widgetWithText(OrbitTextField, '确认密码'), '654321');
     await tester.pump();
 
     await tester.tap(find.text('设置并解锁'));
@@ -222,9 +223,9 @@ void main() {
 
     await _tapAt(tester, find.text('设置密码'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.widgetWithText(TextField, '同步密码'), '123');
+    await tester.enterText(find.widgetWithText(OrbitTextField, '同步密码'), '123');
     await tester.pump();
-    await tester.enterText(find.widgetWithText(TextField, '确认密码'), '123');
+    await tester.enterText(find.widgetWithText(OrbitTextField, '确认密码'), '123');
     await tester.pump();
 
     await tester.tap(find.text('设置并解锁'));
@@ -250,10 +251,10 @@ void main() {
     await _flush(tester);
     expect(_badge('已锁定'), findsOneWidget);
 
-    // 错误密码 → 保持锁定（页内唯一「同步密码」TextFormField 即解锁字段，纪律 3）
+    // 错误密码 → 保持锁定（页内唯一「同步密码」输入框即解锁字段，纪律 3）
     await _scrollTo(tester, find.text('解锁'));
     await tester.enterText(
-        find.widgetWithText(TextFormField, '同步密码'), '000000');
+        find.widgetWithText(OrbitTextField, '同步密码'), '000000');
     await tester.pump();
     await _tapAt(tester, find.text('解锁'));
     await _flush(tester);
@@ -261,7 +262,7 @@ void main() {
 
     // 正确密码 → 解锁
     await tester.enterText(
-        find.widgetWithText(TextFormField, '同步密码'), '123456');
+        find.widgetWithText(OrbitTextField, '同步密码'), '123456');
     await tester.pump();
     await _tapAt(tester, find.text('解锁'));
     await _flush(tester);
@@ -300,7 +301,7 @@ void main() {
     await tester.pumpAndSettle();
     // 升级需当前同步密码（对话框内唯一输入框）
     await tester.enterText(
-        find.widgetWithText(TextField, '当前同步密码'), '123456');
+        find.widgetWithText(OrbitTextField, '当前同步密码'), '123456');
     await tester.pump();
     await tester.tap(find.text('确认升级'));
     await _flush(tester);
