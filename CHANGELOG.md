@@ -17,6 +17,48 @@
 
 ## [Unreleased]
 
+### 优化：移动端输入框全量收口到 MiuixTextField（2026-11-02）
+
+设置/同步/待办各页的 36 处 `TextField` / `TextFormField` 是 Material 描边 + 浮动 label，与 OS4 观感脱节（云同步配置页最明显）。现统一走新原语 `OrbitTextField`（`MiuixTextField` 承载，HyperOS 灰底胶囊 + 聚焦描边）：
+
+- **两种形态**：`filled` 标准表单（16 内边距/16 圆角/浮动标签）；`inline` 内联编辑器（详情页标题、子任务行、评论框、项目名行、周期数值格）——透明底、零内边距、hint 当占位。
+- **补齐库缺口**：`maxLength`（库不暴露 `inputFormatters`，按 grapheme 截断，不画 Material 计数器）、`validator`（包 `FormField`，错误文案画在框下并把标签/描边染红）、`onTapOutside`（包 `TapRegion`）。
+- **已知取舍**：miuix 输入框不暴露 `textAlign`，重复规则数值格从居中改左对齐；占位/标签色统一取 `secondaryText`（桥接的 `onSecondaryContainer` 是正文色，直接吃会偏黑）。
+- **配套**：云同步页的「引擎 / 定时同步」选择行原用 `InputDecorator` 模拟 Material 输入框，随迁移改为与 miuix filled 同形的灰底胶囊（小号浮动标签 + 值 + 尾箭头），整张卡不再混两种输入观感。
+- **验证**：`flutter analyze` 0 issue；`flutter test` 全绿（新增 `orbit_text_field_test` 三例锁定限长/校验/内联占位；表单校验用例由「错误态边框」改为断言框下错误文案）。docs/16 §5.4.1 同步记录迁移口径。
+
+### 修复：底部抽屉铺满整屏（云同步「同步引擎」选择抽屉显示异常，2026-11-02）
+
+`OrbitSheetScaffold` 为 #107 平板限宽 640 用了裸 `Align`，而 `showModalBottomSheet`（`isScrollControlled: true`）给的是「最大高度 = 屏高」的松约束——Align 没有 `heightFactor` 就会撑满整屏，抽屉背板变成一整页白、内容贴在屏底（云同步设置点「引擎」实测：整屏白 + 选项被屏底裁切）。补 `heightFactor: 1` 后抽屉按内容收缩、仍由底部弹层贴屏底锚定，且不影响平板 640 限宽居中。
+
+- **影响面**：全部走该骨架的共享弹层——确认/单选/更多操作/密码/各表单抽屉（70+ 调用点）。
+- **回归锁**：`orbit_sheets_test` 新增「弹层按内容收缩、贴屏底、末项不溢出」几何用例。
+- **验证**：`flutter analyze` 0 issue、`flutter test` 1114 绿。
+
+### 优化：移动端底栏改为 OS4 悬浮胶囊（2026-11-02）
+
+换承载后底栏仍是通栏贴屏底的玻璃条，看着不像 HyperOS 4 的悬浮导航栏。现按 flutter_miuix `example/lib/showcase/os4.dart` 的接线复刻：
+
+- **悬浮几何**：`OrbitBottomNav` 左右各留 12、底边距 12（另加系统手势区）、上方 8，平板/横屏宽度封顶 520 居中；栏体仍是纯图标 + 滑动胶囊指示器。
+- **内容铺底**：壳层 `Scaffold.extendBody: true`，页面内容铺到屏幕底边，玻璃才采样得到背后的列表/卡片（此前栏体在 body 之外，采样落在快照外，玻璃退化成半透明色块）。
+- **页尾净空**：新增 `OrbitBottomNav.clearanceOf(context)`（栏体 + 上下留白 + 手势区），壳内各页与子页的滚动尾部按它补留白；批量工具条抬到栏体上沿、筛选器页用等高空底栏托住自带 FAB，末行不再停在玻璃后面。
+- **验证**：`flutter analyze` 0 issue、`flutter test` 全绿（新增「底栏悬浮：离屏边胶囊 + extendBody」几何用例）。
+
+### 变更：移动端组件面全量 Miuix 化，shadcn 退为图标字体源（2026-11-01）
+
+第二批组件收口：消灭全部残余 `sh.*` 组件用法（12 个文件 → 0），`ShadcnLayer` / `DrawerOverlay` / `buildShadcnTheme` 整层移除（`core/theme/shadcn_theme.dart` 删除），公共 API 全部保持，页面调用点只换按钮构造名：
+
+- **Toast**：`WaitToast` 引擎从 shadcn `showToast` 换成 `MiuixSnackbarHostState` 队列（根部 `OrbitToastHost` 挂载，不依赖页面 `Scaffold`），单条策略/停留档位/四变体/action 钮语义不变；卡面换 squircle 毛玻璃（`BackdropFilter` σ=28 + 82% 表面 + 1px 描边），新增横滑关闭。
+- **FAB**：`sh.Button.primary` 圆形变体 → `MiuixFloatingActionButton`（`containerColor` 直接填强调色），长按（模板新建）由外层手势保留。
+- **取色器**：`sh.ColorPicker` → `MiuixColorPicker`（HSV 三滑杆 + 预览）+ `MiuixTextField`（HEX 精确输入，双向同步），`showOrbitColorPickerSheet` 门面不变。
+- **按钮**：抽屉尾栏 `OrbitSheetActions`、日期面板清除/确认、分诊/周回顾/排程三页的全部 `sh.Button.*` → `OrbitButton`（`MiuixButton` 承载）。
+- **提示**：月历翻月钮 `sh.Tooltip` → `OrbitIconButton.tooltip`（Material `Tooltip`；日期面板已回退 Material 根层弹层，Overlay 约束消失）。
+- **下拉刷新**：4 个列表页 `RefreshIndicator` → 新增原语 `OrbitPullToRefresh`（`MiuixPullToRefresh` 承载，`isRefreshing` 内持、`edgeOffset`/`displacement` 映射 `contentPadding.top` 避让玻璃页头）。
+- **时分滚轮**：`CupertinoPicker` → `MiuixNumberPicker`（每项 44 高、5 项视窗、逐项触感、弹簧吸附；边界不环绕，与 Cupertino 同语义），`wait_date_picker` 两条滚轮用例同步换 finder。
+- **批量工具条**：手搓 `Container`（圆角+描边+e3）→ `MiuixFloatingToolbar`（squircle 胶囊 + 固定几何阴影 + 0.75dp 描边），占位常量与动作内容不变。
+- **保留**（附理由见 `docs/16` §五）：底部抽屉容器、`TextField`/`ListTile`、Material `Tooltip`、`table_calendar` 月历、`MiuixBadge`（与 docs/04 像素规格冲突）、OS4 图标集（跨端 Lucide 一致）。
+- **验证**：`flutter analyze` 0 issue、`flutter test` 1112 绿；修复 miuix 静态队列跨用例残留（宿主挂载时换新队列 + `drainToastTimers` 清理）。
+
 ### 新增：移动端接入 flutter_miuix（HyperOS 组件库）与 OS4 玻璃（2026-10-31）
 
 移动端 UI 组件体系从「shadcn_flutter 单体系」扩为「shadcn_flutter + flutter_miuix 双体系并存」，按最小侵入原则**只换组件承载、不改页面几何与公共 API**：

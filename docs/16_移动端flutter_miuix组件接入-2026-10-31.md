@@ -68,13 +68,13 @@ OrbitGlassScope（向下暴露同一个 backdrop）
 |---|---|
 | `showModalBottomSheet`（49 处） | 抽屉承载与 `OrbitSheetScaffold`（标题/可滚内容/固定尾栏/键盘避让）深度耦合；`MiuixOverlayBottomSheet` 是声明式 API（`show` 布尔 + `onDismissRequest`），且库内**没有** `MiuixGlassBottomSheet`（上游未实现）。换承载会同时改 49 处调用写法与全部抽屉测试。 |
 | `showDialog`（3 处，均为附件图片预览透明 Dialog） | 非选择/确认/输入类，AGENTS.md 明确豁免 |
-| `TextField` / `TextFormField`（27 + 12 处） | `MiuixTextField` 的 `controller`/`decoration`/`obscureText`/`keyboardType` 参数面与 Material 不同，且 12 个测试文件依赖 `find.byType(TextField)` 与 `decoration.hintText` 定位。换承载属「输入基建迁移」，收益（外观）远小于风险（IME/表单/校验/焦点）。输入框外观继续由 `inputDecorationTheme` 统一。 |
+| ~~`TextField` / `TextFormField`（27 + 12 处）~~ | **2026-11-02 已替换**为 `OrbitTextField`（`MiuixTextField` 承载，见 5.4.1）：壳层补齐 `maxLength` / `validator` / `onTapOutside` 与 `inline` 变体。业务层不再有裸 Material 输入框。 |
 | `ListTile`（20 处） | `MiuixBasicComponent` 的 2:5:3 测量约束与 `ListTile` 的 `leading/title/subtitle/trailing` 语义不一一对应；侧栏/搜索/回收站的 `ListTile` 已由 `orbit_list_card` 的分段卡面承载外观，换组件只换布局实现、不改观感。 |
-| `RefreshIndicator`（5 处） | `MiuixPullToRefresh` 需要 `MiuixScrollBehavior` 配合且自带手势判定；现有 5 处下拉刷新已带 `edgeOffset` 避开页头（几何依赖 `RefreshIndicator` 参数）。属交互级替换，留作独立立项。 |
+| ~~`RefreshIndicator`（列表页 4 处）~~ | **2026-11-01 已替换**为 `MiuixPullToRefresh`（经 `OrbitPullToRefresh` 包装，参数镜像 `RefreshIndicator`），见第五节。 |
 | `Tooltip`（9 处） | 全局 `tooltipTheme` 已是「主题色底白字」口径（AGENTS.md 强制），64 条测试用 `find.byTooltip`；`MiuixTooltip` 是独立组件（`MiuixTooltipBox`），换掉会同时改调用写法与断言。`OrbitIconButton` 内部仍用 Material `Tooltip`，保证 `byTooltip` 全部有效。 |
 | `InkWell` / `Material`（74 / 13 处） | 属点击/裁剪基建而非"组件"，且大量用于水波/圆角裁切。 |
-| `MiuixScaffold` / `MiuixTopAppBar` / `MiuixNavigationRail` / `MiuixTabRow` / `MiuixBreadcrumbBar` / `MiuixColorPicker` 系 / `MiuixNumberPicker` / `MiuixSearchBar` / `MiuixSlider` 系 / 偏好项（`Miuix*Preference`） | 本项目**没有对应功能**：无 Tab 栏（用底部导航）、无面包屑、无调色盘取色器（色板走 `orbit_color_picker` 的预设色格 + 底部抽屉）、无数值滚轮（容量用输入型抽屉）、无 Slider（容量是文本输入）、偏好项语义由 `SectionCard` + 行组件表达。**不为了"用上组件"而新造功能**（AGENTS.md 裁剪口径）。 |
-| `MiuixSnackbar` / `MiuixSnackbarHost` | 轻提示已统一走 `WaitToast`（shadcn `showToast` 承载，支持 action 钮、单条策略、停留档位）；换 `MiuixSnackbarHost` 需要页面级 `Scaffold` 挂 Host，而本项目弹层走根路由、页面是 Material `Scaffold`，且 33 处调用 + toast 计时器测试全部依赖 `WaitToast` 语义。 |
+| `MiuixScaffold` / `MiuixTopAppBar` / `MiuixNavigationRail` / `MiuixTabRow` / `MiuixBreadcrumbBar` / `MiuixSearchBar` / `MiuixSlider` 系 / 偏好项（`Miuix*Preference`） | 本项目**没有对应功能**：无 Tab 栏（用底部导航）、无面包屑、无搜索框（清单过滤用 chip 行）、无 Slider（容量是文本输入）、偏好项语义由 `SectionCard` + 行组件表达。**不为了"用上组件"而新造功能**（AGENTS.md 裁剪口径）。~~`MiuixColorPicker` 系~~ / ~~`MiuixNumberPicker`~~ / ~~`MiuixFloatingToolbar`~~ 已于 2026-11-01 替换（取色抽屉 / 时分滚轮 / 批量工具条），见第五节。 |
+| ~~`MiuixSnackbar` / `MiuixSnackbarHost`~~ | **2026-11-01 已替换**：`WaitToast` 公共 API 不变、引擎换 `MiuixSnackbarHostState` 队列（根部 `OrbitToastHost` 挂载，不依赖页面 Scaffold），见第五节。 |
 
 ## 三、验证
 
@@ -133,3 +133,91 @@ OrbitGlassScope（向下暴露同一个 backdrop）
    `selectionClick`（叠加会变成两下震感）；取消完成时同样震一下属上游行为。
 4. **shader 降级**：无 runtime shader 的设备上，OS4 玻璃退化为「模糊 + 原生混色」，
    不是实色；`MiuixGlassRendering.loadError` 可查原因。
+
+## 五、第二批：组件面全量收口（2026-11-01）
+
+### 5.1 目标与结果
+
+第一批（10-31）只换了「原语层承载」，页面里仍有 12 个文件直接使用 shadcn
+组件（`sh.Button` / `sh.showToast` / `sh.ColorPicker` / `sh.Tooltip` /
+`sh.Card` / `ShadcnLayer` 装配）。本批**把残余 sh.* 组件用法清零**：
+
+- `import 'package:shadcn_flutter'` 全库仅剩 `core/theme/icon_map.dart`
+  （`LucideIcons` 图标字体源，与桌面端 lucide-react 同套线性图标）；
+- `ShadcnLayer` / `DrawerOverlay` / `buildShadcnTheme` / destructive 组件主题
+  整层移除（`core/theme/shadcn_theme.dart` 删除），运行时不再有第三套主题层；
+- 公共 API 全部保持（`WaitToast` / `OrbitButton` / `OrbitSheetActions` /
+  `showOrbitColorPickerSheet` / `OrbitFab` 签名逐字不变），页面调用点改动
+  仅限「同一个按钮换构造名」。
+
+### 5.2 本批映射
+
+| 现有实现 | 换成的 flutter_miuix 组件 | 落点 | 口径 |
+|---|---|---|---|
+| `sh.showToast` 队列（`WaitToast` 内部） | `MiuixSnackbarHostState` + `MiuixSnackbarHost` | `orbit_toast.dart`（引擎）+ 根部 `OrbitToastHost` | 单条策略/停留档位/四变体语义不变；卡面换 HyperOS squircle + `BackdropFilter` 毛玻璃（口径同 `MiuixSnackbar.blurSigma`）；新增横滑关闭；变体色/副文案按 `MiuixSnackbarData` 身份挂 payload 表（退场期不串色） |
+| `sh.Button.primary`（圆形 FAB） | `MiuixFloatingActionButton` | `orbit_fab.dart` | 填色走 `containerColor`（不再绕组件主题）；长按（模板新建）由外层 `GestureDetector` 保留（内部 `MiuixPressable` 不注册长按） |
+| `sh.ColorPicker`（色域/滑杆/HEX 三档） | `MiuixColorPicker`（HSV 三滑杆 + 预览）+ `MiuixTextField`（HEX 输入） | `orbit_color_picker.dart` | 门面 `showOrbitColorPickerSheet` 不变；HEX 双向同步（聚焦中不回写）；3/6 位十六进制均接受 |
+| `sh.Button.outline/destructive/primary`（抽屉尾栏） | `OrbitButton`（`MiuixButton`） | `orbit_sheet_scaffold.dart` 的 `OrbitSheetActions` | 三形态一一对应；`Expanded` 拉满宽语义保留 |
+| `sh.Button.ghost`（日期面板清除/确认） | `OrbitButton.text` | `orbit_date_picker.dart` | 紧凑档 40 高 |
+| `sh.Button.*`（分诊 / 周回顾 / 排程三页） | `OrbitButton.*` | `triage_page` / `weekly_review_sheet` / `plan_day_sheet` | primary→`primary(expand)`、outline→`outline(compact)`、ghost→`text(compact)` |
+| `sh.Tooltip`（月历翻月钮） | `OrbitIconButton.tooltip`（Material `Tooltip`） | `orbit_month_calendar.dart` | 日期面板 2026-09-21 已回退 Material 根层弹层，「找不到 Overlay」约束消失；外观由 `tooltipTheme` 统一（AGENTS.md 口径） |
+| `RefreshIndicator`（主列表/清单/统计/回收站） | `MiuixPullToRefresh` | 新增 `orbit_pull_to_refresh.dart` + 4 页 | 阻尼拖拽 + 细环指示圈 + 四档 zh-CN 文案；`isRefreshing` 由包装内持（页面零改动）；`edgeOffset`/`displacement` 映射为 `contentPadding.top` 避让玻璃页头 |
+| `CupertinoPicker`（时分滚轮） | `MiuixNumberPicker` | `orbit_date_picker.dart` 的 `_TimeWheelSheet` | 每项 44 高、5 项视窗、逐项触感、弹簧吸附；边界不环绕（同 Cupertino）；选中/非选中取 `titleText`/`secondaryText` 渐变插值 |
+| 手搓批量工具条容器（`Container` + e3） | `MiuixFloatingToolbar` | `sub_list_screen.dart` 的 `_batchToolbar` | squircle 胶囊 + 固定几何阴影 + 0.75dp 描边；外层留白 12/8 由组件贡献，占位常量 `touchTarget + space8*4` 不变；动作内容与横滑逻辑原样 |
+
+### 5.3 OS4 玻璃增量
+
+第一批已接：玻璃底栏 / 玻璃页头 / 玻璃浮层。本批新增：
+
+- **Toast 毛玻璃**：`ClipPath`（squircle）+ `BackdropFilter(σ=28)` + 82% 表面 +
+  1px 描边 + e2 阴影（阴影画在裁剪外），与 `MiuixSnackbar.blurSigma` 同构；
+- **FAB 换 miuix 引擎**：`MiuixFloatingActionButton`（HyperOS 阴影公式 + 弹簧按压），
+  仍为实心强调色（沿用 v3「FAB 不玻璃化」的既定决策，避免与底栏玻璃双重磨砂）。
+
+### 5.4 保留的兼容处理（本批仍未替换）
+
+| 项 | 理由 |
+|---|---|
+| `showModalBottomSheet` + `OrbitSheetScaffold` | 见 2.3：与 49 处抽屉的键盘避让/平板限宽/长按确认/固定尾栏深度耦合；`MiuixOverlayBottomSheet` 是声明式 API，属交互级重写 |
+| ~~`TextField` / `TextFormField`（27 + 12 处）~~ | **2026-11-02 已迁移**，见 5.4.1 |
+| `ListTile`（20 处） | 已在 `orbit_list_card` 分段卡面内承载外观，换 `MiuixBasicComponent` 只换布局实现 |
+| Material `Tooltip` | AGENTS.md 全局口径 + 64 条 `find.byTooltip` 断言；`MiuixTooltip` 属另一套独立 API |
+| `table_calendar`（月历网格） | miuix 无月历组件；农历/节气/休班语义是任务日期底座（AGENTS.md 明确不算生活记录域） |
+| `MiuixBadge` | 尺寸档 16/11sp 与 docs/04 像素规格（底栏角标 14/9sp）冲突，保留自绘胶囊 |
+| `MiuixIcon` 系（`MiuixIcons.os4`） | 图标体系锁 Lucide（跨端与桌面 lucide-react 一致）；OS4 图标为填充/多字重风格，全量替换属视觉改版 |
+| `MiuixScaffold` / `MiuixTopAppBar` / `MiuixNavigationRail` / `MiuixTabRow` / 偏好项 / `MiuixDatePicker` / `MiuixNumberPicker` / `MiuixSlider` / `MiuixSearchBar` / `MiuixBreadcrumbBar` / `MiuixCascading*` | 无对应场景或会改变既定交互（日期面板带农历网格、时分用步进器、视图切换是图标钮）；**不为了用组件而新造功能** |
+
+#### 5.4.1 追加：输入框全量收口（2026-11-02）
+
+`TextField` / `TextFormField` 的 36 处调用全部迁到 `OrbitTextField`
+（`shared/widgets/shadcn/orbit_text_field.dart`，底层 `MiuixTextField`）：
+
+- **两种形态**：默认 `filled`（16 内边距 / 16 圆角 / 灰底 / 浮动标签）；`inline`
+  （详情页标题原地编辑、子任务行、评论框、项目名行、周期数值格）为透明底、零
+  内边距、hint 当占位，边框/布局交给宿主容器。
+- **补齐库缺口**：`maxLength`（库不暴露 `inputFormatters`，按 grapheme 截断，
+  不画 Material 计数器）、`validator`（包 `FormField`，错误文案画在框下并把标签/
+  描边染成破坏性色）、`onTapOutside`（包 `TapRegion`）。
+- **已知取舍**：miuix 输入框不暴露 `textAlign`，重复规则面板的数值格从居中改
+  左对齐；占位/标签色统一取 `secondaryText`（主题桥接的 `onSecondaryContainer`
+  是正文色，直接吃会偏黑）。
+- **测试**：`find.byType(TextFormField)` 全部改 `OrbitTextField`；
+  `decoration.hintText` 定位改读原语字段；新增 `orbit_text_field_test.dart`
+  锁限长 / 校验 / 内联占位。
+- **配套**：云同步页「引擎 / 定时同步」选择行从 `InputDecorator`（模拟 Material
+  输入框）改为与 miuix filled 同形的灰底胶囊（16 圆角 + 小号浮动标签 + 尾箭头）。
+
+### 5.5 验证
+
+- `flutter analyze`：**No issues found**；
+- `flutter test`：**1112 项全绿**（含 `wait_toast` 停留口径四例、`orbit_sheets`
+  破坏性按钮实色断言、`calendar_screen` 时间轴手势、`wait_date_picker` 双按钮居中
+  与两条时分滚轮用例——finder 已换 `MiuixNumberPicker`，44px 拖拽一格吸附方向/
+  边界钳制与 Cupertino 一致）；
+- 回归修复：miuix 队列是**静态跨用例存活**的，用例结束时在途条目会留在队列里、
+  下一用例挂载后被重新渲染成卡片遮挡底部点击（曾致 `calendar_screen` 8 例 /
+  `manager_pages` 1 例红）。修法：`OrbitToastHost` 挂载时换新队列
+  （生产壳只挂载一次，等价单例），`drainToastTimers` 追加
+  `WaitToast.debugFlushForTest()` 清残留；
+- 新增/改写的测试辅助：`orbit_sheets_test.buttonFillOf` 改为读
+  `MiuixButton.colors.color`（shadcn `OverflowDecoratedBox` 已不存在）。
