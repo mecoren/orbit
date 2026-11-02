@@ -2,8 +2,8 @@
 ///
 /// **单一来源原则**：本文件不定义任何新色值/尺寸，`MiuixColors` 的 54 个语义
 /// 角色全部由 `core/theme` 既有 token（[AppColors] / [OrbitAccents]）派生，
-/// 与 Material 侧（`app_theme.dart`）、shadcn 侧（`shadcn_theme.dart`）同源，
-/// 因此三套组件体系并存时不会出现"色板漂移"。
+/// 与 Material 侧（`app_theme.dart`）同源；2026-11-01 起移动端组件面全量
+/// Miuix 化（shadcn_flutter 退为图标字体源），两套主题并存不再有色板漂移。
 ///
 /// **为什么不用 `MiuixSystemTheme`**：它会读 `MediaQuery.platformBrightness`，
 /// 而本项目的亮暗由外观页三态（`theme_mode`：system/light/dark）控制，

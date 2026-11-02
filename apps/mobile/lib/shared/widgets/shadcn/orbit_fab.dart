@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
-import 'package:shadcn_flutter/shadcn_flutter.dart' as sh;
+import 'package:flutter_miuix/miuix.dart';
 
 import '../../../core/theme/app_dimens.dart';
-import '../../../core/theme/app_elevation.dart';
 import '../../../core/theme/icon_map.dart';
 
-/// 悬浮主操作按钮（设计系统 v3：shadcn `Button` 圆形变体承载�?
+/// 悬浮主操作按钮（flutter_miuix `MiuixFloatingActionButton` 承载）
 ///
-/// �?`OrbitFab` 的「白玻璃（BackdropFilter + 渐变 tint）」随玻璃三件套整体移除；
-/// v3 采用 shadcn �?*实心圆形按钮**——按模块强调色填�?+ 白色线性图�?+ e2 柔和
-/// 投影（阴影留给浮层元素，FAB 属于浮层语义）�?
+/// **2026-11-01 换承载**：shadcn `Button.primary`（圆形变体 + 组件级主题
+/// 覆盖填色）换成 miuix FAB——squircle 引擎同源的 `StadiumBorder`（正方形
+/// bounds 下为正圆）、`MiuixPressable` 弹簧按压遮罩与库内阴影公式（HyperOS
+/// 规格：elevation 4、黑 15% 投影），按实例填色走 [MiuixFloatingActionButton.containerColor]
+/// 直接传强调色，不再需要绕组件主题。
 ///
-/// 按实例着色用 shadcn 的组件级主题（`ComponentTheme<PrimaryButtonTheme>`）实现：
-/// `ButtonStyle` 只带 variance/size/density/shape 不带颜色，颜色只能经组件主题
-/// 或 `decoration` 委托覆盖——这样既保住了 shadcn Button 的按压/悬停/焦点状态机，
-/// 又能让待办模块用 [OrbitAccents.todoAccent]、其余模块用全局 primary。
+/// 长按语义（模板新建）miuix FAB 无此参数，经外层 `GestureDetector` 补上：
+/// FAB 内部的 `MiuixPressable` 不注册长按手势（onLongPress 传 null 不进
+/// 手势竞技场），外层识别器无竞争、正常触发。
 class OrbitFab extends StatelessWidget {
   const OrbitFab({
     super.key,
@@ -42,26 +42,20 @@ class OrbitFab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return sh.ComponentTheme<sh.PrimaryButtonTheme>(
-      data: sh.PrimaryButtonTheme(
-        // 覆盖填充色为模块强调色；圆形状由 ButtonShape.circle 提供
-        decoration: (context, states, defaultValue) => ShapeDecoration(
-          color: accentColor,
-          shape: const CircleBorder(),
-          shadows: AppElevation.ofContext(context, level: 2),
-        ),
-      ),
-      child: SizedBox.square(
-        dimension: dimension,
-        child: sh.Button.primary(
-          onPressed: onPressed,
-          onLongPressStart: onLongPress == null ? null : (_) => onLongPress!(),
-          style: sh.ButtonStyle.primary(shape: sh.ButtonShape.circle),
-          child: Icon(
-            icon,
-            size: AppDimens.iconSizeLg,
-            color: const Color(0xFFFFFFFF),
-          ),
+    return GestureDetector(
+      onLongPress: onLongPress,
+      child: MiuixFloatingActionButton(
+        onPressed: onPressed,
+        // 圆钮直径 = dimension（minWidth/minHeight 同时钉住）
+        minWidth: dimension,
+        minHeight: dimension,
+        // 内容色不跟随库内 onSurface（miuix FAB 内容色继承 Surface 默认值），
+        // 按既有口径恒白
+        containerColor: accentColor,
+        child: Icon(
+          icon,
+          size: AppDimens.iconSizeLg,
+          color: const Color(0xFFFFFFFF),
         ),
       ),
     );

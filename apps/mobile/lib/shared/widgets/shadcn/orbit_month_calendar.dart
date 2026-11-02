@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:shadcn_flutter/shadcn_flutter.dart' as sh;
 import 'package:table_calendar/table_calendar.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -231,24 +230,24 @@ class OrbitMonthCalendar extends StatelessWidget {
 
   /// 月份导航钮（图标 + 悬浮提示）
   ///
-  /// 提示刻意走 shadcn `Tooltip` 而非 Material `IconButton.tooltip`：本组件既渲染
-  /// 在普通页面（日历页，位于 Navigator 的 Overlay 之内），也渲染在 shadcn 弹层
-  /// （日期面板）里——后者挂在 Navigator **之外**的根 `DrawerOverlay` 上，
-  /// Material 的 `RawTooltip` 在那里找不到 `Overlay` 祖先会直接抛
-  /// 「No Overlay widget found」；shadcn 提示吃 `ShadcnLayer` 的
-  /// `OverlayManagerLayer`，两种位置都能用。
+  /// **2026-11-01 提示换回 Material `Tooltip`**（经 [OrbitIconButton.tooltip]）：
+  /// 此前用 shadcn `Tooltip` 是因为日期面板还挂在 shadcn 根 `DrawerOverlay`
+  /// 上，Material `RawTooltip` 找不到 `Overlay` 祖先；该弹层 2026-09-21 已
+  /// 回退 Material `showModalBottomSheet(useRootNavigator: true)`（挂在根
+  /// Navigator 的 Overlay 之内），本组件渲染在普通页面 / 日期面板两种位置
+  /// 都有 Overlay 祖先。外观由 `app_theme.dart` 的 `tooltipTheme` 统一成
+  /// 「主题色底白字」，与 AGENTS.md 悬浮提示口径一致。
   Widget _navButton({
     required String tooltip,
     required VoidCallback? onPressed,
     required IconData icon,
-  }) => sh.Tooltip(
-    tooltip: (context) => Text(tooltip),
-    child: OrbitIconButton(
-      onPressed: onPressed,
-      icon: Icon(icon, size: _navIconSize + 4),
-      visualDensity: VisualDensity.compact,
-    ),
-  );
+  }) =>
+      OrbitIconButton(
+        onPressed: onPressed,
+        tooltip: tooltip,
+        icon: Icon(icon, size: _navIconSize + 4),
+        visualDensity: VisualDensity.compact,
+      );
 
   @override
   Widget build(BuildContext context) {

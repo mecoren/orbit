@@ -1,8 +1,6 @@
-import 'package:flutter/cupertino.dart'
-    show CupertinoPicker, CupertinoPickerDefaultSelectionOverlay;
 import 'package:flutter/material.dart';
+import 'package:flutter_miuix/miuix.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shadcn_flutter/shadcn_flutter.dart' as sh;
 
 import '../../../core/lunar/chinese_almanac.dart';
 import '../../../core/theme/app_colors.dart';
@@ -12,6 +10,7 @@ import '../../../core/theme/icon_map.dart';
 import '../../../core/theme/orbit_accents.dart';
 import '../../../data/api/dto.dart';
 import '../../../modules/todo/providers/todo_providers.dart';
+import 'orbit_button.dart';
 import 'orbit_month_calendar.dart';
 import 'orbit_card.dart';
 import 'orbit_sheet_scaffold.dart';
@@ -160,7 +159,6 @@ class _DatePickerSheetState extends ConsumerState<_DatePickerSheet> {
         title: title,
         itemCount: itemCount,
         initialItem: current,
-        accent: widget.accent ?? OrbitAccents.themeAccent,
         onConfirm: (value) => Navigator.of(sheetContext).pop(value),
       ),
     );
@@ -223,8 +221,9 @@ class _DatePickerSheetState extends ConsumerState<_DatePickerSheet> {
               ),
             ),
             const Spacer(),
-            sh.Button.ghost(
+            OrbitButton.text(
               onPressed: widget.onClear,
+              compact: true,
               child: const Text('清除'),
             ),
           ],
@@ -501,7 +500,13 @@ class _TimeDropdownField extends StatelessWidget {
   }
 }
 
-/// 滚轮选择弹层：`CupertinoPicker` 滚动选值，确认回传选中项
+/// 滚轮选择弹层：`MiuixNumberPicker` 滚动选值，确认回传选中项
+///
+/// **2026-11-01 换承载**：`CupertinoPicker`（ListWheel + 选中带 overlay）换成
+/// miuix `MiuixNumberPicker`——同为正中选中/上下渐隐缩放的垂直滚轮，改用
+/// HyperOS 口径：每项 44 高、5 项视窗、逐项触感反馈、`SpringSimulation` 吸附，
+/// 选中项取 `titleText`、非选中 `secondaryText` 渐变插值（不再叠强调色底带）。
+/// 边界语义与 Cupertino 一致（无环绕，末项钳住）；确认仍从尾栏回传。
 ///
 /// 承载与形状同主面板（Material `showModalBottomSheet` + `bottomSheetTopShape`）。
 class _TimeWheelSheet extends StatefulWidget {
@@ -509,7 +514,6 @@ class _TimeWheelSheet extends StatefulWidget {
     required this.title,
     required this.itemCount,
     required this.initialItem,
-    required this.accent,
     required this.onConfirm,
   });
 
@@ -521,7 +525,6 @@ class _TimeWheelSheet extends StatefulWidget {
   /// 初始选中项（对应当前时/分值）
   final int initialItem;
 
-  final Color accent;
   final ValueChanged<int> onConfirm;
 
   @override
@@ -562,34 +565,31 @@ class _TimeWheelSheetState extends State<_TimeWheelSheet> {
                       ),
                     ),
                     const Spacer(),
-                    sh.Button.ghost(
+                    OrbitButton.text(
                       onPressed: () => widget.onConfirm(_selected),
+                      compact: true,
                       child: const Text('确认'),
                     ),
                   ],
                 ),
               ),
-              SizedBox(
-                height: 216,
-                child: CupertinoPicker(
-                  itemExtent: 44,
-                  scrollController: FixedExtentScrollController(
-                    initialItem: widget.initialItem,
-                  ),
-                  selectionOverlay: CupertinoPickerDefaultSelectionOverlay(
-                    background: widget.accent.withValues(alpha: 0.08),
-                  ),
-                  onSelectedItemChanged: (i) => _selected = i,
-                  children: [
-                    for (var i = 0; i < widget.itemCount; i++)
-                      Center(
-                        child: Text(
-                          i.toString().padLeft(2, '0'),
-                          style: TextStyle(fontSize: 16, color: colors.bodyText),
-                        ),
-                      ),
-                  ],
+              MiuixNumberPicker(
+                value: _selected,
+                min: 0,
+                max: widget.itemCount - 1,
+                itemHeight: 44,
+                // 5 项视窗（与旧 CupertinoPicker 的 216 高近似）
+                visibleItemCount: 5,
+                // 两位数补零（小时 0~23 / 分钟 0~59）
+                label: (v) => v.toString().padLeft(2, '0'),
+                textStyle: const TextStyle(fontSize: 17),
+                colors: MiuixNumberPickerColors(
+                  selectedTextColor: colors.titleText,
+                  unselectedTextColor: colors.secondaryText,
+                  disabledSelectedTextColor: colors.secondaryText,
+                  disabledUnselectedTextColor: colors.secondaryText,
                 ),
+                onValueChanged: (v) => setState(() => _selected = v),
               ),
               // 占位色块避免弹层底部贴边突兀
               SizedBox(

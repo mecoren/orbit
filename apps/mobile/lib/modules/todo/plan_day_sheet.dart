@@ -7,7 +7,6 @@
 // 弹层机制 = showModalBottomSheet + bottomSheetTopShape/Motion（共享弹层族）。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shadcn_flutter/shadcn_flutter.dart' as sh;
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
@@ -327,10 +326,11 @@ class _PlanDaySheetState extends ConsumerState<_PlanDaySheet> {
                       // 应用按钮（拇指区底部；勾选默认全选，可逐条取消）
                       if (plan.slots.isNotEmpty) ...[
                         const SizedBox(height: AppDimens.space8),
-                        sh.Button.primary(
+                        OrbitButton.primary(
                           onPressed: _applying || _checked.isEmpty
                               ? null
                               : _apply,
+                          expand: true,
                           child: Text(
                             _applying
                                 ? '应用中…'

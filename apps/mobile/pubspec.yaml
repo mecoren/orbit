@@ -9,13 +9,13 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # ── UI 组件体系（shadcn_flutter）──
-  # 接入方式：MaterialApp.router + builder 内包 ShadcnLayer（方案 B）。
-  # 为什么不用 MaterialShadcnApp（方案 A）：其依赖 shadcn_flutter_material 全库
-  # 仅 0.0.54 一个版本，硬要求 Dart >=3.13 + Flutter >=3.47；本仓库锁
-  # Flutter 3.44.2 / Dart 3.12.2 无法解析。方案 B 无需 material_ui 迁移，
-  # Material 主题（core/theme/app_theme.dart）与 shadcn 主题并存，页面层不受影响。
-  # 0.0.x 属预 1.0，API 漂移风险高：此处**精确锁版、不带 ^**，升版须单独立项评估。
+  # ── 图标字体源（shadcn_flutter，仅 LucideIcons）──
+  # 2026-11-01 移动端组件面全量切换 flutter_miuix 后，本包**只剩一个用途**：
+  # `core/theme/icon_map.dart` 的 `LucideIcons`（与桌面端 lucide-react 同套
+  # 线性图标，跨端视觉一致性）。ShadcnLayer / DrawerOverlay / buildShadcnTheme
+  # 等主题装配已随 sh.* 组件退场一并移除，不再参与任何组件渲染。
+  # 0.0.x 属预 1.0，API 漂移风险高：此处**精确锁版、不带 ^**，升版须单独立项
+  # 评估；若未来换掉 Lucide 图标源，可连同本依赖一起评估移除。
   shadcn_flutter: 0.0.53
 
   # 水平滑动操作（shadcn 无侧滑原语；侧滑完成/删除是移动端核心手感，保留）
@@ -31,14 +31,17 @@ dependencies:
   # 平台能力，0.0.x 式的 API 漂移会直接让页头变回实色。
   progressive_background_blur: 1.0.1
 
-  # ── UI 组件体系（flutter_miuix，HyperOS 风格，含 OS4 玻璃）──
-  # pub.dev 官方包，**精确锁版**（与 shadcn_flutter 同口径：组件库升版必须单独立项
-  # 评估，避免 OS4 玻璃 shader / 材质档随上游漂移）。
+  # ── UI 组件体系主体（flutter_miuix，HyperOS 风格，含 OS4 玻璃）──
+  # pub.dev 官方包，**精确锁版**（组件库升版必须单独立项评估，避免 OS4 玻璃
+  # shader / 材质档随上游漂移）。
   # OS4（`MiuixGlass*` / `MiuixIcons.os4`）自 1.2.0 起随包发布；1.3.0 带「shader
   # 逐个降级 + saveLayer 模糊修复 + 顶栏模糊带」三处关键修复，故最低锁 1.3.0。
   # 接入方式 = `core/theme/miuix_theme.dart` 的 MiuixTheme 提供层（不用
-  # MiuixSystemTheme 跟随系统亮度：本仓亮暗由外观页三态控制），页面/原语层
-  # 按需取 `Miuix*` 组件；主题 token 由 core/theme 同一份 AppColors 派生。
+  # MiuixSystemTheme 跟随系统亮度：本仓亮暗由外观页三态控制）；主题 token 由
+  # core/theme 同一份 AppColors 派生。
+  # 2026-11-01 起为移动端组件主体：按钮/图标钮/卡片/勾选/开关/进度/Spinner/
+  # Snackbar（Toast 队列）/FAB/取色器/下拉刷新/玻璃导航栏/玻璃页头/玻璃浮层；
+  # 保留 Material 的部分（底部弹层容器/文本输入域/列表骨架）见 docs/16。
   # 传递依赖：material_color_utilities 0.13.0 + dynamic_color 1.9.0（Android 壁纸取色）。
   flutter_miuix: 1.3.0
 

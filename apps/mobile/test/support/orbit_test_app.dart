@@ -3,24 +3,20 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/core/routing/router_keys.dart';
 import 'package:orbit/core/theme/app_theme.dart';
 import 'package:orbit/core/theme/miuix_theme.dart';
-import 'package:orbit/core/theme/shadcn_theme.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_toast.dart';
-import 'package:shadcn_flutter/shadcn_flutter.dart' as sh;
 
-/// 测试用应用壳：与 `lib/app.dart` 的根装配同构（MaterialApp + ShadcnLayer
-/// + DrawerOverlay + MiuixTheme，见 [_orbitRootLayers]）。
+/// 测试用应用壳：与 `lib/app.dart` 的根装配同构（MaterialApp + MiuixTheme
+/// + OrbitToastHost，见 [_orbitRootLayers]）。
 ///
-/// **为什么测试也必须包这几层**：设计系统 v3 的轻提示（`WaitToast` →
-/// `showToast`）依赖 ShadcnLayer 注入的 `ToastLayer`；shadcn 的
-/// `Tooltip`/`Sheet`/`Drawer` 系浮层依赖 `OverlayManagerLayer`（+ 根
-/// `DrawerOverlay` 作落点，见 `orbit_sheets.dart` 的承载口径说明）；
-/// `MiuixCard` / `MiuixInfiniteProgressIndicator` / OS4 玻璃组件靠
+/// **为什么测试也必须包这几层**：设计系统 v3 的轻提示（`WaitToast`）依赖
+/// 根部挂载的 [OrbitToastHost]（全局 miuix Snackbar 队列）；`MiuixCard` /
+/// `MiuixButton` / `MiuixInfiniteProgressIndicator` / OS4 玻璃组件靠
 /// `MiuixTheme.of(context)` 取色（未命中回退浅色默认值，会与 token 漂移）。
 /// 缺了任何一层都不是"样式不同"而是直接断言失败或配色错位。测试壳与生产壳
 /// 同构，才能让同名断言继续有效。
 ///
-/// 同时提供 [navigatorKey]（沿用 `rootNavigatorKey`）：WaitToast 经全局 Navigator
-/// 取 context，测试与生产必须指向同一个 key。
+/// 同时提供 [navigatorKey]（沿用 `rootNavigatorKey`）：服务层仍经全局
+/// Navigator 取 context，测试与生产必须指向同一个 key。
 Widget orbitTestApp({
   required Widget home,
   Brightness brightness = Brightness.light,
@@ -38,7 +34,7 @@ Widget orbitTestApp({
       ),
     );
 
-/// 路由形态的测试壳（GoRouter 用）：与 [orbitTestApp] 同构，同样包浮层两层。
+/// 路由形态的测试壳（GoRouter 用）：与 [orbitTestApp] 同构。
 Widget orbitTestAppRouter({
   required RouterConfig<Object> routerConfig,
   Brightness brightness = Brightness.light,
@@ -53,34 +49,39 @@ Widget orbitTestAppRouter({
       ),
     );
 
-/// 浮层根装配（`lib/app.dart` 同款）：ShadcnLayer（主题 + ToastLayer +
-/// OverlayManagerLayer）→ DrawerOverlay（`SheetConfiguration` 弹层落点）
-/// → MiuixTheme（HyperOS 组件取色）。
+/// 浮层根装配（`lib/app.dart` 同款）：MiuixTheme（HyperOS 组件取色）
+/// → 路由内容 + 全局 toast 宿主（浮层，原 ShadcnLayer 的层级语义）。
+///
+/// 2026-11-01 起移动端组件面全量 Miuix 化，shadcn_flutter 退为图标字体源，
+/// ShadcnLayer / DrawerOverlay / destructive 组件主题整层移除（同批生产壳）。
 Widget _orbitRootLayers({
   required Widget child,
   required Brightness brightness,
 }) =>
-    sh.ShadcnLayer(
-      theme: buildShadcnTheme(brightness: brightness),
-      scaling: sh.AdaptiveScaling.desktop,
-      // destructive 按钮的实心填充口径（与 lib/app.dart 同装配，详见
-      // shadcn_theme.buildDestructiveButtonTheme）
-      child: buildDestructiveButtonTheme(
-        child: sh.DrawerOverlay(
-          child: OrbitMiuixTheme(brightness: brightness, child: child),
-        ),
+    OrbitMiuixTheme(
+      brightness: brightness,
+      child: Stack(
+        children: [
+          child,
+          const Positioned.fill(child: OrbitToastHost()),
+        ],
       ),
     );
 
-/// 收尾：推掉 shadcn toast 的停留计时器，并收敛残留动画。
+/// 收尾：推掉 toast 的停留计时器与残留动画，并清空全局队列。
 ///
 /// **为什么必须显式收尾**：测试壳与生产壳同构后（`navigatorKey` 指向
-/// `rootNavigatorKey`），页面里的 `WaitToast` 会**真的插入浮层**；而 shadcn
-/// `showToast` 把停留时长落成库内 `Timer` 且在条目 dispose 时不取消——用例若在
-/// 它触发前结束，就会命中 flutter_test 的「A Timer is still pending」断言。
+/// `rootNavigatorKey`），页面里的 `WaitToast` 会**真的插入浮层**；有限停留
+/// 档在宿主条目内落成 `Timer`，用例若在它触发前结束，就会命中 flutter_test
+/// 的「A Timer is still pending」断言。
 ///
-/// [holdForever] = true 用于「不自动收」的 toast（`WaitToast.holdForever` 档），
-/// 其余（纯提示 / 撤销类）推 [WaitToast.undoDwell] 即可覆盖最长有限档。
+/// [holdForever] = true 用于「不自动收」的 toast（旧 `WaitToast.holdForever`
+/// 档，新承载用 indefinite 表达、无 Timer，推它无害），其余（纯提示 /
+/// 撤销类）推 [WaitToast.undoDwell] 即可覆盖最长有限档。
+///
+/// 最后的 [WaitToast.debugFlushForTest]：miuix 宿主状态是**静态跨用例存活**
+/// 的，把仍可见的条目全部撤下并让退场动画走完、条目出队，否则上一用例的
+/// toast 文案会浮进下一用例的 find 断言。
 Future<void> drainToastTimers(
   WidgetTester tester, {
   bool holdForever = false,
@@ -89,5 +90,6 @@ Future<void> drainToastTimers(
     holdForever ? WaitToast.holdForever : WaitToast.undoDwell,
   );
   await tester.pump(const Duration(milliseconds: 500));
+  await WaitToast.debugFlushForTest();
   await tester.pumpAndSettle();
 }

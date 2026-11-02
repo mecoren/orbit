@@ -3,8 +3,8 @@
 /// **为什么收口**：底部抽屉此前各写一套「标题 + 内容 + 按钮行」，由此产生两类
 /// 通病——
 /// ① 按钮被放进滚动容器（内容一长，确认钮就滚出可视区，用户得先回滚才能提交）；
-/// ② 标签在 `Expanded` 拉满宽的按钮里贴左（shadcn 按钮内标签盒子与按钮同宽，
-///    默认 `TextAlign.start`），观感"字不在按钮中间"。
+/// ② 标签在 `Expanded` 拉满宽的按钮里贴左（按钮内标签盒子与按钮同宽时，
+///    默认 `TextAlign.start` 会把字形顶到左边距），观感"字不在按钮中间"。
 /// 本文件是两个通病的唯一口径：
 /// - 顶部拖拽手柄（40×4 圆角条，像素与既有各抽屉一致）
 /// - 标题：[title] 走标准文本标题，特殊标题行（可点/带副标题/带动作）走 [header]
@@ -19,11 +19,11 @@
 library;
 
 import 'package:flutter/material.dart';
-import 'package:shadcn_flutter/shadcn_flutter.dart' as sh;
 
 import '../../../core/layout/orbit_breakpoints.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimens.dart';
+import 'orbit_button.dart';
 import 'orbit_divider.dart';
 
 /// 抽屉骨架：[title]/[header] + 可滚 [content] + 固定 [actions] 尾栏
@@ -172,8 +172,8 @@ class _SheetHandle extends StatelessWidget {
 /// - 双按钮：[cancelLabel] + [confirmLabel]，各占一半宽（取消在左、确认在右）
 /// - 单按钮：[cancelLabel] 传 null（主行动独占整行）
 /// - [confirmChild] 覆盖确认钮内容（如 busy 态 spinner）
-/// - 标签居中原因：按钮被 `Expanded` 拉满宽后，shadcn 按钮内标签盒子与按钮同宽，
-///   默认 `TextAlign.start` 会把字形顶到左边距（2026-09-22 统一修复）
+/// - 标签居中原因：按钮被 `Expanded` 拉满宽后，标签盒与按钮同宽时默认
+///   `TextAlign.start` 会把字形顶到左边距（2026-09-22 统一修复）
 class OrbitSheetActions extends StatelessWidget {
   const OrbitSheetActions({
     super.key,
@@ -202,8 +202,10 @@ class OrbitSheetActions extends StatelessWidget {
       child: Row(
         children: [
           if (cancelLabel != null) ...[
+            // 2026-11-01 换承载：sh.Button → OrbitButton（miuix MiuixButton），
+            // 展开语义同旧（Expanded 拉满宽 + 标签居中）
             Expanded(
-              child: sh.Button.outline(
+              child: OrbitButton.outline(
                 onPressed: onCancel,
                 child: Text(cancelLabel!, textAlign: TextAlign.center),
               ),
@@ -211,9 +213,11 @@ class OrbitSheetActions extends StatelessWidget {
             const SizedBox(width: AppDimens.space12),
           ],
           Expanded(
-            child: destructive
-                ? sh.Button.destructive(onPressed: onConfirm, child: label)
-                : sh.Button.primary(onPressed: onConfirm, child: label),
+            child: OrbitButton.primary(
+              onPressed: onConfirm,
+              destructive: destructive,
+              child: label,
+            ),
           ),
         ],
       ),

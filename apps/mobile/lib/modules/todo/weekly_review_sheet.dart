@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:shadcn_flutter/shadcn_flutter.dart' as sh;
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../core/theme/app_shapes.dart';
 import '../../core/theme/icon_map.dart';
 import '../../data/api/dto.dart';
+import '../../shared/widgets/shadcn/orbit_button.dart';
 import '../../shared/widgets/shadcn/orbit_sheets.dart'
     show bottomSheetMotion, bottomSheetTopShape;
 import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
@@ -292,7 +292,7 @@ class _WeeklyReviewSheetState extends State<_WeeklyReviewSheet> {
               Row(
                 children: [
                   Expanded(
-                    child: sh.Button.outline(
+                    child: OrbitButton.outline(
                       onPressed: _busy ? null : () => _rolloverAll(_DuePreset.today),
                       child: const Text('全部顺延到今天',
                           textAlign: TextAlign.center),
@@ -300,7 +300,7 @@ class _WeeklyReviewSheetState extends State<_WeeklyReviewSheet> {
                   ),
                   const SizedBox(width: AppDimens.space8),
                   Expanded(
-                    child: sh.Button.outline(
+                    child: OrbitButton.outline(
                       onPressed: _busy
                           ? null
                           : () => _rolloverAll(_DuePreset.tomorrow),
@@ -312,8 +312,9 @@ class _WeeklyReviewSheetState extends State<_WeeklyReviewSheet> {
               ),
               const SizedBox(height: AppDimens.space8),
             ],
-            sh.Button.primary(
+            OrbitButton.primary(
               onPressed: _busy ? null : _next,
+              expand: true,
               child: Text(
                 isLast ? '完成回顾' : '下一步',
                 textAlign: TextAlign.center,
@@ -357,8 +358,9 @@ class _WeeklyReviewSheetState extends State<_WeeklyReviewSheet> {
   }
 
   Widget _action(String label, VoidCallback onTap) {
-    return sh.Button.ghost(
+    return OrbitButton.text(
       onPressed: _busy ? null : onTap,
+      compact: true,
       child: Text(label),
     );
   }

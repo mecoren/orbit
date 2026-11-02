@@ -5,6 +5,7 @@
 // 把自绘圆角盖住、观感变成「两边有角」的问题。
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter_miuix/miuix.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/core/theme/app_colors.dart';
 import 'package:orbit/core/theme/app_dimens.dart';
@@ -28,18 +29,15 @@ double glyphCenterX(WidgetTester tester, String label) {
       .dx;
 }
 
-/// 取按钮实际绘制的填充色（shadcn 把按钮 decoration 落在 `OverflowDecoratedBox` 上，
-/// 该组件非公开 API，只能按运行时类型名定位后读字段）。
+/// 取按钮实际配置的填充色（2026-11-01 换承载：OrbitButton → miuix
+/// `MiuixButton`，颜色经构造上的 `colors` 配置，不再有 shadcn 的
+/// `OverflowDecoratedBox` decoration 可取）。
 Color buttonFillOf(WidgetTester tester, String label) {
-  final box = find.ancestor(
+  final button = find.ancestor(
     of: find.text(label),
-    matching: find.byWidgetPredicate(
-      (w) => w.runtimeType.toString() == 'OverflowDecoratedBox',
-    ),
+    matching: find.byType(MiuixButton),
   );
-  // ignore: avoid_dynamic_calls
-  final decoration = (tester.widget(box.first) as dynamic).decoration;
-  return (decoration as BoxDecoration).color!;
+  return tester.widget<MiuixButton>(button.first).colors!.color;
 }
 
 void main() {

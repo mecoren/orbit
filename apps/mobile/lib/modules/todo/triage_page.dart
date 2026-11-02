@@ -10,7 +10,6 @@
 // - 结束给「收件箱已清空」正反馈与汇总。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shadcn_flutter/shadcn_flutter.dart' as sh;
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
@@ -432,33 +431,39 @@ class _TriagePageState extends ConsumerState<TriagePage> {
               const SizedBox(height: AppDimens.cardGap),
 
               // 主动作：归入项目（拇指区主按钮）
-              sh.Button.primary(
+              // 2026-11-01：sh.Button → OrbitButton（miuix MiuixButton 承载）
+              OrbitButton.primary(
                 onPressed: _busy ? null : () => _pickProject(task),
+                expand: true,
                 child: const Text('归入项目…', textAlign: TextAlign.center),
               ),
               const SizedBox(height: AppDimens.space8),
 
               // 快捷动作：今天 / 明天 /（有日期才出）清日期 / 优先级
-              // （与周回顾弹层的 sh.Button.outline 同形态）
+              // （与周回顾弹层的 OrbitButton.outline 同形态）
               Wrap(
                 spacing: AppDimens.space8,
                 runSpacing: AppDimens.space8,
                 children: [
-                  sh.Button.outline(
+                  OrbitButton.outline(
                     onPressed: _busy ? null : () => _schedule(task, 0),
+                    compact: true,
                     child: const Text('今天'),
                   ),
-                  sh.Button.outline(
+                  OrbitButton.outline(
                     onPressed: _busy ? null : () => _schedule(task, 1),
+                    compact: true,
                     child: const Text('明天'),
                   ),
                   if (task.dueDate != null)
-                    sh.Button.outline(
+                    OrbitButton.outline(
                       onPressed: _busy ? null : () => _clearDue(task),
+                      compact: true,
                       child: const Text('清日期'),
                     ),
-                  sh.Button.outline(
+                  OrbitButton.outline(
                     onPressed: _busy ? null : () => _pickPriority(task),
+                    compact: true,
                     child: Text(task.priority > 0
                         ? '优先级 · ${priorityLabel(task.priority)}'
                         : '优先级'),

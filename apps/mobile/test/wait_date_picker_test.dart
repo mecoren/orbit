@@ -1,7 +1,7 @@
 // 日期时间面板测试：日视图与日历视图同口径（农历/休班）+ 时间选择区交互
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter_miuix/miuix.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
@@ -116,12 +116,12 @@ void main() {
     // 点小时下拉框 → 弹出滚轮弹层
     await tester.tap(find.byKey(const ValueKey('time_hour_value')));
     await tester.pumpAndSettle();
-    expect(find.byType(CupertinoPicker), findsOneWidget);
+    expect(find.byType(MiuixNumberPicker), findsOneWidget);
 
-    // 滚轮滑动方向随边界自适应：ListWheel 无环绕语义——初始在末项（23 点）
-    // 时上滑会被 maxScrollExtent 钳住，改下滑 -1；否则上滑 +1。
+    // 滚轮滑动方向随边界自适应：无环绕语义——初始在末项（23 点）时上滑
+    // 会被边界钳住，改下滑 -1；否则上滑 +1（每项 44 高，滑一格）。
     final atLast = initialHour == 23;
-    await tester.drag(find.byType(CupertinoPicker),
+    await tester.drag(find.byType(MiuixNumberPicker),
         Offset(0, atLast ? 44 : -44));
     await tester.pumpAndSettle();
 
@@ -140,11 +140,11 @@ void main() {
     // 点分钟下拉框 → 弹出滚轮弹层
     await tester.tap(find.byKey(const ValueKey('time_minute_value')));
     await tester.pumpAndSettle();
-    expect(find.byType(CupertinoPicker), findsOneWidget);
+    expect(find.byType(MiuixNumberPicker), findsOneWidget);
 
     // 边界自适应（同小时用例）：末项 59 分下滑 -1，否则上滑 +1
     final atLast = initialMinute == 59;
-    await tester.drag(find.byType(CupertinoPicker),
+    await tester.drag(find.byType(MiuixNumberPicker),
         Offset(0, atLast ? 44 : -44));
     await tester.pumpAndSettle();
 
