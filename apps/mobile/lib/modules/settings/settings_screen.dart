@@ -19,6 +19,7 @@ import '../../data/api/orbit_bridge.dart'
 import '../../data/providers/biometric_provider.dart';
 import '../../data/providers/todo_widget_provider.dart';
 import '../../data/providers/bridge_provider.dart';
+import '../../shared/widgets/shadcn/orbit_arrow_tile.dart';
 import '../../shared/widgets/shadcn/orbit_bottom_nav.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_password_sheet.dart';
@@ -964,90 +965,43 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ],
                       const SizedBox(height: AppDimens.space12),
                       // 云同步设置入口（未配置/已配置均可进入，移动端可本机完成配置）
-                      InkWell(
-                        borderRadius: AppShapes.medium,
-                        onTap: () => context.push('/settings/sync'),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            vertical: AppDimens.space8,
-                          ),
-                          child: Row(
-                            children: [
-                              Text(
-                                '云同步设置',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                  color: OrbitAccents.themeAccent,
-                                ),
-                              ),
-                              const Spacer(),
-                              Icon(
-                                OrbitIcons.chevronRight,
-                                size: AppDimens.iconSizeMd,
-                                color: colors.secondaryText,
-                              ),
-                            ],
-                          ),
-                        ),
+                      OrbitArrowTile(
+                        title: '云同步设置',
+                        titleColor: OrbitAccents.themeAccent,
+                        onClick: () => context.push('/settings/sync'),
                       ),
                       const SizedBox(height: AppDimens.space4),
                       // 冲突记录入口（03 §八）：待处理数 > 0 时显示角标
-                      InkWell(
-                        borderRadius: AppShapes.medium,
-                        onTap: () async {
+                      OrbitArrowTile(
+                        title: '冲突记录',
+                        titleColor: OrbitAccents.themeAccent,
+                        onClick: () async {
                           await context.push('/settings/conflicts');
                           _refreshConflictPending();
                         },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            vertical: AppDimens.space8,
-                          ),
-                          child: Row(
-                            children: [
-                              Text(
-                                '冲突记录',
+                        trailing: FutureBuilder<int>(
+                          future: _conflictPending,
+                          builder: (context, snap) {
+                            final n = snap.data ?? 0;
+                            if (n <= 0) return const SizedBox.shrink();
+                            return Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppDimens.space6,
+                                vertical: 1,
+                              ),
+                              decoration: BoxDecoration(
+                                color: colors.warning.withValues(alpha: 0.18),
+                                borderRadius: AppShapes.small,
+                              ),
+                              child: Text(
+                                '待处理 $n',
                                 style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                  color: OrbitAccents.themeAccent,
+                                  fontSize: 11,
+                                  color: colors.warning,
                                 ),
                               ),
-                              const SizedBox(width: AppDimens.space8),
-                              FutureBuilder<int>(
-                                future: _conflictPending,
-                                builder: (context, snap) {
-                                  final n = snap.data ?? 0;
-                                  if (n <= 0) return const SizedBox.shrink();
-                                  return Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: AppDimens.space6,
-                                      vertical: 1,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: colors.warning.withValues(
-                                        alpha: 0.18,
-                                      ),
-                                      borderRadius: AppShapes.small,
-                                    ),
-                                    child: Text(
-                                      '待处理 $n',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: colors.warning,
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                              const Spacer(),
-                              Icon(
-                                OrbitIcons.chevronRight,
-                                size: AppDimens.iconSizeMd,
-                                color: colors.secondaryText,
-                              ),
-                            ],
-                          ),
+                            );
+                          },
                         ),
                       ),
                       const SizedBox(height: AppDimens.space4),
@@ -1108,70 +1062,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ),
                       ),
                       const SizedBox(height: AppDimens.space4),
-                      InkWell(
-                        borderRadius: AppShapes.medium,
-                        onTap: _pickTrashRetention,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            vertical: AppDimens.space8,
-                          ),
-                          child: Row(
-                            children: [
-                              Text(
-                                '保留时间',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: colors.bodyText,
-                                ),
-                              ),
-                              const Spacer(),
-                              Text(
-                                _trashRetentionLabel(
-                                  ref
-                                      .watch(trashMetaProvider)
-                                      .value
-                                      ?.retentionDays,
-                                ),
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: OrbitAccents.themeAccent,
-                                ),
-                              ),
-                              Icon(
-                                OrbitIcons.chevronRight,
-                                size: AppDimens.iconSizeMd,
-                                color: colors.secondaryText,
-                              ),
-                            ],
-                          ),
+                      OrbitArrowTile(
+                        title: '保留时间',
+                        value: _trashRetentionLabel(
+                          ref.watch(trashMetaProvider).value?.retentionDays,
                         ),
+                        valueColor: OrbitAccents.themeAccent,
+                        onClick: _pickTrashRetention,
                       ),
                       const SizedBox(height: AppDimens.space4),
-                      InkWell(
-                        borderRadius: AppShapes.medium,
-                        onTap: () => context.go('/todo/trash'),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            vertical: AppDimens.space8,
-                          ),
-                          child: Row(
-                            children: [
-                              Text(
-                                '查看回收站',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: colors.bodyText,
-                                ),
-                              ),
-                              const Spacer(),
-                              Icon(
-                                OrbitIcons.chevronRight,
-                                size: AppDimens.iconSizeMd,
-                                color: colors.secondaryText,
-                              ),
-                            ],
-                          ),
-                        ),
+                      OrbitArrowTile(
+                        title: '查看回收站',
+                        onClick: () => context.go('/todo/trash'),
                       ),
                       const SizedBox(height: AppDimens.space4),
                       InkWell(
@@ -1347,31 +1249,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ),
                       ),
                       const SizedBox(height: AppDimens.space4),
-                      InkWell(
-                        borderRadius: AppShapes.medium,
-                        onTap: () => context.push('/settings/backup'),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            vertical: AppDimens.space8,
-                          ),
-                          child: Row(
-                            children: [
-                              Text(
-                                '备份与恢复',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: colors.bodyText,
-                                ),
-                              ),
-                              const Spacer(),
-                              Icon(
-                                OrbitIcons.chevronRight,
-                                size: AppDimens.iconSizeMd,
-                                color: colors.secondaryText,
-                              ),
-                            ],
-                          ),
-                        ),
+                      OrbitArrowTile(
+                        title: '备份与恢复',
+                        onClick: () => context.push('/settings/backup'),
                       ),
                     ],
                   ),
@@ -1689,38 +1569,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 // 三、关于卡
                 SectionCard(
                   title: '关于',
-                  child: InkWell(
-                    borderRadius: AppShapes.medium,
-                    onTap: () => context.push('/about'),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: AppDimens.space4,
-                      ),
-                      child: Row(
-                        children: [
-                          Text(
-                            '版本',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: colors.bodyText,
-                            ),
-                          ),
-                          const Spacer(),
-                          Text(
-                            _appVersion,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: OrbitAccents.themeAccent,
-                            ),
-                          ),
-                          Icon(
-                            OrbitIcons.chevronRight,
-                            size: AppDimens.iconSizeMd,
-                            color: colors.secondaryText,
-                          ),
-                        ],
-                      ),
-                    ),
+                  child: OrbitArrowTile(
+                    title: '版本',
+                    value: _appVersion,
+                    valueColor: OrbitAccents.themeAccent,
+                    onClick: () => context.push('/about'),
                   ),
                 ),
               ],
@@ -1842,40 +1695,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ],
         ),
         const SizedBox(height: AppDimens.space4),
-        InkWell(
-          borderRadius: AppShapes.medium,
-          onTap: prefs.enabled ? _pickDigestTime : null,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: AppDimens.touchTarget),
-            child: Row(
-              children: [
-                Text(
-                  '提醒时刻',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: prefs.enabled
-                        ? colors.bodyText
-                        : colors.bodyText.withValues(alpha: 0.4),
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  prefs.label,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: prefs.enabled
-                        ? OrbitAccents.themeAccent
-                        : colors.secondaryText,
-                  ),
-                ),
-                Icon(
-                  OrbitIcons.chevronRight,
-                  size: AppDimens.iconSizeMd,
-                  color: colors.secondaryText,
-                ),
-              ],
-            ),
-          ),
+        OrbitArrowTile(
+          title: '提醒时刻',
+          value: prefs.label,
+          valueColor: prefs.enabled
+              ? OrbitAccents.themeAccent
+              : colors.secondaryText,
+          onClick: prefs.enabled ? _pickDigestTime : null,
         ),
         const SizedBox(height: AppDimens.space4),
         Text(
@@ -1897,29 +1723,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  /// 通用导航行（卡片内的「文案 + 右箭头」入口，行高满足触控热区）
+  /// 通用导航行（卡片内的跳转入口，统一走 [OrbitArrowTile] 原语）
   Widget _navRow(
     AppColorSet colors, {
     required String label,
     required VoidCallback onTap,
-  }) => InkWell(
-    borderRadius: AppShapes.medium,
-    onTap: onTap,
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: AppDimens.touchTarget),
-      child: Row(
-        children: [
-          Text(label, style: TextStyle(fontSize: 14, color: colors.bodyText)),
-          const Spacer(),
-          Icon(
-            OrbitIcons.chevronRight,
-            size: AppDimens.iconSizeMd,
-            color: colors.secondaryText,
-          ),
-        ],
-      ),
-    ),
-  );
+  }) => OrbitArrowTile(title: label, onClick: onTap);
 
   /// 安全卡内容：库加密态（明文/加密）+ 主密码操作 + 指纹解锁开关
   ///
@@ -1965,84 +1774,33 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ),
         const SizedBox(height: AppDimens.space8),
         if (encrypted == true)
-          InkWell(
-            borderRadius: AppShapes.medium,
-            onTap: _secBusy ? null : _changeMasterPassword,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: AppDimens.space8),
-              child: Row(
-                children: [
-                  Text(
-                    '修改主密码',
-                    style: TextStyle(fontSize: 14, color: colors.bodyText),
-                  ),
-                  const Spacer(),
-                  Icon(
-                    OrbitIcons.chevronRight,
-                    size: AppDimens.iconSizeMd,
-                    color: colors.secondaryText,
-                  ),
-                ],
-              ),
-            ),
+          OrbitArrowTile(
+            title: '修改主密码',
+            enabled: !_secBusy,
+            onClick: _changeMasterPassword,
           ),
         // 清除主密码：加密库下单独清除会打不开库，入口先确认再路由
         // 到「关闭加密」完成库迁移（db_migrate_to_plaintext + clear +
         // 重开），与桌面关闭加密口径一致
         if (encrypted == true)
-          InkWell(
-            borderRadius: AppShapes.medium,
-            onTap: _secBusy ? null : _clearMasterPassword,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: AppDimens.space8),
-              child: Row(
-                children: [
-                  Text(
-                    '清除主密码…',
-                    style: TextStyle(fontSize: 14, color: colors.destructive),
-                  ),
-                  const Spacer(),
-                  Icon(
-                    OrbitIcons.chevronRight,
-                    size: AppDimens.iconSizeMd,
-                    color: colors.secondaryText,
-                  ),
-                ],
-              ),
-            ),
+          OrbitArrowTile(
+            title: '清除主密码…',
+            titleColor: colors.destructive,
+            enabled: !_secBusy,
+            onClick: _clearMasterPassword,
           ),
         if (encrypted != null)
-          InkWell(
-            borderRadius: AppShapes.medium,
-            onTap: _secBusy
-                ? null
-                : (encrypted ? _disableEncryption : _enableEncryption),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: AppDimens.space8),
-              child: Row(
-                children: [
-                  Text(
-                    encrypted ? '关闭加密（转为明文库）' : '开启加密（设置主密码）',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: encrypted ? colors.destructive : colors.bodyText,
-                    ),
-                  ),
-                  const Spacer(),
-                  if (_secBusy)
-                    OrbitSpinner(
-                      size: AppDimens.iconSizeSm,
-                      color: OrbitAccents.themeAccent,
-                    )
-                  else
-                    Icon(
-                      OrbitIcons.chevronRight,
-                      size: AppDimens.iconSizeMd,
-                      color: colors.secondaryText,
-                    ),
-                ],
-              ),
-            ),
+          OrbitArrowTile(
+            title: encrypted ? '关闭加密（转为明文库）' : '开启加密（设置主密码）',
+            titleColor: encrypted ? colors.destructive : null,
+            enabled: !_secBusy,
+            onClick: encrypted ? _disableEncryption : _enableEncryption,
+            trailing: _secBusy
+                ? OrbitSpinner(
+                    size: AppDimens.iconSizeSm,
+                    color: OrbitAccents.themeAccent,
+                  )
+                : null,
           ),
         const OrbitDivider(height: AppDimens.space24),
         if (_bioAvailable == true) ...[
