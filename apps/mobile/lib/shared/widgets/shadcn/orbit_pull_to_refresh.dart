@@ -14,16 +14,19 @@ import '../../../core/theme/orbit_accents.dart';
 /// 1. 下拉未达阈值：按进度扫开一段细弧（弧闭合即到达可释放阈值）；
 /// 2. 越过阈值（`reached`）：保持 miuix 同口径的「拉长圆」——上圆 + 下圆 + 两段
 ///    竖线，长度 = 越过触发阈值后的下拉量，越拉越长，文案「释放刷新」；
-/// 3. 松手（`refreshing`）：弹簧把下拉量吸附回阈值，拉长圆**收缩成正常圆**，
-///    环内一枚实心点开始匀速绕行；刷新成功后环上浮淡出。
+/// 3. 松手（`refreshing`）：刷新任务立刻开始，同时用 `normal`(220ms) 固定时长
+///    把下拉量过渡回阈值——拉长圆**收缩成正常圆**；收圆完成即进入 refreshing，
+///    环内实心点立刻匀速绕行（不经过弹簧 ~1.1s 的收敛等待），圆 + 点至少展示
+///    `slow`(300ms)；刷新成功后环上浮淡出。
 ///
 /// 几何与 `OrbitSpinner` 同源（描边 = 边长 8%、点半径 = 边长 10%、轨道内缩
 /// 2 倍点半径），所以「收圆 + 点转」与全局加载指示器是同一语言。
 ///
 /// **为什么不再直用 `MiuixPullToRefresh`**：库内 painter 只在 refreshing 状态
-/// 画绕行点，阈值态画拉伸胶囊但**松手后直接跳成整圆 + 点**，且绘制与布局全部
-/// 锁死，无法控制收圆过渡。本组件保留它的手势与弹簧口径（阻尼多项式、临界阻尼
-/// 弹簧、0.25 触发比例、下拉带整体下移避让），绘制换成本文件口径。
+/// 画绕行点，阈值态画拉伸胶囊但松手后要等弹簧吸附（~1.1s）才切刷新态，短刷新
+/// 会变成「收圆后只闪一下点」；绘制与布局全部锁死，无法控制收圆过渡。本组件保留
+/// 它的手势与弹簧口径（阻尼多项式、临界阻尼弹簧、0.25 触发比例、下拉带整体
+/// 下移避让），只把绘制与收圆时序换成本文件口径。
 ///
 /// **调用口径不变**：`onRefresh` 返回 Future，期间指示器自持绕行；调用点只需
 /// 传 `child`（含纵向可滚动组件）。`color` 为 null 时取 [OrbitAccents.themeAccent]。
@@ -97,8 +100,15 @@ class _OrbitPullToRefreshState extends State<OrbitPullToRefresh>
   static const double _springResponseSeconds = 0.4;
 
   late final AnimationController _spring;
+
+  /// 松手收圆（拉长圆 → 正常圆）的固定时长过渡：220ms 内收完，
+  /// 保证「收成圆」的那一刻绕行点已经开始转（弹簧收敛要 ~1.1s，太慢）
+  late final AnimationController _settle;
+
   late final AnimationController _spin;
   late final AnimationController _complete;
+
+  double _settleFrom = 0;
 
   double _containerHeight = 0;
   double _maxDragDistance = 0;
@@ -129,7 +139,9 @@ class _OrbitPullToRefreshState extends State<OrbitPullToRefresh>
     super.initState();
     _spring = AnimationController.unbounded(vsync: this)
       ..addListener(_driveSpring);
-    // 绕行周期取全局加载动效 token；阈值态就开始转，刷新区间不重启，角度连续
+    _settle = AnimationController(vsync: this, duration: AppMotion.normal)
+      ..addListener(_driveSettle);
+    // 绕行周期取全局加载动效 token；阈值态不转，进入 refreshing 后连续绕行
     _spin = AnimationController(vsync: this, duration: AppMotion.spinnerOrbit);
     _complete = AnimationController(vsync: this, duration: AppMotion.normal)
       ..addListener(_driveComplete);
@@ -138,6 +150,7 @@ class _OrbitPullToRefreshState extends State<OrbitPullToRefresh>
   @override
   void dispose() {
     _spring.dispose();
+    _settle.dispose();
     _spin.dispose();
     _complete.dispose();
     super.dispose();
@@ -255,6 +268,27 @@ class _OrbitPullToRefreshState extends State<OrbitPullToRefresh>
     _spring.stop(canceled: true);
   }
 
+  /// 松手收圆：把当前下拉量按固定时长（[AppMotion.normal]）过渡回阈值，
+  /// 拉长圆随之收缩成正常圆；比弹簧（临界阻尼收尾 ~1.1s）快一个数量级，
+  /// 用户不会在「已经是圆但还没开始转」的状态上停留
+  void _driveSettle() {
+    final t = AppMotion.standard.transform(_settle.value);
+    _setOffset(_settleFrom + (_revealThreshold - _settleFrom) * t);
+  }
+
+  Future<bool> _settleToThreshold() async {
+    _settleFrom = _dragOffset;
+    _settle.value = 0;
+    try {
+      await _settle.forward().orCancel;
+    } on TickerCanceled {
+      return false;
+    }
+    if (!mounted) return false;
+    _setOffset(_revealThreshold);
+    return true;
+  }
+
   // ── 刷新流程 ──
 
   Future<void> _handleRelease() async {
@@ -284,18 +318,22 @@ class _OrbitPullToRefreshState extends State<OrbitPullToRefresh>
   Future<void> _refresh() async {
     if (_refreshing) return;
     _refreshing = true;
-    final settled = await _animateSpringTo(_revealThreshold);
-    if (!mounted) return;
-    if (!settled || _touching) {
-      // 吸附途中被新的下拉取消（或手指重新按下）：释放内部锁，
-      // 否则后续松手都会被「已在刷新」挡掉，指示器卡在展开态。
-      _refreshing = false;
-      return;
-    }
-    _updatePhase(_PullPhase.refreshing);
-    setState(() {});
     try {
-      await widget.onRefresh();
+      // 刷新任务与收圆并行：松手后立刻开始拉刷新数据，同时用 220ms 收圆；
+      // 收圆完成即进入 refreshing——绕行点「变成圆的那一刻」就在转，
+      // 不会出现「已是圆但点不动」的空窗。
+      final refreshFuture = widget.onRefresh();
+      final settled = await _settleToThreshold();
+      if (!mounted) return;
+      if (settled) {
+        _updatePhase(_PullPhase.refreshing);
+      }
+      setState(() {});
+      // 圆 + 绕行点至少展示 slow(300ms)：本地重读秒回时不至于只闪一帧
+      await Future.wait<void>([
+        refreshFuture,
+        Future<void>.delayed(AppMotion.slow),
+      ]);
     } finally {
       if (mounted) await _finishRefresh();
       _refreshing = false;
