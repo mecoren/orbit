@@ -1233,12 +1233,15 @@ void main() {
     );
     expect(slots, findsNWidgets(4));
 
-    // 点第一枚圆点（position 升序 = 8101 的任务）→ 改期抽屉
+    // 点第一枚圆点（position 升序 = 8101 的任务）→ 改期浮层
     await tester.tap(slots.first);
     await tester.pumpAndSettle();
-    expect(find.text('改期到'), findsOneWidget);
+    // 2026-11-03 起单选取浮层口径：弹层不画标题行，选项限定在弹层内查
+    final popup = selectPopup();
+    expect(find.descendant(of: popup, matching: find.text('明天')),
+        findsOneWidget);
 
-    await tester.tap(find.text('明天'));
+    await tester.tap(find.descendant(of: popup, matching: find.text('明天')));
     await tester.pumpAndSettle();
     await settle(tester);
 

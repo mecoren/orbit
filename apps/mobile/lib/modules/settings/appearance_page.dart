@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
-import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../services/appearance.dart';
+import '../../shared/widgets/shadcn/orbit_arrow_tile.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
@@ -40,7 +40,7 @@ class _AppearancePageState extends State<AppearancePage> {
     await showSelectBottomSheet<String>(
       context,
       title: '主题模式',
-      current: Appearance.themeLabel(),
+      current: Appearance.themeValue(),
       items: const [
         SelectItem(value: 'system', label: '跟随系统'),
         SelectItem(value: 'light', label: '浅色'),
@@ -60,7 +60,7 @@ class _AppearancePageState extends State<AppearancePage> {
     await showSelectBottomSheet<String>(
       context,
       title: '字号',
-      current: Appearance.fontSizeLabel(),
+      current: Appearance.fontSizeValue(),
       items: const [
         SelectItem(value: 'small', label: '小'),
         SelectItem(value: 'standard', label: '标准'),
@@ -80,7 +80,7 @@ class _AppearancePageState extends State<AppearancePage> {
     await showSelectBottomSheet<String>(
       context,
       title: '字重',
-      current: Appearance.fontWeightLabel(),
+      current: Appearance.fontWeightValue(),
       items: const [
         SelectItem(value: 'regular', label: '常规'),
         SelectItem(value: 'medium', label: '适中'),
@@ -135,30 +135,33 @@ class _AppearancePageState extends State<AppearancePage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _valueRow(
-                      colors,
-                      label: '主题模式',
+                    // 四行统一走 miuix `MiuixArrowPreference`（HyperOS 标准
+                    // 值行：左标题 / 右强调色值 / 右箭头），与设置页其余
+                    // 值行同构（2026-11-03 收口，此前是手搓 14px 行）
+                    OrbitArrowTile(
+                      title: '主题模式',
                       value: Appearance.themeLabel(),
-                      onTap: _pickTheme,
+                      valueColor: OrbitAccents.themeAccent,
+                      onClick: _pickTheme,
                     ),
-                    _valueRow(
-                      colors,
-                      label: '字号',
+                    OrbitArrowTile(
+                      title: '字号',
                       value: Appearance.fontSizeLabel(),
-                      onTap: _pickFontSize,
+                      valueColor: OrbitAccents.themeAccent,
+                      onClick: _pickFontSize,
                     ),
-                    _valueRow(
-                      colors,
-                      label: '字重',
+                    OrbitArrowTile(
+                      title: '字重',
                       value: Appearance.fontWeightLabel(),
-                      onTap: _pickFontWeight,
+                      valueColor: OrbitAccents.themeAccent,
+                      onClick: _pickFontWeight,
                     ),
                     // #107：强调色（桌面早已有 10 色板 + 自定义，移动此前只能用默认蓝）
-                    _valueRow(
-                      colors,
-                      label: '强调色',
+                    OrbitArrowTile(
+                      title: '强调色',
                       value: colorToHex(OrbitAccents.themeAccent),
-                      onTap: _pickAccent,
+                      valueColor: OrbitAccents.themeAccent,
+                      onClick: _pickAccent,
                     ),
                   ],
                 ),
@@ -181,35 +184,6 @@ class _AppearancePageState extends State<AppearancePage> {
     );
   }
 
-  /// 值行：左标签 + 右值（强调色）+ 右箭头，点行弹选择抽屉
-  /// （形制与设置页「保留时间」行一致，热区同 `touchTarget`）
-  Widget _valueRow(
-    AppColorSet colors, {
-    required String label,
-    required String value,
-    required VoidCallback onTap,
-  }) => InkWell(
-    borderRadius: AppShapes.medium,
-    onTap: onTap,
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: AppDimens.touchTarget),
-      child: Row(
-        children: [
-          Text(label, style: TextStyle(fontSize: 14, color: colors.bodyText)),
-          const Spacer(),
-          Text(
-            value,
-            style: TextStyle(fontSize: 14, color: OrbitAccents.themeAccent),
-          ),
-          Icon(
-            OrbitIcons.chevronRight,
-            size: AppDimens.iconSizeMd,
-            color: colors.secondaryText,
-          ),
-        ],
-      ),
-    ),
-  );
 }
 
 /// 强调色抽屉（#107）：10 色预设 + 自定义十六进制

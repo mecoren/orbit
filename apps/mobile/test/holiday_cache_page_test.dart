@@ -165,13 +165,14 @@ void main() {
     await _settle(tester);
 
     await tester.tap(find.text('按年份范围获取'));
-    await _pumpUntil(tester, find.text('起始年份'));
-    expect(find.text('起始年份'), findsOneWidget);
+    // 2026-11-03 起单选取浮层口径：不画标题行，等浮层本身出现
+    await _pumpUntil(tester, selectPopup());
+    expect(selectPopup(), findsOneWidget);
 
-    // 抽屉列表 2013..明年 升序，首两项必在视口内（无需滚动）
+    // 浮层列表 2013..明年 升序，首两项必在视口内（无需滚动）
     await tester.tap(find.text('2013 年'));
-    await _pumpUntil(tester, find.text('结束年份'));
-    expect(find.text('结束年份'), findsOneWidget);
+    await _pumpUntil(tester, selectPopup());
+    expect(selectPopup(), findsOneWidget);
 
     // 调大 mock 延迟让进度弹层的存在窗口可观察（默认 120ms 会被
     // pumpAndSettle 的内部帧整段吃掉，弹层开合快到任何帧间断言都赶不上）
@@ -200,9 +201,9 @@ void main() {
     bridge.store.holidayFailedYears.add(2014);
 
     await tester.tap(find.text('按年份范围获取'));
-    await _pumpUntil(tester, find.text('起始年份'));
+    await _pumpUntil(tester, selectPopup());
     await tester.tap(find.text('2013 年'));
-    await _pumpUntil(tester, find.text('结束年份'));
+    await _pumpUntil(tester, selectPopup());
     bridge.latency = const Duration(milliseconds: 300);
     await tester.tap(find.text('2014 年'));
     await _pumpUntil(tester, find.text('正在补写节假日'));

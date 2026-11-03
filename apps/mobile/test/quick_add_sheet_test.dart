@@ -299,10 +299,10 @@ void main() {
 
       await tester.tap(find.byTooltip('日期'));
       await tester.pumpAndSettle();
-      // 顶层抽屉（快捷日期单）内的行：背景列表页另有一处「明天」文本，
-      // 故点选限定在最后（最顶）一个 BottomSheet 内
+      // 快捷日期浮层内的行：背景列表页另有一处「明天」文本，
+      // 故点选限定在 miuix 选择浮层内
       Finder sheetRow(String label) => find.descendant(
-            of: find.byType(BottomSheet).last,
+            of: selectPopup(),
             matching: find.text(label),
           );
       expect(sheetRow('今天'), findsOneWidget);
@@ -336,23 +336,17 @@ void main() {
       await tester.tap(find.byTooltip('日期'));
       await tester.pumpAndSettle();
       Finder sheetRow(String label) => find.descendant(
-            of: find.byType(BottomSheet).last,
+            of: selectPopup(),
             matching: find.text(label),
           );
       await tester.tap(sheetRow('下周'));
       await tester.pumpAndSettle();
 
-      // 重开抽屉：所落值恰为「下周一 00:00」才与「下周」档相等（回勾选态）；
+      // 重开浮层：所落值恰为「下周一 00:00」才与「下周」档相等（回勾选态）；
       // 旧口径 +7 天周内错位会落空（无任何勾选）
       await tester.tap(find.byTooltip(RegExp('^截止：')));
       await tester.pumpAndSettle();
-      expect(
-        find.descendant(
-          of: find.byType(BottomSheet).last,
-          matching: find.byIcon(OrbitIcons.check),
-        ),
-        findsOneWidget,
-      );
+      expect(selectedPopupLabels(tester), ['下周']);
     });
 
     testWidgets('更多菜单：未启用三档 + 固定「设置」入口', (tester) async {

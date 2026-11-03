@@ -24,8 +24,9 @@ const double orbitPanelWidthFactor = 0.62;
 /// 面板条目（[showOrbitDropdownPanel] 的数据项）
 class OrbitPanelItem {
   const OrbitPanelItem({
-    required this.icon,
+    this.icon,
     required this.label,
+    this.leading,
     this.iconColor,
     this.onTap,
     this.children = const <OrbitPanelItem>[],
@@ -35,8 +36,16 @@ class OrbitPanelItem {
   });
 
   /// 行首图标（子项不画图标——图标列改承载选中打勾）
-  final IconData icon;
+  ///
+  /// 可空：纯文字条目（选择浮层里主题/字号这类没有语义图标的档位）。
+  final IconData? icon;
   final String label;
+
+  /// 自定义行首（12px 色点等），优先于 [icon]
+  ///
+  /// 项目/优先级选择用「颜色即语义」的色点，[icon] 的 IconData 表达不了；
+  /// 尺寸由行内 22×22 图标列承载，内容自行居中。
+  final Widget? leading;
 
   /// 行首图标着色（语义色图标，如快捷视图八键；null 跟随文案层级）。
   /// 与 [color] 分开：只染图标、不动文案（快捷视图选中档文案仍走主题色）
@@ -300,11 +309,12 @@ Future<T?> showOrbitFloatCard<T>(
 /// **不执行该条目**——「此刻只在挑子项」这一状态靠颜色一眼可辨，也不会误触到
 /// 别的动作（点空白/再点该项本身同样是收起）。
 ///
-/// **与底部抽屉的分工**（2026-09-23 修订，见 AGENTS.md）：从一组值里挑一个的
-/// 纯选择类交互仍走底部抽屉（`showSelectBottomSheet` 等）；**页头的「当前列表
-/// 操作」类入口**收敛到本面板——它锚在触发钮附近、不遮住列表，且「就地展开」
-/// 的层级感是抽屉给不了的（竞品同款版式）。快加面板的档位快捷项（优先级 /
-/// 项目单选、标签多选卡）同样锚在触发钮上方弹出，与页头面板同源同形。
+/// **与选择浮层的分工**（2026-11-03 修订，见 AGENTS.md）：从一组值里挑一个的
+/// 纯选择交互改走 `showOrbitSelectPopup`（OS4 玻璃卡 + 选中强调色/对勾，
+/// 就近弹出）；**页头的「当前列表操作」类入口**（含开关、就地展开子项）仍收敛
+/// 到本面板——它锚在触发钮附近、不遮住列表，且「就地展开」的层级感是单项选择
+/// 浮层给不了的（竞品同款版式）。快加面板的档位快捷项（优先级 / 项目单选、
+/// 标签多选卡）同样锚在触发钮上方弹出，与页头面板同源同形。
 Future<void> showOrbitDropdownPanel(
   BuildContext context, {
   required List<List<OrbitPanelItem>> groups,
@@ -523,14 +533,25 @@ class OrbitDropdownPanelViewState extends State<OrbitDropdownPanelView> {
           padding: const EdgeInsets.symmetric(horizontal: AppDimens.space12),
           child: Row(
             children: [
-              Icon(
-                item.icon,
-                size: AppDimens.iconSizeMd,
-                color: dimmed
-                    ? colors.deactivatedText
-                    : (item.iconColor ?? item.color ?? colors.iconText),
-              ),
-              const SizedBox(width: AppDimens.space12),
+              // 行首：自定义 leading（色点）> 语义图标 > 无（纯文字条目，
+              // 文案直接贴左边距，选择浮层里主题/字号这类档位即此形态）
+              if (item.leading != null) ...[
+                SizedBox(
+                  width: AppDimens.iconSizeMd,
+                  height: AppDimens.iconSizeMd,
+                  child: Center(child: item.leading!),
+                ),
+                const SizedBox(width: AppDimens.space12),
+              ] else if (item.icon != null) ...[
+                Icon(
+                  item.icon,
+                  size: AppDimens.iconSizeMd,
+                  color: dimmed
+                      ? colors.deactivatedText
+                      : (item.iconColor ?? item.color ?? colors.iconText),
+                ),
+                const SizedBox(width: AppDimens.space12),
+              ],
               Expanded(
                 child: Text(
                   item.label,

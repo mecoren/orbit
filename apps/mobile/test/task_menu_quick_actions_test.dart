@@ -12,7 +12,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:orbit/core/theme/icon_map.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/todo/logic/task_logic.dart';
@@ -62,14 +61,18 @@ void main() {
     await tester.tap(find.text('日期'));
     await tester.pumpAndSettle();
 
-    expect(find.text('设置截止时间'), findsOneWidget);
-    // 恒在快捷档（「今天晚些时候」有 22:00 截断，由纯函数用例把关）
-    expect(find.text('一小时后'), findsOneWidget);
-    expect(find.text('下周'), findsOneWidget);
-    expect(find.text('选择日期和时间'), findsOneWidget);
-    // 种子任务已有截止 → 清除截止在列；「明天」行尾提示为「周X, 09:00」
-    expect(find.text('清除截止'), findsOneWidget);
-    expect(find.textContaining(', 09:00'), findsNWidgets(2));
+    // 2026-11-03 起浮层不画标题行；恒在选项限定在弹层内查
+    // （「今天晚些时候」有 22:00 截断，由纯函数用例把关）
+    final popup = selectPopup();
+    for (final label in ['一小时后', '下周', '选择日期和时间', '清除截止']) {
+      expect(find.descendant(of: popup, matching: find.text(label)),
+          findsOneWidget);
+    }
+    // 种子任务已有截止 → 清除截止在列；「明天」等档副标题为「周X, 09:00」
+    expect(
+      find.descendant(of: popup, matching: find.textContaining(', 09:00')),
+      findsNWidgets(2),
+    );
   });
 
   testWidgets('日期快捷档「明天」：次日 09:00 绝对时刻落库（非保时刻）',
@@ -113,10 +116,11 @@ void main() {
     await tester.tap(find.text('优先级'));
     await tester.pumpAndSettle();
 
-    expect(find.text('设置优先级'), findsOneWidget);
+    // 2026-11-03 起单选取浮层口径：不画标题行，选项限定在弹层内查
+    final popup = selectPopup();
     // 种子库有同名标签「紧急」，六档文案须限定在弹层内查（行标签色点另算）
     Finder inSheet(String text) => find.descendant(
-          of: find.byType(BottomSheet),
+          of: popup,
           matching: find.text(text),
         );
     for (final label in ['无', '低', '中', '高', '紧急', '立即处理']) {
@@ -141,19 +145,16 @@ void main() {
     await tester.tap(find.text('更换项目'));
     await tester.pumpAndSettle();
 
+    final popup = selectPopup();
     Finder inSheet(String text) => find.descendant(
-          of: find.byType(BottomSheet),
+          of: popup,
           matching: find.text(text),
         );
-    expect(find.text('更换项目'), findsOneWidget, reason: '菜单已收起，只剩抽屉标题');
+    expect(find.text('更换项目'), findsNothing, reason: '菜单已收起，浮层无标题行');
     expect(inSheet('未分组'), findsOneWidget);
     expect(inSheet('生活'), findsOneWidget);
-    // 当前项（工作）由选中态打勾标注——抽屉内恰一枚勾
-    expect(
-      find.descendant(
-          of: find.byType(BottomSheet), matching: find.byIcon(OrbitIcons.check)),
-      findsOneWidget,
-    );
+    // 当前项（工作）由选中态标注——浮层内恰一枚选中行
+    expect(selectedPopupLabels(tester), ['工作']);
 
     await tester.tap(inSheet('生活'));
     await _settlePastMockLatency(tester);

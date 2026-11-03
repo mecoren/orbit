@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/core/routing/router_keys.dart';
 import 'package:orbit/core/theme/app_theme.dart';
 import 'package:orbit/core/theme/miuix_theme.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_dropdown_panel.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_select_popup.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_toast.dart';
 
 /// 测试用应用壳：与 `lib/app.dart` 的根装配同构（MaterialApp + MiuixTheme
@@ -67,6 +69,29 @@ Widget _orbitRootLayers({
         ],
       ),
     );
+
+/// 单选浮层（OS4 玻璃菜单）finder
+///
+/// 2026-11-03 起单选不再走底部抽屉：`showSelectBottomSheet` 内部改为
+/// OS4 玻璃锚定浮层（`orbit_select_popup.dart`）。测试要限定「弹层内的选项
+/// 文本/选中态」时用本 finder，不要再用 `find.byType(BottomSheet)`——那是
+/// 确认/更多操作/表单抽屉的承载。
+Finder selectPopup() => find.byKey(orbitSelectPopupKey);
+
+/// 单选浮层里打勾的条目文案
+///
+/// 选择浮层与页头 ⋮ 菜单共用 `OrbitDropdownPanelView`，选中态是行数据上的
+/// `checked`（勾本身是 Icon，直接按 icon 数断言会被菜单其他勾干扰），
+/// 故从面板 groups 读权威选中项。
+Iterable<String> selectedPopupLabels(WidgetTester tester) {
+  final view = tester.widget<OrbitDropdownPanelView>(
+    find.byType(OrbitDropdownPanelView),
+  );
+  return view.groups
+      .expand((group) => group)
+      .where((item) => item.checked)
+      .map((item) => item.label);
+}
 
 /// 收尾：推掉 toast 的停留计时器与残留动画，并清空全局队列。
 ///

@@ -106,11 +106,13 @@ void main() {
     await _longPress('完成移动端重构方案评审', tester);
     await _tapInMenu(tester, '设置提醒');
 
-    // 相对档抽屉（桌面 DateTimePicker 相对档同口径；种子任务有截止 →
-    // 「截止前 1 小时」等档在列）
-    expect(find.text('提醒时间'), findsOneWidget);
-    expect(find.text('截止前 1 小时'), findsOneWidget);
-    expect(find.text('自定义时间…'), findsOneWidget);
+    // 相对档浮层（桌面 DateTimePicker 相对档同口径；种子任务有截止 →
+    // 「截止前 1 小时」等档在列）。2026-11-03 起单选取浮层口径、不画标题行。
+    final popup = selectPopup();
+    expect(find.descendant(of: popup, matching: find.text('截止前 1 小时')),
+        findsOneWidget);
+    expect(find.descendant(of: popup, matching: find.text('自定义时间…')),
+        findsOneWidget);
 
     await tester.tap(find.text('截止前 1 小时'));
     await _settlePastMockLatency(tester);

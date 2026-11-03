@@ -1,8 +1,13 @@
 /// 底部弹层族（设计系统 v3：承载与形状统一走 Material）
 ///
-/// 三个共享弹层（确认 / 单选 / 更多操作）的**公共 API 与旧实现逐字一致**：
-/// 调用点合计 70+ 处（`showConfirmBottomSheet` 25、`showSelectBottomSheet` 31、
-/// `showMoreActionsSheet` 3），保留原名与原参数以免制造无谓 diff。
+/// 本文件现在只剩**确认 / 更多操作**两个底部抽屉
+/// （`showConfirmBottomSheet` 25 处、`showMoreActionsSheet` 3 处），
+/// 公共 API 与旧实现逐字一致，保留原名与原参数以免制造无谓 diff。
+///
+/// **单选已迁出（2026-11-03）**：从一组值里挑一个的交互不再从底部升起抽屉，
+/// 改为 OS4 玻璃锚定浮层（透明玻璃卡 + 选中项强调色/对勾），实现见
+/// `orbit_select_popup.dart`；`showSelectBottomSheet` 保留为兼容名并直接
+/// 转发，49 处存量调用点零改动即统一。
 ///
 /// **为什么承载回到 Material `showModalBottomSheet`**（2026-09-21 修复）：
 /// shadcn 的 `SheetConfiguration` 打开的 sheet 容器（`SheetRawContainer`）把背景
@@ -39,9 +44,12 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimens.dart';
 import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_shapes.dart';
-import '../../../core/theme/icon_map.dart';
 import 'orbit_glass_surface.dart';
+import 'orbit_select_popup.dart';
 import 'orbit_sheet_scaffold.dart';
+
+export 'orbit_select_popup.dart'
+    show SelectItem, showOrbitSelectPopup, orbitSelectPopupKey;
 
 /// 底部抽屉顶圆角描边形状（全项目底部抽屉的唯一形状来源）
 const RoundedRectangleBorder bottomSheetTopShape = RoundedRectangleBorder(
@@ -102,64 +110,30 @@ Future<bool> showConfirmBottomSheet(
   return result ?? false;
 }
 
-/// 单选弹层数据项（行首图标 / 12×12 色点 + 文案，二选一）
-/// - [icon] + [iconColor]：行首语义图标（快捷视图切换等与清单页图标同源的场景）；
-/// - [colorDot]：12px 语义色点（项目 / 优先级等颜色即语义的场景）；
-/// - [hint]：行尾灰字提示（如「周四, 09:00」——快捷日期菜单右侧时间提示，
-///   与桌面 QuickDateMenu 同款信息位）。
-class SelectItem<T> {
-  final T value;
-  final String label;
-  final String? hint;
-  final Color? colorDot;
-  final IconData? icon;
-  final Color? iconColor;
-
-  const SelectItem(
-      {required this.value,
-      required this.label,
-      this.hint,
-      this.colorDot,
-      this.icon,
-      this.iconColor});
-}
-
-/// 详情/表单底部单选弹层：行 = 可选色点 + 文案，当前值尾随对勾；
-/// 点选即回调并关闭。
+/// 详情/表单单选弹层（**兼容名**）
+///
+/// 2026-11-03 起实现换成 miuix 口径的锚定浮层
+/// （[showOrbitSelectPopup]：白卡 + 就近弹出 + 选中项强调色/对勾），
+/// 不再从底部升起玻璃抽屉。保留原名与参数，49 处存量调用点零改动即统一。
+///
+/// [title] 仍必填，但浮层里不画标题行（miuix 下拉面板无标题；当前值靠对勾），
+/// 仅作无障碍语义。行式入口可传 [anchor]（触发行矩形）让弹层贴行弹出。
 Future<void> showSelectBottomSheet<T>(
   BuildContext context, {
   required String title,
   required List<SelectItem<T>> items,
   T? current,
   required ValueChanged<T> onSelect,
-}) async {
-  // 玻璃表面要采样「弹层背后的页面内容」，取壳层同一份采样器
-  // （调用方 context 在 `OrbitGlassScope` 之下；无壳/测试裸页为 null）
-  final backdrop = OrbitGlassScope.maybeOf(context);
-  await showModalBottomSheet<void>(
-    context: context,
-    useRootNavigator: true,
-    isScrollControlled: true,
-    // 表面由 `OrbitGlassSheet` 自绘：承载层透明 + elevation 0
-    backgroundColor: Colors.transparent,
-    elevation: 0,
-    barrierColor: Colors.black.withValues(alpha: 0.32),
-    shape: bottomSheetTopShape,
-    sheetAnimationStyle: bottomSheetMotion,
-    builder: (sheetContext) => OrbitGlassSheet(
-      backdrop: backdrop,
-      child: _SelectSheet<T>(
-        title: title,
-        items: items,
-        current: current,
-        onPick: (value) {
-          Navigator.of(sheetContext).pop();
-          onSelect(value);
-        },
-      ),
-    ),
-  );
-}
+  Rect? anchor,
+}) =>
+    showOrbitSelectPopup<T>(
+      context,
+      title: title,
+      items: items,
+      current: current,
+      onSelect: onSelect,
+      anchor: anchor,
+    );
 
 /// 更多操作菜单项（图标 + 文案；destructive 项由调用方传红色 [color]）
 class MoreActionItem {
@@ -304,101 +278,6 @@ class _ConfirmSheetState extends State<_ConfirmSheet> {
             formatHoldConfirmLabel(_remaining, widget.confirmLabel),
         onConfirm: _remaining > 0 ? null : widget.onConfirm,
         destructive: widget.destructive,
-      ),
-    );
-  }
-}
-
-class _SelectSheet<T> extends StatelessWidget {
-  const _SelectSheet({
-    required this.title,
-    required this.items,
-    required this.onPick,
-    this.current,
-  });
-
-  final String title;
-  final List<SelectItem<T>> items;
-  final T? current;
-  final ValueChanged<T> onPick;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = AppColors.ofContext(context);
-    // 无尾栏（点选即关）；列表自管滚动（shrinkWrap + 高度上限），
-    // 故 contentScrollable: false
-    return OrbitSheetScaffold(
-      title: title,
-      contentScrollable: false,
-      maxHeightFactor: 0.6,
-      content: ListView.builder(
-        shrinkWrap: true,
-        padding: const EdgeInsets.only(bottom: AppDimens.space8),
-        itemCount: items.length,
-        itemBuilder: (context, index) {
-          final item = items[index];
-          final selected = item.value == current;
-          return InkWell(
-            onTap: () => onPick(item.value),
-            child: SizedBox(
-              height: AppDimens.touchTarget,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppDimens.space16,
-                ),
-                child: Row(
-                  children: [
-                    if (item.icon != null) ...[
-                      Icon(
-                        item.icon!,
-                        size: AppDimens.iconSizeMd,
-                        color: item.iconColor ?? colors.bodyText,
-                      ),
-                      const SizedBox(width: AppDimens.space12),
-                    ] else if (item.colorDot != null) ...[
-                      Container(
-                        width: AppDimens.colorDotSize,
-                        height: AppDimens.colorDotSize,
-                        decoration: BoxDecoration(
-                          color: item.colorDot,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: AppDimens.space12),
-                    ],
-                    Expanded(
-                      child: Text(
-                        item.label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 15,
-                          color: colors.bodyText,
-                        ),
-                      ),
-                    ),
-                    if (item.hint != null) ...[
-                      const SizedBox(width: AppDimens.space8),
-                      Text(
-                        item.hint!,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: colors.secondaryText,
-                        ),
-                      ),
-                    ],
-                    if (selected)
-                      Icon(
-                        OrbitIcons.check,
-                        size: AppDimens.iconSizeMd,
-                        color: colors.accent,
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
       ),
     );
   }

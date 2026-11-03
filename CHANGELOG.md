@@ -17,6 +17,16 @@
 
 ## [Unreleased]
 
+### 优化：移动端单选交互统一为页头菜单同源玻璃浮层（2026-11-03）
+
+「从一组值里挑一个」原先是底部玻璃抽屉（`showSelectBottomSheet` → `showModalBottomSheet` + `OrbitGlassSheet`），与全量 Miuix 化的组件面观感割裂。现改为**直接复用页头 ⋮ 菜单的同一套面板**（另造一套视觉必然长期漂移）：
+
+- 新原语 `shared/widgets/shadcn/orbit_select_popup.dart`：行渲染复用 `OrbitDropdownPanelView`（与菜单同一行：22px 图标列 / 15px 文案 / 行尾强调色对勾 / 44 行高 / 组间分隔线），表面走 `OrbitGlassSurface`（OS4 液态玻璃；设置页这类独立路由取不到壳层快照时退实时模糊，仍是透明玻璃而非实色白卡）；`SelectItem` 的色点/图标/副标题信息位全部保留。`showSelectBottomSheet` 保留为兼容名直接转发，**49 处存量调用点零改动**（任务详情 / 表单 / 快捷菜单 / 日历 / 分诊 / 批量操作 / 设置 / 同步 / 备份 / 节假日等）。
+- 定位与页头菜单同坐标：右上角、页头下沿（宽 `orbitFloatCardWidth`，右留白 8），淡入 + 自右上 0.96→1 缩放；不铺遮罩、点面板外即关、**不画标题行**（菜单无标题），`title` 降为读屏语义。`anchor` 参数保留为「贴行弹出」的扩展点，当前未参与定位。`OrbitPanelItem` 另支持 `leading`（自定义行首，项目/优先级用 12px 语义色点）且 `icon` 可空（主题/字号这类无图标的纯文字档位）。
+- 外观设置页四行（主题模式 / 字号 / 字重 / 强调色）换 `OrbitArrowTile`（`MiuixArrowPreference`），与设置页其余值行同构，点行即弹选择浮层；顺带修：三档选择的 `current` 误传中文标签（`themeLabel()`），与 `SelectItem.value` 永不相等、弹层一项都不打勾——改用 `themeValue` / `fontSizeValue` / `fontWeightValue` 原始键。
+- 口径边界：多选（标签 / 云端文件）与色板仍是底部抽屉——勾选清单不是下拉选择；页头 ⋮ 的「列表操作」面板（含开关与就地展开子项）继续走玻璃下拉面板。
+- **验证**：`flutter analyze` 0 issue、`flutter test` **1128 绿**（7 个测试文件的弹层定位从 `BottomSheet` 改为浮层 key，测试壳新增 `selectPopup()` / `selectedPopupLabels()` 助手，新增 `appearance_page_test` 覆盖当前档回勾）。
+
 ### 优化：移动端功能模块配置页逐件对齐 flutter_miuix 组件（2026-11-03）
 
 按截图逐个核对页面元素在 flutter_miuix 1.3.0 中的对应组件，手搓控件一律换成库内原语：
@@ -32,7 +42,7 @@
 
 miuix 版 `MiuixPullToRefresh` 的绘制锁死：阈值态是拉长圆但没有点，松手后直接跳成整圆 + 点，中间没有「收圆」过渡；且列表自身回弹会打断吸附。
 
-- `OrbitPullToRefresh` 指示器改自绘：下拉按进度扫开一段细弧；越过阈值保持 miuix 同口径的**拉长圆**（上圆 + 下圆 + 两段竖线，长度随下拉继续增长）；松手后弹簧把下拉量吸附回阈值，拉长圆**收缩成正常圆**，环内实心点才开始匀速绕行；成功后环上浮淡出。
+- `OrbitPullToRefresh` 指示器改自绘：下拉按进度扫开一段细弧；越过阈值保持 miuix 同口径的**拉长圆**（上圆 + 下圆 + 两段竖线，长度随下拉继续增长）；松手后刷新任务立刻开始，同时用 220ms 固定时长把下拉量过渡回阈值、拉长圆**收缩成正常圆**，收圆完成即出现环内绕行点（不再等弹簧 ~1.1s 收敛），圆 + 点至少展示 300ms；成功后环上浮淡出。
 - 几何与 `OrbitSpinner` 同源（描边 = 边长 8%、点半径 = 边长 10%、轨道内缩 2 倍点半径）；手势/弹簧口径沿用 miuix（阻尼多项式、临界阻尼弹簧、0.25 触发比例），`edgeOffset`/`displacement` 仍是绘制下移避让玻璃页头，四页调用点零改动。
 - 顺带修：松手吸附期间忽略列表自身回弹产生的滚动通知（`_processingRelease` 守卫），否则吸附被打断、刷新不触发。
 - **验证**：`flutter analyze` 0 issue；新增 `orbit_pull_to_refresh_test`（未过阈值回弹不触发 / 越过阈值松手触发一次并进入刷新态），截图核对阈值态为拉长圆、刷新态为「正常圆 + 环内点」；`stats_screen` / `trash` / `sidebar_calendar_card` / `todo_screens_smoke` 全绿。

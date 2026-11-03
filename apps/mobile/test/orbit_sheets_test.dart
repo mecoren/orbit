@@ -1,17 +1,15 @@
-// 共享底部弹层族（orbit_sheets.dart）承载口径：
-// 表面色与顶部圆角由 Material `showModalBottomSheet` 的
-// `backgroundColor` + `bottomSheetTopShape` 提供（唯一来源）——
-// 修 shadcn `SheetConfiguration` 的 sheet 容器硬编码直角 + 不透明背景
-// 把自绘圆角盖住、观感变成「两边有角」的问题。
+// 共享弹层族（orbit_sheets.dart）承载口径：
+// - 确认 / 更多操作：Material `showModalBottomSheet` + `bottomSheetTopShape`；
+// - 单选：2026-11-03 起**复用页头 ⋮ 菜单的面板**（OrbitDropdownPanelView +
+//   OS4 玻璃表面，右上角弹出），不再走底部抽屉或自绘白卡。
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_miuix/miuix.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/core/theme/app_colors.dart';
 import 'package:orbit/core/theme/app_dimens.dart';
-import 'package:orbit/core/theme/icon_map.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_dropdown_panel.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_glass_surface.dart';
-import 'package:orbit/shared/widgets/shadcn/orbit_sheet_scaffold.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_sheets.dart';
 import 'support/orbit_test_app.dart';
 
@@ -58,29 +56,37 @@ void main() {
     return ctx;
   }
 
-  testWidgets('单选弹层：顶部圆角由承载提供，表面由玻璃壳自绘', (tester) async {
+  testWidgets('单选浮层：复用页头 ⋮ 菜单面板（玻璃 + 行勾）', (tester) async {
     final ctx = await pumpHost(tester);
     showSelectBottomSheet<String>(
       ctx,
       title: '视图模式',
-      items: const [SelectItem(value: 'list', label: '列表')],
+      items: const [
+        SelectItem(value: 'list', label: '列表'),
+        SelectItem(value: 'grid', label: '网格'),
+      ],
       current: 'list',
       onSelect: (_) {},
     );
     await tester.pumpAndSettle();
 
-    final sheet = tester.widget<BottomSheet>(find.byType(BottomSheet));
-    expect(sheet.shape, bottomSheetTopShape, reason: '顶部圆角唯一来源');
-    // 2026-11-03 起表面由 OrbitGlassSheet 自绘（OS4 玻璃，与快速添加面板同档）：
-    // 承载层必须透明且无 elevation，否则 Material 会在玻璃下再铺一层实色/
-    // 直角阴影，把圆角玻璃的边界弄脏
-    expect(sheet.backgroundColor, Colors.transparent, reason: '玻璃表面自绘');
-    expect(sheet.elevation, 0, reason: '透明底上补直角阴影会弄脏圆角边界');
-    expect(find.byType(OrbitGlassSheet), findsOneWidget);
-    expect(find.text('视图模式'), findsOneWidget);
+    // 与页头菜单同一套渲染：OrbitDropdownPanelView 行 + OS4 玻璃表面；
+    // 底部抽屉与自绘白卡均已退场
+    expect(selectPopup(), findsOneWidget);
+    expect(find.byType(OrbitDropdownPanelView), findsOneWidget);
+    expect(find.byType(OrbitGlassSurface), findsOneWidget);
+    expect(find.byType(BottomSheet), findsNothing, reason: '不再从底部升起抽屉');
+    expect(find.text('视图模式'), findsNothing, reason: '菜单没有标题行');
+
+    // 选中态在行数据上打勾；行文字保持正文色（与菜单一致，不染蓝）
+    expect(selectedPopupLabels(tester), ['列表']);
+    expect(
+      tester.widget<Text>(find.text('列表')).style?.color,
+      AppColors.light.bodyText,
+    );
   });
 
-  testWidgets('弹层按内容收缩、贴屏底——不铺满整屏（2026-11-02 云同步引擎抽屉回归）',
+  testWidgets('单选浮层：右上角、页头下沿、240 宽（与页头菜单同坐标）',
       (tester) async {
     final ctx = await pumpHost(tester);
     showSelectBottomSheet<String>(
@@ -96,17 +102,40 @@ void main() {
     await tester.pumpAndSettle();
 
     final screen = tester.getSize(find.byType(Scaffold));
-    final sheet = tester.getRect(find.byType(OrbitSheetScaffold));
-    // 抽屉骨架限宽居中的 Align 曾漏 `heightFactor`：松高度约束下 Align 会铺满
-    // 整屏，抽屉背板变成一整页白、内容贴在屏底。锁死「按内容收缩 + 贴屏底」。
-    expect(sheet.top, greaterThan(0), reason: '抽屉不应铺满整屏');
-    expect(sheet.height, lessThan(screen.height * 0.5), reason: '短内容自适应收缩');
-    expect(sheet.bottom, screen.height, reason: '仍由底部弹层贴屏底锚定');
+    final popup = tester.getRect(selectPopup());
+    expect(popup.width, 240, reason: 'orbitPanelMaxWidth（与菜单同宽）');
+    expect(
+      popup.right,
+      moreOrLessEquals(screen.width - 8, epsilon: 1),
+      reason: '右侧留白 8（菜单同款）',
+    );
+    expect(popup.top, greaterThan(0), reason: '页头下沿起算');
+    expect(popup.height, lessThan(screen.height * 0.5), reason: '短内容自适应收缩');
     expect(
       tester.getRect(find.text('S3 兼容存储')).bottom,
       lessThanOrEqualTo(screen.height),
       reason: '末项不能溢出屏幕',
     );
+  });
+
+  testWidgets('单选浮层：点面板外关闭（不铺遮罩色）', (tester) async {
+    final ctx = await pumpHost(tester);
+    showSelectBottomSheet<String>(
+      ctx,
+      title: '优先级',
+      items: const [
+        SelectItem(value: 'p0', label: 'P0'),
+        SelectItem(value: 'p1', label: 'P1'),
+      ],
+      current: 'p0',
+      onSelect: (_) {},
+    );
+    await tester.pumpAndSettle();
+    expect(selectPopup(), findsOneWidget);
+
+    await tester.tapAt(const Offset(8, 300));
+    await tester.pumpAndSettle();
+    expect(selectPopup(), findsNothing);
   });
 
   testWidgets('单选弹层：icon 项渲染语义图标（快捷视图切换口径）', (tester) async {
@@ -135,7 +164,7 @@ void main() {
     expect(find.text('今天'), findsOneWidget);
   });
 
-  testWidgets('单选弹层：hint 行尾灰字（快捷日期档「周四, 09:00」信息位）',
+  testWidgets('单选浮层：hint 渲染为副标题（快捷日期档「周四, 09:00」信息位）',
       (tester) async {
     final ctx = await pumpHost(tester);
     showSelectBottomSheet<String>(
@@ -156,10 +185,11 @@ void main() {
     await tester.pumpAndSettle();
 
     final hint = tester.widget<Text>(find.text('周四, 09:00'));
-    expect(hint.style?.fontSize, 13, reason: '行尾提示与主标签（15）不同档');
-    expect(hint.style?.color, AppColors.light.secondaryText);
-    // 未选中项不渲染勾选图标（hint 不是选中态）
-    expect(find.byIcon(OrbitIcons.check), findsNothing);
+    expect(hint.style?.color, AppColors.light.secondaryText,
+        reason: '行尾提示取次要文字色');
+    expect(find.text('明天'), findsOneWidget);
+    // hint 不改变选中态：当前值为空时任何一项都不打勾
+    expect(selectedPopupLabels(tester), isEmpty);
   });
 
   testWidgets('确认弹层：底部按钮标签水平居中（贴左即 TextAlign.start 回归）',

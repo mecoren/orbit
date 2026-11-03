@@ -48,6 +48,21 @@ class Appearance {
     }
   }
 
+  /// 主题档原始值（system/light/dark）
+  ///
+  /// 选择弹层的选中判据必须用本值，不能用 [themeLabel] 的中文文案——
+  /// 文案与 `SelectItem.value`（英文键）永不相等，弹层里会一项都不打勾。
+  static String themeValue() {
+    switch (LocalPrefs.getString(themeKey)) {
+      case 'light':
+        return 'light';
+      case 'dark':
+        return 'dark';
+      default:
+        return 'system';
+    }
+  }
+
   /// 字号缩放比（small 0.9 / standard 1.0 / large 1.15）
   static double fontScale() {
     switch (LocalPrefs.getString(fontSizeKey)) {
@@ -71,6 +86,18 @@ class Appearance {
     }
   }
 
+  /// 字号档原始值（small/standard/large；选择弹层选中判据）
+  static String fontSizeValue() {
+    switch (LocalPrefs.getString(fontSizeKey)) {
+      case 'small':
+        return 'small';
+      case 'large':
+        return 'large';
+      default:
+        return 'standard';
+    }
+  }
+
   /// 基础字重（regular w400 / medium w500 / bold w600）
   static FontWeight fontWeight() {
     switch (LocalPrefs.getString(fontWeightKey)) {
@@ -91,6 +118,18 @@ class Appearance {
         return '加粗';
       default:
         return '常规';
+    }
+  }
+
+  /// 字重档原始值（regular/medium/bold；选择弹层选中判据）
+  static String fontWeightValue() {
+    switch (LocalPrefs.getString(fontWeightKey)) {
+      case 'medium':
+        return 'medium';
+      case 'bold':
+        return 'bold';
+      default:
+        return 'regular';
     }
   }
 

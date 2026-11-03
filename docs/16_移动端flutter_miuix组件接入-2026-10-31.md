@@ -38,7 +38,7 @@
 | `MiuixSurface`（squircle） | `OrbitFilterChip`（新增） | 4 处（2 处 `ChoiceChip` + 2 处手搓容器） | 筛选标签统一为 squircle 表面 + 强调色 16% 选中底 |
 | `MiuixHorizontalDivider` / `MiuixVerticalDivider` | `OrbitDivider` / `OrbitVerticalDivider`（新增） | 6 处 | 0.75 细线 + `dividerLine` 语义角色（保留 `height`/`thickness` 语义） |
 | `MiuixGlassNavigationBar`（**OS4 玻璃**） | `OrbitBottomNav` | 1 处（壳） | 液态玻璃底栏 + 滑动胶囊指示器 + 弹簧回弹 + 支持拖动换页 |
-| `MiuixGlassPanel` + `miuixGlassSurface`（**OS4 玻璃**） | `OrbitPageHeader` 玻璃层 / `OrbitFloatCard` 浮层 / `OrbitGlassSurface` + `OrbitGlassSheet`（底部弹层与菜单抽屉，2026-11-03） | 28 页页头 + 全部锚点浮层 + 快速添加面板 + 选择/动作抽屉 | 页头：OS4 材质（模糊 + 混色 + 描边），无采样器时回落实时 `BackdropFilter`；浮层：`puredThinGlass` + blur 32；弹层：`puredThinGlass` 栏体材质 + `shading: false` |
+| `MiuixGlassPanel` + `miuixGlassSurface`（**OS4 玻璃**） | `OrbitPageHeader` 玻璃层 / `OrbitFloatCard` 浮层 / `OrbitGlassSurface` + `OrbitGlassSheet`（更多操作抽屉，2026-11-03） | 28 页页头 + 全部锚点浮层 + 快速添加面板 + 动作抽屉 | 页头：OS4 材质（模糊 + 混色 + 描边），无采样器时回落实时 `BackdropFilter`；浮层：`puredThinGlass` + blur 32；弹层：`puredThinGlass` 栏体材质 + `shading: false` |
 | `MiuixTheme` / `MiuixColors` / `MiuixTextStyles` | `OrbitMiuixTheme`（`core/theme/miuix_theme.dart`） | 根装配 + 测试壳 | 54 个语义色角色全部由 `AppColors` / `OrbitAccents` 派生，三套体系（Material / shadcn / Miuix）数值同源 |
 | `MiuixGlassRendering` | `HomeShell.initState` 预热 | 1 处 | 首帧前加载 OS4 shader，避免"先实色后玻璃"的跳变 |
 
@@ -175,8 +175,11 @@ OrbitGlassScope（向下暴露同一个 backdrop）
   仍为实心强调色（沿用 v3「FAB 不玻璃化」的既定决策，避免与底栏玻璃双重磨砂）。
 - **弹出层表面统一 OS4 玻璃（2026-11-03）**：
   - 锚定卡片 `OrbitFloatCard` 接 `MiuixLayerBackdrop`（此前缺采样器退实色白卡）；
-  - 底部菜单型抽屉 `showSelectBottomSheet` / `showMoreActionsSheet` 改
-    `OrbitGlassSheet`（承载透明 + `elevation 0` + 32% 黑遮罩，键盘避让提到玻璃层外）；
+  - 底部菜单型抽屉 `showMoreActionsSheet` 改 `OrbitGlassSheet`（承载透明 +
+    `elevation 0` + 32% 黑遮罩，键盘避让提到玻璃层外）；**单选**同日再改为
+    OS4 玻璃锚定浮层（卡面 `OrbitGlassSurface` + 行复用页头 ⋮ 菜单的
+    选中强调色/对勾，见 `orbit_select_popup.dart`），不再走底部抽屉
+    （`showSelectBottomSheet` 降为兼容名，直接转发新原语）；
     `showConfirmBottomSheet` 保持实色（确认框不是菜单，读秒/危险动作需要实体感）；
   - 形变菜单扩容（`MiuixGlassTransformPopup`）：项目编辑页头 ⋮、上级文件夹行
     （**整行**作触发件，`anchorContent` 为同构副本）、底栏「更多」——

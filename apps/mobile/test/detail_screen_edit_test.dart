@@ -147,7 +147,7 @@ void main() {
     await tester.tap(find.text('截止日期'));
     await tester.pumpAndSettle();
 
-    final sheet = find.byType(BottomSheet);
+    final sheet = selectPopup();
     expect(find.descendant(of: sheet, matching: find.text('一小时后')),
         findsOneWidget);
     expect(
@@ -183,7 +183,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(
       find.descendant(
-        of: find.byType(BottomSheet),
+        of: selectPopup(),
         matching: find.text('选择日期和时间'),
       ),
     );
