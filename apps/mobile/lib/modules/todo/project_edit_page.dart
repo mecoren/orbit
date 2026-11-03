@@ -17,6 +17,7 @@ import '../../shared/widgets/shadcn/orbit_bottom_nav.dart';
 import '../../shared/widgets/shadcn/orbit_color_picker.dart';
 import '../../shared/widgets/shadcn/orbit_dropdown_panel.dart';
 import '../../shared/widgets/shadcn/orbit_empty_state.dart';
+import '../../shared/widgets/shadcn/orbit_glass_menu.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
@@ -30,6 +31,8 @@ import 'logic/project_review.dart';
 import 'logic/project_tree.dart';
 import 'logic/view_mode.dart';
 import 'providers/todo_providers.dart';
+import '../../shared/widgets/shadcn/orbit_glass_surface.dart'
+    show OrbitGlassScope;
 
 /// 编辑项目整页（2026-09-23：由 `AlertDialog` 升级为整页）
 ///
@@ -156,12 +159,14 @@ class _ProjectEditPageState extends ConsumerState<ProjectEditPage> {
     if (ok) context.pop();
   }
 
-  /// 页头 ⋮：归档 / 取消归档 + 删除（与侧栏长按菜单同一套写路径）
-  void _showMorePanel(TodoProject project, int undoneCount) {
-    showOrbitDropdownPanel(
-      context,
-      topInset: _topInset(context),
-      groups: [
+  /// 页头 ⋮ 的条目配置：归档 / 取消归档 + 删除（与侧栏长按菜单同一套写路径）
+  ///
+  /// 菜单点开瞬间由原语回调构建（`ref.read` 语义），条目值取当下状态。
+  List<List<OrbitPanelItem>> _moreGroups(
+    TodoProject project,
+    int undoneCount,
+  ) =>
+      [
         [
           OrbitPanelItem(
             icon: OrbitIcons.archive,
@@ -175,9 +180,7 @@ class _ProjectEditPageState extends ConsumerState<ProjectEditPage> {
             onTap: () => _delete(project, undoneCount),
           ),
         ],
-      ],
-    );
-  }
+      ];
 
   Future<void> _delete(TodoProject project, int undoneCount) async {
     final deleted =
@@ -265,17 +268,29 @@ class _ProjectEditPageState extends ConsumerState<ProjectEditPage> {
                               : colors.deactivatedText,
                         ),
                 ),
-                OrbitIconButton(
-                  tooltip: '更多操作',
-                  onPressed: project == null
-                      ? null
-                      : () => _showMorePanel(project, undoneCount),
-                  icon: Icon(
-                    OrbitIcons.moreVertical,
-                    size: AppDimens.iconSizeMd,
-                    color: colors.titleText,
-                  ),
-                ),
+                project == null
+                    // 项目未就绪（provider 首帧）时无从归档/删除，保持禁用态
+                    ? OrbitIconButton(
+                        tooltip: '更多操作',
+                        onPressed: null,
+                        icon: Icon(
+                          OrbitIcons.moreVertical,
+                          size: AppDimens.iconSizeMd,
+                          color: colors.titleText,
+                        ),
+                      )
+                    // OS4 玻璃形变菜单（与列表页页头 ⋮ 同款：按钮 → 菜单连续形变）
+                    : OrbitGlassMenuButton(
+                        groupsBuilder: () =>
+                            _moreGroups(project, undoneCount),
+                        backdrop: OrbitGlassScope.maybeOf(context),
+                        tooltip: '更多操作',
+                        icon: Icon(
+                          OrbitIcons.moreVertical,
+                          size: AppDimens.iconSizeMd,
+                          color: colors.titleText,
+                        ),
+                      ),
               ],
             ),
           ),
@@ -385,49 +400,61 @@ class _ProjectEditPageState extends ConsumerState<ProjectEditPage> {
     );
   }
 
-  /// 上级文件夹行（M8）：显示当前层级（带祖先路径），点击弹出候选面板
+  /// 上级文件夹行（M8）：显示当前层级（带祖先路径），点击弹出候选菜单
+  ///
+  /// 触发件是**整行**（图标 + 层级文案 + 箭头）：OS4 玻璃形变菜单要求
+  /// 触发控件与形变副本同构，故这一行收进局部 `row()` 复用于两处。
   Widget _parentFolderRow(AppColorSet colors, List<TodoProject> projects) {
     final labels = buildFolderPathLabels(buildProjectTree(projects));
     final currentLabel = _parentUuid == null
         ? '顶层（不分组）'
         : (labels[_parentUuid] ?? '上级文件夹');
-    return InkWell(
-      onTap: () => _pickParentFolder(projects, labels),
-      borderRadius: AppShapes.small,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppDimens.space8),
-        child: Row(
-          children: [
-            Icon(
-              OrbitIcons.folder,
-              size: AppDimens.iconSizeMd,
-              color: colors.iconText,
-            ),
-            const SizedBox(width: AppDimens.space12),
-            Expanded(
-              child: Text(
-                currentLabel,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 15, color: colors.titleText),
+    Widget row() => Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppDimens.space8),
+          child: Row(
+            children: [
+              Icon(
+                OrbitIcons.folder,
+                size: AppDimens.iconSizeMd,
+                color: colors.iconText,
               ),
-            ),
-            Icon(
-              OrbitIcons.expandMore,
-              size: AppDimens.iconSizeMd,
-              color: colors.secondaryText,
-            ),
-          ],
-        ),
+              const SizedBox(width: AppDimens.space12),
+              Expanded(
+                child: Text(
+                  currentLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 15, color: colors.titleText),
+                ),
+              ),
+              Icon(
+                OrbitIcons.expandMore,
+                size: AppDimens.iconSizeMd,
+                color: colors.secondaryText,
+              ),
+            ],
+          ),
+        );
+    return OrbitGlassMenu(
+      groupsBuilder: () => [_parentFolderGroups(projects, labels)],
+      backdrop: OrbitGlassScope.maybeOf(context),
+      triggerBuilder: (onTap) => InkWell(
+        onTap: onTap,
+        borderRadius: AppShapes.small,
+        child: row(),
       ),
+      anchorContent: row(),
     );
   }
 
-  /// 上级文件夹候选面板（M8）
+  /// 上级文件夹候选菜单条目（M8）
   ///
   /// 候选**排除自身与全部后代**——否则成环，Rust `validate_project_parent` 必拒；
   /// 文案带祖先路径（"父 / 子"）避免不同层级同名歧义。
-  void _pickParentFolder(List<TodoProject> projects, Map<String, String> labels) {
+  List<OrbitPanelItem> _parentFolderGroups(
+    List<TodoProject> projects,
+    Map<String, String> labels,
+  ) {
     final items = <OrbitPanelItem>[
       OrbitPanelItem(
         icon: _parentUuid == null ? OrbitIcons.check : OrbitIcons.inbox,
@@ -446,11 +473,7 @@ class _ProjectEditPageState extends ConsumerState<ProjectEditPage> {
         ),
       );
     }
-    showOrbitDropdownPanel(
-      context,
-      topInset: _topInset(context),
-      groups: [items],
-    );
+    return items;
   }
 
   /// 名称行：行首文件夹图标按当前色染色（与侧栏项目行同形制），无边框输入

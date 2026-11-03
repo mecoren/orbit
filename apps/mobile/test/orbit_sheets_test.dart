@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/core/theme/app_colors.dart';
 import 'package:orbit/core/theme/app_dimens.dart';
 import 'package:orbit/core/theme/icon_map.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_glass_surface.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_sheet_scaffold.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_sheets.dart';
 import 'support/orbit_test_app.dart';
@@ -57,7 +58,7 @@ void main() {
     return ctx;
   }
 
-  testWidgets('单选弹层：顶部圆角与弹层表面色由承载提供', (tester) async {
+  testWidgets('单选弹层：顶部圆角由承载提供，表面由玻璃壳自绘', (tester) async {
     final ctx = await pumpHost(tester);
     showSelectBottomSheet<String>(
       ctx,
@@ -70,7 +71,12 @@ void main() {
 
     final sheet = tester.widget<BottomSheet>(find.byType(BottomSheet));
     expect(sheet.shape, bottomSheetTopShape, reason: '顶部圆角唯一来源');
-    expect(sheet.backgroundColor, AppColors.light.popup, reason: '弹层表面色');
+    // 2026-11-03 起表面由 OrbitGlassSheet 自绘（OS4 玻璃，与快速添加面板同档）：
+    // 承载层必须透明且无 elevation，否则 Material 会在玻璃下再铺一层实色/
+    // 直角阴影，把圆角玻璃的边界弄脏
+    expect(sheet.backgroundColor, Colors.transparent, reason: '玻璃表面自绘');
+    expect(sheet.elevation, 0, reason: '透明底上补直角阴影会弄脏圆角边界');
+    expect(find.byType(OrbitGlassSheet), findsOneWidget);
     expect(find.text('视图模式'), findsOneWidget);
   });
 

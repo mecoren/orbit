@@ -71,10 +71,21 @@ double orbitFloatCardWidth(BuildContext context, [double? width]) {
     screen.width - AppDimens.space32,
   );
 }
-/// 浮层卡片壳（下拉面板与快加快捷卡片共用同一视觉：`popup` 底 + 1px `outline` +
-/// 弹出层阴影 `e4` + large 圆角；内容区限高 0.7 屏，滚动与尾栏由内容自理）。
+/// 浮层卡片壳（下拉面板与快加快捷卡片共用同一视觉：OS4 玻璃面 + 浮层阴影
+/// + large 圆角；内容区限高 0.7 屏，滚动与尾栏由内容自理）。
+///
+/// **OS4 玻璃（2026-11-03 补齐采样器）**：卡片一直是 `miuixGlassSurface` 的
+/// 菜单档表面，但此前没接 [backdrop]，库内拿不到快照就退回**实色填充**——
+/// 于是页头 ⋮ 是玻璃菜单（`OrbitGlassMenu`）、而所有锚定卡片是白色实色卡片，
+/// 两套观感并存。现在采样器由调用方透传（卡片挂在路由/Overlay 上，取不到
+/// 壳层 `OrbitGlassScope`），与形变菜单同一档材质。
 class OrbitFloatCard extends StatelessWidget {
-  const OrbitFloatCard({super.key, required this.child, this.width});
+  const OrbitFloatCard({
+    super.key,
+    required this.child,
+    this.width,
+    this.backdrop,
+  });
 
   /// 卡片内容（面板则传可滚条目列，多选卡传列表 + 尾栏）
   final Widget child;
@@ -83,16 +94,29 @@ class OrbitFloatCard extends StatelessWidget {
   /// 显式宽度同样受屏宽 - 32 钳制，保证不贴边
   final double? width;
 
+  /// OS4 玻璃背景采样器（调用方传壳层的 `MiuixLayerBackdrop`）
+  ///
+  /// 卡片经 `showGeneralDialog` / `OverlayEntry` 挂在 Navigator / Overlay 上，
+  /// 位于 `OrbitGlassScope` 之外，**不能在卡片内部自取**；null 时库内退实色
+  /// （无壳或测试裸页）。
+  final MiuixLayerBackdrop? backdrop;
+
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
     final screen = MediaQuery.of(context).size;
     // 宽度走统入口（含小屏钳制），与锚点定位用同一数值
     final w = orbitFloatCardWidth(context, width);
-    // OS4 玻璃浮层：库内 `miuixGlassSurface` 的材质档（菜单/面板类表面，
-    // `shading: false` 不做仿生折射）+ 浮层阴影。没有背景采样器时库内自动
-    // 回退实色填充，观感与旧版 `popup` 底一致。
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    // OS4 玻璃浮层：材质档与 `OrbitGlassMenu` 同源（`puredThinGlass` +
+    // blurRadius 32，`shading: false` 不做仿生折射）——库默认 `popupViewGlass`
+    // 的 60 档在进场动画期（origin/size 逐帧变、纹理缓存逐帧失效）会每帧
+    // 重算 sigma≈27 的离屏模糊，真机掉帧明显。
     final surface = miuixGlassSurface(
+      backdrop: backdrop,
+      material: MiuixGlassMaterials.puredThinGlass(isDark).copyWith(
+        blurRadius: 32,
+      ),
       shadow: MiuixGlassShadows.floating,
       alpha: 1,
     );
@@ -107,18 +131,14 @@ class OrbitFloatCard extends StatelessWidget {
           child: surface(
             context,
             RoundedRectangleBorder(borderRadius: AppShapes.large),
-            // 表面与「按下水波纹」都由这层 Material 承担（圆角裁切）
+            // 表面与「按下水波纹」都由这层 Material 承担（圆角裁切）；
+            // 描边不再手绘 1px `outline`——玻璃 shader 自带高光描边，
+            // 再叠一圈灰线会让玻璃面看起来像实色卡片
             Material(
               color: colors.popup.withValues(alpha: 0.0),
               borderRadius: AppShapes.large,
               clipBehavior: Clip.antiAlias,
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: AppShapes.large,
-                  border: Border.all(color: colors.outline),
-                ),
-                child: child,
-              ),
+              child: child,
             ),
           ),
         ),
@@ -229,6 +249,7 @@ Future<T?> showOrbitFloatCard<T>(
   bool above = true,
   double? topInset,
   double? width,
+  MiuixLayerBackdrop? backdrop,
 }) {
   final layout = orbitFloatCardLayout(
     context,
@@ -248,7 +269,7 @@ Future<T?> showOrbitFloatCard<T>(
       alignment: layout.align,
       child: Padding(
         padding: layout.padding,
-        child: OrbitFloatCard(width: width, child: child),
+        child: OrbitFloatCard(width: width, backdrop: backdrop, child: child),
       ),
     ),
     // 出场：淡入 + 自锚点同侧轻微放大（空间上「从按钮里长出来」）
@@ -304,12 +325,16 @@ Future<void> showOrbitDropdownPanel(
   /// 标题行尾随动作文案（如「编辑」，主题强调色）；点击先收面板再回调
   String? actionLabel,
   VoidCallback? onAction,
+
+  /// OS4 玻璃背景采样器（壳层 `OrbitGlassScope` 的实例；null = 退实色）
+  MiuixLayerBackdrop? backdrop,
 }) {
   return showOrbitFloatCard<void>(
     context,
     anchor: anchor,
     above: above,
     topInset: topInset,
+    backdrop: backdrop,
     child: OrbitDropdownPanelView(
       groups: groups,
       title: title,
@@ -329,6 +354,7 @@ class OrbitDropdownPanelView extends StatefulWidget {
     this.actionLabel,
     this.onAction,
     this.onClose,
+    this.scrollable = true,
   });
 
   final List<List<OrbitPanelItem>> groups;
@@ -340,6 +366,12 @@ class OrbitDropdownPanelView extends StatefulWidget {
   /// 关闭动作覆写（Overlay 直挂时传调用方的 remove；null = 路由 pop，
   /// 既有调用方行为不变）
   final VoidCallback? onClose;
+
+  /// 是否自带滚动容器
+  ///
+  /// OS4 形变弹层（`MiuixGlassTransformPopup`）外层已经包了纵向滚动，
+  /// 内部再套一层滚动会拿到无界高度直接报错，那里传 false。
+  final bool scrollable;
 
   @override
   State<OrbitDropdownPanelView> createState() => OrbitDropdownPanelViewState();
@@ -440,39 +472,38 @@ class OrbitDropdownPanelViewState extends State<OrbitDropdownPanelView> {
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
-
-    // 壳由入口统一包（[showOrbitFloatCard]），此处只出条目列，避免双层边框
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(vertical: AppDimens.space6),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-                if (widget.title != null || widget.actionLabel != null)
-                  _headerRow(),
-                for (var g = 0; g < widget.groups.length; g++) ...[
-                  if (g > 0)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                          vertical: AppDimens.space4),
-                      child: Divider(
-                        height: 1,
-                        thickness: 1,
-                        indent: AppDimens.space12,
-                        endIndent: AppDimens.space12,
-                        color: colors.divider,
-                      ),
-                    ),
-                  for (var i = 0; i < widget.groups[g].length; i++) ...[
-                    _topRow(g, i, widget.groups[g][i]),
-                    if (_isExpanded(g, i))
-                      for (final child in widget.groups[g][i].children)
-                        _childRow(child),
-                  ],
-                ],
-              ],
+    final column = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (widget.title != null || widget.actionLabel != null) _headerRow(),
+        for (var g = 0; g < widget.groups.length; g++) ...[
+          if (g > 0)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppDimens.space4),
+              child: Divider(
+                height: 1,
+                thickness: 1,
+                indent: AppDimens.space12,
+                endIndent: AppDimens.space12,
+                color: colors.divider,
+              ),
             ),
+          for (var i = 0; i < widget.groups[g].length; i++) ...[
+            _topRow(g, i, widget.groups[g][i]),
+            if (_isExpanded(g, i))
+              for (final child in widget.groups[g][i].children)
+                _childRow(child),
+          ],
+        ],
+      ],
     );
+    // 壳由入口统一包（[showOrbitFloatCard] / OS4 形变弹层），此处只出条目列，
+    // 避免双层边框；形变弹层外层已带纵向滚动，[scrollable] 为 false 时不再套
+    const padding = EdgeInsets.symmetric(vertical: AppDimens.space6);
+    return widget.scrollable
+        ? SingleChildScrollView(padding: padding, child: column)
+        : Padding(padding: padding, child: column);
   }
 
   /// 顶层条目行：有子项展开时**其余**条目置灰（图标与文案同时降级）

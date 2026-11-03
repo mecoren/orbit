@@ -15,7 +15,9 @@ import 'package:orbit/modules/todo/matrix_screen.dart';
 import 'package:orbit/modules/todo/sidebar_screen.dart';
 import 'package:orbit/services/local_prefs.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_bottom_nav.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_dropdown_panel.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_fab.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_glass_surface.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_page_header.dart';
 import 'support/orbit_test_app.dart';
 
@@ -130,7 +132,7 @@ void main() {
     );
   });
 
-  testWidgets('悬浮新建钮：点击弹出快速添加面板', (tester) async {
+  testWidgets('悬浮新建钮：点击弹出快速添加面板（OS4 玻璃表面 + 壳层采样器）', (tester) async {
     await _pump(tester, _seededBridge());
 
     // 悬浮钮是壳内唯一的 OrbitFab
@@ -138,6 +140,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('准备做什么？'), findsOneWidget);
+    // 面板走玻璃表面，且采样器非空：FAB 的 onPressed 必须在 OrbitGlassScope
+    // **之下**的 context 取值，否则只能退实时模糊（与底栏/页头不同档）
+    final surface = tester.widget<OrbitGlassSurface>(
+      find.byType(OrbitGlassSurface),
+    );
+    expect(surface.backdrop, isNotNull);
   });
 
   testWidgets('「更多」动作位：弹出面板（标题行带编辑），点条目切分支底栏常驻', (tester) async {
@@ -152,6 +160,17 @@ void main() {
     expect(find.text('搜索'), findsOneWidget);
     expect(find.text('回收站'), findsOneWidget);
     expect(find.text('设置'), findsOneWidget);
+
+    // OS4 玻璃**形变**菜单：从底栏「更多」图标长出（不再是路由浮层卡片），
+    // 面板内容仍由 `OrbitDropdownPanelView` 出列
+    // 页头标题也有一个形变弹层实例（常温 show=false），按 show 取开着的那个
+    final popup = tester
+        .widgetList<MiuixGlassTransformPopup>(
+          find.byType(MiuixGlassTransformPopup),
+        )
+        .firstWhere((p) => p.show);
+    expect(popup.anchor, isNotNull, reason: '锚点绑在底栏图标上');
+    expect(find.byType(OrbitDropdownPanelView), findsOneWidget);
 
     // 点条目 = 切分支（与页签同语义）：底栏保持可见，页面切到统计
     await tester.tap(find.text('统计'));

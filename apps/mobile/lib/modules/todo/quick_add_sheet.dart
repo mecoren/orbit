@@ -15,11 +15,18 @@
 ///（#39 视图标记注入：我的一天/收藏/今日/本周；今日/本周截止时刻归一 18:00）。
 /// 图片走「先建任务再挂附件」两段式（任务暂无 id 无法先传附件），附件失败不阻断
 /// 任务本身——部分成功口径与表单的标签/子任务挂载一致。
+///
+/// **表面材质（2026-11-03）**：面板换成 OS4 玻璃（`OrbitGlassSurface`），材质档
+/// 与页头/底栏同一档 `puredThinGlass`（栏体玻璃，不做仿生折射着色）——承载层
+/// 透明 + 遮罩淡一档，玻璃采样壳层 `MiuixLayerBackdropCapture` 录制的页面内容；
+/// 无壳/测试裸页（拿不到 `OrbitGlassScope`）自动退回实时模糊。输入框与按钮行
+/// 的版式、选中态口径一律不动。
 library;
 
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_miuix/miuix.dart' show MiuixLayerBackdrop;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
@@ -36,6 +43,7 @@ import '../../shared/widgets/shadcn/orbit_actions_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_checkbox.dart';
 import '../../shared/widgets/shadcn/orbit_date_picker.dart';
 import '../../shared/widgets/shadcn/orbit_dropdown_panel.dart';
+import '../../shared/widgets/shadcn/orbit_glass_surface.dart';
 import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
@@ -84,17 +92,28 @@ Future<void> showQuickAddSheet(
   QuickViewKey? quickView,
   int? initialDueDate,
 }) {
+  // 玻璃表面要采样「面板背后的页面内容」：壳层（`HomeShell`）已把页面内容录进
+  // `MiuixLayerBackdropCapture`，这里取同一个采样器（无壳/测试裸页为 null，
+  // 面板退回实时模糊）。面板挂在根 Navigator 的 Overlay 上、位于捕获树之外，
+  // 不会把自己拍进背景（自采样会让面板越糊越实）。
+  final backdrop = OrbitGlassScope.maybeOf(context);
   return showModalBottomSheet<void>(
     context: context,
     useRootNavigator: true,
     isScrollControlled: true,
-    backgroundColor: AppColors.ofContext(context).popup,
+    // 表面由面板自绘玻璃：承载层必须透明且 elevation 归零，否则 Material 会在
+    // 透明底上再补一圈**直角**阴影，把顶部圆角玻璃的边界弄脏
+    backgroundColor: Colors.transparent,
+    elevation: 0,
+    // 玻璃面板比实色抽屉轻，遮罩比默认 black54 淡一档，背后列表仍隐约可见
+    barrierColor: Colors.black.withValues(alpha: 0.32),
     shape: bottomSheetTopShape,
     sheetAnimationStyle: bottomSheetMotion,
     builder: (_) => _QuickAddSheet(
       defaultProjectId: defaultProjectId,
       quickView: quickView,
       initialDueDate: initialDueDate,
+      backdrop: backdrop,
     ),
   );
 }
@@ -128,6 +147,7 @@ class _QuickAddSheet extends ConsumerStatefulWidget {
     this.defaultProjectId,
     this.quickView,
     this.initialDueDate,
+    this.backdrop,
   });
 
   /// 新建任务默认归属项目（null = 未分组）
@@ -138,6 +158,9 @@ class _QuickAddSheet extends ConsumerStatefulWidget {
 
   /// 预填截止（午夜毫秒；日历长按日格快捷新增用）
   final int? initialDueDate;
+
+  /// OS4 玻璃背景采样器（`OrbitGlassScope` 暴露；null = 实时模糊降级）
+  final MiuixLayerBackdrop? backdrop;
 
   @override
   ConsumerState<_QuickAddSheet> createState() => _QuickAddSheetState();
@@ -361,7 +384,13 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
               padding: layout.padding,
               child: OrbitOverlayCard(
                 scaleAlignment: layout.scale,
-                child: OrbitFloatCard(width: width, child: child),
+                // 采样器用面板打开时从 `OrbitGlassScope` 取到的实例：
+                // Overlay 直挂的卡片同样在 scope 之外，内部自取拿不到
+                child: OrbitFloatCard(
+                  width: width,
+                  backdrop: widget.backdrop,
+                  child: child,
+                ),
               ),
             ),
           ),
@@ -773,61 +802,66 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _closeCard();
       },
-      child: OrbitSheetScaffold(
-        showHandle: true,
-        contentScrollable: false,
-        maxHeightFactor: 0.7,
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppDimens.space16,
-                AppDimens.space12,
-                AppDimens.space16,
-                0,
+      // 键盘避让落在玻璃**之外**（`OrbitGlassSheet` 已收口：玻璃只覆盖面板
+      // 本体，键盘高度不进模糊纹理）
+      child: OrbitGlassSheet(
+        backdrop: widget.backdrop,
+        child: OrbitSheetScaffold(
+          showHandle: true,
+          contentScrollable: false,
+          maxHeightFactor: 0.7,
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppDimens.space16,
+                  AppDimens.space12,
+                  AppDimens.space16,
+                  0,
+                ),
+                child: OrbitTextField(
+                  controller: _titleController,
+                  focusNode: _titleFocus,
+                  autofocus: true,
+                  minLines: 1,
+                  maxLines: 4,
+                  maxLength: 200,
+                  hintText: '准备做什么？',
+                  style: TextStyle(fontSize: 15, color: colors.bodyText),
+                  onChanged: (_) => setState(() {}),
+                  onSubmitted: (_) => _submit(),
+                ),
               ),
-              child: OrbitTextField(
-                controller: _titleController,
-                focusNode: _titleFocus,
-                autofocus: true,
-                minLines: 1,
-                maxLines: 4,
-                maxLength: 200,
-                hintText: '准备做什么？',
-                style: TextStyle(fontSize: 15, color: colors.bodyText),
-                onChanged: (_) => setState(() {}),
-                onSubmitted: (_) => _submit(),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppDimens.space8,
-                AppDimens.space4,
-                AppDimens.space12,
-                AppDimens.space8,
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          for (final id in enabled) _toolbarButton(id),
-                        ],
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppDimens.space8,
+                  AppDimens.space4,
+                  AppDimens.space12,
+                  AppDimens.space8,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            for (final id in enabled) _toolbarButton(id),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  // 「更多」固定在发送钮左侧，不随工具栏横滚被挤走
-                  _moreButton(),
-                  const SizedBox(width: AppDimens.space8),
-                  _sendButton(colors),
-                ],
+                    // 「更多」固定在发送钮左侧，不随工具栏横滚被挤走
+                    _moreButton(),
+                    const SizedBox(width: AppDimens.space8),
+                    _sendButton(colors),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1011,4 +1045,3 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
     );
   }
 }
-

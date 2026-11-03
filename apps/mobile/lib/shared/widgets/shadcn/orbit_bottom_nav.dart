@@ -34,9 +34,12 @@ import '../../../core/theme/orbit_accents.dart';
 /// 栏体才「浮」在真实内容（列表行、卡片）之上，玻璃能采样到东西。此时页面
 /// 的滚动尾部必须自带 [clearanceOf] 的净空，末行才不会停在栏体背后。
 ///
-/// 公共 API 与旧实现逐字一致（`items` / `currentIndex` / `onTap` /
-/// `moreTabIndex` / `onMoreTap` / `badges`），`home_shell.dart` 只多传一个
-/// [backdrop]。
+/// 公共 API 与旧实现一致（`items` / `currentIndex` / `onTap` /
+/// `moreTabIndex` / `onMoreTap` / `badges`），`home_shell.dart` 只多传
+/// [backdrop]。**2026-11-03 起「更多」菜单改 OS4 形变弹层**：[onMoreTap] 退回
+/// 无参回调（不再算页签矩形），栏体另收 [moreAnchor] 并把该图标包进
+/// `MiuixGlassAnchor`——菜单由宿主用 `MiuixGlassTransformPopup` 渲染，
+/// 从图标位置连续长出来。
 class OrbitBottomNav extends StatefulWidget {
   const OrbitBottomNav({
     super.key,
@@ -45,6 +48,7 @@ class OrbitBottomNav extends StatefulWidget {
     required this.onTap,
     this.moreTabIndex,
     this.onMoreTap,
+    this.moreAnchor,
     this.badges = const <int, int>{},
     this.backdrop,
   });
@@ -83,8 +87,12 @@ class OrbitBottomNav extends StatefulWidget {
   /// 「更多」动作位下标（null = 无动作位）
   final int? moreTabIndex;
 
-  /// 「更多」位点击（参数 = 该页签的全局矩形，供来源锚定面板定位）
-  final ValueChanged<Rect>? onMoreTap;
+  /// 「更多」位点击（菜单由宿主渲染，栏体只负责触发）
+  final VoidCallback? onMoreTap;
+
+  /// 「更多」图标的形变锚点（宿主传入后，栏体把该图标包进
+  /// `MiuixGlassAnchor`，OS4 形变菜单才能从图标位置长出来）
+  final MiuixGlassPopupAnchor? moreAnchor;
 
   /// 页签角标计数（下标 → 数量；<=0 不显示）
   final Map<int, int> badges;
@@ -97,40 +105,14 @@ class OrbitBottomNav extends StatefulWidget {
 }
 
 class _OrbitBottomNavState extends State<OrbitBottomNav> {
-  /// 栏体锚点 key：「更多」面板要贴在**该页签格**上方，而 OS4 栏的每个条目
-  /// 不带可测量的 key 槽（`MiuixGlassNavigationItem` 没有 key 参数），故按
-  /// 栏体矩形 + 等分格宽换算（与库内 `_slot` 的等分口径一致）。
-  final GlobalKey _barKey = GlobalKey();
-
   void _handleTap(int index) {
     if (index == widget.moreTabIndex) {
       HapticFeedback.selectionClick();
-      widget.onMoreTap?.call(_moreTabRect());
+      widget.onMoreTap?.call();
       return;
     }
     if (index != widget.currentIndex) HapticFeedback.selectionClick();
     widget.onTap(index);
-  }
-
-  /// 「更多」页签格的全局矩形（栏体矩形按条目数等分）
-  ///
-  /// OS4 栏左右各留 8dp 内边距、条目等分剩余宽度（见库内
-  /// `MiuixGlassNavigationBar` 的 `_slot` 计算），故格宽 = (宽 − 16) / n。
-  Rect _moreTabRect() {
-    final box = _barKey.currentContext?.findRenderObject() as RenderBox?;
-    final index = widget.moreTabIndex;
-    if (box == null || !box.attached || index == null) {
-      return Rect.zero;
-    }
-    final bar = box.localToGlobal(Offset.zero) & box.size;
-    const inset = 8.0;
-    final slot = (bar.width - inset * 2) / widget.items.length;
-    return Rect.fromLTWH(
-      bar.left + inset + slot * index,
-      bar.top,
-      slot,
-      bar.height,
-    );
   }
 
   @override
@@ -153,7 +135,6 @@ class _OrbitBottomNavState extends State<OrbitBottomNav> {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: OrbitBottomNav.maxWidth),
           child: MiuixGlassNavigationBar(
-            key: _barKey,
             backdrop: widget.backdrop,
             selectedIndex: widget.currentIndex,
             // 「更多」动作位：OS4 的 isAction 项只触发回调、不移动指示器
@@ -186,15 +167,22 @@ class _OrbitBottomNavState extends State<OrbitBottomNav> {
       size: AppDimens.iconSizeLg,
       color: selected ? OrbitAccents.themeAccent : colors.secondaryText,
     );
-    if (badge <= 0) return icon;
-    // 角标贴图标右上角：`Stack` + `clipBehavior: none` 允许溢出图标盒绘制
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        icon,
-        Positioned(top: -5, right: -12, child: _buildBadge(badge)),
-      ],
-    );
+    final content = badge <= 0
+        ? icon
+        // 角标贴图标右上角：`Stack` + `clipBehavior: none` 允许溢出图标盒绘制
+        : Stack(
+            clipBehavior: Clip.none,
+            children: [
+              icon,
+              Positioned(top: -5, right: -12, child: _buildBadge(badge)),
+            ],
+          );
+    // 「更多」动作位挂形变锚点：OS4 菜单从该图标位置连续长出来
+    final anchor = widget.moreAnchor;
+    if (index == widget.moreTabIndex && anchor != null) {
+      return MiuixGlassAnchor(anchor: anchor, child: content);
+    }
+    return content;
   }
 
   /// 计数角标：红色胶囊（>99 折叠为 99+），白字加粗保对比度

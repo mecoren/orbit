@@ -40,6 +40,7 @@ import '../../../core/theme/app_dimens.dart';
 import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_shapes.dart';
 import '../../../core/theme/icon_map.dart';
+import 'orbit_glass_surface.dart';
 import 'orbit_sheet_scaffold.dart';
 
 /// 底部抽屉顶圆角描边形状（全项目底部抽屉的唯一形状来源）
@@ -132,21 +133,30 @@ Future<void> showSelectBottomSheet<T>(
   T? current,
   required ValueChanged<T> onSelect,
 }) async {
+  // 玻璃表面要采样「弹层背后的页面内容」，取壳层同一份采样器
+  // （调用方 context 在 `OrbitGlassScope` 之下；无壳/测试裸页为 null）
+  final backdrop = OrbitGlassScope.maybeOf(context);
   await showModalBottomSheet<void>(
     context: context,
     useRootNavigator: true,
     isScrollControlled: true,
-    backgroundColor: AppColors.ofContext(context).popup,
+    // 表面由 `OrbitGlassSheet` 自绘：承载层透明 + elevation 0
+    backgroundColor: Colors.transparent,
+    elevation: 0,
+    barrierColor: Colors.black.withValues(alpha: 0.32),
     shape: bottomSheetTopShape,
     sheetAnimationStyle: bottomSheetMotion,
-    builder: (sheetContext) => _SelectSheet<T>(
-      title: title,
-      items: items,
-      current: current,
-      onPick: (value) {
-        Navigator.of(sheetContext).pop();
-        onSelect(value);
-      },
+    builder: (sheetContext) => OrbitGlassSheet(
+      backdrop: backdrop,
+      child: _SelectSheet<T>(
+        title: title,
+        items: items,
+        current: current,
+        onPick: (value) {
+          Navigator.of(sheetContext).pop();
+          onSelect(value);
+        },
+      ),
     ),
   );
 }
@@ -172,20 +182,26 @@ Future<void> showMoreActionsSheet(
   required String title,
   required List<MoreActionItem> actions,
 }) async {
+  final backdrop = OrbitGlassScope.maybeOf(context);
   await showModalBottomSheet<void>(
     context: context,
     useRootNavigator: true,
     isScrollControlled: true,
-    backgroundColor: AppColors.ofContext(context).popup,
+    backgroundColor: Colors.transparent,
+    elevation: 0,
+    barrierColor: Colors.black.withValues(alpha: 0.32),
     shape: bottomSheetTopShape,
     sheetAnimationStyle: bottomSheetMotion,
-    builder: (sheetContext) => _ActionsSheet(
-      title: title,
-      actions: actions,
-      onPick: (action) {
-        Navigator.of(sheetContext).pop();
-        action.onTap();
-      },
+    builder: (sheetContext) => OrbitGlassSheet(
+      backdrop: backdrop,
+      child: _ActionsSheet(
+        title: title,
+        actions: actions,
+        onPick: (action) {
+          Navigator.of(sheetContext).pop();
+          action.onTap();
+        },
+      ),
     ),
   );
 }

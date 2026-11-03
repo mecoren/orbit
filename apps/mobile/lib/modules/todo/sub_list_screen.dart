@@ -40,7 +40,8 @@ import '../../shared/widgets/shadcn/orbit_text_field.dart';
 import '../../shared/widgets/shadcn/orbit_icon_button.dart';
 import '../../shared/widgets/shadcn/orbit_filter_chip.dart';
 import '../../services/local_prefs.dart';
-import '../shell/home_shell.dart' show OrbitGlassScope;
+import '../../shared/widgets/shadcn/orbit_glass_surface.dart'
+    show OrbitGlassScope;
 import 'kanban_view.dart';
 import 'matrix_view.dart';
 import 'logic/batch_actions.dart';
@@ -453,161 +454,158 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
       _sortDir ??
       baseSortDir[_sortKey == TaskSortKey.manual ? TaskSortKey.due : _sortKey]!;
 
-  /// 页头 ⋮ 下拉面板（2026-09-23）：两组条目——「这个列表」与「怎么操作」
+  /// 页头右上角 ⋮ 玻璃形变菜单（2026-11-02 对齐 OS4 形变菜单口径）的条目配置：
+  /// 两组条目——「这个列表」与「怎么操作」
   ///
   /// 页头由「返回 + 标题 + 四枚图标」收敛成「返回 + 标题 + ⋮」；视图档与排序档
-  /// 在面板内**就地展开**子项（选中打勾），展开期间其余条目置灰
-  /// （口径见 [showOrbitDropdownPanel]）。上下文条目按需出现：
+  /// 经二级面板展开（选中打勾，见 [OrbitGlassMenuButton]）。上下文条目按需出现：
   /// 「编辑项目」只在项目视图有，「看板分组」只在看板档有——常驻只会添噪音。
-  void _showOverflowPanel() {
+  ///
+  /// 菜单点开瞬间由原语回调构建（回调语义，用 `ref.read` 取当下值）。
+  List<List<OrbitPanelItem>> _overflowGroups() {
     final projectId = widget.query.projectId;
-    final prefs = ref.watch(displayPrefsProvider);
-    showOrbitDropdownPanel(
-      context,
-      topInset: MediaQuery.of(context).padding.top + OrbitPageHeader.rowHeight,
-      groups: [
-        [
-          if (projectId != null)
-            OrbitPanelItem(
-              icon: OrbitIcons.edit,
-              label: '编辑项目',
-              onTap: () => context.push('/todo/projects/$projectId/edit'),
-            ),
+    final prefs = ref.read(displayPrefsProvider);
+    return [
+      [
+        if (projectId != null)
           OrbitPanelItem(
-            icon: _viewMode.icon,
-            label: '视图',
+            icon: OrbitIcons.edit,
+            label: '编辑项目',
+            onTap: () => context.push('/todo/projects/$projectId/edit'),
+          ),
+        OrbitPanelItem(
+          icon: _viewMode.icon,
+          label: '视图',
+          children: [
+            for (final m in TaskViewMode.values)
+              OrbitPanelItem(
+                icon: m.icon,
+                label: '${m.label}视图',
+                checked: m == _viewMode,
+                onTap: () => _setViewMode(m),
+              ),
+          ],
+        ),
+        if (_viewMode == TaskViewMode.kanban)
+          OrbitPanelItem(
+            icon: OrbitIcons.flag,
+            label: '看板分组',
             children: [
-              for (final m in TaskViewMode.values)
+              for (final g in KanbanGroupBy.values)
                 OrbitPanelItem(
-                  icon: m.icon,
-                  label: '${m.label}视图',
-                  checked: m == _viewMode,
-                  onTap: () => _setViewMode(m),
+                  icon: g == KanbanGroupBy.project
+                      ? OrbitIcons.folder
+                      : OrbitIcons.flag,
+                  label: g.label,
+                  checked: g == _kanbanGroupBy,
+                  onTap: () => _setKanbanGroupBy(g),
                 ),
             ],
           ),
-          if (_viewMode == TaskViewMode.kanban)
-            OrbitPanelItem(
-              icon: OrbitIcons.flag,
-              label: '看板分组',
-              children: [
-                for (final g in KanbanGroupBy.values)
-                  OrbitPanelItem(
-                    icon: g == KanbanGroupBy.project
-                        ? OrbitIcons.folder
-                        : OrbitIcons.flag,
-                    label: g.label,
-                    checked: g == _kanbanGroupBy,
-                    onTap: () => _setKanbanGroupBy(g),
-                  ),
-              ],
+        OrbitPanelItem(
+          icon: OrbitIcons.success,
+          label: '隐藏已完成',
+          checked: !_doneExpanded,
+          onTap: _toggleDoneSection,
+        ),
+        // 显示详细（竞品同款）：关 = 行内只剩标题 + 右列时刻的紧凑形态
+        OrbitPanelItem(
+          icon: OrbitIcons.tableRows,
+          label: '显示详细',
+          checked: prefs.detail,
+          onTap: () =>
+              ref.read(displayPrefsProvider.notifier).setDetail(!prefs.detail),
+        ),
+        OrbitPanelItem(
+          icon: OrbitIcons.settings,
+          label: '显示设置',
+          onTap: _showDisplaySettingsSheet,
+        ),
+      ],
+      [
+        OrbitPanelItem(
+          icon: OrbitIcons.filterList,
+          label: '筛选',
+          trailingLabel: _filters.isEmpty
+              ? null
+              : '已启用 ${_filters.activeCount} 项',
+          onTap: _showFilterSheet,
+        ),
+        // 保存为筛选器（G1，对齐桌面「···」菜单「保存为筛选器」）：把当前筛选
+        // 一键固化为保存的筛选器——跳筛选器页并预填构建抽屉
+        //（filterToSavedConditions 与桌面 toolbarToForm 同口径）
+        OrbitPanelItem(
+          icon: OrbitIcons.saveView,
+          label: '保存为筛选器',
+          onTap: () => context.push(
+            '/todo/saved-filters',
+            extra: filterToSavedConditions(
+              filters: _filters,
+              quickView: _effectiveQuery.quickView,
             ),
-          OrbitPanelItem(
-            icon: OrbitIcons.success,
-            label: '隐藏已完成',
-            checked: !_doneExpanded,
-            onTap: _toggleDoneSection,
           ),
-          // 显示详细（竞品同款）：关 = 行内只剩标题 + 右列时刻的紧凑形态
-          OrbitPanelItem(
-            icon: OrbitIcons.tableRows,
-            label: '显示详细',
-            checked: prefs.detail,
-            onTap: () => ref
-                .read(displayPrefsProvider.notifier)
-                .setDetail(!prefs.detail),
-          ),
-          OrbitPanelItem(
-            icon: OrbitIcons.settings,
-            label: '显示设置',
-            onTap: _showDisplaySettingsSheet,
-          ),
-        ],
-        [
-          OrbitPanelItem(
-            icon: OrbitIcons.filterList,
-            label: '筛选',
-            trailingLabel: _filters.isEmpty
-                ? null
-                : '已启用 ${_filters.activeCount} 项',
-            onTap: _showFilterSheet,
-          ),
-          // 保存为筛选器（G1，对齐桌面「···」菜单「保存为筛选器」）：把当前筛选
-          // 一键固化为保存的筛选器——跳筛选器页并预填构建抽屉
-          //（filterToSavedConditions 与桌面 toolbarToForm 同口径）
-          OrbitPanelItem(
-            icon: OrbitIcons.saveView,
-            label: '保存为筛选器',
-            onTap: () => context.push(
-              '/todo/saved-filters',
-              extra: filterToSavedConditions(
-                filters: _filters,
-                quickView: _effectiveQuery.quickView,
+        ),
+        OrbitPanelItem(
+          icon: OrbitIcons.sort,
+          label: '排序方式',
+          children: [
+            for (final e in _sortChoices.entries)
+              OrbitPanelItem(
+                icon: OrbitIcons.sort,
+                label: e.value,
+                checked: e.key == _sortKey,
+                onTap: () => _setSortKey(e.key),
               ),
-            ),
-          ),
+          ],
+        ),
+        // 周回顾（G5，对齐桌面「···」菜单「周回顾」）：三步引导处置
+        // 逾期/无日期/停滞，免逐清单翻找
+        OrbitPanelItem(
+          icon: OrbitIcons.calendarCheck,
+          label: '周回顾',
+          onTap: _startWeeklyReview,
+        ),
+        // 收件箱分诊（F2，对齐桌面「···」菜单「分诊未分组」）：未分组
+        // 任务一次一卡定归属的流程页
+        OrbitPanelItem(
+          icon: OrbitIcons.inbox,
+          label: '分诊未分组',
+          onTap: () => context.push('/todo/triage'),
+        ),
+        // 规划今天（F3 阶段一，对齐桌面「···」菜单）：只读排程预览弹层
+        OrbitPanelItem(
+          icon: OrbitIcons.calendarClock,
+          label: '规划今天',
+          onTap: () => showPlanDaySheet(context),
+        ),
+        // 排序方向（对齐桌面「顺序」档）：拖拽序无方向概念，整行隐藏
+        //（口径同桌面 manual 档隐藏）；行尾回显当前生效方向
+        if (_sortKey != TaskSortKey.manual)
           OrbitPanelItem(
             icon: OrbitIcons.sort,
-            label: '排序方式',
+            label: '排序方向',
+            trailingLabel: _effectiveSortDir == TaskSortDir.asc ? '升序' : '降序',
             children: [
-              for (final e in _sortChoices.entries)
+              for (final d in TaskSortDir.values)
                 OrbitPanelItem(
                   icon: OrbitIcons.sort,
-                  label: e.value,
-                  checked: e.key == _sortKey,
-                  onTap: () => _setSortKey(e.key),
+                  label: d == TaskSortDir.asc ? '升序' : '降序',
+                  checked: d == _effectiveSortDir,
+                  onTap: () => _setSortDir(d),
                 ),
             ],
           ),
-          // 周回顾（G5，对齐桌面「···」菜单「周回顾」）：三步引导处置
-          // 逾期/无日期/停滞，免逐清单翻找
+        // 批量选择（对齐桌面 task-list-view / kanban-view / task-table-view
+        // 三视图的多选批量；矩阵档桌面无多选，故排除）：选择态下看板卡与
+        // 表格行换装为选区形态，与列表档同批量工具条
+        if (_viewMode != TaskViewMode.matrix)
           OrbitPanelItem(
-            icon: OrbitIcons.calendarCheck,
-            label: '周回顾',
-            onTap: _startWeeklyReview,
+            icon: OrbitIcons.listChecks,
+            label: '批量选择',
+            onTap: _enterSelectionFromPanel,
           ),
-          // 收件箱分诊（F2，对齐桌面「···」菜单「分诊未分组」）：未分组
-          // 任务一次一卡定归属的流程页
-          OrbitPanelItem(
-            icon: OrbitIcons.inbox,
-            label: '分诊未分组',
-            onTap: () => context.push('/todo/triage'),
-          ),
-          // 规划今天（F3 阶段一，对齐桌面「···」菜单）：只读排程预览弹层
-          OrbitPanelItem(
-            icon: OrbitIcons.calendarClock,
-            label: '规划今天',
-            onTap: () => showPlanDaySheet(context),
-          ),
-          // 排序方向（对齐桌面「顺序」档）：拖拽序无方向概念，整行隐藏
-          //（口径同桌面 manual 档隐藏）；行尾回显当前生效方向
-          if (_sortKey != TaskSortKey.manual)
-            OrbitPanelItem(
-              icon: OrbitIcons.sort,
-              label: '排序方向',
-              trailingLabel: _effectiveSortDir == TaskSortDir.asc ? '升序' : '降序',
-              children: [
-                for (final d in TaskSortDir.values)
-                  OrbitPanelItem(
-                    icon: OrbitIcons.sort,
-                    label: d == TaskSortDir.asc ? '升序' : '降序',
-                    checked: d == _effectiveSortDir,
-                    onTap: () => _setSortDir(d),
-                  ),
-              ],
-            ),
-          // 批量选择（对齐桌面 task-list-view / kanban-view / task-table-view
-          // 三视图的多选批量；矩阵档桌面无多选，故排除）：选择态下看板卡与
-          // 表格行换装为选区形态，与列表档同批量工具条
-          if (_viewMode != TaskViewMode.matrix)
-            OrbitPanelItem(
-              icon: OrbitIcons.listChecks,
-              label: '批量选择',
-              onTap: _enterSelectionFromPanel,
-            ),
-        ],
       ],
-    );
+    ];
   }
 
   /// 显示设置抽屉（竞品「显示设置」）：行内副标题的三个粒度开关写即落盘；
@@ -647,7 +645,10 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                       ),
                     ),
                   ),
-                  OrbitSwitch(value: value, onChanged: enabled ? onChanged : null),
+                  OrbitSwitch(
+                    value: value,
+                    onChanged: enabled ? onChanged : null,
+                  ),
                 ],
               ),
             ),
@@ -2448,9 +2449,11 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                   : [
                       // 视图 / 筛选 / 排序三档收进 ⋮ 溢出菜单：四枚图标并排会把
                       // 动态标题挤到只剩半行；筛选生效时 ⋮ 挂角标（否则列表莫名
-                      // 变少没有出处）。选择类交互仍走底部抽屉，非 PopupMenu
-                      OrbitIconButton(
-                        onPressed: _showOverflowPanel,
+                      // 变少没有出处）。OS4 玻璃形变菜单（按钮 → 菜单连续形变，
+                      // 视图/排序档走二级面板）；采样器取壳层共享实例
+                      OrbitGlassMenuButton(
+                        groupsBuilder: _overflowGroups,
+                        backdrop: OrbitGlassScope.maybeOf(context),
                         tooltip: '更多操作',
                         icon: _filters.isEmpty
                             ? Icon(
@@ -3562,6 +3565,3 @@ class _SelectionRow extends StatelessWidget {
     );
   }
 }
-
-
-

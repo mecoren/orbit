@@ -38,7 +38,7 @@
 | `MiuixSurface`（squircle） | `OrbitFilterChip`（新增） | 4 处（2 处 `ChoiceChip` + 2 处手搓容器） | 筛选标签统一为 squircle 表面 + 强调色 16% 选中底 |
 | `MiuixHorizontalDivider` / `MiuixVerticalDivider` | `OrbitDivider` / `OrbitVerticalDivider`（新增） | 6 处 | 0.75 细线 + `dividerLine` 语义角色（保留 `height`/`thickness` 语义） |
 | `MiuixGlassNavigationBar`（**OS4 玻璃**） | `OrbitBottomNav` | 1 处（壳） | 液态玻璃底栏 + 滑动胶囊指示器 + 弹簧回弹 + 支持拖动换页 |
-| `MiuixGlassPanel` + `miuixGlassSurface`（**OS4 玻璃**） | `OrbitPageHeader` 玻璃层 / `OrbitFloatCard` 浮层 | 28 页页头 + 全部锚点浮层 | 页头：OS4 材质（模糊 + 混色 + 描边），无采样器时回落实时 `BackdropFilter`；浮层：`popupViewGlass` 材质档 |
+| `MiuixGlassPanel` + `miuixGlassSurface`（**OS4 玻璃**） | `OrbitPageHeader` 玻璃层 / `OrbitFloatCard` 浮层 / `OrbitGlassSurface` + `OrbitGlassSheet`（底部弹层与菜单抽屉，2026-11-03） | 28 页页头 + 全部锚点浮层 + 快速添加面板 + 选择/动作抽屉 | 页头：OS4 材质（模糊 + 混色 + 描边），无采样器时回落实时 `BackdropFilter`；浮层：`puredThinGlass` + blur 32；弹层：`puredThinGlass` 栏体材质 + `shading: false` |
 | `MiuixTheme` / `MiuixColors` / `MiuixTextStyles` | `OrbitMiuixTheme`（`core/theme/miuix_theme.dart`） | 根装配 + 测试壳 | 54 个语义色角色全部由 `AppColors` / `OrbitAccents` 派生，三套体系（Material / shadcn / Miuix）数值同源 |
 | `MiuixGlassRendering` | `HomeShell.initState` 预热 | 1 处 | 首帧前加载 OS4 shader，避免"先实色后玻璃"的跳变 |
 
@@ -173,6 +173,39 @@ OrbitGlassScope（向下暴露同一个 backdrop）
   1px 描边 + e2 阴影（阴影画在裁剪外），与 `MiuixSnackbar.blurSigma` 同构；
 - **FAB 换 miuix 引擎**：`MiuixFloatingActionButton`（HyperOS 阴影公式 + 弹簧按压），
   仍为实心强调色（沿用 v3「FAB 不玻璃化」的既定决策，避免与底栏玻璃双重磨砂）。
+- **弹出层表面统一 OS4 玻璃（2026-11-03）**：
+  - 锚定卡片 `OrbitFloatCard` 接 `MiuixLayerBackdrop`（此前缺采样器退实色白卡）；
+  - 底部菜单型抽屉 `showSelectBottomSheet` / `showMoreActionsSheet` 改
+    `OrbitGlassSheet`（承载透明 + `elevation 0` + 32% 黑遮罩，键盘避让提到玻璃层外）；
+    `showConfirmBottomSheet` 保持实色（确认框不是菜单，读秒/危险动作需要实体感）；
+  - 形变菜单扩容（`MiuixGlassTransformPopup`）：项目编辑页头 ⋮、上级文件夹行
+    （**整行**作触发件，`anchorContent` 为同构副本）、底栏「更多」——
+    `OrbitBottomNav` 新增 `moreAnchor` 把图标包进 `MiuixGlassAnchor`，
+    `onMoreTap` 退回无参回调，宿主用 `gap: -(barHeight + bottomGap)` 让菜单浮在
+    底栏之上；`OrbitDropdownPanelView` 新增 `scrollable: false`（形变弹层外层
+    已滚动，内层再套会拿到无界高度报错）；
+  - **快加面板 4 张锚定卡片（优先级/标签/项目/更多）保留 `OrbitOverlayCard`
+    直挂**：`MiuixGlassTransformPopup` 内部 `FocusScope(autofocus: true)` 会抢走
+    标题输入框焦点、键盘下沉，违背「边打字边选」的既有交互（`quick_add_sheet_test`
+    三个用例锁死）；它们已是玻璃表面，只差形变动画。
+- **锚定浮层卡片接玻璃采样器（2026-11-03）**：`OrbitFloatCard` 早先已挂
+  `miuixGlassSurface`，但**没接 `MiuixLayerBackdrop`**——库内无快照即退实色，
+  于是「页头 ⋮ 是玻璃菜单、所有锚定卡片是白色实色卡片」两套观感并存。现由
+  调用方透传采样器（卡片在 `showGeneralDialog` / `OverlayEntry` 上，位于
+  `OrbitGlassScope` 之外，内部自取永远为 null）：底栏「更多」传壳层实例、
+  项目编辑页两处传 `OrbitGlassScope.maybeOf`、快加面板用打开时取到的实例。
+  材质与 `OrbitGlassMenu` 同档（`puredThinGlass` + blur 32，`shading: false`，
+  进场缩放期 origin 逐帧变、纹理缓存失效，60 档会掉帧），并去掉手绘 1px
+  `outline`——改由玻璃 shader 的高光描边承担。
+- **快速添加面板玻璃化（2026-11-03）**：`showQuickAddSheet` 承载层改透明
+  （`backgroundColor: transparent` + `elevation: 0`，否则 Material 在透明底上补
+  一圈直角阴影）、遮罩降到 32% 黑；面板表面走新原语 `OrbitGlassSurface`
+  （`puredThinGlass` 栏体材质 + `shading: false`，与页头/底栏同档），采样壳层
+  同一份 `MiuixLayerBackdrop`（面板挂在根 Overlay，不在捕获树内，无自采样）。
+  首帧/无壳退实时 `BackdropFilter`；键盘避让提到玻璃层**之外**，玻璃只覆盖
+  面板本体（键盘高度不进模糊纹理）。**FAB 的 `onPressed` 必须用
+  `Builder` 下的 context**——`HomeShell.build` 的 context 在 `OrbitGlassScope`
+  之上，直接取采样器永远为 null（`home_shell_test` 已锁）。
 
 ### 5.4 保留的兼容处理（本批仍未替换）
 
