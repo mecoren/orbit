@@ -17,6 +17,17 @@
 
 ## [Unreleased]
 
+### 优化：移动端功能模块配置页逐件对齐 flutter_miuix 组件（2026-11-03）
+
+按截图逐个核对页面元素在 flutter_miuix 1.3.0 中的对应组件，手搓控件一律换成库内原语：
+
+- 列表行 → `MiuixBasicComponent`（标题 headline1 / 简介 body2 / 最小行高 56 / 槽位间距 8），并补 `MiuixHorizontalDivider` 行分隔线（缩进对齐标题文字起点，miuix 分组卡惯例）；
+- 行首启停圆钮 → `MiuixIconButton(backgroundColor:)`：`OrbitIconButton` 新增 `backgroundColor` 参数（色圈钮），行内取 32 紧凑档整圆底，替换原手搓 `Container(circle)`；
+- 底栏落位预览 → `MiuixCard`（经 `OrbitCard` 收口，squircle + 同形描边），不再裸 `Container` + `Border.all`；
+- 页内全部文案（模块简介、空段提示、横滑底衬、页脚说明）→ `MiuixText`，随外观页字重档联动；
+- 库内确无等价物的只有两处，保留自绘但取 miuix 几何与配色：底栏落位预览（`MiuixNavigationBar` 是交互栏且材质要采样页面背景，配置页无可采样内容）、右端拖拽手柄（无拖拽行组件，图标集也没有 drag 字形）。
+- **验证**：`flutter analyze lib` 0 issue；`home_shell_test` 11 例全绿。
+
 ### 优化：移动端下拉刷新成圆即出绕行点（2026-11-03）
 
 miuix 版 `MiuixPullToRefresh` 只在 refreshing 状态画环内绕行点，阈值态画「两半圆 + 两段竖线」的拉伸胶囊——「释放刷新」时圆环静止无点，继续下拉还会被拉长。

@@ -19,12 +19,24 @@
 ///   跨段翻越时触感确认，松手即提交；落位行挂一次入场动画）。
 /// - 槽位映射按列表高度比例折算（行内带简介、高度不一，不能沿用编辑操作页
 ///   的 `touchTarget` 整除口径）。
+///
+/// **组件承载（对照 flutter_miuix 1.3.0 逐个核过）**：卡片与预览底 =
+/// `MiuixCard`（[OrbitCard] 收口，squircle + 同形描边）、行 =
+/// `MiuixBasicComponent`（标题 headline1 / 简介 body2 / 最小行高 56 / 槽位间距
+/// 8）、启停圆钮 = `MiuixIconButton(backgroundColor:)`（[OrbitIconButton] 收口，
+/// 32 紧凑档）、行间分隔线 = `MiuixHorizontalDivider`（[OrbitDivider]）、
+/// 全部文字 = `MiuixText`（随外观页字重档联动）。库内**确无等价物**的只有两处：
+/// **底栏落位预览**（`MiuixNavigationBar` 是交互栏且材质要采样页面背景，配置页
+/// 无可采样内容，故降级为静态示意图）与**右端拖拽手柄**（库无拖拽行组件、图标
+/// 集也无 drag 字形，沿用 lucide `gripVertical` + `ReorderableDragStartListener`，
+/// 尺寸/配色仍取 miuix 口径）。
 library;
 
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_miuix/miuix.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_colors.dart';
@@ -33,6 +45,8 @@ import '../../core/theme/app_motion.dart';
 import '../../core/theme/app_shapes.dart';
 import '../../core/theme/icon_map.dart';
 import '../../core/theme/orbit_accents.dart';
+import '../../shared/widgets/shadcn/orbit_card.dart';
+import '../../shared/widgets/shadcn/orbit_divider.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_icon_button.dart';
@@ -42,6 +56,20 @@ import '../shell/nav_modules.dart';
 /// 与预览跟手位移共用这一个常量——手势进度（行位移占宽比 0…1）除以它即
 /// 预览插值进度（0…1，钳制），1 = 落位后的最终布局。
 const double _swipeThreshold = 0.4;
+
+/// 行首启停圆钮边长：miuix 图标钮（`MiuixIconButton`）的紧凑档，
+/// 整圆底 + 16 号加减号（库默认 40 是独立动作位，行内用 32 才不压行高）。
+const double _toggleExtent = 32;
+
+/// 列表行之间的分隔线左缩进：对齐行标题文字起点。
+///
+/// 圆钮 32 + 圆钮与图标间隙 8 + 模块图标 22 + miuix 槽位间隙 8
+/// （`MiuixBasicComponent` 的 `startAction` → 中心内容固定 8 间距）；行自身
+/// 不吃水平内边距（见 [_moduleRow]），故分隔线容器与行的左基准同一条。
+const double _dividerIndent = _toggleExtent +
+    AppDimens.space8 +
+    AppDimens.iconSizeMd +
+    8;
 
 /// 横滑过程中的实时快照（驱动预览图标跟手位移）。
 ///
@@ -228,7 +256,7 @@ class _NavModulesPageState extends ConsumerState<NavModulesPage> {
                   bottom: AppDimens.gestureInsetFallback + AppDimens.space32,
                 ),
                 children: [
-                  _preview(colors, _liveOrder(nav.enabled)),
+                  _preview(context, colors, _liveOrder(nav.enabled)),
                   const SizedBox(height: AppDimens.cardGap),
                   _section(
                     context,
@@ -244,17 +272,15 @@ class _NavModulesPageState extends ConsumerState<NavModulesPage> {
                     enabledSection: false,
                   ),
                   const SizedBox(height: AppDimens.space12),
-                  Text(
+                  MiuixText(
                     '上方为底栏预览（与真实底栏同形同序）；底栏显示已启用列表的前 '
                     '${NavModulesState.bottomTabLimit} 个模块，'
                     '其余入口收在「更多」面板里。左右滑动行可在「已启用」与'
                     '「未启用」之间移动，也可用行首加减按钮；按住右侧手柄可'
                     '直接拖到另一段（含跨卡片），上方预览实时跟随。',
-                    style: TextStyle(
-                      fontSize: 12,
-                      height: 1.5,
-                      color: colors.secondaryText,
-                    ),
+                    style: MiuixTheme.of(context).textStyles.footnote1,
+                    height: 1.5,
+                    color: colors.secondaryText,
                   ),
                 ],
               ),
@@ -389,7 +415,7 @@ class _NavModulesPageState extends ConsumerState<NavModulesPage> {
     return SectionCard(
       title: label,
       child: modules.isEmpty
-          ? _emptyHint(colors, '全部模块已启用，左滑行或点减号可停用。')
+          ? _emptyHint(context, colors, '全部模块已启用，左滑行或点减号可停用。')
           : _sectionList(
               colors,
               listKey:
@@ -401,11 +427,16 @@ class _NavModulesPageState extends ConsumerState<NavModulesPage> {
   }
 
   /// 空段占位（未启用被搬空时；与编辑操作页工具栏搬空提示同口径）
-  Widget _emptyHint(AppColorSet colors, String text) => Padding(
+  ///
+  /// 文字走 `MiuixText` + `body2`：跟随 miuix 字阶与字重档（外观页调字重时
+  /// 同步变化），不再裸 `Text`。
+  Widget _emptyHint(BuildContext context, AppColorSet colors, String text) =>
+      Padding(
         padding: const EdgeInsets.symmetric(vertical: AppDimens.space12),
-        child: Text(
+        child: MiuixText(
           text,
-          style: TextStyle(fontSize: 13, color: colors.deactivatedText),
+          style: MiuixTheme.of(context).textStyles.body2,
+          color: colors.secondaryText,
         ),
       );
 
@@ -512,10 +543,16 @@ class _NavModulesPageState extends ConsumerState<NavModulesPage> {
               DismissDirection.startToEnd: _swipeThreshold,
               DismissDirection.endToStart: _swipeThreshold,
             },
-            background:
-                _swipeBackground(colors, toEnabled: !enabledSection),
-            secondaryBackground:
-                _swipeBackground(colors, toEnabled: !enabledSection),
+            background: _swipeBackground(
+              context,
+              colors,
+              toEnabled: !enabledSection,
+            ),
+            secondaryBackground: _swipeBackground(
+              context,
+              colors,
+              toEnabled: !enabledSection,
+            ),
             // 最后一个已启用模块不可停用：横滑直接拒收，不播出场
             confirmDismiss: (_) async {
               if (enabledSection &&
@@ -552,14 +589,29 @@ class _NavModulesPageState extends ConsumerState<NavModulesPage> {
               _swipeLive.value = null;
               _moveAcross(module, !enabledSection);
             },
-            child: _EnterTransition(
-              animate: _arrived.contains(module),
-              child: _moduleRow(
-                colors,
-                module: module,
-                enabled: enabledSection,
-                index: index,
-              ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // 行分隔线落在首行之外（miuix 分组卡惯例：项之间用
+                // `MiuixHorizontalDivider`，见库内 preferences demo 的
+                // `IndentDivider`），随行一起横滑离场
+                if (index > 0)
+                  OrbitDivider(
+                    indent: _dividerIndent,
+                    endIndent: AppDimens.space16,
+                  ),
+                _EnterTransition(
+                  animate: _arrived.contains(module),
+                  child: _moduleRow(
+                    context,
+                    colors,
+                    module: module,
+                    enabled: enabledSection,
+                    index: index,
+                  ),
+                ),
+              ],
             ),
           );
         },
@@ -569,7 +621,11 @@ class _NavModulesPageState extends ConsumerState<NavModulesPage> {
 
   /// 横滑底衬：去向已启用 = 绿色系加号，去向未启用 = 红色系减号
   /// （与编辑操作页同色系：加回用绿、收走用红）。
-  Widget _swipeBackground(AppColorSet colors, {required bool toEnabled}) {
+  Widget _swipeBackground(
+    BuildContext context,
+    AppColorSet colors, {
+    required bool toEnabled,
+  }) {
     final tone = toEnabled ? colors.success : colors.destructive;
     return Container(
       alignment: Alignment.center,
@@ -586,13 +642,11 @@ class _NavModulesPageState extends ConsumerState<NavModulesPage> {
             size: AppDimens.iconSizeMd,
             color: tone,
           ),
-          Text(
+          MiuixText(
             toEnabled ? '加到启用' : '收进停用',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: tone,
-            ),
+            style: MiuixTheme.of(context).textStyles.body2,
+            fontWeight: FontWeight.w600,
+            color: tone,
           ),
           Icon(
             toEnabled ? OrbitIcons.add : OrbitIcons.remove,
@@ -614,123 +668,133 @@ class _NavModulesPageState extends ConsumerState<NavModulesPage> {
   /// [_swipeLive] 逐帧给出插值进度——滑出项淡出、后项实时让位；滑入项以
   /// 幽灵图标在槽位淡入占位（落位即扶正，无跳变）。跟手追踪中零延迟直跟
   /// （与行 1:1），手指离开后切回常规时长收尾（与编辑操作页同机制）。
-  Widget _preview(AppColorSet colors, List<OrbitNavModule> enabled) {
-    return Container(
+  Widget _preview(BuildContext context, AppColorSet colors,
+      List<OrbitNavModule> enabled) {
+    // 卡面走原生语（[OrbitCard] = `MiuixCard` squircle + 同形描边），高度固定
+    // 56、无内边距：槽位宽度全部留给图标等分，与真实底栏页签密度同档
+    return OrbitCard(
       key: const ValueKey('nav-preview'),
-      height: 56,
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: AppShapes.medium,
-        border: Border.all(color: colors.outline),
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          // 槽位固定五档（4 个页签位 + 固定「更多」位）：图标只在槽内平移，
-          // 宽度恒定不伸缩，落位提交与进度 1.0 时完全一致，无跳变
-          final slotW = constraints.maxWidth /
-              (NavModulesState.bottomTabLimit + 1);
-          return ValueListenableBuilder<_SwipeLive?>(
-            valueListenable: _swipeLive,
-            builder: (context, live, _) {
-              final bottom = enabled
-                  .take(NavModulesState.bottomTabLimit)
-                  .toList(growable: false);
-              // 落位即所见：调用方传当前落位，横滑/拖拽经 provider 重建即跟随
-              var outIndex = -1;
-              var swipeIn = false;
-              if (live != null) {
-                if (live.fromEnabled) {
-                  outIndex = bottom.indexOf(live.module);
-                } else {
-                  // 滑入项落在底栏（追加位仍在前 4 槽内）才进预览；
-                  // 追加到面板区的换段不影响底栏落位
-                  swipeIn = !enabled.contains(live.module) &&
-                      enabled.length < NavModulesState.bottomTabLimit;
+      padding: EdgeInsets.zero,
+      borderRadius: AppShapes.medium,
+      child: SizedBox(
+        height: 56,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // 槽位固定五档（4 个页签位 + 固定「更多」位）：图标只在槽内平移，
+            // 宽度恒定不伸缩，落位提交与进度 1.0 时完全一致，无跳变
+            final slotW = constraints.maxWidth /
+                (NavModulesState.bottomTabLimit + 1);
+            return ValueListenableBuilder<_SwipeLive?>(
+              valueListenable: _swipeLive,
+              builder: (context, live, _) {
+                final bottom = enabled
+                    .take(NavModulesState.bottomTabLimit)
+                    .toList(growable: false);
+                // 落位即所见：调用方传当前落位，横滑/拖拽经 provider 重建即跟随
+                var outIndex = -1;
+                var swipeIn = false;
+                if (live != null) {
+                  if (live.fromEnabled) {
+                    outIndex = bottom.indexOf(live.module);
+                  } else {
+                    // 滑入项落在底栏（追加位仍在前 4 槽内）才进预览；
+                    // 追加到面板区的换段不影响底栏落位
+                    swipeIn = !enabled.contains(live.module) &&
+                        enabled.length < NavModulesState.bottomTabLimit;
+                  }
                 }
-              }
-              final p = live?.progress ?? 0;
-              // 跟手追踪中零延迟直跟（与行 1:1），手指离开后切回常规时长收尾——
-              // 同一套隐式动画，只换时长，故收尾从当前显示位置平滑起播，无跳变。
-              final tracking = outIndex >= 0 || swipeIn;
-              final posDuration =
-                  tracking ? AppMotion.instant : AppMotion.normal;
-              final fadeDuration =
-                  tracking ? AppMotion.instant : AppMotion.fast;
-              final icons = <Widget>[
-                for (var i = 0; i < bottom.length; i++)
-                  AnimatedPositioned(
-                    // key = 模块身份：换序/换段时同一图标滑向新槽位
-                    key: ValueKey(bottom[i]),
-                    duration: posDuration,
-                    curve: AppMotion.standard,
-                    left: i * slotW -
-                        (outIndex >= 0 && i > outIndex ? p * slotW : 0),
-                    top: 0,
-                    bottom: 0,
-                    width: slotW,
-                    child: AnimatedOpacity(
-                      duration: fadeDuration,
+                final p = live?.progress ?? 0;
+                // 跟手追踪中零延迟直跟（与行 1:1），手指离开后切回常规时长收尾——
+                // 同一套隐式动画，只换时长，故收尾从当前显示位置平滑起播，无跳变。
+                final tracking = outIndex >= 0 || swipeIn;
+                final posDuration =
+                    tracking ? AppMotion.instant : AppMotion.normal;
+                final fadeDuration =
+                    tracking ? AppMotion.instant : AppMotion.fast;
+                final icons = <Widget>[
+                  for (var i = 0; i < bottom.length; i++)
+                    AnimatedPositioned(
+                      // key = 模块身份：换序/换段时同一图标滑向新槽位
+                      key: ValueKey(bottom[i]),
+                      duration: posDuration,
                       curve: AppMotion.standard,
-                      opacity: outIndex == i ? 1 - p : 1,
-                      child: Center(
-                        child: Icon(
-                          bottom[i].icon,
-                          size: AppDimens.iconSizeLg,
-                          color: _lifting == bottom[i]
-                              ? OrbitAccents.themeAccent
-                              : colors.iconText,
+                      left: i * slotW -
+                          (outIndex >= 0 && i > outIndex ? p * slotW : 0),
+                      top: 0,
+                      bottom: 0,
+                      width: slotW,
+                      child: AnimatedOpacity(
+                        duration: fadeDuration,
+                        curve: AppMotion.standard,
+                        opacity: outIndex == i ? 1 - p : 1,
+                        child: Center(
+                          child: Icon(
+                            bottom[i].icon,
+                            size: AppDimens.iconSizeLg,
+                            color: _lifting == bottom[i]
+                                ? OrbitAccents.themeAccent
+                                : colors.iconText,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                if (swipeIn)
-                  AnimatedPositioned(
-                    key: const ValueKey('preview-ghost'),
-                    duration: posDuration,
-                    curve: AppMotion.standard,
-                    left: bottom.length * slotW,
-                    top: 0,
-                    bottom: 0,
-                    width: slotW,
-                    child: AnimatedOpacity(
-                      duration: fadeDuration,
+                  if (swipeIn)
+                    AnimatedPositioned(
+                      key: const ValueKey('preview-ghost'),
+                      duration: posDuration,
                       curve: AppMotion.standard,
-                      opacity: p,
-                      child: Center(
-                        child: Icon(
-                          live!.module.icon,
-                          size: AppDimens.iconSizeLg,
-                          color: colors.iconText,
+                      left: bottom.length * slotW,
+                      top: 0,
+                      bottom: 0,
+                      width: slotW,
+                      child: AnimatedOpacity(
+                        duration: fadeDuration,
+                        curve: AppMotion.standard,
+                        opacity: p,
+                        child: Center(
+                          child: Icon(
+                            live!.module.icon,
+                            size: AppDimens.iconSizeLg,
+                            color: colors.iconText,
+                          ),
                         ),
                       ),
                     ),
+                  AnimatedPositioned(
+                    key: const ValueKey('preview-more'),
+                    duration: posDuration,
+                    curve: AppMotion.standard,
+                    left: NavModulesState.bottomTabLimit * slotW,
+                    top: 0,
+                    bottom: 0,
+                    width: slotW,
+                    child: Center(
+                      child: Icon(OrbitIcons.more,
+                          size: AppDimens.iconSizeLg,
+                          color: colors.iconText),
+                    ),
                   ),
-                AnimatedPositioned(
-                  key: const ValueKey('preview-more'),
-                  duration: posDuration,
-                  curve: AppMotion.standard,
-                  left: NavModulesState.bottomTabLimit * slotW,
-                  top: 0,
-                  bottom: 0,
-                  width: slotW,
-                  child: Center(
-                    child: Icon(OrbitIcons.more,
-                        size: AppDimens.iconSizeLg,
-                        color: colors.iconText),
-                  ),
-                ),
-              ];
-              return Stack(children: icons);
-            },
-          );
-        },
+                ];
+                return Stack(children: icons);
+              },
+            );
+          },
+        ),
       ),
     );
   }
 
-  /// 模块行（与编辑操作页行同语言）：行首启停圆钮 + 模块图标 + 名称/简介 +
-  /// 右端拖拽手柄。圆钮底色/图标随归属渐变（换段时不是硬切）。
+  /// 模块行（`MiuixBasicComponent` 承载）：行首启停圆钮 + 模块图标 → 名称/简介
+  /// → 右端拖拽手柄。圆钮底色/图标随归属渐变（换段时不是硬切）。
+  ///
+  /// 全部尺寸/字阶走 miuix 口径，不再手搓 `Row`：
+  /// - 行内边距 16×10、最小行高 56（`MiuixBasicComponent` 内置 `minHeight`）；
+  /// - 标题 `headline1`（17）、简介 `body2`（14），`startAction`→中心内容
+  ///   固定 8 间距（[_dividerIndent] 即按这套几何算出来的）；
+  /// - 启停钮是 `MiuixIconButton`（经 [OrbitIconButton] 收口）的 32 紧凑档，
+  ///   色圈由 `backgroundColor` 承载（原手搓 `Container(circle)` 已退场）。
   Widget _moduleRow(
+    BuildContext context,
     AppColorSet colors, {
     required OrbitNavModule module,
     required bool enabled,
@@ -741,78 +805,51 @@ class _NavModulesPageState extends ConsumerState<NavModulesPage> {
     final canToggle = enabled
         ? ref.read(navModulesProvider).enabled.length > 1
         : true;
-    return Row(
-      children: [
-        OrbitIconButton(
-          tooltip: enabled ? '停用' : '启用',
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints.tightFor(width: 32, height: 32),
-          onPressed:
-              canToggle ? () => _toggle(module, enabled) : null,
-          icon: TweenAnimationBuilder<double>(
+    final textStyles = MiuixTheme.of(context).textStyles;
+    return MiuixBasicComponent(
+      // 水平内边距交给外层卡片（[SectionCard] → `OrbitCard` 的 16）：miuix 的
+      // 「卡内 16 + 行内 16」在本页会叠成 32，360dp 窄屏下简介被挤成两行；
+      // 垂直 8 + 库内 `minHeight` 56 保持 miuix 行高口径
+      insideMargin: const EdgeInsets.symmetric(
+        vertical: AppDimens.space8,
+      ),
+      startAction: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TweenAnimationBuilder<double>(
             // 圆钮底色/图标随归属渐变（换段时不是硬切）
             tween: Tween(begin: 0, end: enabled ? 1 : 0),
             duration: AppMotion.fast,
             curve: AppMotion.standard,
-            builder: (context, t, _) => Opacity(
-              opacity: canToggle ? 1 : 0.35,
-              child: Container(
-                width: 22,
-                height: 22,
-                decoration: BoxDecoration(
-                  color: Color.lerp(colors.success, colors.destructive, t)!
-                      .withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
+            builder: (context, t, _) {
+              final tone =
+                  Color.lerp(colors.success, colors.destructive, t)!;
+              return OrbitIconButton(
+                tooltip: enabled ? '停用' : '启用',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints.tightFor(
+                  width: _toggleExtent,
+                  height: _toggleExtent,
                 ),
-                child: Transform.scale(
-                  // 图标随归属翻转尺度（减号 ⇄ 加号切换时的轻微回弹）
-                  scale: 1 - 0.15 * (1 - (t * 2 - 1).abs()),
-                  child: Icon(
-                    enabled ? OrbitIcons.remove : OrbitIcons.add,
-                    size: 14,
-                    color:
-                        Color.lerp(colors.success, colors.destructive, t),
-                  ),
+                backgroundColor: tone.withValues(alpha: 0.12),
+                onPressed: canToggle ? () => _toggle(module, enabled) : null,
+                icon: Icon(
+                  enabled ? OrbitIcons.remove : OrbitIcons.add,
+                  size: 16,
+                  color: tone,
                 ),
-              ),
-            ),
+              );
+            },
           ),
-        ),
-        const SizedBox(width: AppDimens.space12),
-        Icon(
-          module.icon,
-          size: AppDimens.iconSizeMd,
-          color: enabled ? colors.iconText : colors.deactivatedText,
-        ),
-        const SizedBox(width: AppDimens.space12),
-        Expanded(
-          child: Padding(
-            padding:
-                const EdgeInsets.symmetric(vertical: AppDimens.space8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  module.label,
-                  style: TextStyle(
-                    fontSize: 15,
-                    color:
-                        enabled ? colors.bodyText : colors.secondaryText,
-                    fontWeight:
-                        lifting ? FontWeight.w600 : FontWeight.w400,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  module.description,
-                  style: TextStyle(
-                      fontSize: 12, color: colors.secondaryText),
-                ),
-              ],
-            ),
+          const SizedBox(width: AppDimens.space8),
+          Icon(
+            module.icon,
+            size: AppDimens.iconSizeMd,
+            color: enabled ? colors.iconText : colors.deactivatedText,
           ),
-        ),
+        ],
+      ),
+      endActions: [
         ReorderableDragStartListener(
           index: index,
           child: Padding(
@@ -825,6 +862,19 @@ class _NavModulesPageState extends ConsumerState<NavModulesPage> {
                   : colors.deactivatedText,
             ),
           ),
+        ),
+      ],
+      content: [
+        MiuixText(
+          module.label,
+          style: textStyles.headline1,
+          fontWeight: lifting ? FontWeight.w600 : FontWeight.w500,
+          color: enabled ? colors.bodyText : colors.secondaryText,
+        ),
+        MiuixText(
+          module.description,
+          style: textStyles.body2,
+          color: colors.secondaryText,
         ),
       ],
     );

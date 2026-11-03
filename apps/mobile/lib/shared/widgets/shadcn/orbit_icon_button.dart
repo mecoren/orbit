@@ -34,6 +34,7 @@ class OrbitIconButton extends StatelessWidget {
     this.padding,
     this.constraints,
     this.iconSize,
+    this.backgroundColor,
   });
 
   final VoidCallback? onPressed;
@@ -70,6 +71,11 @@ class OrbitIconButton extends StatelessWidget {
   /// 兼容参数：图标尺寸（包一层 `IconTheme`，覆盖 `Icon` 自身尺寸）
   final double? iconSize;
 
+  /// 钮底填充（缺省透明）。传低透明度语义色即得「色圈钮」
+  /// （如功能模块页的启停圆钮：粉底减号 / 绿底加号），圆角随 [circular]
+  /// 取整圆——与 `MiuixIconButton.backgroundColor` 同口径。
+  final Color? backgroundColor;
+
   @override
   Widget build(BuildContext context) {
     // 边长优先级：显式 constraints 的紧约束 > compact 档 > 触控标准档
@@ -83,6 +89,7 @@ class OrbitIconButton extends StatelessWidget {
         cornerRadius: circular ? extent : 12,
         minWidth: extent,
         minHeight: extent,
+        backgroundColor: backgroundColor,
         child: iconWidget,
       ),
     );
