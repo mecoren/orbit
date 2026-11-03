@@ -1492,6 +1492,7 @@ dependencies = [
  "serde_json",
  "sqlx",
  "tokio",
+ "zstd-sys",
 ]
 
 [[package]]

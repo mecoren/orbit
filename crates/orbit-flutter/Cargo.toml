@@ -47,6 +47,16 @@ log.workspace = true
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = "0.15"
 
+# zstd-sys 交叉编译开关（本 crate 无代码引用，只为透传 feature）：
+# zstd-sys 的 build.rs 只在 CARGO_CFG_WINDOWS（**目标** cfg，见 build.rs:141）时
+# 禁用 amd64 汇编；交叉编译 arm64/armv7 Android 时目标不含 Windows，它会照旧编译
+# `huf_decompress_amd64.S`（x86_64 汇编），被 aarch64/armv7 clang 拒绝。zstd 与
+# zstd-safe 都未透传 no_asm，故在此直接依赖打开它——纯 C 实现，压缩比不变、速度
+# 略降；桌面端不构建本 crate，其余平台的汇编路径不受影响。
+# 必须 `default-features = false`：zstd-sys 的默认 feature 含 bindgen，交叉编译时
+# 会要求现场用 libclang 解析 zstd.h（本机 libclang 缺 sysroot 的 stddef.h 直接失败）。
+zstd-sys = { version = "2.0", default-features = false, features = ["no_asm"] }
+
 # FRB 宏内部使用 cfg(frb_expand) 标注展开产物，注册免 unexpected_cfgs 告警
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
