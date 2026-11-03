@@ -16,6 +16,7 @@ import 'package:orbit/modules/todo/sidebar_screen.dart';
 import 'package:orbit/services/local_prefs.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_bottom_nav.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_fab.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_page_header.dart';
 import 'support/orbit_test_app.dart';
 
 Widget _wrap(MockOrbitBridge bridge) => ProviderScope(
@@ -101,6 +102,32 @@ void main() {
     await tester.tap(_navIcon(OrbitIcons.sun));
     await tester.pumpAndSettle();
     expect(find.text(todayHeaderLabel(DateTime.now())), findsOneWidget);
+  });
+
+  testWidgets('页头标题：「今天」长出快捷视图玻璃菜单，选「近7天」标题随之切换', (tester) async {
+    await _pump(tester, _seededBridge());
+
+    await tester.tap(find.text('今天'));
+    await tester.pumpAndSettle();
+
+    // 八键全出（菜单挂在根 Overlay 的玻璃形变弹层里）
+    expect(find.text('我的一天'), findsOneWidget);
+    expect(find.text('近7天'), findsOneWidget);
+    expect(find.text('全部任务'), findsOneWidget);
+    expect(find.byType(MiuixGlassPopupItem), findsNWidgets(8));
+
+    await tester.tap(find.text('近7天'));
+    await tester.pumpAndSettle();
+
+    // 菜单收起，页头标题换成该视图（列表/空态同步跟随 _viewOverride）
+    expect(find.byType(MiuixGlassPopupItem), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byType(OrbitPageHeader),
+        matching: find.text('近7天'),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('悬浮新建钮：点击弹出快速添加面板', (tester) async {

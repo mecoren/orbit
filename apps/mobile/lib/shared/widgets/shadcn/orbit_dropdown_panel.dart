@@ -26,6 +26,7 @@ class OrbitPanelItem {
   const OrbitPanelItem({
     required this.icon,
     required this.label,
+    this.iconColor,
     this.onTap,
     this.children = const <OrbitPanelItem>[],
     this.checked = false,
@@ -36,6 +37,10 @@ class OrbitPanelItem {
   /// 行首图标（子项不画图标——图标列改承载选中打勾）
   final IconData icon;
   final String label;
+
+  /// 行首图标着色（语义色图标，如快捷视图八键；null 跟随文案层级）。
+  /// 与 [color] 分开：只染图标、不动文案（快捷视图选中档文案仍走主题色）
+  final Color? iconColor;
 
   /// 叶子条目回调（带子项的条目由面板管理展开，不用它）
   final VoidCallback? onTap;
@@ -490,7 +495,9 @@ class OrbitDropdownPanelViewState extends State<OrbitDropdownPanelView> {
               Icon(
                 item.icon,
                 size: AppDimens.iconSizeMd,
-                color: item.color ?? (dimmed ? colors.deactivatedText : colors.iconText),
+                color: dimmed
+                    ? colors.deactivatedText
+                    : (item.iconColor ?? item.color ?? colors.iconText),
               ),
               const SizedBox(width: AppDimens.space12),
               Expanded(

@@ -17,6 +17,15 @@
 
 ## [Unreleased]
 
+### 优化：移动端快捷视图切换改走玻璃形变菜单（2026-11-03）
+
+「今天」页签标题（今天 ▾）原先是底部单选抽屉，与页头右上角 ⋮ 的 OS4 玻璃形变菜单两套观感。现统一为同一承载：
+
+- `orbit_glass_menu.dart` 抽通用触发件版本 `OrbitGlassMenu`（`triggerBuilder` + `anchorContent`），`OrbitGlassMenuButton` 收敛为它的图标按钮包装——形变/二级面板/材质档口径零改动。
+- 「今天」页签根标题即触发件：点标题在原位长出菜单，八个快捷视图单选（当前档打勾），标题与列表同步切换；非页签根标题（项目/未分组）不变。
+- `OrbitPanelItem` 新增 `iconColor`（行首图标语义色与文案色解耦，快捷视图八色图标保持原色）；`showOrbitDropdownPanel` 同口径消费。
+- **验证**：`flutter analyze` 0 issue；新增「任意触发件开菜单」与「今天标题 → 近7天」两例，`orbit_glass_menu_test` / `home_shell_test` 全绿。
+
 ### 优化：移动端输入框全量收口到 MiuixTextField（2026-11-02）
 
 设置/同步/待办各页的 36 处 `TextField` / `TextFormField` 是 Material 描边 + 浮动 label，与 OS4 观感脱节（云同步配置页最明显）。现统一走新原语 `OrbitTextField`（`MiuixTextField` 承载，HyperOS 灰底胶囊 + 聚焦描边）：

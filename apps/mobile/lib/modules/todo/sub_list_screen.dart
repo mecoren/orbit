@@ -20,6 +20,7 @@ import '../../shared/utils/hex_color.dart';
 import '../../shared/widgets/shadcn/orbit_strikethrough.dart';
 import '../../shared/widgets/shadcn/orbit_checkbox.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_glass_menu.dart';
 import '../../shared/widgets/shadcn/orbit_dropdown_panel.dart';
 import '../../shared/widgets/shadcn/orbit_empty_state.dart';
 import '../../shared/widgets/shadcn/orbit_list_card.dart';
@@ -39,6 +40,7 @@ import '../../shared/widgets/shadcn/orbit_text_field.dart';
 import '../../shared/widgets/shadcn/orbit_icon_button.dart';
 import '../../shared/widgets/shadcn/orbit_filter_chip.dart';
 import '../../services/local_prefs.dart';
+import '../shell/home_shell.dart' show OrbitGlassScope;
 import 'kanban_view.dart';
 import 'matrix_view.dart';
 import 'logic/batch_actions.dart';
@@ -68,8 +70,9 @@ import 'weekly_review_sheet.dart';
 /// 入口三参数互斥：projectId > ungrouped > view（task_logic 同款优先级）。
 /// 「今天」页签与页签栈内入栈共用本屏：页签根传 `showBack: false` 并以
 /// `titleOverride` 换页头文案（页头自动带日期副标）；页签根的标题是快捷视图
-/// 切换器（点标题开单选抽屉在我的一天/今天/近7天/全部任务/已完成/收藏/
-/// 无日期之间切换，标题与列表同步换成该视图——切到哪就叫哪，会话态不持久化）；
+/// 切换器（点标题长出 OS4 玻璃形变菜单，在我的一天/今天/近7天/全部任务/
+/// 已完成/收藏/无日期之间切换，标题与列表同步换成该视图——切到哪就叫哪，
+/// 会话态不持久化）；
 /// 列表消费共享 filterTasks/sortTasks；空态文案按入口映射；Tile 长按弹操作菜单
 /// （编辑 / 星标切换 / 删除确认）；manual 档长按整行拾起拖动重排
 /// （#37，position midpoint 落库与桌面同口径；原地松手仍是操作菜单）。
@@ -281,25 +284,73 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     QuickAddContext.set(_effectiveQuery);
   }
 
-  /// 快捷视图单选抽屉（纯选择类交互走底部抽屉；行首语义图标 + 当前档打勾，
-  /// 图标与清单页快捷行同源 `QuickViewKey.icon` + `colorHex`）
-  Future<void> _showViewSwitchSheet() {
+  /// 页头标题（今天页签根：标题即快捷视图玻璃形变菜单的触发件——点标题在
+  /// 标题旁长出菜单，切到哪标题就叫哪；尾随下箭头明示可点）
+  Widget _headerTitle(String title, AppColorSet colors) {
+    if (!_isTodayTab) {
+      return Text(
+        title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+          color: colors.titleText,
+        ),
+      );
+    }
+    // 触发件与形变副本同构：副本按触发矩形缩放，收起期承接按钮 → 标题的形变
+    Widget content() => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: colors.titleText,
+            ),
+          ),
+        ),
+        const SizedBox(width: AppDimens.space4),
+        Icon(
+          OrbitIcons.expandMore,
+          size: AppDimens.iconSizeSm,
+          color: colors.secondaryText,
+        ),
+      ],
+    );
+    return OrbitGlassMenu(
+      groupsBuilder: _quickViewGroups,
+      backdrop: OrbitGlassScope.maybeOf(context),
+      anchorContent: content(),
+      triggerBuilder: (onTap) => InkWell(
+        borderRadius: AppShapes.small,
+        onTap: onTap,
+        child: content(),
+      ),
+    );
+  }
+
+  /// 标题玻璃菜单的条目（八键单选，当前档打勾；图标与清单页快捷行同源
+  /// `QuickViewKey.icon` + `colorHex`）
+  List<List<OrbitPanelItem>> _quickViewGroups() {
     final current = _effectiveQuery.quickView ?? QuickViewKey.today;
-    return showSelectBottomSheet<QuickViewKey>(
-      context,
-      title: '快捷视图',
-      current: current,
-      items: [
+    return [
+      [
         for (final v in QuickViewKey.values)
-          SelectItem(
-            value: v,
-            label: v.label,
+          OrbitPanelItem(
             icon: v.icon,
             iconColor: hexToColor(v.colorHex),
+            label: v.label,
+            checked: v == current,
+            onTap: () => _switchQuickView(v),
           ),
       ],
-      onSelect: _switchQuickView,
-    );
+    ];
   }
 
   @override
@@ -2333,50 +2384,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                       children: [
                         Row(
                           children: [
-                            Flexible(
-                              child: _isTodayTab && !_selectionMode
-                                  // 今天页签根：标题即快捷视图切换器（点标题开单选抽屉，
-                                  // 切到哪标题就叫哪；尾随下箭头明示可点）
-                                  ? InkWell(
-                                      borderRadius: AppShapes.small,
-                                      onTap: _showViewSwitchSheet,
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Flexible(
-                                            child: Text(
-                                              title,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                fontSize: 18,
-                                                fontWeight: FontWeight.w600,
-                                                color: colors.titleText,
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(
-                                            width: AppDimens.space4,
-                                          ),
-                                          Icon(
-                                            OrbitIcons.expandMore,
-                                            size: AppDimens.iconSizeSm,
-                                            color: colors.secondaryText,
-                                          ),
-                                        ],
-                                      ),
-                                    )
-                                  : Text(
-                                      title,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w600,
-                                        color: colors.titleText,
-                                      ),
-                                    ),
-                            ),
+                            Flexible(child: _headerTitle(title, colors)),
                             if (undone.isNotEmpty) ...[
                               const SizedBox(width: AppDimens.space6),
                               Text(
