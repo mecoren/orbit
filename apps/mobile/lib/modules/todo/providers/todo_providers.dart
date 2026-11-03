@@ -377,7 +377,7 @@ void invalidateBusinessCaches(WidgetRef ref) {
   ref.invalidate(searchProvider);
 }
 
-/// 下拉刷新共用回调（主列表 / 侧栏 / 统计 / 回收站四页的 `RefreshIndicator`）
+/// 下拉刷新共用回调（主列表 / 侧栏 / 统计 / 回收站四页的 `OrbitPullToRefresh`）
 ///
 /// 本地优先应用里「刷新」分两步，顺序不能反：
 /// 1. 本地缓存立即重读——即使第 2 步失败或未配置云同步，用户也一定看到一次

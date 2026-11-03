@@ -17,6 +17,14 @@
 
 ## [Unreleased]
 
+### 优化：移动端下拉刷新成圆即出绕行点（2026-11-03）
+
+miuix 版 `MiuixPullToRefresh` 只在 refreshing 状态画环内绕行点，阈值态画「两半圆 + 两段竖线」的拉伸胶囊——「释放刷新」时圆环静止无点，继续下拉还会被拉长。
+
+- `OrbitPullToRefresh` 指示器改自绘：下拉按进度扫开一段细弧，越过阈值弧闭合成完整圆环，环内实心点开始匀速绕行（刷新区间不重启、角度连续），成功后环上浮淡出。
+- 几何与 `OrbitSpinner` 同源（描边 = 边长 8%、点半径 = 边长 10%、轨道内缩 2 倍点半径）；手势/弹簧口径沿用 miuix（阻尼多项式、临界阻尼弹簧、0.25 触发比例），`edgeOffset`/`displacement` 仍是绘制下移避让玻璃页头，四页调用点零改动。
+- **验证**：`flutter analyze` 0 issue；新增 `orbit_pull_to_refresh_test`（未过阈值回弹不触发 / 越过阈值松手触发一次），`stats_screen` / `trash` / `sidebar_calendar_card` / `todo_screens_smoke` 全绿。
+
 ### 优化：移动端快捷视图切换改走玻璃形变菜单（2026-11-03）
 
 「今天」页签标题（今天 ▾）原先是底部单选抽屉，与页头右上角 ⋮ 的 OS4 玻璃形变菜单两套观感。现统一为同一承载：

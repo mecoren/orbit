@@ -70,7 +70,7 @@ OrbitGlassScope（向下暴露同一个 backdrop）
 | `showDialog`（3 处，均为附件图片预览透明 Dialog） | 非选择/确认/输入类，AGENTS.md 明确豁免 |
 | ~~`TextField` / `TextFormField`（27 + 12 处）~~ | **2026-11-02 已替换**为 `OrbitTextField`（`MiuixTextField` 承载，见 5.4.1）：壳层补齐 `maxLength` / `validator` / `onTapOutside` 与 `inline` 变体。业务层不再有裸 Material 输入框。 |
 | `ListTile`（20 处） | `MiuixBasicComponent` 的 2:5:3 测量约束与 `ListTile` 的 `leading/title/subtitle/trailing` 语义不一一对应；侧栏/搜索/回收站的 `ListTile` 已由 `orbit_list_card` 的分段卡面承载外观，换组件只换布局实现、不改观感。 |
-| ~~`RefreshIndicator`（列表页 4 处）~~ | **2026-11-01 已替换**为 `MiuixPullToRefresh`（经 `OrbitPullToRefresh` 包装，参数镜像 `RefreshIndicator`），见第五节。 |
+| ~~`RefreshIndicator`（列表页 4 处）~~ | **2026-11-01 已替换**：先由 `MiuixPullToRefresh` 承载，2026-11-03 指示器改自绘 `OrbitPullToRefresh`（手势/弹簧口径不变），见第五节。 |
 | `Tooltip`（9 处） | 全局 `tooltipTheme` 已是「主题色底白字」口径（AGENTS.md 强制），64 条测试用 `find.byTooltip`；`MiuixTooltip` 是独立组件（`MiuixTooltipBox`），换掉会同时改调用写法与断言。`OrbitIconButton` 内部仍用 Material `Tooltip`，保证 `byTooltip` 全部有效。 |
 | `InkWell` / `Material`（74 / 13 处） | 属点击/裁剪基建而非"组件"，且大量用于水波/圆角裁切。 |
 | `MiuixScaffold` / `MiuixTopAppBar` / `MiuixNavigationRail` / `MiuixTabRow` / `MiuixBreadcrumbBar` / `MiuixSearchBar` / `MiuixSlider` 系 / 偏好项（`Miuix*Preference`） | 本项目**没有对应功能**：无 Tab 栏（用底部导航）、无面包屑、无搜索框（清单过滤用 chip 行）、无 Slider（容量是文本输入）、偏好项语义由 `SectionCard` + 行组件表达。**不为了"用上组件"而新造功能**（AGENTS.md 裁剪口径）。~~`MiuixColorPicker` 系~~ / ~~`MiuixNumberPicker`~~ / ~~`MiuixFloatingToolbar`~~ 已于 2026-11-01 替换（取色抽屉 / 时分滚轮 / 批量工具条），见第五节。 |
@@ -161,7 +161,7 @@ OrbitGlassScope（向下暴露同一个 backdrop）
 | `sh.Button.ghost`（日期面板清除/确认） | `OrbitButton.text` | `orbit_date_picker.dart` | 紧凑档 40 高 |
 | `sh.Button.*`（分诊 / 周回顾 / 排程三页） | `OrbitButton.*` | `triage_page` / `weekly_review_sheet` / `plan_day_sheet` | primary→`primary(expand)`、outline→`outline(compact)`、ghost→`text(compact)` |
 | `sh.Tooltip`（月历翻月钮） | `OrbitIconButton.tooltip`（Material `Tooltip`） | `orbit_month_calendar.dart` | 日期面板 2026-09-21 已回退 Material 根层弹层，「找不到 Overlay」约束消失；外观由 `tooltipTheme` 统一（AGENTS.md 口径） |
-| `RefreshIndicator`（主列表/清单/统计/回收站） | `MiuixPullToRefresh` | 新增 `orbit_pull_to_refresh.dart` + 4 页 | 阻尼拖拽 + 细环指示圈 + 四档 zh-CN 文案；`isRefreshing` 由包装内持（页面零改动）；`edgeOffset`/`displacement` 映射为 `contentPadding.top` 避让玻璃页头 |
+| `RefreshIndicator`（主列表/清单/统计/回收站） | 自绘 `OrbitPullToRefresh`（2026-11-03；此前为 `MiuixPullToRefresh`） | 新增 `orbit_pull_to_refresh.dart` + 4 页 | 手势/弹簧/阻尼仍按 `MiuixPullToRefresh` 口径；指示器改自绘「弧 → 闭环 + 环内绕行点」（`OrbitSpinner` 同源几何），修 miuix 阈值态「拉长胶囊 + 无点」；`isRefreshing` 由包装内持（页面零改动）；`edgeOffset`/`displacement` 仍作绘制下移避让玻璃页头 |
 | `CupertinoPicker`（时分滚轮） | `MiuixNumberPicker` | `orbit_date_picker.dart` 的 `_TimeWheelSheet` | 每项 44 高、5 项视窗、逐项触感、弹簧吸附；边界不环绕（同 Cupertino）；选中/非选中取 `titleText`/`secondaryText` 渐变插值 |
 | 手搓批量工具条容器（`Container` + e3） | `MiuixFloatingToolbar` | `sub_list_screen.dart` 的 `_batchToolbar` | squircle 胶囊 + 固定几何阴影 + 0.75dp 描边；外层留白 12/8 由组件贡献，占位常量 `touchTarget + space8*4` 不变；动作内容与横滑逻辑原样 |
 
