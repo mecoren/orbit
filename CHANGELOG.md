@@ -28,13 +28,14 @@
 - 库内确无等价物的只有两处，保留自绘但取 miuix 几何与配色：底栏落位预览（`MiuixNavigationBar` 是交互栏且材质要采样页面背景，配置页无可采样内容）、右端拖拽手柄（无拖拽行组件，图标集也没有 drag 字形）。
 - **验证**：`flutter analyze lib` 0 issue；`home_shell_test` 11 例全绿。
 
-### 优化：移动端下拉刷新成圆即出绕行点（2026-11-03）
+### 优化：移动端下拉刷新指示器改自绘——阈值拉长圆、松手收圆转点（2026-11-03）
 
-miuix 版 `MiuixPullToRefresh` 只在 refreshing 状态画环内绕行点，阈值态画「两半圆 + 两段竖线」的拉伸胶囊——「释放刷新」时圆环静止无点，继续下拉还会被拉长。
+miuix 版 `MiuixPullToRefresh` 的绘制锁死：阈值态是拉长圆但没有点，松手后直接跳成整圆 + 点，中间没有「收圆」过渡；且列表自身回弹会打断吸附。
 
-- `OrbitPullToRefresh` 指示器改自绘：下拉按进度扫开一段细弧，越过阈值弧闭合成完整圆环，环内实心点开始匀速绕行（刷新区间不重启、角度连续），成功后环上浮淡出。
+- `OrbitPullToRefresh` 指示器改自绘：下拉按进度扫开一段细弧；越过阈值保持 miuix 同口径的**拉长圆**（上圆 + 下圆 + 两段竖线，长度随下拉继续增长）；松手后弹簧把下拉量吸附回阈值，拉长圆**收缩成正常圆**，环内实心点才开始匀速绕行；成功后环上浮淡出。
 - 几何与 `OrbitSpinner` 同源（描边 = 边长 8%、点半径 = 边长 10%、轨道内缩 2 倍点半径）；手势/弹簧口径沿用 miuix（阻尼多项式、临界阻尼弹簧、0.25 触发比例），`edgeOffset`/`displacement` 仍是绘制下移避让玻璃页头，四页调用点零改动。
-- **验证**：`flutter analyze` 0 issue；新增 `orbit_pull_to_refresh_test`（未过阈值回弹不触发 / 越过阈值松手触发一次），`stats_screen` / `trash` / `sidebar_calendar_card` / `todo_screens_smoke` 全绿。
+- 顺带修：松手吸附期间忽略列表自身回弹产生的滚动通知（`_processingRelease` 守卫），否则吸附被打断、刷新不触发。
+- **验证**：`flutter analyze` 0 issue；新增 `orbit_pull_to_refresh_test`（未过阈值回弹不触发 / 越过阈值松手触发一次并进入刷新态），截图核对阈值态为拉长圆、刷新态为「正常圆 + 环内点」；`stats_screen` / `trash` / `sidebar_calendar_card` / `todo_screens_smoke` 全绿。
 
 ### 优化：移动端快捷视图切换改走玻璃形变菜单（2026-11-03）
 

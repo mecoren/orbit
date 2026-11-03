@@ -8,18 +8,22 @@ import '../../../core/theme/app_dimens.dart';
 import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/orbit_accents.dart';
 
-/// 下拉刷新（原语层：自绘手势状态机 + 「弧 → 闭环 + 环内绕行点」指示器）
+/// 下拉刷新（原语层：自绘手势状态机 + 「弧 → 拉长圆 → 收圆转点」指示器）
 ///
-/// **指示器口径（2026-11-03 改自绘）**：下拉阶段按进度扫开一段细弧；越过阈值
-/// 弧闭合成完整圆环，环内一枚实心点开始匀速绕行，刷新期间持续绕行，刷新成功
-/// 后环上浮淡出。几何与 `OrbitSpinner` 同源（描边 = 边长 8%、点半径 = 边长
-/// 10%、轨道内缩 2 倍点半径），因此「变成圆」的那一刻起点就在转，不再是
-/// miuix 版阈值态的「拉伸胶囊 + 静止无点」。
+/// **指示器口径（2026-11-03 改自绘）**：
+/// 1. 下拉未达阈值：按进度扫开一段细弧（弧闭合即到达可释放阈值）；
+/// 2. 越过阈值（`reached`）：保持 miuix 同口径的「拉长圆」——上圆 + 下圆 + 两段
+///    竖线，长度 = 越过触发阈值后的下拉量，越拉越长，文案「释放刷新」；
+/// 3. 松手（`refreshing`）：弹簧把下拉量吸附回阈值，拉长圆**收缩成正常圆**，
+///    环内一枚实心点开始匀速绕行；刷新成功后环上浮淡出。
+///
+/// 几何与 `OrbitSpinner` 同源（描边 = 边长 8%、点半径 = 边长 10%、轨道内缩
+/// 2 倍点半径），所以「收圆 + 点转」与全局加载指示器是同一语言。
 ///
 /// **为什么不再直用 `MiuixPullToRefresh`**：库内 painter 只在 refreshing 状态
-/// 画绕行点，阈值态画「两半圆 + 两段竖线」的拉伸胶囊，且绘制与布局全部锁死，
-/// 无法在成圆瞬间补点。本组件保留它的手势与弹簧口径（阻尼多项式、临界阻尼
-/// 弹簧、0.25 触发比例、下拉带整体下移避让），只把状态呈现换成上面口径。
+/// 画绕行点，阈值态画拉伸胶囊但**松手后直接跳成整圆 + 点**，且绘制与布局全部
+/// 锁死，无法控制收圆过渡。本组件保留它的手势与弹簧口径（阻尼多项式、临界阻尼
+/// 弹簧、0.25 触发比例、下拉带整体下移避让），绘制换成本文件口径。
 ///
 /// **调用口径不变**：`onRefresh` 返回 Future，期间指示器自持绕行；调用点只需
 /// 传 `child`（含纵向可滚动组件）。`color` 为 null 时取 [OrbitAccents.themeAccent]。
@@ -156,11 +160,16 @@ class _OrbitPullToRefreshState extends State<OrbitPullToRefresh>
     return _dragOffset > 0 ? 1.0 : 0.0;
   }
 
-  /// 弧扫开进度：**越过可释放阈值的瞬间恰好闭合成圆**，与绕行点出现同步
+  /// 弧扫开进度：越过可释放阈值的瞬间恰好闭合成圆
   double get _arcProgress {
     if (_triggerThreshold <= 0) return 0;
     return (_dragOffset / _triggerThreshold).clamp(0.0, 1.0);
   }
+
+  /// 拉长圆的长度：越过触发阈值后的下拉量（刚过阈值时为 0，继续下拉才拉长；
+  /// 松手吸附回阈值时收缩为 0，即「变回正常圆」）
+  double get _capsuleLength =>
+      math.max(0.0, _dragOffset - _triggerThreshold);
 
   double get _stretch => math.max(0.0, _dragOffset - _revealThreshold);
 
@@ -179,8 +188,8 @@ class _OrbitPullToRefreshState extends State<OrbitPullToRefresh>
     if (_phase == next) return;
     if (!mounted) return;
     _phase = next;
-    final spinning =
-        next == _PullPhase.reached || next == _PullPhase.refreshing;
+    // 阈值态仍是拉长圆（不转点），松手进入 refreshing 才收圆并启动绕行
+    final spinning = next == _PullPhase.refreshing;
     if (spinning && !_spin.isAnimating) {
       _spin.repeat();
     } else if (!spinning && _spin.isAnimating) {
@@ -318,6 +327,9 @@ class _OrbitPullToRefreshState extends State<OrbitPullToRefresh>
   bool _handleScrollNotification(ScrollNotification notification) {
     if (_phase == _PullPhase.refreshing ||
         _phase == _PullPhase.complete ||
+        // 松手吸附/刷新在途：列表自身的 overscroll 回弹也会发滚动通知，
+        // 必须挡住，否则会打断弹簧吸附（下拉量停在半路、刷新不触发）
+        _processingRelease ||
         notification.depth != 0 ||
         notification.metrics.axis != Axis.vertical) {
       return false;
@@ -451,15 +463,19 @@ class _OrbitPullToRefreshState extends State<OrbitPullToRefresh>
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               SizedBox(
-                                height: _indicatorSize,
+                                // 拉长圆向下延伸，指示器区高度跟着胶囊走，
+                                // 文案始终贴在胶囊底部 6px 处
+                                height: _indicatorSize + _capsuleLength,
                                 width: double.infinity,
-                                child: Center(
+                                child: Align(
+                                  alignment: Alignment.topCenter,
                                   child: SizedBox.square(
                                     dimension: _indicatorSize,
                                     child: CustomPaint(
                                       painter: _OrbitRefreshPainter(
                                         phase: _phase,
                                         arcProgress: _arcProgress,
+                                        capsuleLength: _capsuleLength,
                                         completeProgress: _complete.value,
                                         color: color,
                                         spin: _spin,
@@ -499,11 +515,13 @@ class _OrbitPullToRefreshState extends State<OrbitPullToRefresh>
   }
 }
 
-/// 指示器绘制：下拉画弧、成圆后画「环 + 绕行点」、成功态画上浮淡出的环
+/// 指示器绘制：下拉画弧、阈值态画拉长圆、松手后画「正常圆 + 绕行点」、
+/// 成功态画上浮淡出的环
 class _OrbitRefreshPainter extends CustomPainter {
   _OrbitRefreshPainter({
     required this.phase,
     required this.arcProgress,
+    required this.capsuleLength,
     required this.completeProgress,
     required this.color,
     required this.spin,
@@ -513,6 +531,9 @@ class _OrbitRefreshPainter extends CustomPainter {
 
   /// 弧扫开进度（0..1）；到 1 即越过可释放阈值
   final double arcProgress;
+
+  /// 阈值态拉长圆的长度（0 = 正常圆）
+  final double capsuleLength;
   final double completeProgress;
   final Color color;
 
@@ -548,14 +569,50 @@ class _OrbitRefreshPainter extends CustomPainter {
             ..strokeCap = StrokeCap.round,
         );
       case _PullPhase.reached:
-      case _PullPhase.refreshing:
-        // 完整圆环 + 环内绕行实心点（OrbitSpinner 同款语义）
+        // 阈值态：miuix 同口径的「拉长圆」——上圆 + 下圆 + 左右两段竖线，
+        // 长度随下拉继续增长；此阶段不画点（点留给松手后的 refreshing）
         final paint = Paint()
           ..color = color
           ..style = PaintingStyle.stroke
           ..strokeWidth = strokeWidth
           ..strokeCap = StrokeCap.round;
-        canvas.drawCircle(center, radius, paint);
+        final topY = center.dy;
+        final bottomY = center.dy + capsuleLength;
+        canvas.drawArc(
+          Rect.fromCircle(center: Offset(center.dx, topY), radius: radius),
+          math.pi,
+          math.pi,
+          false,
+          paint,
+        );
+        canvas.drawArc(
+          Rect.fromCircle(center: Offset(center.dx, bottomY), radius: radius),
+          0,
+          math.pi,
+          false,
+          paint,
+        );
+        canvas.drawLine(
+          Offset(center.dx - radius, topY),
+          Offset(center.dx - radius, bottomY),
+          paint,
+        );
+        canvas.drawLine(
+          Offset(center.dx + radius, topY),
+          Offset(center.dx + radius, bottomY),
+          paint,
+        );
+      case _PullPhase.refreshing:
+        // 松手后：拉长圆已吸附收回成正常圆，环内实心点匀速绕行
+        canvas.drawCircle(
+          center,
+          radius,
+          Paint()
+            ..color = color
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = strokeWidth
+            ..strokeCap = StrokeCap.round,
+        );
         final dotRadius = side * _OrbitPullToRefreshState._dotRatio;
         final orbitRadius = radius - 2 * dotRadius;
         final angle = spin.value * 2 * math.pi;
@@ -589,6 +646,7 @@ class _OrbitRefreshPainter extends CustomPainter {
   bool shouldRepaint(_OrbitRefreshPainter oldDelegate) =>
       oldDelegate.phase != phase ||
       oldDelegate.arcProgress != arcProgress ||
+      oldDelegate.capsuleLength != capsuleLength ||
       oldDelegate.completeProgress != completeProgress ||
       oldDelegate.color != color;
 }

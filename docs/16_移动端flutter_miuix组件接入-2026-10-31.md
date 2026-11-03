@@ -161,7 +161,7 @@ OrbitGlassScope（向下暴露同一个 backdrop）
 | `sh.Button.ghost`（日期面板清除/确认） | `OrbitButton.text` | `orbit_date_picker.dart` | 紧凑档 40 高 |
 | `sh.Button.*`（分诊 / 周回顾 / 排程三页） | `OrbitButton.*` | `triage_page` / `weekly_review_sheet` / `plan_day_sheet` | primary→`primary(expand)`、outline→`outline(compact)`、ghost→`text(compact)` |
 | `sh.Tooltip`（月历翻月钮） | `OrbitIconButton.tooltip`（Material `Tooltip`） | `orbit_month_calendar.dart` | 日期面板 2026-09-21 已回退 Material 根层弹层，「找不到 Overlay」约束消失；外观由 `tooltipTheme` 统一（AGENTS.md 口径） |
-| `RefreshIndicator`（主列表/清单/统计/回收站） | 自绘 `OrbitPullToRefresh`（2026-11-03；此前为 `MiuixPullToRefresh`） | 新增 `orbit_pull_to_refresh.dart` + 4 页 | 手势/弹簧/阻尼仍按 `MiuixPullToRefresh` 口径；指示器改自绘「弧 → 闭环 + 环内绕行点」（`OrbitSpinner` 同源几何），修 miuix 阈值态「拉长胶囊 + 无点」；`isRefreshing` 由包装内持（页面零改动）；`edgeOffset`/`displacement` 仍作绘制下移避让玻璃页头 |
+| `RefreshIndicator`（主列表/清单/统计/回收站） | 自绘 `OrbitPullToRefresh`（2026-11-03；此前为 `MiuixPullToRefresh`） | 新增 `orbit_pull_to_refresh.dart` + 4 页 | 手势/弹簧/阻尼仍按 `MiuixPullToRefresh` 口径；指示器改自绘「弧 → 阈值拉长圆 → 松手收圆 + 环内绕行点」（`OrbitSpinner` 同源几何），阈值态保留拉长圆手感、松手后才出点；`isRefreshing` 由包装内持（页面零改动）；`edgeOffset`/`displacement` 仍作绘制下移避让玻璃页头 |
 | `CupertinoPicker`（时分滚轮） | `MiuixNumberPicker` | `orbit_date_picker.dart` 的 `_TimeWheelSheet` | 每项 44 高、5 项视窗、逐项触感、弹簧吸附；边界不环绕（同 Cupertino）；选中/非选中取 `titleText`/`secondaryText` 渐变插值 |
 | 手搓批量工具条容器（`Container` + e3） | `MiuixFloatingToolbar` | `sub_list_screen.dart` 的 `_batchToolbar` | squircle 胶囊 + 固定几何阴影 + 0.75dp 描边；外层留白 12/8 由组件贡献，占位常量 `touchTarget + space8*4` 不变；动作内容与横滑逻辑原样 |
 
