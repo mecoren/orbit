@@ -4,4 +4,15 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+
+    <!-- 模拟器 Vulkan 驱动刷屏修复（与 debug manifest 同口径）：
+         Impeller 在 Android 走 Vulkan，模拟器 host GPU 直通（MESA）下
+         每帧打印 `E/MESA: Failed to find VkFence:0x...`；此处关闭
+         Impeller 回落 Skia(OpenGL)，release 不受影响。 -->
+    <application>
+        <meta-data
+            android:name="io.flutter.embedding.android.EnableImpeller"
+            android:value="false" />
+    </application>
+
 </manifest>
