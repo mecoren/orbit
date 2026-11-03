@@ -177,8 +177,8 @@ OrbitGlassScope（向下暴露同一个 backdrop）
   - 锚定卡片 `OrbitFloatCard` 接 `MiuixLayerBackdrop`（此前缺采样器退实色白卡）；
   - 底部菜单型抽屉 `showMoreActionsSheet` 改 `OrbitGlassSheet`（承载透明 +
     `elevation 0` + 32% 黑遮罩，键盘避让提到玻璃层外）；**单选**同日再改为
-    OS4 玻璃锚定浮层（卡面 `OrbitGlassSurface` + 行复用页头 ⋮ 菜单的
-    选中强调色/对勾，见 `orbit_select_popup.dart`），不再走底部抽屉
+    页头菜单同源的面板（`OrbitDropdownPanelView` 行 + `OrbitGlassSurface`
+    卡面，右上角、页头下沿，见 `orbit_select_popup.dart`），不再走底部抽屉
     （`showSelectBottomSheet` 降为兼容名，直接转发新原语）；
     `showConfirmBottomSheet` 保持实色（确认框不是菜单，读秒/危险动作需要实体感）；
   - 形变菜单扩容（`MiuixGlassTransformPopup`）：项目编辑页头 ⋮、上级文件夹行

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_miuix/miuix.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/core/routing/router_keys.dart';
 import 'package:orbit/core/theme/app_theme.dart';
 import 'package:orbit/core/theme/miuix_theme.dart';
-import 'package:orbit/shared/widgets/shadcn/orbit_dropdown_panel.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_select_popup.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_toast.dart';
 
@@ -80,17 +80,19 @@ Finder selectPopup() => find.byKey(orbitSelectPopupKey);
 
 /// 单选浮层里打勾的条目文案
 ///
-/// 选择浮层与页头 ⋮ 菜单共用 `OrbitDropdownPanelView`，选中态是行数据上的
-/// `checked`（勾本身是 Icon，直接按 icon 数断言会被菜单其他勾干扰），
-/// 故从面板 groups 读权威选中项。
+/// 行是 miuix 的 `MiuixDropdownImpl`，选中态在 `isSelected` 上（勾本身是
+/// CustomPaint，直接按 icon 数断言拿不到），故读行数据。限定在浮层内找，
+/// 避免页面其它下拉/菜单的同型行混入。
 Iterable<String> selectedPopupLabels(WidgetTester tester) {
-  final view = tester.widget<OrbitDropdownPanelView>(
-    find.byType(OrbitDropdownPanelView),
+  final rows = tester.widgetList<MiuixDropdownImpl>(
+    find.descendant(
+      of: selectPopup(),
+      matching: find.byType(MiuixDropdownImpl),
+    ),
   );
-  return view.groups
-      .expand((group) => group)
-      .where((item) => item.checked)
-      .map((item) => item.label);
+  return rows
+      .where((row) => row.isSelected)
+      .map((row) => row.item.text);
 }
 
 /// 收尾：推掉 toast 的停留计时器与残留动画，并清空全局队列。

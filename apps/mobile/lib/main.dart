@@ -10,6 +10,7 @@ import 'data/api/rust_orbit_bridge.dart';
 import 'data/providers/bridge_provider.dart';
 import 'services/appearance.dart';
 import 'services/local_prefs.dart';
+import 'shared/widgets/shadcn/orbit_select_popup.dart';
 
 /// Orbit 移动端入口
 ///
@@ -57,6 +58,10 @@ Future<void> main() async {
   // 同步编译卡顿）；Skia 后端内部自动跳过。加载失败静默降级为「不模糊」，
   // 不能把资源异常抛到根 zone 拖垮启动。
   unawaited(ProgressiveBlur.precache().catchError((_) {}));
+
+  // 单选浮层贴着触发行弹出，靠「最近一次指针按下」定位。必须在首帧前装好
+  // 全局指针路由：懒安装会漏掉触发本次弹层的那次按下（首开落到屏幕底部）。
+  OrbitPointerAnchor.install();
 
   runApp(
     ProviderScope(

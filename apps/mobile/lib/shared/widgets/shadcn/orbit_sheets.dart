@@ -5,9 +5,9 @@
 /// 公共 API 与旧实现逐字一致，保留原名与原参数以免制造无谓 diff。
 ///
 /// **单选已迁出（2026-11-03）**：从一组值里挑一个的交互不再从底部升起抽屉，
-/// 改为 OS4 玻璃锚定浮层（透明玻璃卡 + 选中项强调色/对勾），实现见
-/// `orbit_select_popup.dart`；`showSelectBottomSheet` 保留为兼容名并直接
-/// 转发，49 处存量调用点零改动即统一。
+/// 改为**复用页头 ⋮ 菜单的面板**（`OrbitDropdownPanelView` 行 + 玻璃卡面，
+/// 右上角弹出），实现见 `orbit_select_popup.dart`；`showSelectBottomSheet`
+/// 保留为兼容名并直接转发，49 处存量调用点零改动即统一。
 ///
 /// **为什么承载回到 Material `showModalBottomSheet`**（2026-09-21 修复）：
 /// shadcn 的 `SheetConfiguration` 打开的 sheet 容器（`SheetRawContainer`）把背景
@@ -113,7 +113,7 @@ Future<bool> showConfirmBottomSheet(
 /// 详情/表单单选弹层（**兼容名**）
 ///
 /// 2026-11-03 起实现换成 miuix 口径的锚定浮层
-/// （[showOrbitSelectPopup]：白卡 + 就近弹出 + 选中项强调色/对勾），
+/// （[showOrbitSelectPopup]：复用页头菜单面板，右上角弹出 + 行尾对勾），
 /// 不再从底部升起玻璃抽屉。保留原名与参数，49 处存量调用点零改动即统一。
 ///
 /// [title] 仍必填，但浮层里不画标题行（miuix 下拉面板无标题；当前值靠对勾），

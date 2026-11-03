@@ -1,15 +1,14 @@
 // 共享弹层族（orbit_sheets.dart）承载口径：
 // - 确认 / 更多操作：Material `showModalBottomSheet` + `bottomSheetTopShape`；
-// - 单选：2026-11-03 起**复用页头 ⋮ 菜单的面板**（OrbitDropdownPanelView +
-//   OS4 玻璃表面，右上角弹出），不再走底部抽屉或自绘白卡。
+// - 单选：2026-11-03 起按 flutter_miuix 的 DropdownPreference(Overlay) 口径
+//   （MiuixDropdownImpl 行 + 贴触发行下方弹出），不再走底部抽屉。
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_miuix/miuix.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/core/theme/app_colors.dart';
 import 'package:orbit/core/theme/app_dimens.dart';
-import 'package:orbit/shared/widgets/shadcn/orbit_dropdown_panel.dart';
-import 'package:orbit/shared/widgets/shadcn/orbit_glass_surface.dart';
+import 'package:orbit/core/theme/orbit_accents.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_sheets.dart';
 import 'support/orbit_test_app.dart';
 
@@ -56,7 +55,8 @@ void main() {
     return ctx;
   }
 
-  testWidgets('单选浮层：复用页头 ⋮ 菜单面板（玻璃 + 行勾）', (tester) async {
+  testWidgets('单选浮层：miuix 下拉行（未选中正文色 / 选中强调色 + 勾）',
+      (tester) async {
     final ctx = await pumpHost(tester);
     showSelectBottomSheet<String>(
       ctx,
@@ -70,25 +70,30 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // 与页头菜单同一套渲染：OrbitDropdownPanelView 行 + OS4 玻璃表面；
-    // 底部抽屉与自绘白卡均已退场
+    // 行渲染走 flutter_miuix 下拉弹层（MiuixDropdownImpl），底部抽屉已退场
     expect(selectPopup(), findsOneWidget);
-    expect(find.byType(OrbitDropdownPanelView), findsOneWidget);
-    expect(find.byType(OrbitGlassSurface), findsOneWidget);
+    expect(find.byType(MiuixListPopupColumn), findsOneWidget);
+    expect(find.byType(MiuixDropdownImpl), findsNWidgets(2));
     expect(find.byType(BottomSheet), findsNothing, reason: '不再从底部升起抽屉');
-    expect(find.text('视图模式'), findsNothing, reason: '菜单没有标题行');
+    expect(find.text('视图模式'), findsNothing, reason: '下拉面板没有标题行');
 
-    // 选中态在行数据上打勾；行文字保持正文色（与菜单一致，不染蓝）
     expect(selectedPopupLabels(tester), ['列表']);
     expect(
       tester.widget<Text>(find.text('列表')).style?.color,
-      AppColors.light.bodyText,
+      OrbitAccents.themeAccent,
+      reason: '选中项文字取强调色',
+    );
+    expect(
+      tester.widget<Text>(find.text('网格')).style?.color,
+      AppColors.light.titleText,
+      reason: '未选中项取库内下拉默认正文色（onSurfaceContainer）',
     );
   });
 
-  testWidgets('单选浮层：右上角、页头下沿、240 宽（与页头菜单同坐标）',
+  testWidgets('单选浮层：贴锚点行下方、右沿对齐（下拉偏好 Overlay 口径）',
       (tester) async {
     final ctx = await pumpHost(tester);
+    const anchor = Rect.fromLTWH(320, 120, 300, 48);
     showSelectBottomSheet<String>(
       ctx,
       title: '同步引擎',
@@ -97,19 +102,25 @@ void main() {
         SelectItem(value: 's3', label: 'S3 兼容存储'),
       ],
       current: 'webdav',
+      anchor: anchor,
       onSelect: (_) {},
     );
     await tester.pumpAndSettle();
 
     final screen = tester.getSize(find.byType(Scaffold));
     final popup = tester.getRect(selectPopup());
-    expect(popup.width, 240, reason: 'orbitPanelMaxWidth（与菜单同宽）');
+    expect(
+      popup.top,
+      greaterThanOrEqualTo(anchor.bottom),
+      reason: '落在触发行的下方（不盖住当前值）',
+    );
     expect(
       popup.right,
-      moreOrLessEquals(screen.width - 8, epsilon: 1),
-      reason: '右侧留白 8（菜单同款）',
+      moreOrLessEquals(anchor.right, epsilon: 1),
+      reason: '右沿对齐触发行',
     );
-    expect(popup.top, greaterThan(0), reason: '页头下沿起算');
+    expect(popup.width, greaterThanOrEqualTo(200), reason: 'miuix 弹层最小宽');
+    expect(popup.width, lessThanOrEqualTo(288), reason: 'miuix 弹层最大宽');
     expect(popup.height, lessThan(screen.height * 0.5), reason: '短内容自适应收缩');
     expect(
       tester.getRect(find.text('S3 兼容存储')).bottom,
@@ -185,8 +196,11 @@ void main() {
     await tester.pumpAndSettle();
 
     final hint = tester.widget<Text>(find.text('周四, 09:00'));
-    expect(hint.style?.color, AppColors.light.secondaryText,
-        reason: '行尾提示取次要文字色');
+    expect(
+      hint.style?.color,
+      AppColors.light.secondaryText,
+      reason: '副标题取库内下拉默认 summary 色（onSurfaceVariantSummary）',
+    );
     expect(find.text('明天'), findsOneWidget);
     // hint 不改变选中态：当前值为空时任何一项都不打勾
     expect(selectedPopupLabels(tester), isEmpty);

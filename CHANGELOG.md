@@ -17,6 +17,15 @@
 
 ## [Unreleased]
 
+### 优化：移动端外观设置页改版为 miuix 下拉偏好（2026-11-03）
+
+外观页四行原为「右箭头跳页」形态（值 + `>`），强调色又走底部抽屉，与「就地选一个值」的语义不符。现按 flutter_miuix `DropdownPreference (Overlay)` 口径整体重做：
+
+- 新原语 `shared/widgets/shadcn/orbit_dropdown_tile.dart`（`MiuixBasicComponent` + `MiuixDropdownArrowEndAction`）：标题 + 摘要 → 尾随当前值 + **上下双箭头**，点行即按行矩形锚点就地弹出单选浮层（`showOrbitSelectPopup` 的 `anchor` 显式传入，右沿对齐触发行）；展开期间 `holdDownState` 常亮，与库内下拉偏好的按压态一致。水平内边距只留卡片那 16（`insideMargin` 竖直 8，同模块配置页口径），避免「卡内 16 + 行内 16」挤断摘要。
+- 单选浮层对齐库内列表浮层：圆角 24 → 16（`MiuixListPopupDefaults.cornerRadius`），行配色直接吃 `MiuixDropdownDefaults.dropdownColors`（未选中改正文色、副标题改 summary 色，此前是灰字 + 0.72 透明档）——49 处存量调用点同步受益，`orbit_sheets_test` 两条配色断言随改。
+- 强调色行改下拉：当前色 → 10 色预设（行首 12px 色点）→ 自定义…（转 `showOrbitColorPickerSheet`，HSV 滑杆 + HEX 精确输入）；默认 `#4E8CFF` 不在预设板里，按需在首位注入「当前色」项，尾随值回显与弹层对勾才都落得下。删掉约 120 行手搓 `_AccentPickerSheet`。
+- **验证**：`flutter analyze` 0 issue；`flutter test` **1132 绿**（`appearance_page_test` 4 例：三档回勾 + 四行尾随值 + 强调色回勾当前色/自定义入口）。
+
 ### 优化：移动端单选交互统一为页头菜单同源玻璃浮层（2026-11-03）
 
 「从一组值里挑一个」原先是底部玻璃抽屉（`showSelectBottomSheet` → `showModalBottomSheet` + `OrbitGlassSheet`），与全量 Miuix 化的组件面观感割裂。现改为**直接复用页头 ⋮ 菜单的同一套面板**（另造一套视觉必然长期漂移）：
@@ -25,7 +34,7 @@
 - 定位与页头菜单同坐标：右上角、页头下沿（宽 `orbitFloatCardWidth`，右留白 8），淡入 + 自右上 0.96→1 缩放；不铺遮罩、点面板外即关、**不画标题行**（菜单无标题），`title` 降为读屏语义。`anchor` 参数保留为「贴行弹出」的扩展点，当前未参与定位。`OrbitPanelItem` 另支持 `leading`（自定义行首，项目/优先级用 12px 语义色点）且 `icon` 可空（主题/字号这类无图标的纯文字档位）。
 - 外观设置页四行（主题模式 / 字号 / 字重 / 强调色）换 `OrbitArrowTile`（`MiuixArrowPreference`），与设置页其余值行同构，点行即弹选择浮层；顺带修：三档选择的 `current` 误传中文标签（`themeLabel()`），与 `SelectItem.value` 永不相等、弹层一项都不打勾——改用 `themeValue` / `fontSizeValue` / `fontWeightValue` 原始键。
 - 口径边界：多选（标签 / 云端文件）与色板仍是底部抽屉——勾选清单不是下拉选择；页头 ⋮ 的「列表操作」面板（含开关与就地展开子项）继续走玻璃下拉面板。
-- **验证**：`flutter analyze` 0 issue、`flutter test` **1128 绿**（7 个测试文件的弹层定位从 `BottomSheet` 改为浮层 key，测试壳新增 `selectPopup()` / `selectedPopupLabels()` 助手，新增 `appearance_page_test` 覆盖当前档回勾）。
+- **验证**：`flutter analyze` 0 issue、`flutter test` **1130 绿**（7 个测试文件的弹层定位从 `BottomSheet` 改为浮层 key，测试壳新增 `selectPopup()` / `selectedPopupLabels()` 助手，新增 `appearance_page_test` 覆盖当前档回勾）。
 
 ### 优化：移动端功能模块配置页逐件对齐 flutter_miuix 组件（2026-11-03）
 

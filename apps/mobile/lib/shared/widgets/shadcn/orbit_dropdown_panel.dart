@@ -310,11 +310,12 @@ Future<T?> showOrbitFloatCard<T>(
 /// 别的动作（点空白/再点该项本身同样是收起）。
 ///
 /// **与选择浮层的分工**（2026-11-03 修订，见 AGENTS.md）：从一组值里挑一个的
-/// 纯选择交互改走 `showOrbitSelectPopup`（OS4 玻璃卡 + 选中强调色/对勾，
-/// 就近弹出）；**页头的「当前列表操作」类入口**（含开关、就地展开子项）仍收敛
-/// 到本面板——它锚在触发钮附近、不遮住列表，且「就地展开」的层级感是单项选择
-/// 浮层给不了的（竞品同款版式）。快加面板的档位快捷项（优先级 / 项目单选、
-/// 标签多选卡）同样锚在触发钮上方弹出，与页头面板同源同形。
+/// 纯选择交互（`showOrbitSelectPopup`）**直接复用本面板**——同一
+/// `OrbitDropdownPanelView` 行渲染、同一右上角坐标，只是由 `showSelectBottomSheet`
+/// 兼容名转发；**页头的「当前列表操作」类入口**（含开关、就地展开子项）仍收敛
+/// 到本面板——「就地展开」的层级感是单项选择给不了的（竞品同款版式）。快加
+/// 面板的档位快捷项（优先级 / 项目单选、标签多选卡）同样锚在触发钮上方弹出，
+/// 与页头面板同源同形。
 Future<void> showOrbitDropdownPanel(
   BuildContext context, {
   required List<List<OrbitPanelItem>> groups,
