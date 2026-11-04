@@ -21,6 +21,7 @@ import 'package:orbit/modules/todo/detail_screen.dart';
 import 'package:orbit/modules/todo/form_bottom_sheet.dart';
 import 'package:orbit/modules/todo/saved_filters_screen.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_info_row.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_select_popup.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_text_field.dart';
 
 import 'support/orbit_test_app.dart';
@@ -367,8 +368,20 @@ void main() {
     await _scrollTo(tester, durationTile);
     await tester.tap(durationTile);
     await tester.pumpAndSettle();
-    // 选择抽屉列表懒构建：自定义档在列表尾部，先滚到可见
-    await tester.drag(find.byType(ListView).last, const Offset(0, -200));
+    // 单选不再走底部抽屉：选项在锚定浮层（自带滚动）里，位置随锚点变——
+    // 拖浮层自己的滚动器把尾部的自定义档滚出来；拖表单的 ListView 在浮层
+    // 翻到上方时会拖空（锚点新鲜与否决定落位，单跑/连跑曾一半红）
+    final popupScroll = find
+        .descendant(
+          of: find.byKey(orbitSelectPopupKey),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+    await tester.dragUntilVisible(
+      find.text('自定义分钟数…'),
+      popupScroll,
+      const Offset(0, -80),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('自定义分钟数…'));
     await tester.pumpAndSettle();
