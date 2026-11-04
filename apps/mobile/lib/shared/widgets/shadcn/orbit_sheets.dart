@@ -23,9 +23,18 @@
 /// FAB 与底栏是 Scaffold 兄弟层）；走根路由抽屉才盖住底栏全屏可点。
 ///
 /// 与 `AlertDialog` 的分工终态（2026-09-24）：`AlertDialog` 已清零——确认类
-/// 走底部抽屉，普通文本输入（新建项目/标签/模板/筛选器）走输入型底部抽屉
-/// （`OrbitSheetScaffold` + 固定尾栏），密码类输入走 `orbit_password_sheet.dart`
-/// 的共享抽屉；仅剩附件图片预览用透明 `Dialog`（非选择/确认/输入，不算违规）。
+/// 走底部锚定的浮起卡片（承载仍是抽屉路由），普通文本输入（新建项目/标签/
+/// 模板/筛选器）走输入型底部抽屉（`OrbitSheetScaffold` + 固定尾栏），密码类
+/// 输入走 `orbit_password_sheet.dart` 的共享抽屉；仅剩附件图片预览用透明
+/// `Dialog`（非选择/确认/输入，不算违规）。
+///
+/// **确认弹层形态（2026-11-04 对齐 miuix 对话框参考）**：确认类不再是贴边
+/// 全宽、带拖拽手柄/左对齐标题的抽屉，改为**浮起圆角卡片**——左/右/下各
+/// 16 留白（四角圆角完整可见，底边不贴屏幕）、四角 28 圆角、标题/说明居中、
+/// 无手柄、遮罩 0.32。承载仍取 Material
+/// `showModalBottomSheet`（保留下滑关闭手势与 25 处调用点的 `Future<bool>`
+/// 语义），但底色必须透明、卡片形状由内容容器自绘；输入型/更多操作抽屉
+/// 仍走 [bottomSheetTopShape] 的贴边顶圆角形态。
 ///
 /// **结构与按钮口径**（2026-09-22 收口）：三个弹层的骨架统一走 [OrbitSheetScaffold]
 /// ——内容可滚、底部按钮行**固定在抽屉底部**、按钮标签一律居中；本文件只保留
@@ -71,7 +80,12 @@ const AnimationStyle bottomSheetMotion = AnimationStyle(
 String formatHoldConfirmLabel(int remaining, String confirmLabel) =>
     remaining > 0 ? '请阅读后果（${remaining}s）' : confirmLabel;
 
-/// 确认抽屉：返回 `true` = 用户点了确认按钮；点遮罩/下滑关闭/取消都是 `false`
+/// 确认弹层卡片 finder（形态回归测试用；同 `orbitSelectPopupKey` 口径）
+const ValueKey<String> confirmDialogCardKey =
+    ValueKey<String>('orbit-confirm-dialog-card');
+
+/// 确认弹层（兼容名 `showConfirmBottomSheet`）：返回 `true` = 用户点了确认按钮；
+/// 点遮罩/下滑关闭/取消都是 `false`
 /// （调用方直接 `if (!await showConfirmBottomSheet(...)) return;` 即可，不必判 null）。
 ///
 /// [holdSeconds] > 0 时开层即进入强制冷静期：确认钮禁用并显示剩余秒数，
@@ -88,23 +102,45 @@ Future<bool> showConfirmBottomSheet(
   int holdSeconds = 0,
 }) async {
   // 取值语义：确认 -> true；取消 / 下滑关闭 / 点遮罩 -> false（结果缺失按 false 处理）
+  final colors = AppColors.ofContext(context);
   final result = await showModalBottomSheet<bool>(
     context: context,
     useRootNavigator: true,
     isScrollControlled: true,
-    backgroundColor: AppColors.ofContext(context).popup,
-    shape: bottomSheetTopShape,
+    // 卡片自绘四角圆角与左/右/下留白：承载底色必须透明，否则 BottomSheet 自带的
+    // 顶圆角/直角背景会从卡片外圈露出来（2026-09-21 同款踩坑）
+    backgroundColor: Colors.transparent,
+    barrierColor: Colors.black.withValues(alpha: 0.32),
+    elevation: 0,
     sheetAnimationStyle: bottomSheetMotion,
-    builder: (sheetContext) => _ConfirmSheet(
-      title: title,
-      message: message,
-      content: content,
-      confirmLabel: confirmLabel,
-      cancelLabel: cancelLabel,
-      destructive: destructive,
-      holdSeconds: holdSeconds,
-      onCancel: () => Navigator.of(sheetContext).pop(false),
-      onConfirm: () => Navigator.of(sheetContext).pop(true),
+    builder: (sheetContext) => Container(
+      key: confirmDialogCardKey,
+      margin: const EdgeInsets.only(
+        left: AppDimens.space16,
+        right: AppDimens.space16,
+        bottom: AppDimens.space16,
+      ),
+      decoration: BoxDecoration(
+        color: colors.popup,
+        borderRadius: AppShapes.xl,
+      ),
+      clipBehavior: Clip.antiAlias,
+      // 卡片底色是 DecoratedBox，会隔断 BottomSheet 的 Material：内容里的
+      // ListTile / InkWell 需要就近的 Material 才能画水波纹（库内对话框同款兜底）
+      child: Material(
+        type: MaterialType.transparency,
+        child: _ConfirmSheet(
+          title: title,
+          message: message,
+          content: content,
+          confirmLabel: confirmLabel,
+          cancelLabel: cancelLabel,
+          destructive: destructive,
+          holdSeconds: holdSeconds,
+          onCancel: () => Navigator.of(sheetContext).pop(false),
+          onConfirm: () => Navigator.of(sheetContext).pop(true),
+        ),
+      ),
     ),
   );
   return result ?? false;
@@ -244,12 +280,11 @@ class _ConfirmSheetState extends State<_ConfirmSheet> {
     final colors = AppColors.ofContext(context);
     // 正文可滚、按钮固定在骨架尾栏（内容再长也不会把确认钮顶出可视区）
     return OrbitSheetScaffold(
-      title: widget.title,
-      contentPadding: const EdgeInsets.fromLTRB(
-        AppDimens.space16,
-        0,
-        AppDimens.space16,
-        AppDimens.space16,
+      showHandle: false,
+      header: _ConfirmDialogTitle(widget.title),
+      // 卡片内边距 24（miuix 对话框 insideMargin 口径）；底部留白由按钮行上边距提供
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: AppDimens.space24,
       ),
       content: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -258,6 +293,7 @@ class _ConfirmSheetState extends State<_ConfirmSheet> {
           if (widget.message != null)
             Text(
               widget.message!,
+              textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 14,
                 height: 1.5,
@@ -271,6 +307,12 @@ class _ConfirmSheetState extends State<_ConfirmSheet> {
         ],
       ),
       actions: OrbitSheetActions(
+        padding: const EdgeInsets.fromLTRB(
+          AppDimens.space24,
+          AppDimens.space16,
+          AppDimens.space24,
+          AppDimens.space20,
+        ),
         cancelLabel: widget.cancelLabel,
         onCancel: widget.onCancel,
         // 冷静期内确认钮禁用、文案走剩余秒数（取消始终可点）
@@ -278,6 +320,37 @@ class _ConfirmSheetState extends State<_ConfirmSheet> {
             formatHoldConfirmLabel(_remaining, widget.confirmLabel),
         onConfirm: _remaining > 0 ? null : widget.onConfirm,
         destructive: widget.destructive,
+      ),
+    );
+  }
+}
+
+/// 确认弹层标题（居中；miuix 对话框口径，卡片内边距 24）
+class _ConfirmDialogTitle extends StatelessWidget {
+  const _ConfirmDialogTitle(this.title);
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.ofContext(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppDimens.space24,
+        AppDimens.space24,
+        AppDimens.space24,
+        AppDimens.space12,
+      ),
+      child: Text(
+        title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+          color: colors.titleText,
+        ),
       ),
     );
   }

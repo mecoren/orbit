@@ -8,7 +8,9 @@ import 'package:flutter_miuix/miuix.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/core/theme/app_colors.dart';
 import 'package:orbit/core/theme/app_dimens.dart';
+import 'package:orbit/core/theme/app_shapes.dart';
 import 'package:orbit/core/theme/orbit_accents.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_sheet_scaffold.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_sheets.dart';
 import 'support/orbit_test_app.dart';
 
@@ -249,6 +251,62 @@ void main() {
     expect(selectedPopupLabels(tester), isEmpty);
   });
 
+  testWidgets('确认弹层：浮起圆角卡 + 居中标题（对齐 miuix 对话框参考）',
+      (tester) async {
+    final ctx = await pumpHost(tester);
+    showConfirmBottomSheet(
+      ctx,
+      title: '导出明文数据',
+      message: '导出内容为未加密明文',
+    );
+    await tester.pumpAndSettle();
+
+    final card = find.byKey(confirmDialogCardKey);
+    expect(card, findsOneWidget);
+    // 宽屏上 BottomSheet 自身会限宽居中，故验外观配置而非绝对坐标
+    final container = tester.widget<Container>(card);
+    expect(
+      container.margin,
+      const EdgeInsets.only(
+        left: AppDimens.space16,
+        right: AppDimens.space16,
+        bottom: AppDimens.space16,
+      ),
+      reason: '左/右/下各留白 16，底边不贴屏幕、四角圆角完整可见',
+    );
+    expect(
+      (container.decoration! as BoxDecoration).borderRadius,
+      AppShapes.xl,
+      reason: '四角大圆角（不是贴边抽屉的顶圆角）',
+    );
+    expect(
+      tester.widget<OrbitSheetScaffold>(find.byType(OrbitSheetScaffold)).showHandle,
+      isFalse,
+      reason: '对话框没有拖拽手柄',
+    );
+    expect(
+      tester.widget<Text>(find.text('导出明文数据')).textAlign,
+      TextAlign.center,
+      reason: '标题居中',
+    );
+    expect(
+      tester.widget<Text>(find.text('导出内容为未加密明文')).textAlign,
+      TextAlign.center,
+      reason: '说明居中',
+    );
+    for (final label in ['取消', '确定']) {
+      final button = find.ancestor(
+        of: find.text(label),
+        matching: find.byType(MiuixButton),
+      );
+      expect(
+        tester.widget<MiuixButton>(button.first).cornerRadius,
+        AppShapes.radiusMedium,
+        reason: '$label 圆角与项目按钮统一档一致（AppShapes.medium = 14）',
+      );
+    }
+  });
+
   testWidgets('确认弹层：底部按钮标签水平居中（贴左即 TextAlign.start 回归）',
       (tester) async {
     final ctx = await pumpHost(tester);
@@ -298,11 +356,21 @@ void main() {
 
     final confirm = find.text('确定');
     final before = tester.getRect(confirm);
-    final sheetBottom = tester.getRect(find.byType(BottomSheet)).bottom;
+    // 卡片现在是浮起浮层（底部留白 16），量「按钮到卡片底」而非到承载底
+    final cardBottom = tester
+        .getRect(
+          find
+              .descendant(
+                of: find.byKey(confirmDialogCardKey),
+                matching: find.byType(DecoratedBox),
+              )
+              .first,
+        )
+        .bottom;
     expect(
-      sheetBottom - before.bottom,
+      cardBottom - before.bottom,
       lessThan(40),
-      reason: '按钮应钉在抽屉底部（间距只剩尾栏内边距）',
+      reason: '按钮应钉在卡片底部（间距只剩尾栏内边距）',
     );
 
     // 内容在内容区独立滚动（抽屉高度 85% 上限 + 80 行文本必然溢出），

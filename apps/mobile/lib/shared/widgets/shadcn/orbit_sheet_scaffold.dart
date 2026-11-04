@@ -24,7 +24,6 @@ import '../../../core/layout/orbit_breakpoints.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimens.dart';
 import 'orbit_button.dart';
-import 'orbit_divider.dart';
 
 /// 抽屉骨架：[title]/[header] + 可滚 [content] + 固定 [actions] 尾栏
 class OrbitSheetScaffold extends StatelessWidget {
@@ -66,7 +65,6 @@ class OrbitSheetScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.ofContext(context);
     final headerWidget = header ?? (title == null ? null : _SheetTitle(title!));
 
     // 键盘避让：底部 padding 跟随 viewInsets（输入型抽屉必有）
@@ -108,11 +106,9 @@ class OrbitSheetScaffold extends StatelessWidget {
                           child: content,
                         ),
                 ),
-                // 尾栏固定在底部：与内容区之间用 1px 分隔线划界（不随内容滚动）
-                if (actions != null) ...[
-                  OrbitDivider(height: 1, color: colors.divider),
-                  actions!,
-                ],
+                // 尾栏固定在底部（不随内容滚动）；与内容之间不画分隔线，
+                // 间距对齐 miuix 对话框参考（按钮行自身带 16 上边距）
+                ?actions,
               ],
             ),
           ),
@@ -180,6 +176,9 @@ class _SheetHandle extends StatelessWidget {
 /// - [confirmChild] 覆盖确认钮内容（如 busy 态 spinner）
 /// - 标签居中原因：按钮被 `Expanded` 拉满宽后，标签盒与按钮同宽时默认
 ///   `TextAlign.start` 会把字形顶到左边距（2026-09-22 统一修复）
+/// - 形态与间距：按钮圆角走原语默认的项目统一档 `AppShapes.medium`（14，
+///   与卡片/输入框同档，docs/05 底部抽屉口径），外边距 16/16/16/20、
+///   双钮间隙 12——不画内容分隔线，靠留白划界
 class OrbitSheetActions extends StatelessWidget {
   const OrbitSheetActions({
     super.key,
@@ -189,6 +188,7 @@ class OrbitSheetActions extends StatelessWidget {
     this.onCancel,
     this.destructive = false,
     this.confirmChild,
+    this.padding,
   });
 
   final String confirmLabel;
@@ -198,18 +198,28 @@ class OrbitSheetActions extends StatelessWidget {
   final bool destructive;
   final Widget? confirmChild;
 
+  /// 按钮行外边距覆写（确认弹层按对话框 24 内边距收口；默认仍是抽屉口径 16）
+  final EdgeInsetsGeometry? padding;
+
   @override
   Widget build(BuildContext context) {
     final label =
         confirmChild ?? Text(confirmLabel, textAlign: TextAlign.center);
 
     return Padding(
-      padding: const EdgeInsets.all(AppDimens.space12),
+      padding: padding ??
+          const EdgeInsets.fromLTRB(
+            AppDimens.space16,
+            AppDimens.space16,
+            AppDimens.space16,
+            AppDimens.space20,
+          ),
       child: Row(
         children: [
           if (cancelLabel != null) ...[
             // 2026-11-01 换承载：sh.Button → OrbitButton（miuix MiuixButton），
-            // 展开语义同旧（Expanded 拉满宽 + 标签居中）
+            // 展开语义同旧（Expanded 拉满宽 + 标签居中）；圆角取原语默认的项目
+            // 统一档，不为弹层单设特例
             Expanded(
               child: OrbitButton.outline(
                 onPressed: onCancel,
