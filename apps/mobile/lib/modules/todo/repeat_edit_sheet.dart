@@ -5,7 +5,7 @@ import '../../core/theme/app_dimens.dart';
 import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart'
-    show bottomSheetTopShape;
+    show bottomSheetMotion, bottomSheetTopShape;
 import '../../shared/widgets/shadcn/orbit_card.dart';
 import '../../shared/widgets/shadcn/orbit_date_picker.dart';
 import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
@@ -70,13 +70,13 @@ Future<RepeatRuleValue?> showRepeatEditSheet(
   int monthMode = rep.RepeatMonthMode.day,
   int nthWeek = 0,
 }) {
-  final colors = AppColors.ofContext(context);
   return showModalBottomSheet<RepeatRuleValue>(
     context: context,
     useRootNavigator: true,
     isScrollControlled: true,
-    backgroundColor: colors.popup,
+    backgroundColor: Colors.transparent,
     shape: bottomSheetTopShape,
+    sheetAnimationStyle: bottomSheetMotion,
     builder: (_) => _RepeatEditSheet(
       mode: mode,
       after: after,
@@ -260,7 +260,12 @@ class _RepeatEditSheetState extends State<_RepeatEditSheet> {
     // 骨架的 stretch 列已按同一口径铺满全宽
     return OrbitSheetScaffold(
       title: '重复',
-      contentPadding: const EdgeInsets.all(AppDimens.space16),
+      contentPadding: const EdgeInsets.fromLTRB(
+        AppDimens.space16,
+        0,
+        AppDimens.space16,
+        AppDimens.space16,
+      ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -297,7 +302,7 @@ class _RepeatEditSheetState extends State<_RepeatEditSheet> {
             ],
           ),
           if (_panelOpen) ...[
-            const SizedBox(height: AppDimens.space8),
+            const SizedBox(height: AppDimens.space12),
             _buildCustomPanel(colors),
           ],
           SizedBox(height: AppDimens.gestureInsetFallback / 2),

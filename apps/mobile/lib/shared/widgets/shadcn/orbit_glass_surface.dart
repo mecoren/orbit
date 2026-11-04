@@ -25,6 +25,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_miuix/miuix.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_dimens.dart';
 import '../../../core/theme/app_shapes.dart';
 
 /// OS4 玻璃采样器的向下传递通道
@@ -164,17 +165,19 @@ class OrbitGlassSurface extends StatelessWidget {
 /// 承载层必须配 `backgroundColor: Colors.transparent` + `elevation: 0`——
 /// 否则 Material 会在透明底上再补一圈**直角**阴影，把顶部圆角玻璃的边界弄脏。
 ///
-/// 两件事在这里收口，调用方不必各写一遍：
-/// - 顶部圆角与 `bottomSheetTopShape` 同档（`AppShapes.radiusLarge`）；
+/// 三件事在这里收口，调用方不必各写一遍：
+/// - 浮起卡片：左/右/下各 `space16` 留白、四角 `AppShapes.radiusXl`（28），
+///   与 `OrbitFloatingSheetCard` 同形态（2026-11-04 全量收口）；
 /// - 键盘避让放在玻璃**之外**（玻璃只覆盖面板本体，键盘高度不进模糊纹理，
 ///   否则模糊面积近乎翻倍），骨架自带的 `viewInsets` 避让在这里被清零，
-///   不会算两遍。
+///   不会算两遍；
+/// - 玻璃弹层里的 `OrbitSheetScaffold` 应传 `floatingCard: false`，避免双层卡面。
 class OrbitGlassSheet extends StatelessWidget {
   const OrbitGlassSheet({
     super.key,
     required this.child,
     this.backdrop,
-    this.topRadius = AppShapes.radiusLarge,
+    this.radius = AppShapes.radiusXl,
   });
 
   /// 面板内容（`OrbitSheetScaffold` 骨架或裸内容列）
@@ -183,20 +186,27 @@ class OrbitGlassSheet extends StatelessWidget {
   /// OS4 玻璃背景采样器（调用方从 `OrbitGlassScope` 取；null = 实时模糊）
   final MiuixLayerBackdrop? backdrop;
 
-  /// 顶部圆角半径（与承载形状同值）
-  final double topRadius;
+  /// 四角圆角半径（浮起卡片档 28）
+  final double radius;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: OrbitGlassSurface(
-        backdrop: backdrop,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(topRadius)),
-        child: MediaQuery.removeViewInsets(
-          context: context,
-          removeBottom: true,
-          child: child,
+      child: Container(
+        margin: const EdgeInsets.only(
+          left: AppDimens.space16,
+          right: AppDimens.space16,
+          bottom: AppDimens.space16,
+        ),
+        child: OrbitGlassSurface(
+          backdrop: backdrop,
+          borderRadius: BorderRadius.circular(radius),
+          child: MediaQuery.removeViewInsets(
+            context: context,
+            removeBottom: true,
+            child: child,
+          ),
         ),
       ),
     );

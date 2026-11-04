@@ -14,8 +14,10 @@
 ///   不随内容滚动
 /// - 键盘避让：底部内边距跟随 `viewInsets`
 ///
-/// 承载（`showModalBottomSheet` + `bottomSheetTopShape` + `bottomSheetMotion`）
-/// 仍由调用方提供——形状/动效的唯一来源是 `orbit_sheets.dart`。
+/// 承载（`showModalBottomSheet` + 透明底 + `bottomSheetTopShape` + `bottomSheetMotion`）
+/// 仍由调用方提供——形状/动效的唯一来源是 `orbit_sheets.dart`；卡片外观由骨架
+/// 调 `OrbitFloatingSheetCard` 自绘（左右下各 16 留白、四角 `AppShapes.xl`），
+/// [floatingCard] 传 false 时交给外层玻璃壳 / 确认弹层的自绘卡片。
 library;
 
 import 'package:flutter/material.dart';
@@ -24,6 +26,7 @@ import '../../../core/layout/orbit_breakpoints.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimens.dart';
 import 'orbit_button.dart';
+import 'orbit_floating_sheet_card.dart';
 
 /// 抽屉骨架：[title]/[header] + 可滚 [content] + 固定 [actions] 尾栏
 class OrbitSheetScaffold extends StatelessWidget {
@@ -37,6 +40,8 @@ class OrbitSheetScaffold extends StatelessWidget {
     this.contentScrollable = true,
     this.showHandle = true,
     this.contentPadding,
+    this.floatingCard = true,
+    this.cardKey,
   });
 
   /// 抽屉内容；[contentScrollable] 为 true 时外包 `SingleChildScrollView`
@@ -63,17 +68,43 @@ class OrbitSheetScaffold extends StatelessWidget {
   /// 内容区自定义内边距（默认由内容自管）
   final EdgeInsetsGeometry? contentPadding;
 
+  /// 是否自绘浮起圆角卡片（左右下各 16 留白、四角 `AppShapes.xl`）。
+  /// 玻璃弹层 / 确认弹层由外层壳画卡片时传 false，避免双层卡面。
+  final bool floatingCard;
+
+  /// 卡片 `Container` 的 key（形态回归用）
+  final Key? cardKey;
+
   @override
   Widget build(BuildContext context) {
     final headerWidget = header ?? (title == null ? null : _SheetTitle(title!));
+    final sheetBody = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (showHandle) const _SheetHandle(),
+        ?headerWidget,
+        Flexible(
+          child: contentScrollable
+              ? SingleChildScrollView(padding: contentPadding, child: content)
+              : Padding(
+                  padding: contentPadding ?? EdgeInsets.zero,
+                  child: content,
+                ),
+        ),
+        // 尾栏固定在底部（不随内容滚动）；与内容之间不画分隔线，
+        // 间距对齐 miuix 对话框参考（按钮行自身带 16 上边距）
+        ?actions,
+      ],
+    );
 
     // 键盘避让：底部 padding 跟随 viewInsets（输入型抽屉必有）
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: SafeArea(
         top: false,
-        // #107 平板：抽屉内容限宽居中（640），避免输入框/按钮横贯 1200dp；
-        // 外层背景与圆角仍由 showModalBottomSheet 承载，观感不变
+        // #107 平板：抽屉内容限宽居中（640），避免输入框/按钮横贯 1200dp。
+        // 卡片本身再留左右下各 16，承载（showModalBottomSheet）必须是透明底。
         //
         // `heightFactor: 1` 不是可选项：`showModalBottomSheet` 给的是
         // `maxHeight = 屏高` 的松约束，裸 `Align` 会铺满整屏 —— 抽屉背板变成
@@ -86,31 +117,16 @@ class OrbitSheetScaffold extends StatelessWidget {
             constraints: BoxConstraints(
               // 只订阅 height 字段（同文件 viewInsetsOf 口径）：键盘开合不应
               // 让整个抽屉内容跟着重建
-              maxHeight: MediaQuery.sizeOf(context).height * maxHeightFactor,
+              // 浮起卡片的左右下留白由卡片自身占掉，高度上限要补回这 16，
+              // 否则内容可用高度凭空少 16（日期面板时间行被挤出滚动区）。
+              maxHeight:
+                  MediaQuery.sizeOf(context).height * maxHeightFactor +
+                  (floatingCard ? AppDimens.space16 : 0),
               maxWidth: OrbitBreakpoints.sheetMaxWidth,
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (showHandle) const _SheetHandle(),
-                ?headerWidget,
-                Flexible(
-                  child: contentScrollable
-                      ? SingleChildScrollView(
-                          padding: contentPadding,
-                          child: content,
-                        )
-                      : Padding(
-                          padding: contentPadding ?? EdgeInsets.zero,
-                          child: content,
-                        ),
-                ),
-                // 尾栏固定在底部（不随内容滚动）；与内容之间不画分隔线，
-                // 间距对齐 miuix 对话框参考（按钮行自身带 16 上边距）
-                ?actions,
-              ],
-            ),
+            child: floatingCard
+                ? OrbitFloatingSheetCard(cardKey: cardKey, child: sheetBody)
+                : sheetBody,
           ),
         ),
       ),
@@ -207,7 +223,8 @@ class OrbitSheetActions extends StatelessWidget {
         confirmChild ?? Text(confirmLabel, textAlign: TextAlign.center);
 
     return Padding(
-      padding: padding ??
+      padding:
+          padding ??
           const EdgeInsets.fromLTRB(
             AppDimens.space16,
             AppDimens.space16,
@@ -240,4 +257,3 @@ class OrbitSheetActions extends StatelessWidget {
     );
   }
 }
-

@@ -82,8 +82,9 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
       context: context,
       useRootNavigator: true,
       isScrollControlled: true,
-      backgroundColor: colors.popup,
+      backgroundColor: Colors.transparent,
       shape: bottomSheetTopShape,
+      sheetAnimationStyle: bottomSheetMotion,
       builder: (sheetCtx) => StatefulBuilder(
         builder: (ctx, setSheet) => OrbitSheetScaffold(
           title: title,
@@ -217,24 +218,25 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
       context: context,
       useRootNavigator: true,
       isScrollControlled: true,
-      backgroundColor: colors.popup,
+      backgroundColor: Colors.transparent,
       shape: bottomSheetTopShape,
+      sheetAnimationStyle: bottomSheetMotion,
       builder: (sheetCtx) => StatefulBuilder(
         builder: (ctx, setSheet) => OrbitSheetScaffold(
           title: existing == null ? '新建筛选器' : '编辑筛选器',
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: AppDimens.space16,
+          contentPadding: const EdgeInsets.fromLTRB(
+            AppDimens.space16,
+            0,
+            AppDimens.space16,
+            AppDimens.space16,
           ),
           // 表单滚动、底部按钮固定（长表单不再把「创建」顶出可视区）
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              OrbitTextField(
-                controller: nameCtl,
-                label: '名称（如：本周 P0）',
-              ),
-              const SizedBox(height: AppDimens.space8),
+              OrbitTextField(controller: nameCtl, label: '名称（如：本周 P0）'),
+              const SizedBox(height: AppDimens.space12),
               SizedBox(
                 height: AppDimens.touchTarget,
                 child: InkWell(
@@ -362,10 +364,7 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
                     children: [
                       Expanded(
                         child: Text(
-                          '项目：${idsSummary(projectIds, [
-                            for (final p in projects)
-                              (id: p.id, title: p.title),
-                          ])}',
+                          '项目：${idsSummary(projectIds, [for (final p in projects) (id: p.id, title: p.title)])}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -406,10 +405,7 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
                     children: [
                       Expanded(
                         child: Text(
-                          '标签：${idsSummary(labelIds, [
-                            for (final l in labels)
-                              (id: l.id, title: l.title),
-                          ])}',
+                          '标签：${idsSummary(labelIds, [for (final l in labels) (id: l.id, title: l.title)])}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -560,7 +556,8 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
         if (c.containsKey(e.key)) {
           final ms = (c[e.key] as num).toInt();
           parts.add(
-              '${e.value}${OrbitDatePicker.formatDate(DateTime.fromMillisecondsSinceEpoch(ms))}');
+            '${e.value}${OrbitDatePicker.formatDate(DateTime.fromMillisecondsSinceEpoch(ms))}',
+          );
         }
       }
       for (final e in triLabels.entries) {
@@ -605,8 +602,9 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
     final reminderRows = ref.watch(taskRemindersProjectionProvider).value;
     final attachmentIds = ref.watch(taskAttachmentFlagsProvider).value;
     final openSubtaskIds = ref.watch(taskOpenSubtaskFlagsProvider).value;
-    final labelIdsByTask =
-        labelRows == null ? null : indexLabelIdsByTask(labelRows);
+    final labelIdsByTask = labelRows == null
+        ? null
+        : indexLabelIdsByTask(labelRows);
     final reminderTaskIds = reminderRows == null
         ? null
         : {
@@ -754,7 +752,9 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
                     );
                   },
                   loading: () => const SliverFillRemaining(
-                    child: Center(child: OrbitSpinner(size: AppDimens.iconSizeLg)),
+                    child: Center(
+                      child: OrbitSpinner(size: AppDimens.iconSizeLg),
+                    ),
                   ),
                   error: (e, _) => SliverFillRemaining(
                     child: Center(
@@ -772,9 +772,7 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
             top: 0,
             left: 0,
             right: 0,
-            child: OrbitPageHeader(
-              title: '筛选器',
-            ),
+            child: OrbitPageHeader(title: '筛选器'),
           ),
         ],
       ),
@@ -812,7 +810,8 @@ class _FilterDateRow extends StatelessWidget {
     final text = value == null
         ? '不限'
         : OrbitDatePicker.formatDate(
-            DateTime.fromMillisecondsSinceEpoch(value!));
+            DateTime.fromMillisecondsSinceEpoch(value!),
+          );
     return SizedBox(
       height: AppDimens.touchTarget,
       child: Row(
@@ -827,8 +826,7 @@ class _FilterDateRow extends StatelessWidget {
                       : DateTime.fromMillisecondsSinceEpoch(value!),
                 );
                 if (picked == null || !context.mounted) return;
-                final day =
-                    DateTime(picked.year, picked.month, picked.day);
+                final day = DateTime(picked.year, picked.month, picked.day);
                 onPick(day.millisecondsSinceEpoch);
               },
               child: Row(
@@ -836,16 +834,10 @@ class _FilterDateRow extends StatelessWidget {
                   Expanded(
                     child: Text(
                       '$label：$text',
-                      style: TextStyle(
-                        fontSize: 15,
-                        color: colors.bodyText,
-                      ),
+                      style: TextStyle(fontSize: 15, color: colors.bodyText),
                     ),
                   ),
-                  Icon(
-                    OrbitIcons.chevronRight,
-                    color: colors.secondaryText,
-                  ),
+                  Icon(OrbitIcons.chevronRight, color: colors.secondaryText),
                 ],
               ),
             ),
@@ -904,20 +896,13 @@ class _FilterTriRow extends StatelessWidget {
             Expanded(
               child: Text(
                 '$label：${_names[value]}',
-                style: TextStyle(
-                  fontSize: 15,
-                  color: colors.bodyText,
-                ),
+                style: TextStyle(fontSize: 15, color: colors.bodyText),
               ),
             ),
-            Icon(
-              OrbitIcons.chevronRight,
-              color: colors.secondaryText,
-            ),
+            Icon(OrbitIcons.chevronRight, color: colors.secondaryText),
           ],
         ),
       ),
     );
   }
 }
-

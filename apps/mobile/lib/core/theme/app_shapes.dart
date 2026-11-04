@@ -30,18 +30,24 @@ class AppShapes {
   static const BorderRadius xs = BorderRadius.all(Radius.circular(radiusXs));
 
   /// 小圆角（标签、小按钮、内嵌 chip）— 10
-  static const BorderRadius small =
-      BorderRadius.all(Radius.circular(radiusSmall));
+  static const BorderRadius small = BorderRadius.all(
+    Radius.circular(radiusSmall),
+  );
 
   /// 中圆角（卡片、按钮、输入框、列表行）— 14
-  static const BorderRadius medium =
-      BorderRadius.all(Radius.circular(radiusMedium));
+  static const BorderRadius medium = BorderRadius.all(
+    Radius.circular(radiusMedium),
+  );
 
   /// 大圆角（大卡片、区块容器）— 20
-  static const BorderRadius large =
-      BorderRadius.all(Radius.circular(radiusLarge));
+  static const BorderRadius large = BorderRadius.all(
+    Radius.circular(radiusLarge),
+  );
 
-  /// 超大圆角（底部抽屉顶角、Modal 面板）— 28
+  /// 超大圆角（所有底部弹层的浮起卡片四角、Modal 面板）— 28
+  ///
+  /// 2026-11-04 起底部弹层不再贴边，四角统一取本档（见
+  /// `orbit_floating_sheet_card.dart`）；[large]（20）留给普通大卡片/区块。
   static const BorderRadius xl = BorderRadius.all(Radius.circular(radiusXl));
 
   /// 详情区块容器圆角（与卡片同档）

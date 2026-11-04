@@ -35,14 +35,11 @@ Future<Set<int>?> showWeeklyReviewSheet(
     context: context,
     useRootNavigator: true,
     isScrollControlled: true,
-    backgroundColor: AppColors.ofContext(context).popup,
+    backgroundColor: Colors.transparent,
     shape: bottomSheetTopShape,
     sheetAnimationStyle: bottomSheetMotion,
-    builder: (sheetContext) => _WeeklyReviewSheet(
-      tasks: tasks,
-      onSetDue: onSetDue,
-      onWake: onWake,
-    ),
+    builder: (sheetContext) =>
+        _WeeklyReviewSheet(tasks: tasks, onSetDue: onSetDue, onWake: onWake),
   );
 }
 
@@ -51,22 +48,22 @@ enum _ReviewStep { overdue, undated, stalled }
 
 extension on _ReviewStep {
   String get title => switch (this) {
-        _ReviewStep.overdue => '逾期任务',
-        _ReviewStep.undated => '无日期任务',
-        _ReviewStep.stalled => '停滞任务',
-      };
+    _ReviewStep.overdue => '逾期任务',
+    _ReviewStep.undated => '无日期任务',
+    _ReviewStep.stalled => '停滞任务',
+  };
 
   String get desc => switch (this) {
-        _ReviewStep.overdue => '这些任务已过截止还没完成——顺延到今天/明天，或逐条决定去留',
-        _ReviewStep.undated => '没有截止日的任务容易被遗忘——给它们排个日期，或先留着',
-        _ReviewStep.stalled => '超过 7 天没动过的任务——碰一下表示「还在关注」',
-      };
+    _ReviewStep.overdue => '这些任务已过截止还没完成——顺延到今天/明天，或逐条决定去留',
+    _ReviewStep.undated => '没有截止日的任务容易被遗忘——给它们排个日期，或先留着',
+    _ReviewStep.stalled => '超过 7 天没动过的任务——碰一下表示「还在关注」',
+  };
 
   IconData get icon => switch (this) {
-        _ReviewStep.overdue => OrbitIcons.warning,
-        _ReviewStep.undated => OrbitIcons.listChecks,
-        _ReviewStep.stalled => OrbitIcons.clock,
-      };
+    _ReviewStep.overdue => OrbitIcons.warning,
+    _ReviewStep.undated => OrbitIcons.listChecks,
+    _ReviewStep.stalled => OrbitIcons.clock,
+  };
 }
 
 const _stepOrder = _ReviewStep.values;
@@ -76,10 +73,10 @@ enum _DuePreset { today, tomorrow, nextWeek }
 
 extension on _DuePreset {
   String get label => switch (this) {
-        _DuePreset.today => '今天',
-        _DuePreset.tomorrow => '明天',
-        _DuePreset.nextWeek => '下周',
-      };
+    _DuePreset.today => '今天',
+    _DuePreset.tomorrow => '明天',
+    _DuePreset.nextWeek => '下周',
+  };
 
   DateTime get day {
     final now = DateTime.now();
@@ -131,8 +128,10 @@ class _WeeklyReviewSheetState extends State<_WeeklyReviewSheet> {
     return all.where((t) => !_handled.contains(t.id)).toList();
   }
 
-  late final WeeklyReviewBuckets _buckets =
-      collectWeeklyReview(widget.tasks, DateTime.now().millisecondsSinceEpoch);
+  late final WeeklyReviewBuckets _buckets = collectWeeklyReview(
+    widget.tasks,
+    DateTime.now().millisecondsSinceEpoch,
+  );
 
   void _markHandled(Iterable<int> ids, String label) {
     setState(() => _handled.addAll(ids));
@@ -204,8 +203,12 @@ class _WeeklyReviewSheetState extends State<_WeeklyReviewSheet> {
     return OrbitSheetScaffold(
       // 自定义标题行：步骤图标 + 标题 + 步进
       header: Padding(
-        padding: const EdgeInsets.fromLTRB(AppDimens.space16, AppDimens.space16,
-            AppDimens.space16, AppDimens.space4),
+        padding: const EdgeInsets.fromLTRB(
+          AppDimens.space16,
+          AppDimens.space16,
+          AppDimens.space16,
+          AppDimens.space4,
+        ),
         child: Row(
           children: [
             Icon(_step.icon, size: 20, color: colors.accent),
@@ -234,7 +237,9 @@ class _WeeklyReviewSheetState extends State<_WeeklyReviewSheet> {
           // 步骤进度条（三段，前段主色）
           Padding(
             padding: const EdgeInsets.symmetric(
-                horizontal: AppDimens.space16, vertical: AppDimens.space4),
+              horizontal: AppDimens.space16,
+              vertical: AppDimens.space4,
+            ),
             child: Row(
               children: [
                 for (var i = 0; i < _stepOrder.length; i++) ...[
@@ -256,7 +261,9 @@ class _WeeklyReviewSheetState extends State<_WeeklyReviewSheet> {
           ),
           Padding(
             padding: const EdgeInsets.symmetric(
-                horizontal: AppDimens.space16, vertical: AppDimens.space4),
+              horizontal: AppDimens.space16,
+              vertical: AppDimens.space4,
+            ),
             child: Text(
               _step.desc,
               style: TextStyle(fontSize: 12, color: colors.deactivatedText),
@@ -272,8 +279,10 @@ class _WeeklyReviewSheetState extends State<_WeeklyReviewSheet> {
                   const SizedBox(height: AppDimens.space8),
                   Text(
                     '${_step.title}已处理完',
-                    style:
-                        TextStyle(fontSize: 13, color: colors.deactivatedText),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: colors.deactivatedText,
+                    ),
                   ),
                 ],
               ),
@@ -293,9 +302,10 @@ class _WeeklyReviewSheetState extends State<_WeeklyReviewSheet> {
                 children: [
                   Expanded(
                     child: OrbitButton.outline(
-                      onPressed: _busy ? null : () => _rolloverAll(_DuePreset.today),
-                      child: const Text('全部顺延到今天',
-                          textAlign: TextAlign.center),
+                      onPressed: _busy
+                          ? null
+                          : () => _rolloverAll(_DuePreset.today),
+                      child: const Text('全部顺延到今天', textAlign: TextAlign.center),
                     ),
                   ),
                   const SizedBox(width: AppDimens.space8),
@@ -304,8 +314,7 @@ class _WeeklyReviewSheetState extends State<_WeeklyReviewSheet> {
                       onPressed: _busy
                           ? null
                           : () => _rolloverAll(_DuePreset.tomorrow),
-                      child: const Text('全部顺延到明天',
-                          textAlign: TextAlign.center),
+                      child: const Text('全部顺延到明天', textAlign: TextAlign.center),
                     ),
                   ),
                 ],
@@ -315,10 +324,7 @@ class _WeeklyReviewSheetState extends State<_WeeklyReviewSheet> {
             OrbitButton.primary(
               onPressed: _busy ? null : _next,
               expand: true,
-              child: Text(
-                isLast ? '完成回顾' : '下一步',
-                textAlign: TextAlign.center,
-              ),
+              child: Text(isLast ? '完成回顾' : '下一步', textAlign: TextAlign.center),
             ),
           ],
         ),
@@ -330,7 +336,9 @@ class _WeeklyReviewSheetState extends State<_WeeklyReviewSheet> {
   Widget _row(TodoTask t, AppColorSet colors) {
     return Padding(
       padding: const EdgeInsets.symmetric(
-          horizontal: AppDimens.space16, vertical: AppDimens.space4),
+        horizontal: AppDimens.space16,
+        vertical: AppDimens.space4,
+      ),
       child: Row(
         children: [
           Expanded(

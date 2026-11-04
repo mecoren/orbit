@@ -33,8 +33,10 @@
 /// 16 留白（四角圆角完整可见，底边不贴屏幕）、四角 28 圆角、标题/说明居中、
 /// 无手柄、遮罩 0.32。承载仍取 Material
 /// `showModalBottomSheet`（保留下滑关闭手势与 25 处调用点的 `Future<bool>`
-/// 语义），但底色必须透明、卡片形状由内容容器自绘；输入型/更多操作抽屉
-/// 仍走 [bottomSheetTopShape] 的贴边顶圆角形态。
+/// 语义），但底色必须透明、卡片形状由内容容器自绘。**2026-11-04 起这套浮起
+/// 圆角卡片推广到全部底部弹层**（输入型、选择型、玻璃弹层、主表单），
+/// 统一由 `OrbitFloatingSheetCard` / `OrbitGlassSheet` 绘制，见
+/// `orbit_floating_sheet_card.dart`；本文件的确认弹层不再特殊。
 ///
 /// **结构与按钮口径**（2026-09-22 收口）：三个弹层的骨架统一走 [OrbitSheetScaffold]
 /// ——内容可滚、底部按钮行**固定在抽屉底部**、按钮标签一律居中；本文件只保留
@@ -60,11 +62,14 @@ import 'orbit_sheet_scaffold.dart';
 export 'orbit_select_popup.dart'
     show SelectItem, showOrbitSelectPopup, orbitSelectPopupKey;
 
-/// 底部抽屉顶圆角描边形状（全项目底部抽屉的唯一形状来源）
+/// 底部弹层承载形状（全项目唯一形状来源；兼容名保留）
+///
+/// 2026-11-04 起所有底部弹层一律浮起圆角卡片：真正的卡片由
+/// `OrbitFloatingSheetCard` / `OrbitGlassSheet` 自绘（左右下各 16 留白 +
+/// 四角 `AppShapes.xl`），承载底色透明。本形状只作 Material 兜底，四角与卡片
+/// 同档，避免顶圆角 shape 把卡片顶角裁成贴边抽屉的样子。
 const RoundedRectangleBorder bottomSheetTopShape = RoundedRectangleBorder(
-  borderRadius: BorderRadius.vertical(
-    top: Radius.circular(AppShapes.radiusLarge),
-  ),
+  borderRadius: AppShapes.xl,
 );
 
 /// 底部抽屉统一动效（时长/曲线取自 AppMotion，视图内不写裸值）
@@ -81,8 +86,9 @@ String formatHoldConfirmLabel(int remaining, String confirmLabel) =>
     remaining > 0 ? '请阅读后果（${remaining}s）' : confirmLabel;
 
 /// 确认弹层卡片 finder（形态回归测试用；同 `orbitSelectPopupKey` 口径）
-const ValueKey<String> confirmDialogCardKey =
-    ValueKey<String>('orbit-confirm-dialog-card');
+const ValueKey<String> confirmDialogCardKey = ValueKey<String>(
+  'orbit-confirm-dialog-card',
+);
 
 /// 确认弹层（兼容名 `showConfirmBottomSheet`）：返回 `true` = 用户点了确认按钮；
 /// 点遮罩/下滑关闭/取消都是 `false`
@@ -161,15 +167,14 @@ Future<void> showSelectBottomSheet<T>(
   T? current,
   required ValueChanged<T> onSelect,
   Rect? anchor,
-}) =>
-    showOrbitSelectPopup<T>(
-      context,
-      title: title,
-      items: items,
-      current: current,
-      onSelect: onSelect,
-      anchor: anchor,
-    );
+}) => showOrbitSelectPopup<T>(
+  context,
+  title: title,
+  items: items,
+  current: current,
+  onSelect: onSelect,
+  anchor: anchor,
+);
 
 /// 更多操作菜单项（图标 + 文案；destructive 项由调用方传红色 [color]）
 class MoreActionItem {
@@ -281,11 +286,11 @@ class _ConfirmSheetState extends State<_ConfirmSheet> {
     // 正文可滚、按钮固定在骨架尾栏（内容再长也不会把确认钮顶出可视区）
     return OrbitSheetScaffold(
       showHandle: false,
+      // 卡片由 showConfirmBottomSheet 外层 Container 画，骨架不再画第二层
+      floatingCard: false,
       header: _ConfirmDialogTitle(widget.title),
       // 卡片内边距 24（miuix 对话框 insideMargin 口径）；底部留白由按钮行上边距提供
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: AppDimens.space24,
-      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: AppDimens.space24),
       content: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
@@ -301,7 +306,8 @@ class _ConfirmSheetState extends State<_ConfirmSheet> {
               ),
             ),
           if (widget.content != null) ...[
-            if (widget.message != null) const SizedBox(height: AppDimens.space12),
+            if (widget.message != null)
+              const SizedBox(height: AppDimens.space12),
             widget.content!,
           ],
         ],
@@ -316,8 +322,7 @@ class _ConfirmSheetState extends State<_ConfirmSheet> {
         cancelLabel: widget.cancelLabel,
         onCancel: widget.onCancel,
         // 冷静期内确认钮禁用、文案走剩余秒数（取消始终可点）
-        confirmLabel:
-            formatHoldConfirmLabel(_remaining, widget.confirmLabel),
+        confirmLabel: formatHoldConfirmLabel(_remaining, widget.confirmLabel),
         onConfirm: _remaining > 0 ? null : widget.onConfirm,
         destructive: widget.destructive,
       ),
@@ -373,6 +378,8 @@ class _ActionsSheet extends StatelessWidget {
     // 无尾栏（点选即关）；选项行数量有限，内容区按需滚动
     return OrbitSheetScaffold(
       title: title,
+      // 玻璃卡面由 OrbitGlassSheet 画，骨架不再画第二层不透明卡片
+      floatingCard: false,
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,

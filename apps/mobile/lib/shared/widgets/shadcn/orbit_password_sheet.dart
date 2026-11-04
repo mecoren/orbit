@@ -1,18 +1,18 @@
 /// 密码输入抽屉（设计系统 v3，2026-09-24 收口）
- ///
- /// **为什么收口**：此前 6 处密码输入（改主密码 / 开启加密 / 指纹密码确认 /
- /// 改同步密码 / 升 v2 / 密钥包密码）各写一套中央 `AlertDialog`，与「输入一律
- /// 走底部抽屉」口径相悖。本文件是密码类输入的唯一口径：
- /// - 承载与形状：`showModalBottomSheet` + [bottomSheetTopShape] +
- ///   [bottomSheetMotion]（与共享弹层族同源，见 `orbit_sheets.dart`）
- /// - 骨架：[OrbitSheetScaffold]（内容可滚、按钮固定底部、键盘避让）
- /// - 字段：1~3 个 `obscureText` 输入（`labels` 定标签，`hints` 可选占位）；
- ///   首个自动聚焦，末个回车即确认
- /// - 返回：确认 → 各字段原文的 `List<String>`（顺序同 `labels`）；取消 /
- ///   点遮罩 / 下滑 → `null`。合法性校验（空值 / 长度 / 两次一致）由调用方
- ///   在关闭后执行，与此前 `AlertDialog` 行为一致
- /// - 控制器交给抽屉子树释放（退出动画期间表单会重建一次，提前 dispose
- ///   会让那一帧读到已释放的 controller，见 `ControllerDisposer`）
+///
+/// **为什么收口**：此前 6 处密码输入（改主密码 / 开启加密 / 指纹密码确认 /
+/// 改同步密码 / 升 v2 / 密钥包密码）各写一套中央 `AlertDialog`，与「输入一律
+/// 走底部抽屉」口径相悖。本文件是密码类输入的唯一口径：
+/// - 承载与形状：`showModalBottomSheet` + [bottomSheetTopShape] +
+///   [bottomSheetMotion]（与共享弹层族同源，见 `orbit_sheets.dart`）
+/// - 骨架：[OrbitSheetScaffold]（内容可滚、按钮固定底部、键盘避让）
+/// - 字段：1~3 个 `obscureText` 输入（`labels` 定标签，`hints` 可选占位）；
+///   首个自动聚焦，末个回车即确认
+/// - 返回：确认 → 各字段原文的 `List<String>`（顺序同 `labels`）；取消 /
+///   点遮罩 / 下滑 → `null`。合法性校验（空值 / 长度 / 两次一致）由调用方
+///   在关闭后执行，与此前 `AlertDialog` 行为一致
+/// - 控制器交给抽屉子树释放（退出动画期间表单会重建一次，提前 dispose
+///   会让那一帧读到已释放的 controller，见 `ControllerDisposer`）
 library;
 
 import 'package:flutter/material.dart';
@@ -35,13 +35,14 @@ Future<List<String>?> showPasswordSheet(
 }) async {
   assert(labels.isNotEmpty, '密码抽屉至少需要一个字段');
   assert(hints == null || hints.length == labels.length, 'hints 须与 labels 等长');
-  final controllers = [for (var i = 0; i < labels.length; i++) TextEditingController()];
-  final colors = AppColors.ofContext(context);
+  final controllers = [
+    for (var i = 0; i < labels.length; i++) TextEditingController(),
+  ];
   return showModalBottomSheet<List<String>>(
     context: context,
     useRootNavigator: true,
     isScrollControlled: true,
-    backgroundColor: colors.popup,
+    backgroundColor: Colors.transparent,
     shape: bottomSheetTopShape,
     sheetAnimationStyle: bottomSheetMotion,
     builder: (sheetContext) => ControllerDisposer(
@@ -49,9 +50,8 @@ Future<List<String>?> showPasswordSheet(
       child: StatefulBuilder(
         builder: (ctx, setSheetState) {
           final sheetColors = AppColors.ofContext(ctx);
-          void submit() => Navigator.of(ctx).pop(
-                [for (final c in controllers) c.text],
-              );
+          void submit() =>
+              Navigator.of(ctx).pop([for (final c in controllers) c.text]);
 
           return OrbitSheetScaffold(
             title: title,
@@ -76,7 +76,9 @@ Future<List<String>?> showPasswordSheet(
                   ),
                 if (message != null) const SizedBox(height: AppDimens.space12),
                 for (var i = 0; i < labels.length; i++) ...[
-                  if (i > 0) const SizedBox(height: AppDimens.space8),
+                  // 字段纵向节奏与其它输入型弹层统一 12（form_bottom_sheet /
+                  // 标签 / 模板同档），不再为密码弹层单设 8
+                  if (i > 0) const SizedBox(height: AppDimens.space12),
                   OrbitTextField(
                     controller: controllers[i],
                     obscureText: true,

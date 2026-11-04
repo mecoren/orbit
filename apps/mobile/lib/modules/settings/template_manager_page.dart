@@ -13,7 +13,8 @@ import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_card.dart';
 import '../../shared/widgets/controller_disposer.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
-import '../../shared/widgets/shadcn/orbit_actions_sheet.dart' show bottomSheetTopShape;
+import '../../shared/widgets/shadcn/orbit_actions_sheet.dart'
+    show bottomSheetMotion, bottomSheetTopShape;
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
@@ -115,138 +116,139 @@ class _TemplateManagerPageState extends ConsumerState<TemplateManagerPage> {
   }
 
   /// 模板表单底部抽屉（新建/编辑共用）
-  Future<({String name, Map<String, Object?> payload})?> _showTemplateForm(
-      {TodoTemplate? editing}) async {
+  Future<({String name, Map<String, Object?> payload})?> _showTemplateForm({
+    TodoTemplate? editing,
+  }) async {
     final parsed = editing == null
         ? const TemplatePayload()
         : parseTemplatePayload(editing.payload);
     final nameCtrl = TextEditingController(text: editing?.name ?? '');
     final titleCtrl = TextEditingController(text: parsed.title ?? '');
     final notesCtrl = TextEditingController(text: parsed.notes ?? '');
-    final subtasksCtrl =
-        TextEditingController(text: parsed.subtasks.join('\n'));
+    final subtasksCtrl = TextEditingController(
+      text: parsed.subtasks.join('\n'),
+    );
     int? priority = parsed.priority;
     int? offsetDays = parsed.dueOffsetDays;
-    final colors = AppColors.ofContext(context);
 
     return showModalBottomSheet<({String name, Map<String, Object?> payload})>(
-        context: context,
-        useRootNavigator: true,
-        isScrollControlled: true,
-        backgroundColor: colors.popup,
-        shape: bottomSheetTopShape,
-        builder: (sheetContext) => ControllerDisposer(
-          controllers: [nameCtrl, titleCtrl, notesCtrl, subtasksCtrl],
-          child: StatefulBuilder(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      shape: bottomSheetTopShape,
+      sheetAnimationStyle: bottomSheetMotion,
+      builder: (sheetContext) => ControllerDisposer(
+        controllers: [nameCtrl, titleCtrl, notesCtrl, subtasksCtrl],
+        child: StatefulBuilder(
           builder: (sheetContext, setSheetState) {
-              // 表单滚动 + 底部操作区固定：长表单（备注/子任务多行）会把
-              // 保存按钮顶出可视区；骨架与按钮口径见 orbit_sheet_scaffold.dart
-              return OrbitSheetScaffold(
-                title: editing == null ? '新建模板' : '编辑模板',
-                contentScrollable: false,
-                content: ListView(
-                  shrinkWrap: true,
-                  padding: const EdgeInsets.fromLTRB(
-                    AppDimens.space16,
-                    0,
-                    AppDimens.space16,
-                    AppDimens.space16,
+            // 表单滚动 + 底部操作区固定：长表单（备注/子任务多行）会把
+            // 保存按钮顶出可视区；骨架与按钮口径见 orbit_sheet_scaffold.dart
+            return OrbitSheetScaffold(
+              title: editing == null ? '新建模板' : '编辑模板',
+              contentScrollable: false,
+              // 内边距交给骨架，与密码 / 标签弹层同一参数；字段节奏统一 12
+              contentPadding: const EdgeInsets.fromLTRB(
+                AppDimens.space16,
+                0,
+                AppDimens.space16,
+                AppDimens.space16,
+              ),
+              content: ListView(
+                shrinkWrap: true,
+                padding: EdgeInsets.zero,
+                children: [
+                  OrbitTextField(
+                    key: const ValueKey('tpl-field-name'),
+                    controller: nameCtrl,
+                    label: '模板名称',
+                    helperText: '列表里显示的名字',
                   ),
-                  children: [
-                      OrbitTextField(
-                        key: const ValueKey('tpl-field-name'),
-                        controller: nameCtrl,
-                        label: '模板名称',
-                        helperText: '列表里显示的名字',
-                      ),
-                      const SizedBox(height: AppDimens.space12),
-                      OrbitTextField(
-                        key: const ValueKey('tpl-field-title'),
-                        controller: titleCtrl,
-                        label: '任务标题',
-                        helperText: '套用时预填；留空则不预填',
-                      ),
-                      const SizedBox(height: AppDimens.space8),
-                      _selectRow(
-                        label: '优先级',
-                        value: priority == null
-                            ? '不预填'
-                            : priorityLabel(priority!),
-                        onTap: () => showSelectBottomSheet<int>(
-                          sheetContext,
-                          title: '优先级',
-                          current: priority,
-                          items: [
-                            for (var p = 0; p <= 5; p++)
-                              SelectItem(value: p, label: priorityLabel(p)),
-                          ],
-                          onSelect: (v) =>
-                              setSheetState(() => priority = v),
-                        ),
-                      ),
-                      _selectRow(
-                        label: '截止偏移',
-                        value: offsetDays == null ? '不预填' : '$offsetDays 天后',
-                        onTap: () async {
-                          await showSelectBottomSheet<int>(
-                            sheetContext,
-                            title: '截止偏移（套用当天起算）',
-                            current: offsetDays,
-                            items: [
-                              for (final d in const [0, 1, 3, 7, 14, 30])
-                                SelectItem(
-                                  value: d,
-                                  label: d == 0 ? '今天' : '$d 天后',
-                                ),
-                            ],
-                            onSelect: (v) =>
-                                setSheetState(() => offsetDays = v),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: AppDimens.space12),
-                      OrbitTextField(
-                        key: const ValueKey('tpl-field-notes'),
-                        controller: notesCtrl,
-                        maxLines: 3,
-                        label: '备注（可选）',
-                      ),
-                      const SizedBox(height: AppDimens.space12),
-                      OrbitTextField(
-                        key: const ValueKey('tpl-field-subtasks'),
-                        controller: subtasksCtrl,
-                        maxLines: 4,
-                        label: '子任务（每行一条，可选）',
-                      ),
-                  ],
-                ),
-                actions: OrbitSheetActions(
-                  cancelLabel: '取消',
-                  onCancel: () => Navigator.of(sheetContext).pop(null),
-                  confirmLabel: '保存',
-                  onConfirm: () {
-                    final name = nameCtrl.text.trim();
-                    if (name.isEmpty) {
-                      WaitToast.destructive('模板名称不能为空');
-                      return;
-                    }
-                    Navigator.of(sheetContext).pop((
-                      name: name,
-                      payload: _buildPayload(
-                        title: titleCtrl.text,
-                        notes: notesCtrl.text,
-                        priority: priority,
-                        offsetDays: offsetDays,
-                        subtasks: subtasksCtrl.text,
-                      ),
-                    ));
-                  },
-                ),
-              );
-            },
-          ),
+                  const SizedBox(height: AppDimens.space12),
+                  OrbitTextField(
+                    key: const ValueKey('tpl-field-title'),
+                    controller: titleCtrl,
+                    label: '任务标题',
+                    helperText: '套用时预填；留空则不预填',
+                  ),
+                  const SizedBox(height: AppDimens.space12),
+                  _selectRow(
+                    label: '优先级',
+                    value: priority == null ? '不预填' : priorityLabel(priority!),
+                    onTap: () => showSelectBottomSheet<int>(
+                      sheetContext,
+                      title: '优先级',
+                      current: priority,
+                      items: [
+                        for (var p = 0; p <= 5; p++)
+                          SelectItem(value: p, label: priorityLabel(p)),
+                      ],
+                      onSelect: (v) => setSheetState(() => priority = v),
+                    ),
+                  ),
+                  const SizedBox(height: AppDimens.space12),
+                  _selectRow(
+                    label: '截止偏移',
+                    value: offsetDays == null ? '不预填' : '$offsetDays 天后',
+                    onTap: () async {
+                      await showSelectBottomSheet<int>(
+                        sheetContext,
+                        title: '截止偏移（套用当天起算）',
+                        current: offsetDays,
+                        items: [
+                          for (final d in const [0, 1, 3, 7, 14, 30])
+                            SelectItem(
+                              value: d,
+                              label: d == 0 ? '今天' : '$d 天后',
+                            ),
+                        ],
+                        onSelect: (v) => setSheetState(() => offsetDays = v),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: AppDimens.space12),
+                  OrbitTextField(
+                    key: const ValueKey('tpl-field-notes'),
+                    controller: notesCtrl,
+                    maxLines: 3,
+                    label: '备注（可选）',
+                  ),
+                  const SizedBox(height: AppDimens.space12),
+                  OrbitTextField(
+                    key: const ValueKey('tpl-field-subtasks'),
+                    controller: subtasksCtrl,
+                    maxLines: 4,
+                    label: '子任务（每行一条，可选）',
+                  ),
+                ],
+              ),
+              actions: OrbitSheetActions(
+                cancelLabel: '取消',
+                onCancel: () => Navigator.of(sheetContext).pop(null),
+                confirmLabel: '保存',
+                onConfirm: () {
+                  final name = nameCtrl.text.trim();
+                  if (name.isEmpty) {
+                    WaitToast.destructive('模板名称不能为空');
+                    return;
+                  }
+                  Navigator.of(sheetContext).pop((
+                    name: name,
+                    payload: _buildPayload(
+                      title: titleCtrl.text,
+                      notes: notesCtrl.text,
+                      priority: priority,
+                      offsetDays: offsetDays,
+                      subtasks: subtasksCtrl.text,
+                    ),
+                  ));
+                },
+              ),
+            );
+          },
         ),
-      );
+      ),
+    );
   }
 
   /// 表单 → payload（只出白名单键；空值不出键 = 套用时不预填）
@@ -288,15 +290,17 @@ class _TemplateManagerPageState extends ConsumerState<TemplateManagerPage> {
         constraints: const BoxConstraints(minHeight: AppDimens.touchTarget),
         child: Row(
           children: [
-            Text(label,
-                style: TextStyle(fontSize: 14, color: colors.bodyText)),
+            Text(label, style: TextStyle(fontSize: 14, color: colors.bodyText)),
             const Spacer(),
             Text(
               value,
               style: TextStyle(fontSize: 14, color: OrbitAccents.themeAccent),
             ),
-            Icon(OrbitIcons.chevronRight,
-                size: AppDimens.iconSizeMd, color: colors.secondaryText),
+            Icon(
+              OrbitIcons.chevronRight,
+              size: AppDimens.iconSizeMd,
+              color: colors.secondaryText,
+            ),
           ],
         ),
       ),
@@ -315,7 +319,8 @@ class _TemplateManagerPageState extends ConsumerState<TemplateManagerPage> {
             child: ListView(
               controller: _scrollController,
               padding: EdgeInsets.only(
-                top: MediaQuery.of(context).padding.top +
+                top:
+                    MediaQuery.of(context).padding.top +
                     OrbitPageHeader.rowHeight +
                     AppDimens.space16,
                 left: AppDimens.space16,
@@ -332,8 +337,10 @@ class _TemplateManagerPageState extends ConsumerState<TemplateManagerPage> {
                       Text(
                         '模板用于一键生成常用任务（含子任务与默认优先级/截止偏移）。'
                         '在任务列表长按右下角新建按钮即可套用。',
-                        style:
-                            TextStyle(fontSize: 12, color: colors.secondaryText),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colors.secondaryText,
+                        ),
                       ),
                       const SizedBox(height: AppDimens.space8),
                       if (templates.isEmpty)
@@ -343,7 +350,9 @@ class _TemplateManagerPageState extends ConsumerState<TemplateManagerPage> {
                             child: Text(
                               '还没有模板。',
                               style: TextStyle(
-                                  fontSize: 12, color: colors.secondaryText),
+                                fontSize: 12,
+                                color: colors.secondaryText,
+                              ),
                             ),
                           ),
                         )
@@ -352,10 +361,13 @@ class _TemplateManagerPageState extends ConsumerState<TemplateManagerPage> {
                       const SizedBox(height: AppDimens.space8),
                       SizedBox(
                         width: double.infinity,
-                        child: OrbitButton.icon(variant: OrbitButtonVariant.outline, 
+                        child: OrbitButton.icon(
+                          variant: OrbitButtonVariant.outline,
                           onPressed: _busy ? null : () => _upsert(),
-                          icon: const Icon(OrbitIcons.add,
-                              size: AppDimens.iconSizeSm + 2),
+                          icon: const Icon(
+                            OrbitIcons.add,
+                            size: AppDimens.iconSizeSm + 2,
+                          ),
                           label: const Text('新建模板'),
                         ),
                       ),
@@ -369,9 +381,7 @@ class _TemplateManagerPageState extends ConsumerState<TemplateManagerPage> {
             top: 0,
             left: 0,
             right: 0,
-            child: OrbitPageHeader(
-              title: '任务模板',
-            ),
+            child: OrbitPageHeader(title: '任务模板'),
           ),
         ],
       ),
@@ -380,13 +390,13 @@ class _TemplateManagerPageState extends ConsumerState<TemplateManagerPage> {
 
   Widget _card(AppColorSet colors, TodoTemplate tpl) {
     final p = parseTemplatePayload(tpl.payload);
-    final priorityText =
-        p.priority == null ? null : '优先级 ${priorityLabel(p.priority!)}';
+    final priorityText = p.priority == null
+        ? null
+        : '优先级 ${priorityLabel(p.priority!)}';
     final offsetText = p.dueOffsetDays == null
         ? null
         : (p.dueOffsetDays == 0 ? '今天截止' : '${p.dueOffsetDays} 天后截止');
-    final subtaskText =
-        p.subtasks.isEmpty ? null : '${p.subtasks.length} 个子任务';
+    final subtaskText = p.subtasks.isEmpty ? null : '${p.subtasks.length} 个子任务';
     final subtitle = [
       ?p.title,
       ?priorityText,
@@ -404,48 +414,57 @@ class _TemplateManagerPageState extends ConsumerState<TemplateManagerPage> {
         ),
         child: Row(
           children: [
-          Expanded(
-            child: InkWell(
-              borderRadius: AppShapes.small,
-              onTap: _busy ? null : () => _upsert(editing: tpl),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                    vertical: AppDimens.space8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      tpl.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 14, color: colors.bodyText),
-                    ),
-                    const SizedBox(height: AppDimens.space2),
-                    Text(
-                      subtitle.isEmpty ? '无预填字段' : subtitle,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style:
-                          TextStyle(fontSize: 11, color: colors.secondaryText),
-                    ),
-                  ],
+            Expanded(
+              child: InkWell(
+                borderRadius: AppShapes.small,
+                onTap: _busy ? null : () => _upsert(editing: tpl),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: AppDimens.space8,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        tpl.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 14, color: colors.bodyText),
+                      ),
+                      const SizedBox(height: AppDimens.space2),
+                      Text(
+                        subtitle.isEmpty ? '无预填字段' : subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: colors.secondaryText,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-          OrbitIconButton(
-            onPressed: _busy ? null : () => _upsert(editing: tpl),
-            tooltip: '编辑',
-            icon: Icon(OrbitIcons.edit,
-                size: AppDimens.iconSizeMd, color: colors.secondaryText),
-          ),
-          OrbitIconButton(
-            onPressed: _busy ? null : () => _delete(tpl),
-            tooltip: '删除',
-            icon: Icon(OrbitIcons.delete,
-                size: AppDimens.iconSizeMd, color: colors.destructive),
-          ),
-        ],
+            OrbitIconButton(
+              onPressed: _busy ? null : () => _upsert(editing: tpl),
+              tooltip: '编辑',
+              icon: Icon(
+                OrbitIcons.edit,
+                size: AppDimens.iconSizeMd,
+                color: colors.secondaryText,
+              ),
+            ),
+            OrbitIconButton(
+              onPressed: _busy ? null : () => _delete(tpl),
+              tooltip: '删除',
+              icon: Icon(
+                OrbitIcons.delete,
+                size: AppDimens.iconSizeMd,
+                color: colors.destructive,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -454,5 +473,3 @@ class _TemplateManagerPageState extends ConsumerState<TemplateManagerPage> {
 
 // 表单控制器的释放交给 shared/widgets/controller_disposer.dart 的
 // ControllerDisposer（见该文件顶部关于「弹层退出动画期重建」的说明）。
-
-

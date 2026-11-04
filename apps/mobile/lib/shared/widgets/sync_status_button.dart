@@ -28,7 +28,8 @@ import '../../data/providers/bridge_provider.dart';
 import '../../modules/shell/db_invalidation.dart';
 import '../../modules/todo/providers/todo_providers.dart';
 import '../utils/sync_status_text.dart';
-import 'shadcn/orbit_actions_sheet.dart' show bottomSheetTopShape;
+import 'shadcn/orbit_actions_sheet.dart'
+    show bottomSheetMotion, bottomSheetTopShape;
 import 'shadcn/orbit_sheet_scaffold.dart';
 import 'shadcn/orbit_spinner.dart';
 import 'shadcn/orbit_toast.dart';
@@ -116,12 +117,12 @@ class _SyncStatusButtonState extends ConsumerState<SyncStatusButton> {
   }
 
   Future<void> _showInfoSheet() async {
-    final colors = AppColors.ofContext(context);
     await showModalBottomSheet<void>(
       context: context,
       useRootNavigator: true,
-      backgroundColor: colors.popup,
+      backgroundColor: Colors.transparent,
       shape: bottomSheetTopShape,
+      sheetAnimationStyle: bottomSheetMotion,
       builder: (_) => _SyncInfoSheet(
         status: _runStatus,
         errorMessage: _errorMessage,
@@ -446,18 +447,17 @@ class _SyncInfoSheetState extends ConsumerState<_SyncInfoSheet> {
       actions: OrbitSheetActions(
         // N33：运行中把主按钮换成「取消同步」——进度条只说明在推进，
         // 大附件分片上传时用户仍需要一个「停下」的出口
-        confirmLabel: _busy
-            ? (_cancelling ? '取消中…' : '取消同步')
-            : '立即同步',
+        confirmLabel: _busy ? (_cancelling ? '取消中…' : '取消同步') : '立即同步',
         onConfirm: _busy
             ? (_cancelling ? null : () => unawaited(_cancelSync()))
             : () => unawaited(_runSync()),
         confirmChild: _cancelling
-            ? const OrbitSpinner(size: AppDimens.iconSizeSm, color: Colors.white)
+            ? const OrbitSpinner(
+                size: AppDimens.iconSizeSm,
+                color: Colors.white,
+              )
             : null,
       ),
     );
   }
 }
-
-

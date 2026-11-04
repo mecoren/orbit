@@ -35,8 +35,9 @@ ThemeData buildAppTheme({
 }) {
   final isDark = brightness == Brightness.dark;
   final accent = OrbitAccents.themeAccent;
-  final colorScheme =
-      isDark ? ColorSchemes.dark(accent) : ColorSchemes.light(accent);
+  final colorScheme = isDark
+      ? ColorSchemes.dark(accent)
+      : ColorSchemes.light(accent);
   final colors = AppColors.of(brightness);
 
   // 字号缩放不在主题层做（会被 ~300 处内联 fontSize 绕过）：全局 TextScaler
@@ -77,9 +78,7 @@ ThemeData buildAppTheme({
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: AppShapes.medium,
-        side: isDark
-            ? BorderSide(color: colors.outline)
-            : BorderSide.none,
+        side: isDark ? BorderSide(color: colors.outline) : BorderSide.none,
       ),
     ),
     listTileTheme: ListTileThemeData(
@@ -133,12 +132,8 @@ ThemeData buildAppTheme({
         disabledForegroundColor: colors.deactivatedText,
         elevation: 0,
         shadowColor: Colors.transparent,
-        shape: const RoundedRectangleBorder(
-          borderRadius: AppShapes.medium,
-        ),
-        textStyle: textTheme.labelLarge?.copyWith(
-          fontWeight: FontWeight.w600,
-        ),
+        shape: const RoundedRectangleBorder(borderRadius: AppShapes.medium),
+        textStyle: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
@@ -146,24 +141,16 @@ ThemeData buildAppTheme({
         minimumSize: const Size(0, AppDimens.touchTarget),
         foregroundColor: accent,
         side: BorderSide(color: accent.withValues(alpha: 0.45)),
-        shape: const RoundedRectangleBorder(
-          borderRadius: AppShapes.medium,
-        ),
-        textStyle: textTheme.labelLarge?.copyWith(
-          fontWeight: FontWeight.w600,
-        ),
+        shape: const RoundedRectangleBorder(borderRadius: AppShapes.medium),
+        textStyle: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
       ),
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
         minimumSize: const Size(0, AppDimens.touchTarget),
         foregroundColor: accent,
-        shape: const RoundedRectangleBorder(
-          borderRadius: AppShapes.medium,
-        ),
-        textStyle: textTheme.labelLarge?.copyWith(
-          fontWeight: FontWeight.w600,
-        ),
+        shape: const RoundedRectangleBorder(borderRadius: AppShapes.medium),
+        textStyle: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
       ),
     ),
     floatingActionButtonTheme: FloatingActionButtonThemeData(
@@ -181,7 +168,9 @@ ThemeData buildAppTheme({
     ),
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
-      backgroundColor: isDark ? colors.surfaceElevated : const Color(0xFF272C36),
+      backgroundColor: isDark
+          ? colors.surfaceElevated
+          : const Color(0xFF272C36),
       contentTextStyle: textTheme.bodyMedium?.copyWith(color: Colors.white),
       actionTextColor: isDark ? accent : const Color(0xFF9DBBFF),
       elevation: 0,
@@ -189,10 +178,7 @@ ThemeData buildAppTheme({
     ),
     // 悬浮提示统一主题色底白字（对齐桌面 ui/tooltip.tsx 原语 bg-primary 口径）
     tooltipTheme: TooltipThemeData(
-      decoration: BoxDecoration(
-        color: accent,
-        borderRadius: AppShapes.of(8),
-      ),
+      decoration: BoxDecoration(color: accent, borderRadius: AppShapes.of(8)),
       textStyle: textTheme.bodySmall?.copyWith(
         color: Colors.white,
         fontSize: 12,
@@ -250,17 +236,19 @@ ThemeData buildAppTheme({
         ),
       ),
     ),
-    // 底部抽屉默认皮肤（调用点显式传参时以显式为准）
+    // 底部抽屉默认皮肤（2026-11-04 全量收口为浮起圆角卡片）
+    // 承载底色必须透明、clip 必须 none：卡片由 OrbitFloatingSheetCard /
+    // OrbitSheetScaffold 自绘（左右下各 16 留白 + 四角 AppShapes.xl），
+    // 否则 BottomSheet 自带的贴边直角背景会从卡片外圈露出来、顶角被裁。
     bottomSheetTheme: BottomSheetThemeData(
-      backgroundColor: colors.surfaceElevated,
-      modalBackgroundColor: colors.surfaceElevated,
+      backgroundColor: Colors.transparent,
+      modalBackgroundColor: Colors.transparent,
+      modalBarrierColor: Colors.black.withValues(alpha: 0.32),
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       modalElevation: 0,
-      clipBehavior: Clip.antiAlias,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
+      clipBehavior: Clip.none,
+      shape: const RoundedRectangleBorder(borderRadius: AppShapes.xl),
     ),
     // 对话框：大圆角 + 白底 + 无 M3 色调叠加
     dialogTheme: DialogThemeData(
@@ -273,8 +261,7 @@ ThemeData buildAppTheme({
       ),
       shape: RoundedRectangleBorder(borderRadius: AppShapes.xl),
       titleTextStyle: textTheme.titleLarge?.copyWith(color: colors.titleText),
-      contentTextStyle:
-          textTheme.bodyMedium?.copyWith(color: colors.bodyText),
+      contentTextStyle: textTheme.bodyMedium?.copyWith(color: colors.bodyText),
     ),
     // ── 全局滚动条（悬浮细滑块：轨道透明、圆角胶囊、hover/按下加深）──
     scrollbarTheme: ScrollbarThemeData(
@@ -300,8 +287,6 @@ ThemeData buildAppTheme({
       crossAxisMargin: 2,
       mainAxisMargin: 2,
     ),
-    extensions: [
-      const AppTypographyConfig(baseFontWeight: FontWeight.w400),
-    ],
+    extensions: [const AppTypographyConfig(baseFontWeight: FontWeight.w400)],
   );
 }

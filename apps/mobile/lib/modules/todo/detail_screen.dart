@@ -20,14 +20,20 @@ import '../../services/notification_service.dart';
 import '../../shared/utils/hex_color.dart';
 import '../../shared/widgets/shadcn/orbit_strikethrough.dart';
 import '../../shared/widgets/shadcn/orbit_checkbox.dart';
+import '../../shared/widgets/shadcn/orbit_color_swatches.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_image_thumb.dart';
 import '../../shared/widgets/shadcn/orbit_info_row.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_skeleton.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart'
-    show bottomSheetTopShape, showMoreActionsSheet, MoreActionItem;
+    show
+        bottomSheetMotion,
+        bottomSheetTopShape,
+        showMoreActionsSheet,
+        MoreActionItem;
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
+import '../../shared/widgets/shadcn/orbit_floating_sheet_card.dart';
 import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
@@ -337,7 +343,10 @@ class _ErrorView extends StatelessWidget {
             style: TextStyle(fontSize: 14, color: colors.secondaryText),
           ),
           const SizedBox(height: AppDimens.space16),
-          OrbitButton.text(onPressed: () => context.pop(), child: const Text('返回')),
+          OrbitButton.text(
+            onPressed: () => context.pop(),
+            child: const Text('返回'),
+          ),
         ],
       ),
     );
@@ -864,8 +873,9 @@ class _DescriptionSectionState extends State<_DescriptionSection> {
       context: context,
       useRootNavigator: true,
       isScrollControlled: true,
-      backgroundColor: AppColors.ofContext(context).popup,
+      backgroundColor: Colors.transparent,
       shape: bottomSheetTopShape,
+      sheetAnimationStyle: bottomSheetMotion,
       builder: (_) => _DescriptionEditSheet(
         initial: widget.detail.description ?? '',
         onApply: (text) =>
@@ -916,22 +926,20 @@ class _DescriptionEditSheetState extends State<_DescriptionEditSheet> {
       title: '编辑描述',
       maxHeightFactor: 0.7,
       contentScrollable: false,
-      content: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          AppDimens.space16,
-          0,
-          AppDimens.space16,
-          AppDimens.space16,
-        ),
-        child: OrbitTextField(
-          controller: _controller,
-          maxLines: null,
-          minLines: 6,
-          maxLength: 5000,
-          autofocus: true,
-          hintText: '请输入描述',
-          style: TextStyle(fontSize: 15, color: colors.bodyText),
-        ),
+      contentPadding: const EdgeInsets.fromLTRB(
+        AppDimens.space16,
+        0,
+        AppDimens.space16,
+        AppDimens.space16,
+      ),
+      content: OrbitTextField(
+        controller: _controller,
+        maxLines: null,
+        minLines: 6,
+        maxLength: 5000,
+        autofocus: true,
+        hintText: '请输入描述',
+        style: TextStyle(fontSize: 15, color: colors.bodyText),
       ),
       actions: OrbitSheetActions(
         cancelLabel: '取消',
@@ -1234,7 +1242,8 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
                     ),
                   ],
                 )
-              : OrbitButton.icon(variant: OrbitButtonVariant.text, 
+              : OrbitButton.icon(
+                  variant: OrbitButtonVariant.text,
                   onPressed: () => setState(() => _adding = true),
                   icon: const Icon(
                     OrbitIcons.add,
@@ -1312,13 +1321,13 @@ class _LabelsSection extends StatelessWidget {
   }
 
   void _openEditor(BuildContext context) {
-    final colors = AppColors.ofContext(context);
     showModalBottomSheet<void>(
       context: context,
       useRootNavigator: true,
       isScrollControlled: true,
-      backgroundColor: colors.popup,
+      backgroundColor: Colors.transparent,
       shape: bottomSheetTopShape,
+      sheetAnimationStyle: bottomSheetMotion,
       builder: (_) => _LabelEditSheet(taskId: detail.id),
     );
   }
@@ -1413,167 +1422,122 @@ class _LabelEditSheetState extends ConsumerState<_LabelEditSheet> {
             .toSet() ??
         <int>{};
 
-    // 键盘避让：底部 padding 跟随 viewInsets
-    return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
+    // 与其余输入型弹层共用骨架：手柄 / 标题 / 键盘避让 / 高度上限统一由
+    // OrbitSheetScaffold 承担，不再自写 SafeArea + Column + 手写色板。
+    return OrbitSheetScaffold(
+      title: '编辑标签',
+      maxHeightFactor: 0.7,
+      contentScrollable: false,
+      contentPadding: const EdgeInsets.fromLTRB(
+        AppDimens.space16,
+        0,
+        AppDimens.space16,
+        AppDimens.space16,
       ),
-      child: SafeArea(
-        top: false,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(context).size.height * 0.7,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(AppDimens.space16),
-                child: Text(
-                  '编辑标签',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: colors.titleText,
+      content: ListView(
+        shrinkWrap: true,
+        padding: EdgeInsets.zero,
+        children: [
+          if (labels.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(AppDimens.space16),
+              child: Text(
+                '暂无可选标签',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: colors.secondaryText.withValues(alpha: 0.5),
+                ),
+              ),
+            )
+          else
+            for (final label in labels)
+              InkWell(
+                onTap: () => _toggleLabel(label),
+                child: SizedBox(
+                  height: AppDimens.touchTarget,
+                  child: Row(
+                    children: [
+                      const SizedBox(width: AppDimens.space16),
+                      OrbitCheckbox(
+                        checked: attachedIds.contains(label.id),
+                        size: AppDimens.iconSizeMd + 2,
+                        onToggle: () => _toggleLabel(label),
+                      ),
+                      const SizedBox(width: AppDimens.space12),
+                      Container(
+                        width: AppDimens.colorDotSize,
+                        height: AppDimens.colorDotSize,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: hexToColor(label.hexColor),
+                        ),
+                      ),
+                      const SizedBox(width: AppDimens.space8),
+                      Expanded(
+                        child: Text(
+                          label.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: colors.bodyText,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-              Flexible(
-                child: labels.isEmpty
-                    ? Padding(
-                        padding: const EdgeInsets.all(AppDimens.space16),
-                        child: Text(
-                          '暂无可选标签',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: colors.secondaryText.withValues(alpha: 0.5),
-                          ),
-                        ),
-                      )
-                    : ListView(
-                        shrinkWrap: true,
-                        padding: EdgeInsets.zero,
-                        children: [
-                          for (final label in labels)
-                            InkWell(
-                              onTap: () => _toggleLabel(label),
-                              child: SizedBox(
-                                height: AppDimens.touchTarget,
-                                child: Row(
-                                  children: [
-                                    const SizedBox(width: AppDimens.space16),
-                                    OrbitCheckbox(
-                                      checked: attachedIds.contains(label.id),
-                                      size: AppDimens.iconSizeMd + 2,
-                                      onToggle: () => _toggleLabel(label),
-                                    ),
-                                    const SizedBox(width: AppDimens.space12),
-                                    Container(
-                                      width: AppDimens.colorDotSize,
-                                      height: AppDimens.colorDotSize,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: hexToColor(label.hexColor),
-                                      ),
-                                    ),
-                                    const SizedBox(width: AppDimens.space8),
-                                    Expanded(
-                                      child: Text(
-                                        label.title,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontSize: 15,
-                                          color: colors.bodyText,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-              ),
-              // 新建标签行：输入标题 + 固定 8 色板选色 → todoLabelCreate
-              Container(
-                padding: const EdgeInsets.fromLTRB(
-                  AppDimens.space16,
-                  AppDimens.space8,
-                  AppDimens.space16,
-                  0,
-                ),
-                decoration: BoxDecoration(
-                  border: Border(top: BorderSide(color: colors.divider)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OrbitTextField(
-                            inline: true,
-                            controller: _titleController,
-                            maxLength: 50,
-                            hintText: '新建标签',
-                            style: TextStyle(
-                              fontSize: 15,
-                              color: colors.bodyText,
-                            ),
-                            insideMargin: const EdgeInsets.symmetric(
-                              vertical: AppDimens.space8,
-                            ),
-                            onSubmitted: (_) => _createLabel(),
-                          ),
-                        ),
-                        OrbitIconButton(
-                          tooltip: '新建标签',
-                          icon: Icon(
-                            OrbitIcons.add,
-                            size: AppDimens.iconSizeLg,
-                            color: OrbitAccents.todoAccent,
-                          ),
-                          onPressed: _createLabel,
-                        ),
-                      ],
+        ],
+      ),
+      // 新建标签行固定在底部：输入标题 + 色板 → todoLabelCreate
+      actions: Container(
+        padding: const EdgeInsets.fromLTRB(
+          AppDimens.space16,
+          AppDimens.space12,
+          AppDimens.space16,
+          AppDimens.space16,
+        ),
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: colors.divider)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: OrbitTextField(
+                    inline: true,
+                    controller: _titleController,
+                    maxLength: 50,
+                    hintText: '新建标签',
+                    style: TextStyle(fontSize: 15, color: colors.bodyText),
+                    insideMargin: const EdgeInsets.symmetric(
+                      vertical: AppDimens.space8,
                     ),
-                    const SizedBox(height: AppDimens.space8),
-                    Wrap(
-                      spacing: AppDimens.space12,
-                      runSpacing: AppDimens.space8,
-                      children: [
-                        for (final hex in labelPaletteHexes)
-                          GestureDetector(
-                            onTap: () => setState(() => _newColorHex = hex),
-                            // 26 色点视觉不变，热区补到 48（touchTarget）
-                            child: Padding(
-                              padding: const EdgeInsets.all(11),
-                              child: Container(
-                                width: 26,
-                                height: 26,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: hexToColor(hex),
-                                  border: Border.all(
-                                    width: _newColorHex == hex ? 3 : 1,
-                                    color: _newColorHex == hex
-                                        ? OrbitAccents.themeAccent
-                                        : colors.outline,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    SizedBox(height: AppDimens.gestureInsetFallback / 2),
-                  ],
+                    onSubmitted: (_) => _createLabel(),
+                  ),
                 ),
-              ),
-            ],
-          ),
+                OrbitIconButton(
+                  tooltip: '新建标签',
+                  icon: Icon(
+                    OrbitIcons.add,
+                    size: AppDimens.iconSizeLg,
+                    color: OrbitAccents.todoAccent,
+                  ),
+                  onPressed: _createLabel,
+                ),
+              ],
+            ),
+            const SizedBox(height: AppDimens.space12),
+            OrbitColorSwatches(
+              hexes: labelPaletteHexes,
+              selectedHex: _newColorHex,
+              onSelected: (hex) => setState(() => _newColorHex = hex),
+            ),
+          ],
         ),
       ),
     );
@@ -2002,101 +1966,107 @@ class _RelationsSectionState extends ConsumerState<_RelationsSection> {
       context: context,
       useRootNavigator: true,
       isScrollControlled: true,
-      backgroundColor: AppColors.ofContext(context).popup,
+      backgroundColor: Colors.transparent,
       shape: bottomSheetTopShape,
-      builder: (sheetCtx) => StatefulBuilder(
-        builder: (ctx, setSheet) => SafeArea(
-          top: false,
-          child: Padding(
-            padding: EdgeInsets.only(
-              left: AppDimens.space16,
-              right: AppDimens.space16,
-              top: AppDimens.space16,
-              bottom: MediaQuery.of(ctx).viewInsets.bottom + AppDimens.space16,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text(
-                  '关联任务',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: AppDimens.space8),
-                OrbitTextField(
-                  controller: queryCtl,
-                  autofocus: true,
-                  label: '搜索任务标题',
-                  helperText: '输入关键词后点搜索',
-                  onSubmitted: (_) async {
-                    setSheet(() => searching = true);
-                    try {
-                      final r = await ref
-                          .read(orbitBridgeProvider)
-                          .globalSearch(queryCtl.text.trim(), limit: 20);
-                      setSheet(() {
-                        hits = r.tasks
-                            .where(
-                              (t) =>
-                                  t.id != widget.taskId &&
-                                  !linkedIds.contains(t.id),
-                            )
-                            .toList();
-                        searching = false;
-                      });
-                    } catch (_) {
-                      setSheet(() => searching = false);
-                    }
-                  },
-                ),
-                const SizedBox(height: AppDimens.space8),
-                if (searching)
-                  const Center(child: OrbitSpinner(size: AppDimens.iconSizeLg))
-                else
-                  Flexible(
-                    child: ListView(
-                      shrinkWrap: true,
-                      children: [
-                        for (final t in hits.take(20))
-                          SizedBox(
-                            height: AppDimens.touchTarget,
-                            child: InkWell(
-                              onTap: () => Navigator.pop(sheetCtx, t.id),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      t.title,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(fontSize: 15),
+      sheetAnimationStyle: bottomSheetMotion,
+      builder: (sheetCtx) => OrbitFloatingSheetCard(
+        child: StatefulBuilder(
+          builder: (ctx, setSheet) => SafeArea(
+            top: false,
+            child: Padding(
+              padding: EdgeInsets.only(
+                left: AppDimens.space16,
+                right: AppDimens.space16,
+                top: AppDimens.space16,
+                bottom:
+                    MediaQuery.of(ctx).viewInsets.bottom + AppDimens.space16,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    '关联任务',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: AppDimens.space8),
+                  OrbitTextField(
+                    controller: queryCtl,
+                    autofocus: true,
+                    label: '搜索任务标题',
+                    helperText: '输入关键词后点搜索',
+                    onSubmitted: (_) async {
+                      setSheet(() => searching = true);
+                      try {
+                        final r = await ref
+                            .read(orbitBridgeProvider)
+                            .globalSearch(queryCtl.text.trim(), limit: 20);
+                        setSheet(() {
+                          hits = r.tasks
+                              .where(
+                                (t) =>
+                                    t.id != widget.taskId &&
+                                    !linkedIds.contains(t.id),
+                              )
+                              .toList();
+                          searching = false;
+                        });
+                      } catch (_) {
+                        setSheet(() => searching = false);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: AppDimens.space8),
+                  if (searching)
+                    const Center(
+                      child: OrbitSpinner(size: AppDimens.iconSizeLg),
+                    )
+                  else
+                    Flexible(
+                      child: ListView(
+                        shrinkWrap: true,
+                        children: [
+                          for (final t in hits.take(20))
+                            SizedBox(
+                              height: AppDimens.touchTarget,
+                              child: InkWell(
+                                onTap: () => Navigator.pop(sheetCtx, t.id),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        t.title,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(fontSize: 15),
+                                      ),
                                     ),
-                                  ),
-                                  Text(
-                                    '#${t.id}',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.ofContext(
-                                        context,
-                                      ).secondaryText,
+                                    Text(
+                                      '#${t.id}',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: AppColors.ofContext(
+                                          context,
+                                        ).secondaryText,
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
-                        if (hits.isEmpty)
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 12),
-                            child: Text(
-                              '输入关键词后回车搜索（排除本任务）',
-                              style: TextStyle(fontSize: 13),
+                          if (hits.isEmpty)
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 12),
+                              child: Text(
+                                '输入关键词后回车搜索（排除本任务）',
+                                style: TextStyle(fontSize: 13),
+                              ),
                             ),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -2856,8 +2826,3 @@ class _HistorySectionState extends ConsumerState<_HistorySection> {
     );
   }
 }
-
-
-
-
-

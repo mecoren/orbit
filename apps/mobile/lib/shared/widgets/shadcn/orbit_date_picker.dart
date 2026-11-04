@@ -6,6 +6,7 @@ import '../../../core/lunar/chinese_almanac.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimens.dart';
 import '../../../core/theme/app_shapes.dart';
+import 'orbit_floating_sheet_card.dart';
 import '../../../core/theme/icon_map.dart';
 import '../../../core/theme/orbit_accents.dart';
 import '../../../data/api/dto.dart';
@@ -60,7 +61,7 @@ class OrbitDatePicker {
       context: context,
       useRootNavigator: true,
       isScrollControlled: true,
-      backgroundColor: AppColors.ofContext(context).popup,
+      backgroundColor: Colors.transparent,
       shape: bottomSheetTopShape,
       sheetAnimationStyle: bottomSheetMotion,
       builder: (sheetContext) => _DatePickerSheet(
@@ -115,16 +116,18 @@ class _DatePickerSheetState extends ConsumerState<_DatePickerSheet> {
   }
 
   String get _title => switch (_mode) {
-        OrbitDatePickerMode.day => '${_month.year}年${_month.month}月',
-        OrbitDatePickerMode.month => '${_month.year}年',
-        OrbitDatePickerMode.year => '选择年份',
-      };
+    OrbitDatePickerMode.day => '${_month.year}年${_month.month}月',
+    OrbitDatePickerMode.month => '${_month.year}年',
+    OrbitDatePickerMode.year => '选择年份',
+  };
 
   String get _subtitle {
     final today = DateTime.now();
-    final diff = DateTime(_draft.year, _draft.month, _draft.day)
-        .difference(DateTime(today.year, today.month, today.day))
-        .inDays;
+    final diff = DateTime(
+      _draft.year,
+      _draft.month,
+      _draft.day,
+    ).difference(DateTime(today.year, today.month, today.day)).inDays;
     if (diff == 0) return '今天';
     if (diff == 1) return '明天';
     if (diff == -1) return '昨天';
@@ -133,8 +136,13 @@ class _DatePickerSheetState extends ConsumerState<_DatePickerSheet> {
 
   void _setTime({int? hours, int? minutes}) {
     setState(() {
-      _draft = DateTime(_draft.year, _draft.month, _draft.day,
-          hours ?? _draft.hour, minutes ?? _draft.minute);
+      _draft = DateTime(
+        _draft.year,
+        _draft.month,
+        _draft.day,
+        hours ?? _draft.hour,
+        minutes ?? _draft.minute,
+      );
     });
   }
 
@@ -152,14 +160,16 @@ class _DatePickerSheetState extends ConsumerState<_DatePickerSheet> {
       context: context,
       useRootNavigator: true,
       isScrollControlled: true,
-      backgroundColor: AppColors.ofContext(context).popup,
+      backgroundColor: Colors.transparent,
       shape: bottomSheetTopShape,
       sheetAnimationStyle: bottomSheetMotion,
-      builder: (sheetContext) => _TimeWheelSheet(
-        title: title,
-        itemCount: itemCount,
-        initialItem: current,
-        onConfirm: (value) => Navigator.of(sheetContext).pop(value),
+      builder: (sheetContext) => OrbitFloatingSheetCard(
+        child: _TimeWheelSheet(
+          title: title,
+          itemCount: itemCount,
+          initialItem: current,
+          onConfirm: (value) => Navigator.of(sheetContext).pop(value),
+        ),
       ),
     );
     if (result != null) onPicked(result);
@@ -215,10 +225,7 @@ class _DatePickerSheetState extends ConsumerState<_DatePickerSheet> {
             const SizedBox(width: AppDimens.space8),
             Text(
               _subtitle,
-              style: TextStyle(
-                fontSize: 12,
-                color: colors.secondaryText,
-              ),
+              style: TextStyle(fontSize: 12, color: colors.secondaryText),
             ),
             const Spacer(),
             OrbitButton.text(
@@ -229,9 +236,7 @@ class _DatePickerSheetState extends ConsumerState<_DatePickerSheet> {
           ],
         ),
       ),
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: AppDimens.space12,
-      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: AppDimens.space12),
       content: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
@@ -270,13 +275,16 @@ class _DatePickerSheetState extends ConsumerState<_DatePickerSheet> {
       selected: _draft,
       accentColor: accent,
       weekendColor: ChineseCalendarColors.weekend,
-      holidays: {
-        for (final e in holidayByDate) e.date: e.isHoliday,
-      },
+      holidays: {for (final e in holidayByDate) e.date: e.isHoliday},
       subLabelBuilder: ChineseAlmanac.daySubLabel,
       onDayTap: (date) => setState(() {
         _draft = DateTime(
-            date.year, date.month, date.day, _draft.hour, _draft.minute);
+          date.year,
+          date.month,
+          date.day,
+          _draft.hour,
+          _draft.minute,
+        );
       }),
       onMonthChange: (focused) => setState(() {
         _month = DateTime(focused.year, focused.month, 1);
@@ -286,8 +294,9 @@ class _DatePickerSheetState extends ConsumerState<_DatePickerSheet> {
 
   Widget _buildMonthView(Color accent) {
     final colors = AppColors.ofContext(context);
-    final currentMonth =
-        (DateTime.now().year == _month.year) ? DateTime.now().month : -1;
+    final currentMonth = (DateTime.now().year == _month.year)
+        ? DateTime.now().month
+        : -1;
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -317,8 +326,8 @@ class _DatePickerSheetState extends ConsumerState<_DatePickerSheet> {
                 color: selected
                     ? accent
                     : isCurrent
-                        ? colors.outline
-                        : Colors.transparent,
+                    ? colors.outline
+                    : Colors.transparent,
               ),
             ),
             child: Text(
@@ -368,8 +377,8 @@ class _DatePickerSheetState extends ConsumerState<_DatePickerSheet> {
                 color: selected
                     ? accent
                     : year == currentYear
-                        ? colors.outline
-                        : Colors.transparent,
+                    ? colors.outline
+                    : Colors.transparent,
               ),
             ),
             child: Text(
@@ -472,29 +481,32 @@ class _TimeDropdownField extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-            Text(
-              value.toString().padLeft(2, '0'),
-              key: ValueKey(valueKey),
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: colors.titleText,
-                fontFeatures: const [FontFeature.tabularFigures()],
+              Text(
+                value.toString().padLeft(2, '0'),
+                key: ValueKey(valueKey),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: colors.titleText,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
               ),
-            ),
-            const SizedBox(width: AppDimens.space4),
-            Text(
-              unit,
-              style: TextStyle(fontSize: 11, color: colors.secondaryText),
-            ),
-            const SizedBox(width: AppDimens.space4),
-            // 右侧下拉箭头（与输入框下拉同视觉；弹层内不用 Material Tooltip——
-            // 弹层挂在 Navigator 之外，Material 的 RawTooltip 找不到 Overlay 祖先）
-            Icon(OrbitIcons.expandMore,
-                size: AppDimens.iconSizeMd, color: colors.iconText),
-          ],
+              const SizedBox(width: AppDimens.space4),
+              Text(
+                unit,
+                style: TextStyle(fontSize: 11, color: colors.secondaryText),
+              ),
+              const SizedBox(width: AppDimens.space4),
+              // 右侧下拉箭头（与输入框下拉同视觉；弹层内不用 Material Tooltip——
+              // 弹层挂在 Navigator 之外，Material 的 RawTooltip 找不到 Overlay 祖先）
+              Icon(
+                OrbitIcons.expandMore,
+                size: AppDimens.iconSizeMd,
+                color: colors.iconText,
+              ),
+            ],
           ),
-      ),
+        ),
       ),
     );
   }

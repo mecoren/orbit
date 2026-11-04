@@ -11,6 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../core/theme/app_shapes.dart';
+import '../../shared/widgets/shadcn/orbit_floating_sheet_card.dart';
 import '../../core/theme/icon_map.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
@@ -30,10 +31,11 @@ Future<void> showPlanDaySheet(BuildContext context, {int? nowMs}) {
     context: context,
     useRootNavigator: true,
     isScrollControlled: true,
-    backgroundColor: AppColors.ofContext(context).popup,
+    backgroundColor: Colors.transparent,
     shape: bottomSheetTopShape,
     sheetAnimationStyle: bottomSheetMotion,
-    builder: (sheetContext) => _PlanDaySheet(nowMs: nowMs),
+    builder: (sheetContext) =>
+        OrbitFloatingSheetCard(child: _PlanDaySheet(nowMs: nowMs)),
   );
 }
 
@@ -56,6 +58,7 @@ class _PlanDaySheetState extends ConsumerState<_PlanDaySheet> {
   DayPlan? _plan;
   DayPlanPrefs _prefs = DayPlanPrefs.defaults;
   String? _error;
+
   /// 勾选集（task_id；新预览到达时重置为全选）
   Set<int> _checked = {};
   bool _applying = false;
@@ -69,8 +72,12 @@ class _PlanDaySheetState extends ConsumerState<_PlanDaySheet> {
   Future<void> _load() async {
     try {
       _prefs = await ref.read(orbitBridgeProvider).dayPlanPrefsGet();
-      final plan = await ref.read(orbitBridgeProvider).dayPlanPreview(
-          _prefs, widget.nowMs ?? DateTime.now().millisecondsSinceEpoch);
+      final plan = await ref
+          .read(orbitBridgeProvider)
+          .dayPlanPreview(
+            _prefs,
+            widget.nowMs ?? DateTime.now().millisecondsSinceEpoch,
+          );
       if (mounted) {
         setState(() {
           _plan = plan;
@@ -86,11 +93,11 @@ class _PlanDaySheetState extends ConsumerState<_PlanDaySheet> {
   /// 作息编辑：逐项底部抽屉选档（选择类交互统一口径）；保存走
   /// dayPlanPrefsSet（core 校验钳制，返回存后生效值），保存即重拉预览
   Future<void> _pickPrefs() async {
-    final draft =
-        await showPlanPrefsSheet(context, initial: _prefs);
+    final draft = await showPlanPrefsSheet(context, initial: _prefs);
     if (draft == null || !mounted) return;
-    final effective =
-        await ref.read(orbitBridgeProvider).dayPlanPrefsSet(draft);
+    final effective = await ref
+        .read(orbitBridgeProvider)
+        .dayPlanPrefsSet(draft);
     if (!mounted) return;
     setState(() => _prefs = effective);
     await _load();
@@ -128,12 +135,15 @@ class _PlanDaySheetState extends ConsumerState<_PlanDaySheet> {
         onAction: () async {
           try {
             for (final a in r.applied) {
-              await ref.read(orbitBridgeProvider).todoTaskUpdate(
-                  a.taskId,
-                  encodePatch({
-                    'my_day_date': a.prevMyDayDate,
-                    'start_date': a.prevStartDate,
-                  }));
+              await ref
+                  .read(orbitBridgeProvider)
+                  .todoTaskUpdate(
+                    a.taskId,
+                    encodePatch({
+                      'my_day_date': a.prevMyDayDate,
+                      'start_date': a.prevStartDate,
+                    }),
+                  );
             }
             ref.invalidate(todoTasksProvider);
           } catch (_) {
@@ -162,187 +172,185 @@ class _PlanDaySheetState extends ConsumerState<_PlanDaySheet> {
             ? SizedBox(
                 height: 120,
                 child: Center(
-                    child: Text(_error!,
-                        style: TextStyle(
-                            fontSize: 14, color: colors.secondaryText))),
+                  child: Text(
+                    _error!,
+                    style: TextStyle(fontSize: 14, color: colors.secondaryText),
+                  ),
+                ),
               )
             : plan == null
-                ? const SizedBox(
-                    height: 160,
-                    child: Center(child: OrbitSpinner(size: AppDimens.iconSizeLg)),
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    mainAxisSize: MainAxisSize.min,
+            ? const SizedBox(
+                height: 160,
+                child: Center(child: OrbitSpinner(size: AppDimens.iconSizeLg)),
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // 标题行 + 作息入口 + 容量
+                  Row(
                     children: [
-                      // 标题行 + 作息入口 + 容量
-                      Row(
-                        children: [
-                          Text(
-                            '规划今天',
-                            style: TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w600,
-                              color: colors.titleText,
-                            ),
-                          ),
-                          const SizedBox(width: AppDimens.space8),
-                          OrbitButton.text(
-                            onPressed: _pickPrefs,
-                            child: const Text('作息'),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 2),
                       Text(
-                        '剩余可排 ${plan.capacityMinutes} 分钟 · 候选 ${plan.loadMinutes} 分钟 · 只读预览',
+                        '规划今天',
                         style: TextStyle(
-                            fontSize: 12, color: colors.secondaryText),
-                      ),
-                      const SizedBox(height: AppDimens.space8),
-                      Flexible(
-                        child: plan.slots.isEmpty && plan.unscheduled.isEmpty
-                            ? SizedBox(
-                                height: 180,
-                                child: const EmptyState(
-                                  message:
-                                      '没有可规划的任务\n给任务设置截止、加入我的一天或填写预计时长后给出建议',
-                                  icon: OrbitIcons.calendarCheck,
-                                ),
-                              )
-                            : ListView(
-                                shrinkWrap: true,
-                                children: [
-                                  if (plan.overloaded)
-                                    Container(
-                                      margin: const EdgeInsets.only(
-                                          bottom: AppDimens.space8),
-                                      padding:
-                                          const EdgeInsets.all(AppDimens.space8),
-                                      decoration: BoxDecoration(
-                                        color: OrbitAccents.myDayAmber
-                                            .withValues(alpha: 0.12),
-                                        borderRadius: AppShapes.small,
-                                      ),
-                                      child: Text(
-                                        '候选总量超出今日剩余容量 ${plan.loadMinutes - plan.capacityMinutes} 分钟，建议把低优先级项移到明天',
-                                        style: TextStyle(
-                                            fontSize: 12,
-                                            color: OrbitAccents.myDayAmber),
-                                      ),
-                                    ),
-                                  for (final s in plan.slots)
-                                    Container(
-                                      margin: const EdgeInsets.only(
-                                          bottom: 6),
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: AppDimens.space12,
-                                          vertical: AppDimens.space8),
-                                      decoration: BoxDecoration(
-                                        color: colors.surfaceSecondary,
-                                        borderRadius: AppShapes.small,
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          SizedBox(
-                                            width: 92,
-                                            child: Text(
-                                              '${_hhmm(s.startMs)} – ${_hhmm(s.endMs)}',
-                                              style: TextStyle(
-                                                  fontSize: 12,
-                                                  color:
-                                                      colors.secondaryText),
-                                            ),
-                                          ),
-                                          Expanded(
-                                            child: Text(
-                                              s.title,
-                                              maxLines: 1,
-                                              overflow:
-                                                  TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                  fontSize: 14,
-                                                  color: colors.titleText),
-                                            ),
-                                          ),
-                                          const SizedBox(
-                                              width: AppDimens.space8),
-                                          Text(
-                                            s.reason,
-                                            style: TextStyle(
-                                              fontSize: 11,
-                                              color: s.reason.startsWith('已逾期')
-                                                  ? OrbitAccents.overdueRed
-                                                  : colors.secondaryText,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  if (plan.unscheduled.isNotEmpty) ...[
-                                    Padding(
-                                      padding: const EdgeInsets.only(
-                                          top: AppDimens.space8,
-                                          bottom: 4),
-                                      child: Text(
-                                        '未排入（${plan.unscheduled.length}）',
-                                        style: TextStyle(
-                                            fontSize: 12,
-                                            color: colors.secondaryText),
-                                      ),
-                                    ),
-                                    for (final u in plan.unscheduled)
-                                      Padding(
-                                        padding:
-                                            const EdgeInsets.only(bottom: 4),
-                                        child: Row(
-                                          children: [
-                                            Expanded(
-                                              child: Text(
-                                                u.title,
-                                                maxLines: 1,
-                                                overflow:
-                                                    TextOverflow.ellipsis,
-                                                style: TextStyle(
-                                                    fontSize: 13,
-                                                    color: colors
-                                                        .secondaryText),
-                                              ),
-                                            ),
-                                            Text(
-                                              u.reason,
-                                              style: TextStyle(
-                                                  fontSize: 11,
-                                                  color:
-                                                      colors.secondaryText),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                  ],
-                                ],
-                              ),
-                      ),
-                      // 应用按钮（拇指区底部；勾选默认全选，可逐条取消）
-                      if (plan.slots.isNotEmpty) ...[
-                        const SizedBox(height: AppDimens.space8),
-                        OrbitButton.primary(
-                          onPressed: _applying || _checked.isEmpty
-                              ? null
-                              : _apply,
-                          expand: true,
-                          child: Text(
-                            _applying
-                                ? '应用中…'
-                                : '应用到 ${_checked.length} 条任务',
-                            textAlign: TextAlign.center,
-                          ),
+                          fontSize: 17,
+                          fontWeight: FontWeight.w600,
+                          color: colors.titleText,
                         ),
-                      ],
+                      ),
+                      const SizedBox(width: AppDimens.space8),
+                      OrbitButton.text(
+                        onPressed: _pickPrefs,
+                        child: const Text('作息'),
+                      ),
                     ],
                   ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '剩余可排 ${plan.capacityMinutes} 分钟 · 候选 ${plan.loadMinutes} 分钟 · 只读预览',
+                    style: TextStyle(fontSize: 12, color: colors.secondaryText),
+                  ),
+                  const SizedBox(height: AppDimens.space8),
+                  Flexible(
+                    child: plan.slots.isEmpty && plan.unscheduled.isEmpty
+                        ? SizedBox(
+                            height: 180,
+                            child: const EmptyState(
+                              message: '没有可规划的任务\n给任务设置截止、加入我的一天或填写预计时长后给出建议',
+                              icon: OrbitIcons.calendarCheck,
+                            ),
+                          )
+                        : ListView(
+                            shrinkWrap: true,
+                            children: [
+                              if (plan.overloaded)
+                                Container(
+                                  margin: const EdgeInsets.only(
+                                    bottom: AppDimens.space8,
+                                  ),
+                                  padding: const EdgeInsets.all(
+                                    AppDimens.space8,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: OrbitAccents.myDayAmber.withValues(
+                                      alpha: 0.12,
+                                    ),
+                                    borderRadius: AppShapes.small,
+                                  ),
+                                  child: Text(
+                                    '候选总量超出今日剩余容量 ${plan.loadMinutes - plan.capacityMinutes} 分钟，建议把低优先级项移到明天',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: OrbitAccents.myDayAmber,
+                                    ),
+                                  ),
+                                ),
+                              for (final s in plan.slots)
+                                Container(
+                                  margin: const EdgeInsets.only(bottom: 6),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: AppDimens.space12,
+                                    vertical: AppDimens.space8,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: colors.surfaceSecondary,
+                                    borderRadius: AppShapes.small,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      SizedBox(
+                                        width: 92,
+                                        child: Text(
+                                          '${_hhmm(s.startMs)} – ${_hhmm(s.endMs)}',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: colors.secondaryText,
+                                          ),
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: Text(
+                                          s.title,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            color: colors.titleText,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: AppDimens.space8),
+                                      Text(
+                                        s.reason,
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: s.reason.startsWith('已逾期')
+                                              ? OrbitAccents.overdueRed
+                                              : colors.secondaryText,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              if (plan.unscheduled.isNotEmpty) ...[
+                                Padding(
+                                  padding: const EdgeInsets.only(
+                                    top: AppDimens.space8,
+                                    bottom: 4,
+                                  ),
+                                  child: Text(
+                                    '未排入（${plan.unscheduled.length}）',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: colors.secondaryText,
+                                    ),
+                                  ),
+                                ),
+                                for (final u in plan.unscheduled)
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 4),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            u.title,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              color: colors.secondaryText,
+                                            ),
+                                          ),
+                                        ),
+                                        Text(
+                                          u.reason,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: colors.secondaryText,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                              ],
+                            ],
+                          ),
+                  ),
+                  // 应用按钮（拇指区底部；勾选默认全选，可逐条取消）
+                  if (plan.slots.isNotEmpty) ...[
+                    const SizedBox(height: AppDimens.space8),
+                    OrbitButton.primary(
+                      onPressed: _applying || _checked.isEmpty ? null : _apply,
+                      expand: true,
+                      child: Text(
+                        _applying ? '应用中…' : '应用到 ${_checked.length} 条任务',
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
       ),
     );
   }
 }
-

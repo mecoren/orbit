@@ -9,9 +9,11 @@ import '../../data/providers/bridge_provider.dart';
 import '../../shared/utils/hex_color.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_card.dart';
+import '../../shared/widgets/shadcn/orbit_color_swatches.dart';
 import '../../shared/widgets/controller_disposer.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
-import '../../shared/widgets/shadcn/orbit_actions_sheet.dart' show bottomSheetMotion, bottomSheetTopShape;
+import '../../shared/widgets/shadcn/orbit_actions_sheet.dart'
+    show bottomSheetMotion, bottomSheetTopShape;
 import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
@@ -65,71 +67,27 @@ class _LabelManagerPageState extends ConsumerState<LabelManagerPage> {
   // ── 色板抽屉（10 色，行高满足触控热区） ──
 
   Future<String?> _pickColor(String current) async {
-    final colors = AppColors.ofContext(context);
     return showModalBottomSheet<String>(
       context: context,
       useRootNavigator: true,
-      backgroundColor: colors.popup,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       shape: bottomSheetTopShape,
-      builder: (sheetContext) => SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(AppDimens.space16),
-              child: Text(
-                '标签颜色',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: colors.titleText,
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppDimens.space16,
-                vertical: AppDimens.space8,
-              ),
-              child: Wrap(
-                spacing: AppDimens.space16,
-                runSpacing: AppDimens.space16,
-                children: [
-                  for (final hex in labelPaletteHexes)
-                    GestureDetector(
-                      onTap: () => Navigator.of(sheetContext).pop(hex),
-                      // 40 色点视觉不变，热区补到 48（touchTarget）——与
-                      // 「新建标签」对话框色板、侧栏项目色板同口径
-                      child: Padding(
-                        padding: const EdgeInsets.all(AppDimens.space4),
-                        child: Container(
-                          width: AppDimens.touchTarget - AppDimens.space8,
-                          height: AppDimens.touchTarget - AppDimens.space8,
-                          decoration: BoxDecoration(
-                            color: hexToColor(hex),
-                            shape: BoxShape.circle,
-                            border: hex.toUpperCase() == current.toUpperCase()
-                                ? Border.all(
-                                    color: colors.titleText,
-                                    width: 2,
-                                  )
-                                : null,
-                          ),
-                          child: hex.toUpperCase() == current.toUpperCase()
-                              ? const Icon(OrbitIcons.check,
-                                  size: AppDimens.iconSizeSm,
-                                  color: Colors.white)
-                              : null,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            SizedBox(height: AppDimens.gestureInsetFallback / 2),
-          ],
+      sheetAnimationStyle: bottomSheetMotion,
+      // 与新建/编辑标签弹层共用骨架和色板原语：手柄、标题内边距、字段节奏
+      // 不再各写一套 SafeArea + Column + Padding（见 orbit_sheet_scaffold.dart）
+      builder: (sheetContext) => OrbitSheetScaffold(
+        title: '标签颜色',
+        contentPadding: const EdgeInsets.fromLTRB(
+          AppDimens.space16,
+          0,
+          AppDimens.space16,
+          AppDimens.space16,
+        ),
+        content: OrbitColorSwatches(
+          hexes: labelPaletteHexes,
+          selectedHex: current,
+          onSelected: (hex) => Navigator.of(sheetContext).pop(hex),
         ),
       ),
     );
@@ -142,11 +100,10 @@ class _LabelManagerPageState extends ConsumerState<LabelManagerPage> {
     if (draft == null) return;
     setState(() => _busy = true);
     try {
-      await ref.read(orbitBridgeProvider).todoLabelCreate(
-            TodoLabelCreateInput(
-              title: draft.$1,
-              hexColor: draft.$2,
-            ),
+      await ref
+          .read(orbitBridgeProvider)
+          .todoLabelCreate(
+            TodoLabelCreateInput(title: draft.$1, hexColor: draft.$2),
           );
       _refresh();
       if (mounted) WaitToast.success('已创建标签「${draft.$1}」');
@@ -166,7 +123,9 @@ class _LabelManagerPageState extends ConsumerState<LabelManagerPage> {
     if (draft == null) return;
     setState(() => _busy = true);
     try {
-      await ref.read(orbitBridgeProvider).todoLabelUpdate(
+      await ref
+          .read(orbitBridgeProvider)
+          .todoLabelUpdate(
             label.id,
             encodePatch({'title': draft.$1, 'hex_color': draft.$2}),
           );
@@ -226,12 +185,11 @@ class _LabelManagerPageState extends ConsumerState<LabelManagerPage> {
   }) async {
     final controller = TextEditingController(text: initialTitle);
     var color = initialColor;
-    final colors = AppColors.ofContext(context);
     final result = await showModalBottomSheet<(String, String)?>(
       context: context,
       useRootNavigator: true,
       isScrollControlled: true,
-      backgroundColor: colors.popup,
+      backgroundColor: Colors.transparent,
       shape: bottomSheetTopShape,
       sheetAnimationStyle: bottomSheetMotion,
       // 控制器交给抽屉子树释放（退出动画期间表单会重建一次，提前 dispose
@@ -240,7 +198,6 @@ class _LabelManagerPageState extends ConsumerState<LabelManagerPage> {
         controllers: [controller],
         child: StatefulBuilder(
           builder: (ctx, setSheetState) {
-            final sheetColors = AppColors.ofContext(ctx);
             void submit() {
               final name = controller.text.trim();
               if (name.isEmpty) {
@@ -270,38 +227,11 @@ class _LabelManagerPageState extends ConsumerState<LabelManagerPage> {
                     onChanged: (_) => setSheetState(() {}),
                     onSubmitted: (_) => submit(),
                   ),
-                  const SizedBox(height: AppDimens.space16),
-                  Wrap(
-                    spacing: AppDimens.space12,
-                    runSpacing: AppDimens.space12,
-                    children: [
-                      for (final hex in labelPaletteHexes)
-                        GestureDetector(
-                          onTap: () => setSheetState(() => color = hex),
-                          // 36 色点视觉不变，热区补到 48（touchTarget）
-                          child: Padding(
-                            padding: const EdgeInsets.all(AppDimens.space6),
-                            child: Container(
-                              width: AppDimens.touchTarget - AppDimens.space12,
-                              height: AppDimens.touchTarget - AppDimens.space12,
-                              decoration: BoxDecoration(
-                                color: hexToColor(hex),
-                                shape: BoxShape.circle,
-                                border: hex.toUpperCase() ==
-                                        color.toUpperCase()
-                                    ? Border.all(
-                                        color: sheetColors.titleText, width: 2)
-                                    : null,
-                              ),
-                              child: hex.toUpperCase() == color.toUpperCase()
-                                  ? const Icon(OrbitIcons.check,
-                                      size: AppDimens.iconSizeSm,
-                                      color: Colors.white)
-                                  : null,
-                            ),
-                          ),
-                        ),
-                    ],
+                  const SizedBox(height: AppDimens.space12),
+                  OrbitColorSwatches(
+                    hexes: labelPaletteHexes,
+                    selectedHex: color,
+                    onSelected: (hex) => setSheetState(() => color = hex),
                   ),
                 ],
               ),
@@ -309,8 +239,7 @@ class _LabelManagerPageState extends ConsumerState<LabelManagerPage> {
                 cancelLabel: '取消',
                 onCancel: () => Navigator.of(ctx).pop(),
                 confirmLabel: '保存',
-                onConfirm:
-                    controller.text.trim().isEmpty ? null : submit,
+                onConfirm: controller.text.trim().isEmpty ? null : submit,
               ),
             );
           },
@@ -338,7 +267,8 @@ class _LabelManagerPageState extends ConsumerState<LabelManagerPage> {
             child: ListView(
               controller: _scrollController,
               padding: EdgeInsets.only(
-                top: MediaQuery.of(context).padding.top +
+                top:
+                    MediaQuery.of(context).padding.top +
                     OrbitPageHeader.rowHeight +
                     AppDimens.space16,
                 left: AppDimens.space16,
@@ -354,8 +284,10 @@ class _LabelManagerPageState extends ConsumerState<LabelManagerPage> {
                     children: [
                       Text(
                         '标签用于跨项目归类任务；列表页可按标签筛选，看板与表格会显示标签色点。',
-                        style:
-                            TextStyle(fontSize: 12, color: colors.secondaryText),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colors.secondaryText,
+                        ),
                       ),
                       const SizedBox(height: AppDimens.space8),
                       if (labels.isEmpty)
@@ -365,7 +297,9 @@ class _LabelManagerPageState extends ConsumerState<LabelManagerPage> {
                             child: Text(
                               '还没有标签。',
                               style: TextStyle(
-                                  fontSize: 12, color: colors.secondaryText),
+                                fontSize: 12,
+                                color: colors.secondaryText,
+                              ),
                             ),
                           ),
                         )
@@ -374,10 +308,13 @@ class _LabelManagerPageState extends ConsumerState<LabelManagerPage> {
                       const SizedBox(height: AppDimens.space8),
                       SizedBox(
                         width: double.infinity,
-                        child: OrbitButton.icon(variant: OrbitButtonVariant.outline, 
+                        child: OrbitButton.icon(
+                          variant: OrbitButtonVariant.outline,
                           onPressed: _busy ? null : _createLabel,
-                          icon: const Icon(OrbitIcons.add,
-                              size: AppDimens.iconSizeSm + 2),
+                          icon: const Icon(
+                            OrbitIcons.add,
+                            size: AppDimens.iconSizeSm + 2,
+                          ),
                           label: const Text('新建标签'),
                         ),
                       ),
@@ -391,9 +328,7 @@ class _LabelManagerPageState extends ConsumerState<LabelManagerPage> {
             top: 0,
             left: 0,
             right: 0,
-            child: OrbitPageHeader(
-              title: '标签管理',
-            ),
+            child: OrbitPageHeader(title: '标签管理'),
           ),
         ],
       ),
@@ -411,51 +346,55 @@ class _LabelManagerPageState extends ConsumerState<LabelManagerPage> {
         ),
         child: Row(
           children: [
-          // 色点即改色入口（点一下弹色板抽屉；热区 48，视觉 16 不变）
-          Tooltip(
-            message: '更换颜色',
-            child: InkWell(
-              borderRadius: AppShapes.small,
-              onTap: _busy ? null : () => _changeColor(label),
-              child: Padding(
-                padding: const EdgeInsets.all(AppDimens.space16),
-                child: Container(
-                  width: AppDimens.colorDotSize + AppDimens.space4,
-                  height: AppDimens.colorDotSize + AppDimens.space4,
-                  decoration: BoxDecoration(
-                    color: hexToColor(label.hexColor),
-                    shape: BoxShape.circle,
+            // 色点即改色入口（点一下弹色板抽屉；热区 48，视觉 16 不变）
+            Tooltip(
+              message: '更换颜色',
+              child: InkWell(
+                borderRadius: AppShapes.small,
+                onTap: _busy ? null : () => _changeColor(label),
+                child: Padding(
+                  padding: const EdgeInsets.all(AppDimens.space16),
+                  child: Container(
+                    width: AppDimens.colorDotSize + AppDimens.space4,
+                    height: AppDimens.colorDotSize + AppDimens.space4,
+                    decoration: BoxDecoration(
+                      color: hexToColor(label.hexColor),
+                      shape: BoxShape.circle,
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(width: AppDimens.space8),
-          Expanded(
-            child: Text(
-              label.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 14, color: colors.bodyText),
+            const SizedBox(width: AppDimens.space8),
+            Expanded(
+              child: Text(
+                label.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 14, color: colors.bodyText),
+              ),
             ),
-          ),
-          OrbitIconButton(
-            onPressed: _busy ? null : () => _rename(label),
-            tooltip: '编辑',
-            icon: Icon(OrbitIcons.edit,
-                size: AppDimens.iconSizeMd, color: colors.secondaryText),
-          ),
-          OrbitIconButton(
-            onPressed: _busy ? null : () => _delete(label),
-            tooltip: '删除',
-            icon: Icon(OrbitIcons.delete,
-                size: AppDimens.iconSizeMd, color: colors.destructive),
-          ),
-        ],
+            OrbitIconButton(
+              onPressed: _busy ? null : () => _rename(label),
+              tooltip: '编辑',
+              icon: Icon(
+                OrbitIcons.edit,
+                size: AppDimens.iconSizeMd,
+                color: colors.secondaryText,
+              ),
+            ),
+            OrbitIconButton(
+              onPressed: _busy ? null : () => _delete(label),
+              tooltip: '删除',
+              icon: Icon(
+                OrbitIcons.delete,
+                size: AppDimens.iconSizeMd,
+                color: colors.destructive,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
-
-

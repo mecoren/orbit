@@ -13,6 +13,7 @@ import '../../shared/widgets/shadcn/orbit_info_row.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart'
     show bottomSheetMotion, bottomSheetTopShape;
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
+import '../../shared/widgets/shadcn/orbit_floating_sheet_card.dart';
 import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
@@ -116,33 +117,35 @@ Future<void> showTemplateCreateFlow(
     final tpl = await showModalBottomSheet<TodoTemplate>(
       context: context,
       useRootNavigator: true,
-      backgroundColor: colors.popup,
+      backgroundColor: Colors.transparent,
       shape: bottomSheetTopShape,
       sheetAnimationStyle: bottomSheetMotion,
-      builder: (ctx) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(AppDimens.space16),
-              child: Text(
-                '从模板新建',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: colors.titleText,
+      builder: (ctx) => OrbitFloatingSheetCard(
+        child: SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(AppDimens.space16),
+                child: Text(
+                  '从模板新建',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: colors.titleText,
+                  ),
                 ),
               ),
-            ),
-            for (final t in templates)
-              ListTile(
-                title: Text(
-                  t.name,
-                  style: TextStyle(fontSize: 14, color: colors.bodyText),
+              for (final t in templates)
+                ListTile(
+                  title: Text(
+                    t.name,
+                    style: TextStyle(fontSize: 14, color: colors.bodyText),
+                  ),
+                  onTap: () => Navigator.pop(ctx, t),
                 ),
-                onTap: () => Navigator.pop(ctx, t),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -717,17 +720,22 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
 
   /// 自定义时长输入（1–10080 分钟；超出桌面同字段的合理跨度按无效处理）
   Future<void> _pickCustomDuration() async {
-    final colors = AppColors.ofContext(context);
     _durationCtl.text = _durationMinutes?.toString() ?? '';
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
       useRootNavigator: true,
       isScrollControlled: true,
-      backgroundColor: colors.popup,
+      backgroundColor: Colors.transparent,
       shape: bottomSheetTopShape,
       sheetAnimationStyle: bottomSheetMotion,
       builder: (sheetCtx) => OrbitSheetScaffold(
         title: '自定义时长',
+        contentPadding: const EdgeInsets.fromLTRB(
+          AppDimens.space16,
+          0,
+          AppDimens.space16,
+          AppDimens.space16,
+        ),
         content: OrbitTextField(
           controller: _durationCtl,
           autofocus: true,
@@ -897,10 +905,16 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
         constraints: BoxConstraints(
           maxHeight: MediaQuery.of(context).size.height * 0.85,
         ),
+        margin: const EdgeInsets.only(
+          left: AppDimens.space16,
+          right: AppDimens.space16,
+          bottom: AppDimens.space16,
+        ),
         decoration: BoxDecoration(
           color: colors.popup,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          borderRadius: AppShapes.xl,
         ),
+        clipBehavior: Clip.antiAlias,
         child: SafeArea(
           top: false,
           child: !_loaded
@@ -1330,8 +1344,8 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                             ),
                                             insideMargin:
                                                 const EdgeInsets.symmetric(
-                                              vertical: AppDimens.space8,
-                                            ),
+                                                  vertical: AppDimens.space8,
+                                                ),
                                             onSubmitted: (_) =>
                                                 _addSubtaskTitle(),
                                           ),
@@ -1375,8 +1389,9 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
       context: context,
       useRootNavigator: true,
       isScrollControlled: true,
-      backgroundColor: colors.popup,
+      backgroundColor: Colors.transparent,
       shape: bottomSheetTopShape,
+      sheetAnimationStyle: bottomSheetMotion,
       builder: (sheetCtx) => StatefulBuilder(
         builder: (ctx, setSheet) {
           // 就地新建标签（对齐桌面 TagsField）：建完即选中，无需转去设置页
@@ -1833,5 +1848,3 @@ class _TitleParseChips extends StatelessWidget {
     );
   }
 }
-
-

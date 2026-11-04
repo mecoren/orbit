@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_miuix/miuix.dart';
 
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimens.dart';
 import 'orbit_sheet_scaffold.dart';
 import 'orbit_sheets.dart';
@@ -27,14 +26,17 @@ Future<Color?> showOrbitColorPickerSheet(
     context: context,
     useRootNavigator: true,
     isScrollControlled: true,
-    backgroundColor: AppColors.ofContext(context).popup,
+    backgroundColor: Colors.transparent,
     shape: bottomSheetTopShape,
     sheetAnimationStyle: bottomSheetMotion,
     builder: (sheetContext) => StatefulBuilder(
       builder: (sheetContext, setSheetState) => OrbitSheetScaffold(
         title: '自定义颜色',
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: AppDimens.space16,
+        contentPadding: const EdgeInsets.fromLTRB(
+          AppDimens.space16,
+          0,
+          AppDimens.space16,
+          AppDimens.space16,
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -48,7 +50,6 @@ Future<Color?> showOrbitColorPickerSheet(
               color: picked,
               onColorChanged: (c) => setSheetState(() => picked = c),
             ),
-            const SizedBox(height: AppDimens.space8),
           ],
         ),
         actions: OrbitSheetActions(

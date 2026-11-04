@@ -10,14 +10,58 @@ import '../../core/theme/icon_map.dart';
 import '../../data/api/dto.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
-import '../../shared/widgets/shadcn/orbit_button.dart';
+import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
 
 /// 时间档位（半小时粒度 00:00–23:30）
 const List<int> _kTimeOptions = [
-  0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330, 360, 390, 420, 450,
-  480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900,
-  930, 960, 990, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290,
-  1320, 1350, 1380, 1410,
+  0,
+  30,
+  60,
+  90,
+  120,
+  150,
+  180,
+  210,
+  240,
+  270,
+  300,
+  330,
+  360,
+  390,
+  420,
+  450,
+  480,
+  510,
+  540,
+  570,
+  600,
+  630,
+  660,
+  690,
+  720,
+  750,
+  780,
+  810,
+  840,
+  870,
+  900,
+  930,
+  960,
+  990,
+  1020,
+  1050,
+  1080,
+  1110,
+  1140,
+  1170,
+  1200,
+  1230,
+  1260,
+  1290,
+  1320,
+  1350,
+  1380,
+  1410,
 ];
 
 const List<int> _kGranularityOptions = [5, 10, 15, 30, 60];
@@ -35,7 +79,7 @@ Future<DayPlanPrefs?> showPlanPrefsSheet(
     context: context,
     useRootNavigator: true,
     isScrollControlled: true,
-    backgroundColor: AppColors.ofContext(context).popup,
+    backgroundColor: Colors.transparent,
     shape: bottomSheetTopShape,
     sheetAnimationStyle: bottomSheetMotion,
     builder: (sheetContext) => _PrefsSheet(initial: initial),
@@ -55,16 +99,18 @@ class _PrefsSheetState extends State<_PrefsSheet> {
   late DayPlanPrefs _draft = widget.initial;
 
   /// 单项选档（当前值描边 + 点选即回调）
-  Future<void> _pick(String title, int current, List<int> options,
-      String Function(int) label, ValueChanged<int> onPicked) async {
+  Future<void> _pick(
+    String title,
+    int current,
+    List<int> options,
+    String Function(int) label,
+    ValueChanged<int> onPicked,
+  ) async {
     await showSelectBottomSheet<int>(
       context,
       title: title,
       current: current,
-      items: [
-        for (final o in options)
-          SelectItem(value: o, label: label(o)),
-      ],
+      items: [for (final o in options) SelectItem(value: o, label: label(o))],
       onSelect: (v) => setState(() => onPicked(v)),
     );
   }
@@ -73,73 +119,130 @@ class _PrefsSheetState extends State<_PrefsSheet> {
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
     final p = _draft;
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(AppDimens.cardPadding),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              '排程作息',
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w600,
-                color: colors.titleText,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              '保存在本机（不参与云同步）；越界值保存时自动回落默认',
-              style: TextStyle(fontSize: 12, color: colors.secondaryText),
-            ),
-            const SizedBox(height: AppDimens.space8),
-            _row(colors, OrbitIcons.calendar, '工作开始',
-                _hhmm(p.workStartMinute), () async {
-              await _pick('工作开始', p.workStartMinute, _kTimeOptions, _hhmm,
-                  (v) => _draft = _copy(p, workStartMinute: v));
-            }),
-            _row(colors, OrbitIcons.calendar, '工作结束',
-                _hhmm(p.workEndMinute), () async {
-              await _pick('工作结束', p.workEndMinute, _kTimeOptions, _hhmm,
-                  (v) => _draft = _copy(p, workEndMinute: v));
-            }),
-            _row(colors, OrbitIcons.calendar, '午休开始',
-                _hhmm(p.lunchStartMinute), () async {
-              await _pick('午休开始', p.lunchStartMinute, _kTimeOptions, _hhmm,
-                  (v) => _draft = _copy(p, lunchStartMinute: v));
-            }),
-            _row(colors, OrbitIcons.calendar, '午休结束',
-                _hhmm(p.lunchEndMinute), () async {
-              await _pick('午休结束', p.lunchEndMinute, _kTimeOptions, _hhmm,
-                  (v) => _draft = _copy(p, lunchEndMinute: v));
-            }),
-            _row(colors, OrbitIcons.sort, '排程粒度', '${p.granularityMinutes} 分钟',
-                () async {
-              await _pick('排程粒度', p.granularityMinutes, _kGranularityOptions,
-                  (v) => '$v 分钟',
-                  (v) => _draft = _copy(p, granularityMinutes: v));
-            }),
-            _row(colors, OrbitIcons.listChecks, '无时长兜底',
-                '${p.defaultTaskMinutes} 分钟', () async {
+    // 与其余输入型弹层共用骨架：标题 / 内边距 / 按钮行不再自写
+    return OrbitSheetScaffold(
+      title: '排程作息',
+      contentPadding: const EdgeInsets.fromLTRB(
+        AppDimens.space16,
+        0,
+        AppDimens.space16,
+        AppDimens.space16,
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            '保存在本机（不参与云同步）；越界值保存时自动回落默认',
+            style: TextStyle(fontSize: 12, color: colors.secondaryText),
+          ),
+          const SizedBox(height: AppDimens.space12),
+          _row(
+            colors,
+            OrbitIcons.calendar,
+            '工作开始',
+            _hhmm(p.workStartMinute),
+            () async {
               await _pick(
-                  '无时长兜底', p.defaultTaskMinutes, _kDefaultTaskOptions,
-                  (v) => '$v 分钟',
-                  (v) => _draft = _copy(p, defaultTaskMinutes: v));
-            }),
-            _row(colors, OrbitIcons.warning,
-                p.includeOverdue ? '逾期任务：纳入排程' : '逾期任务：不排程', '点击切换',
-                () async {
+                '工作开始',
+                p.workStartMinute,
+                _kTimeOptions,
+                _hhmm,
+                (v) => _draft = _copy(p, workStartMinute: v),
+              );
+            },
+          ),
+          _row(
+            colors,
+            OrbitIcons.calendar,
+            '工作结束',
+            _hhmm(p.workEndMinute),
+            () async {
+              await _pick(
+                '工作结束',
+                p.workEndMinute,
+                _kTimeOptions,
+                _hhmm,
+                (v) => _draft = _copy(p, workEndMinute: v),
+              );
+            },
+          ),
+          _row(
+            colors,
+            OrbitIcons.calendar,
+            '午休开始',
+            _hhmm(p.lunchStartMinute),
+            () async {
+              await _pick(
+                '午休开始',
+                p.lunchStartMinute,
+                _kTimeOptions,
+                _hhmm,
+                (v) => _draft = _copy(p, lunchStartMinute: v),
+              );
+            },
+          ),
+          _row(
+            colors,
+            OrbitIcons.calendar,
+            '午休结束',
+            _hhmm(p.lunchEndMinute),
+            () async {
+              await _pick(
+                '午休结束',
+                p.lunchEndMinute,
+                _kTimeOptions,
+                _hhmm,
+                (v) => _draft = _copy(p, lunchEndMinute: v),
+              );
+            },
+          ),
+          _row(
+            colors,
+            OrbitIcons.sort,
+            '排程粒度',
+            '${p.granularityMinutes} 分钟',
+            () async {
+              await _pick(
+                '排程粒度',
+                p.granularityMinutes,
+                _kGranularityOptions,
+                (v) => '$v 分钟',
+                (v) => _draft = _copy(p, granularityMinutes: v),
+              );
+            },
+          ),
+          _row(
+            colors,
+            OrbitIcons.listChecks,
+            '无时长兜底',
+            '${p.defaultTaskMinutes} 分钟',
+            () async {
+              await _pick(
+                '无时长兜底',
+                p.defaultTaskMinutes,
+                _kDefaultTaskOptions,
+                (v) => '$v 分钟',
+                (v) => _draft = _copy(p, defaultTaskMinutes: v),
+              );
+            },
+          ),
+          _row(
+            colors,
+            OrbitIcons.warning,
+            p.includeOverdue ? '逾期任务：纳入排程' : '逾期任务：不排程',
+            '点击切换',
+            () async {
               setState(
-                  () => _draft = _copy(p, includeOverdue: !p.includeOverdue));
-            }),
-            const SizedBox(height: AppDimens.space8),
-            OrbitButton.primary(
-              onPressed: () => Navigator.of(context).pop(_draft),
-              child: const Text('保存作息', textAlign: TextAlign.center),
-            ),
-          ],
-        ),
+                () => _draft = _copy(p, includeOverdue: !p.includeOverdue),
+              );
+            },
+          ),
+        ],
+      ),
+      actions: OrbitSheetActions(
+        confirmLabel: '保存作息',
+        onConfirm: () => Navigator.of(context).pop(_draft),
       ),
     );
   }
@@ -153,19 +256,23 @@ class _PrefsSheetState extends State<_PrefsSheet> {
     int? granularityMinutes,
     int? defaultTaskMinutes,
     bool? includeOverdue,
-  }) =>
-      DayPlanPrefs(
-        workStartMinute: workStartMinute ?? p.workStartMinute,
-        workEndMinute: workEndMinute ?? p.workEndMinute,
-        lunchStartMinute: lunchStartMinute ?? p.lunchStartMinute,
-        lunchEndMinute: lunchEndMinute ?? p.lunchEndMinute,
-        granularityMinutes: granularityMinutes ?? p.granularityMinutes,
-        defaultTaskMinutes: defaultTaskMinutes ?? p.defaultTaskMinutes,
-        includeOverdue: includeOverdue ?? p.includeOverdue,
-      );
+  }) => DayPlanPrefs(
+    workStartMinute: workStartMinute ?? p.workStartMinute,
+    workEndMinute: workEndMinute ?? p.workEndMinute,
+    lunchStartMinute: lunchStartMinute ?? p.lunchStartMinute,
+    lunchEndMinute: lunchEndMinute ?? p.lunchEndMinute,
+    granularityMinutes: granularityMinutes ?? p.granularityMinutes,
+    defaultTaskMinutes: defaultTaskMinutes ?? p.defaultTaskMinutes,
+    includeOverdue: includeOverdue ?? p.includeOverdue,
+  );
 
-  Widget _row(AppColorSet colors, IconData icon, String label, String value,
-      VoidCallback onTap) {
+  Widget _row(
+    AppColorSet colors,
+    IconData icon,
+    String label,
+    String value,
+    VoidCallback onTap,
+  ) {
     return InkWell(
       onTap: onTap,
       borderRadius: AppShapes.small,
@@ -176,18 +283,24 @@ class _PrefsSheetState extends State<_PrefsSheet> {
             Icon(icon, size: AppDimens.iconSizeMd, color: colors.iconText),
             const SizedBox(width: AppDimens.space12),
             Expanded(
-              child: Text(label,
-                  style: TextStyle(fontSize: 15, color: colors.titleText)),
+              child: Text(
+                label,
+                style: TextStyle(fontSize: 15, color: colors.titleText),
+              ),
             ),
-            Text(value,
-                style: TextStyle(fontSize: 13, color: colors.secondaryText)),
+            Text(
+              value,
+              style: TextStyle(fontSize: 13, color: colors.secondaryText),
+            ),
             const SizedBox(width: AppDimens.space8),
-            Icon(OrbitIcons.expandMore,
-                size: AppDimens.iconSizeMd, color: colors.secondaryText),
+            Icon(
+              OrbitIcons.expandMore,
+              size: AppDimens.iconSizeMd,
+              color: colors.secondaryText,
+            ),
           ],
         ),
       ),
     );
   }
 }
-

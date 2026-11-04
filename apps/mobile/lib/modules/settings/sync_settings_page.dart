@@ -13,7 +13,10 @@ import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/utils/sync_status_text.dart';
+import '../../shared/widgets/shadcn/orbit_actions_sheet.dart'
+    show bottomSheetMotion, bottomSheetTopShape;
 import '../../shared/widgets/shadcn/orbit_checkbox.dart';
+import '../../shared/widgets/shadcn/orbit_floating_sheet_card.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_password_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_card.dart';
@@ -317,50 +320,41 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
         ),
         const SizedBox(height: AppDimens.space12),
         _formFields([
-        OrbitTextField(
-          controller: _endpointController,
-          keyboardType: TextInputType.url,
-          label: isS3 ? 'Endpoint' : '服务器地址',
-          onChanged: (_) => setState(() {}),
-        ),
-        if (isS3) ...[
+          OrbitTextField(
+            controller: _endpointController,
+            keyboardType: TextInputType.url,
+            label: isS3 ? 'Endpoint' : '服务器地址',
+            onChanged: (_) => setState(() {}),
+          ),
+          if (isS3) ...[
+            const SizedBox(height: AppDimens.space12),
+            OrbitTextField(controller: _bucketController, label: '存储桶'),
+            const SizedBox(height: AppDimens.space12),
+            OrbitTextField(controller: _regionController, label: 'Region'),
+          ],
           const SizedBox(height: AppDimens.space12),
           OrbitTextField(
-            controller: _bucketController,
-            label: '存储桶',
+            controller: _usernameController,
+            label: isS3 ? 'Access Key' : '用户名',
           ),
           const SizedBox(height: AppDimens.space12),
           OrbitTextField(
-            controller: _regionController,
-            label: 'Region',
-          ),
-        ],
-        const SizedBox(height: AppDimens.space12),
-        OrbitTextField(
-          controller: _usernameController,
-          label: isS3 ? 'Access Key' : '用户名',
-        ),
-        const SizedBox(height: AppDimens.space12),
-        OrbitTextField(
-          controller: _passwordController,
-          obscureText: true,
-          label: isS3 ? 'Secret Key' : '密码',
-          helperText: _config?.passwordSet == true ? '已保存（修改请重新输入）' : null,
-        ),
-        if (isS3) ...[
-          const SizedBox(height: AppDimens.space12),
-          OrbitTextField(
-            controller: _sessionTokenController,
+            controller: _passwordController,
             obscureText: true,
-            label: '会话令牌（STS 临时凭据专用）',
-            helperText: _config?.sessionTokenSet == true ? '已设置，留空沿用' : null,
+            label: isS3 ? 'Secret Key' : '密码',
+            helperText: _config?.passwordSet == true ? '已保存（修改请重新输入）' : null,
           ),
-        ],
-        const SizedBox(height: AppDimens.space12),
-        OrbitTextField(
-          controller: _basePathController,
-          label: '远端路径',
-        ),
+          if (isS3) ...[
+            const SizedBox(height: AppDimens.space12),
+            OrbitTextField(
+              controller: _sessionTokenController,
+              obscureText: true,
+              label: '会话令牌（STS 临时凭据专用）',
+              helperText: _config?.sessionTokenSet == true ? '已设置，留空沿用' : null,
+            ),
+          ],
+          const SizedBox(height: AppDimens.space12),
+          OrbitTextField(controller: _basePathController, label: '远端路径'),
         ]),
         const SizedBox(height: AppDimens.space12),
         // 定时同步：开关作为行首动作并入同一偏好行，按压灰底覆盖整行
@@ -380,82 +374,87 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
           ),
         ),
         _formFields([
-        if (_autoEnabled)
-          Padding(
-            padding: const EdgeInsets.only(top: AppDimens.space4),
-            child: Text(
-              '移动端不驻后台调度，该间隔由桌面端执行；此处配置全端共享。',
-              style: TextStyle(fontSize: 12, color: colors.secondaryText),
+          if (_autoEnabled)
+            Padding(
+              padding: const EdgeInsets.only(top: AppDimens.space4),
+              child: Text(
+                '移动端不驻后台调度，该间隔由桌面端执行；此处配置全端共享。',
+                style: TextStyle(fontSize: 12, color: colors.secondaryText),
+              ),
             ),
+          const SizedBox(height: AppDimens.space12),
+          _switchRow(
+            colors: colors,
+            label: '修改后立即同步',
+            value: _onChange,
+            onChanged: (v) => setState(() => _onChange = v),
+            // 门控与桌面同口径：需「定时同步」总开关同时开启（见
+            // sync_on_change_scheduler.dart 的 pushNow 门控链）
+            description: !_onChange
+                ? '仅按定时或手动同步'
+                : _autoEnabled
+                ? '编辑后约 5 秒自动推送（需已解锁同步密码）'
+                : '编辑后约 5 秒自动推送（需开启上方「定时同步」总开关）',
           ),
-        const SizedBox(height: AppDimens.space12),
-        _switchRow(
-          colors: colors,
-          label: '修改后立即同步',
-          value: _onChange,
-          onChanged: (v) => setState(() => _onChange = v),
-          // 门控与桌面同口径：需「定时同步」总开关同时开启（见
-          // sync_on_change_scheduler.dart 的 pushNow 门控链）
-          description: !_onChange
-              ? '仅按定时或手动同步'
-              : _autoEnabled
-              ? '编辑后约 5 秒自动推送（需已解锁同步密码）'
-              : '编辑后约 5 秒自动推送（需开启上方「定时同步」总开关）',
-        ),
-        const SizedBox(height: AppDimens.space12),
-        Row(
-          children: [
-            Expanded(
-              child: OrbitTextField(
-                controller: _timeoutController,
-                keyboardType: TextInputType.number,
-                label: '请求超时（秒，5–600）',
+          const SizedBox(height: AppDimens.space12),
+          Row(
+            children: [
+              Expanded(
+                child: OrbitTextField(
+                  controller: _timeoutController,
+                  keyboardType: TextInputType.number,
+                  label: '请求超时（秒，5–600）',
+                ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppDimens.space12),
-        _switchRow(
-          colors: colors,
-          label: '跳过 TLS 验证',
-          value: _skipTls,
-          onChanged: (v) => setState(() => _skipTls = v),
-          description: _skipTls ? '自签名证书场景专用，存在中间人风险' : '校验服务器证书（推荐）',
-          warning: _skipTls,
-        ),
-        const SizedBox(height: AppDimens.space4),
-        Text(
-          '数据以 AES-256-GCM 端到端加密后上传，服务商无法读取内容。',
-          style: TextStyle(fontSize: 12, color: colors.secondaryText),
-        ),
-        const SizedBox(height: AppDimens.space12),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            if (_config != null)
-              OrbitButton.text(
-                onPressed: _busy ? null : () => _confirmDisconnect(context),
-                child: Text('断开', style: TextStyle(color: colors.destructive)),
+            ],
+          ),
+          const SizedBox(height: AppDimens.space12),
+          _switchRow(
+            colors: colors,
+            label: '跳过 TLS 验证',
+            value: _skipTls,
+            onChanged: (v) => setState(() => _skipTls = v),
+            description: _skipTls ? '自签名证书场景专用，存在中间人风险' : '校验服务器证书（推荐）',
+            warning: _skipTls,
+          ),
+          const SizedBox(height: AppDimens.space4),
+          Text(
+            '数据以 AES-256-GCM 端到端加密后上传，服务商无法读取内容。',
+            style: TextStyle(fontSize: 12, color: colors.secondaryText),
+          ),
+          const SizedBox(height: AppDimens.space12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              if (_config != null)
+                OrbitButton.text(
+                  onPressed: _busy ? null : () => _confirmDisconnect(context),
+                  child: Text(
+                    '断开',
+                    style: TextStyle(color: colors.destructive),
+                  ),
+                ),
+              const SizedBox(width: AppDimens.space8),
+              OrbitButton.outline(
+                onPressed: (_testing || _busy || endpointEmpty)
+                    ? null
+                    : _testConnection,
+                child: _testing
+                    ? const OrbitSpinner(size: AppDimens.iconSizeSm)
+                    : const Text('测试连接'),
               ),
-            const SizedBox(width: AppDimens.space8),
-            OrbitButton.outline(
-              onPressed: (_testing || _busy || endpointEmpty)
-                  ? null
-                  : _testConnection,
-              child: _testing
-                  ? const OrbitSpinner(size: AppDimens.iconSizeSm)
-                  : const Text('测试连接'),
-            ),
-            const SizedBox(width: AppDimens.space8),
-            OrbitButton.primary(
-              onPressed: (_busy || endpointEmpty) ? null : _save,
-              child: _busy
-                  ? const OrbitSpinner(
-                      size: AppDimens.iconSizeSm, color: Colors.white)
-                  : const Text('保存'),
-            ),
-          ],
-        ),
+              const SizedBox(width: AppDimens.space8),
+              OrbitButton.primary(
+                onPressed: (_busy || endpointEmpty) ? null : _save,
+                child: _busy
+                    ? const OrbitSpinner(
+                        size: AppDimens.iconSizeSm,
+                        color: Colors.white,
+                      )
+                    : const Text('保存'),
+              ),
+            ],
+          ),
         ]),
       ],
     );
@@ -918,7 +917,9 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
                       onPressed: _busy ? null : _setup,
                       child: _busy
                           ? const OrbitSpinner(
-                              size: AppDimens.iconSizeSm, color: Colors.white)
+                              size: AppDimens.iconSizeSm,
+                              color: Colors.white,
+                            )
                           : const Text('设置密码'),
                     ),
                   ),
@@ -964,7 +965,9 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
                         onPressed: _busy ? null : _unlock,
                         child: _busy
                             ? const OrbitSpinner(
-                                size: AppDimens.iconSizeSm, color: Colors.white)
+                                size: AppDimens.iconSizeSm,
+                                color: Colors.white,
+                              )
                             : const Text('解锁'),
                       ),
                     ),
@@ -1507,179 +1510,185 @@ class _CloudCleanupCardState extends ConsumerState<_CloudCleanupCard> {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: colors.surfaceElevated,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (sheetContext) => StatefulBuilder(
-        builder: (context, setSheetState) {
-          final allSelected = selected.length == result.items.length;
-          var bytes = 0;
-          for (final item in result.items) {
-            if (selected.contains(item.hash)) bytes += item.displayBytes;
-          }
-          final days = result.minAgeSecs ~/ 86400;
+      backgroundColor: Colors.transparent,
+      shape: bottomSheetTopShape,
+      sheetAnimationStyle: bottomSheetMotion,
+      builder: (sheetContext) => OrbitFloatingSheetCard(
+        child: StatefulBuilder(
+          builder: (context, setSheetState) {
+            final allSelected = selected.length == result.items.length;
+            var bytes = 0;
+            for (final item in result.items) {
+              if (selected.contains(item.hash)) bytes += item.displayBytes;
+            }
+            final days = result.minAgeSecs ~/ 86400;
 
-          return SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppDimens.space16,
-                AppDimens.space16,
-                AppDimens.space16,
-                AppDimens.space12,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    '清理云端孤儿附件',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: colors.bodyText,
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppDimens.space16,
+                  AppDimens.space16,
+                  AppDimens.space16,
+                  AppDimens.space12,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      '清理云端孤儿附件',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: colors.bodyText,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: AppDimens.space8),
-                  Text(
-                    '以下对象无任何设备引用，且写入超过 $days 天。删除的是云端密文副本；'
-                    '其他设备若仍有本地副本会在下次同步自动重传。',
-                    style: TextStyle(fontSize: 12, color: colors.secondaryText),
-                  ),
-                  const SizedBox(height: AppDimens.space8),
-                  Row(
-                    children: [
-                      OrbitButton.text(
-                        onPressed: busy
-                            ? null
-                            : () => setSheetState(() {
-                                if (allSelected) {
-                                  selected.clear();
-                                } else {
-                                  selected
-                                    ..clear()
-                                    ..addAll(result.items.map((i) => i.hash));
-                                }
-                              }),
-                        child: Text(allSelected ? '取消全选' : '全选'),
+                    const SizedBox(height: AppDimens.space8),
+                    Text(
+                      '以下对象无任何设备引用，且写入超过 $days 天。删除的是云端密文副本；'
+                      '其他设备若仍有本地副本会在下次同步自动重传。',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: colors.secondaryText,
                       ),
-                      const Spacer(),
-                      Text(
-                        '已选 ${selected.length} / 共 ${result.items.length} 项 · '
-                        '${humanFileSize(bytes)}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: colors.secondaryText,
-                        ),
-                      ),
-                    ],
-                  ),
-                  Flexible(
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      itemCount: result.items.length,
-                      separatorBuilder: (_, _) =>
-                          OrbitDivider(height: 1, color: colors.divider),
-                      itemBuilder: (context, index) {
-                        final item = result.items[index];
-                        final checked = selected.contains(item.hash);
-                        return ListTile(
-                          dense: true,
-                          contentPadding: EdgeInsets.zero,
-                          leading: OrbitCheckbox(
-                            checked: checked,
-                            onToggle: busy
-                                ? () {}
-                                : () => setSheetState(() {
-                                    if (checked) {
-                                      selected.remove(item.hash);
-                                    } else {
-                                      selected.add(item.hash);
-                                    }
-                                  }),
-                          ),
-                          title: Text(
-                            item.label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: colors.bodyText,
-                            ),
-                          ),
-                          subtitle: Text(
-                            '${item.kindLabel} · '
-                            '${humanFileSize(item.displayBytes)}'
-                            '${item.isLocalCached == 1 ? ' · 本地有副本' : ''}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: colors.secondaryText,
-                            ),
-                          ),
-                        );
-                      },
                     ),
-                  ),
-                  const SizedBox(height: AppDimens.space8),
-                  Row(
-                    children: [
-                      OrbitButton.outline(
-                        onPressed: busy
-                            ? null
-                            : () => Navigator.pop(sheetContext),
-                        child: const Text('取消'),
-                      ),
-                      const SizedBox(width: AppDimens.space12),
-                      Expanded(
-                        child: OrbitButton.primary(
-                          onPressed: busy || selected.isEmpty
+                    const SizedBox(height: AppDimens.space8),
+                    Row(
+                      children: [
+                        OrbitButton.text(
+                          onPressed: busy
                               ? null
-                              : () async {
-                                  setSheetState(() => busy = true);
-                                  try {
-                                    final r = await ref
-                                        .read(orbitBridgeProvider)
-                                        .cloudUnusedAttachmentsDelete(
-                                          hashes: selected.toList(),
-                                          expectedEpoch: result.epoch,
-                                        );
-                                    if (!sheetContext.mounted) return;
-                                    Navigator.pop(sheetContext);
-                                    if (r.staleManifest) {
-                                      WaitToast.success('云端刚有新的同步活动，已重新扫描');
-                                      await _scan();
-                                      return;
-                                    }
-                                    if (r.deletedAssets == 0) {
-                                      WaitToast.success('没有可清理的云端附件');
-                                    } else if (r.errors.isNotEmpty) {
-                                      WaitToast.destructive(
-                                        '已清理 ${r.deletedAssets} 个（部分失败：${r.errors.first}）',
-                                      );
-                                    } else {
-                                      WaitToast.success(
-                                        '已清理 ${r.deletedAssets} 个云端附件（${r.deletedObjects} 个对象）',
-                                      );
-                                    }
-                                  } catch (e) {
-                                    setSheetState(() => busy = false);
-                                    WaitToast.destructive('清理失败：${_errMsg(e)}');
+                              : () => setSheetState(() {
+                                  if (allSelected) {
+                                    selected.clear();
+                                  } else {
+                                    selected
+                                      ..clear()
+                                      ..addAll(result.items.map((i) => i.hash));
                                   }
-                                },
-                          child: busy
-                              ? const OrbitSpinner(size: 16)
-                              : Text(
-                                  '删除选中${selected.isEmpty ? '' : ' (${selected.length})'}',
-                                ),
+                                }),
+                          child: Text(allSelected ? '取消全选' : '全选'),
                         ),
+                        const Spacer(),
+                        Text(
+                          '已选 ${selected.length} / 共 ${result.items.length} 项 · '
+                          '${humanFileSize(bytes)}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: colors.secondaryText,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Flexible(
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: result.items.length,
+                        separatorBuilder: (_, _) =>
+                            OrbitDivider(height: 1, color: colors.divider),
+                        itemBuilder: (context, index) {
+                          final item = result.items[index];
+                          final checked = selected.contains(item.hash);
+                          return ListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            leading: OrbitCheckbox(
+                              checked: checked,
+                              onToggle: busy
+                                  ? () {}
+                                  : () => setSheetState(() {
+                                      if (checked) {
+                                        selected.remove(item.hash);
+                                      } else {
+                                        selected.add(item.hash);
+                                      }
+                                    }),
+                            ),
+                            title: Text(
+                              item.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: colors.bodyText,
+                              ),
+                            ),
+                            subtitle: Text(
+                              '${item.kindLabel} · '
+                              '${humanFileSize(item.displayBytes)}'
+                              '${item.isLocalCached == 1 ? ' · 本地有副本' : ''}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: colors.secondaryText,
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                    ],
-                  ),
-                ],
+                    ),
+                    const SizedBox(height: AppDimens.space8),
+                    Row(
+                      children: [
+                        OrbitButton.outline(
+                          onPressed: busy
+                              ? null
+                              : () => Navigator.pop(sheetContext),
+                          child: const Text('取消'),
+                        ),
+                        const SizedBox(width: AppDimens.space12),
+                        Expanded(
+                          child: OrbitButton.primary(
+                            onPressed: busy || selected.isEmpty
+                                ? null
+                                : () async {
+                                    setSheetState(() => busy = true);
+                                    try {
+                                      final r = await ref
+                                          .read(orbitBridgeProvider)
+                                          .cloudUnusedAttachmentsDelete(
+                                            hashes: selected.toList(),
+                                            expectedEpoch: result.epoch,
+                                          );
+                                      if (!sheetContext.mounted) return;
+                                      Navigator.pop(sheetContext);
+                                      if (r.staleManifest) {
+                                        WaitToast.success('云端刚有新的同步活动，已重新扫描');
+                                        await _scan();
+                                        return;
+                                      }
+                                      if (r.deletedAssets == 0) {
+                                        WaitToast.success('没有可清理的云端附件');
+                                      } else if (r.errors.isNotEmpty) {
+                                        WaitToast.destructive(
+                                          '已清理 ${r.deletedAssets} 个（部分失败：${r.errors.first}）',
+                                        );
+                                      } else {
+                                        WaitToast.success(
+                                          '已清理 ${r.deletedAssets} 个云端附件（${r.deletedObjects} 个对象）',
+                                        );
+                                      }
+                                    } catch (e) {
+                                      setSheetState(() => busy = false);
+                                      WaitToast.destructive(
+                                        '清理失败：${_errMsg(e)}',
+                                      );
+                                    }
+                                  },
+                            child: busy
+                                ? const OrbitSpinner(size: 16)
+                                : Text(
+                                    '删除选中${selected.isEmpty ? '' : ' (${selected.length})'}',
+                                  ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
@@ -1780,7 +1789,9 @@ class _SyncDiagnosticCardState extends ConsumerState<_SyncDiagnosticCard> {
       if (r.skipped) {
         WaitToast.info('已有同步任务在进行中');
       } else if (r.errors.isNotEmpty) {
-        WaitToast.destructive('同步完成但有 ${r.errors.length} 条错误：${r.errors.first}');
+        WaitToast.destructive(
+          '同步完成但有 ${r.errors.length} 条错误：${r.errors.first}',
+        );
       } else {
         WaitToast.success(
           mode == 'push'
@@ -1839,6 +1850,3 @@ class _SyncDiagnosticCardState extends ConsumerState<_SyncDiagnosticCard> {
     );
   }
 }
-
-
-

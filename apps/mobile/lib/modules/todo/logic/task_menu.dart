@@ -63,7 +63,9 @@ Future<void> showTaskActionSheet(
       try {
         if (task.isDone) {
           await bridge.todoTaskUpdate(
-              task.id, encodePatch(buildDoneTogglePatch(task)));
+            task.id,
+            encodePatch(buildDoneTogglePatch(task)),
+          );
         } else {
           // 完成走单事务推进重复任务下一实例（与勾选同口径）
           await bridge.todoTaskComplete(task.id);
@@ -75,11 +77,9 @@ Future<void> showTaskActionSheet(
     }();
   }
 
-  void toggleFavorite() =>
-      patch(buildFavoriteTogglePatch(task), fail: '操作失败');
+  void toggleFavorite() => patch(buildFavoriteTogglePatch(task), fail: '操作失败');
 
-  void toggleMyDay() =>
-      patch(buildMyDayTogglePatch(task), fail: '操作失败');
+  void toggleMyDay() => patch(buildMyDayTogglePatch(task), fail: '操作失败');
 
   void duplicate() async {
     try {
@@ -157,11 +157,7 @@ Future<void> showTaskActionSheet(
         color: OrbitAccents.starYellow,
         onTap: toggleFavorite,
       ),
-      MoreActionItem(
-        icon: OrbitIcons.copy,
-        label: '复制任务',
-        onTap: duplicate,
-      ),
+      MoreActionItem(icon: OrbitIcons.copy, label: '复制任务', onTap: duplicate),
       MoreActionItem(
         icon: OrbitIcons.folder,
         label: '更换项目',
@@ -207,12 +203,22 @@ Future<void> _pickDue(
     items: [
       for (final o in options)
         SelectItem(
-            value: o.key, label: o.label, hint: o.hint, icon: dueQuickIcon(o.key)),
+          value: o.key,
+          label: o.label,
+          hint: o.hint,
+          icon: dueQuickIcon(o.key),
+        ),
       const SelectItem(
-          value: 'custom', label: '选择日期和时间', icon: OrbitIcons.calendarDays),
+        value: 'custom',
+        label: '选择日期和时间',
+        icon: OrbitIcons.calendarDays,
+      ),
       if (task.dueDate != null)
         const SelectItem(
-            value: 'clear', label: '清除截止', icon: OrbitIcons.calendarBlocked),
+          value: 'clear',
+          label: '清除截止',
+          icon: OrbitIcons.calendarBlocked,
+        ),
     ],
     onSelect: (v) async {
       if (v == 'custom') {
@@ -224,8 +230,9 @@ Future<void> _pickDue(
           showTime: true,
         );
         if (picked != null) {
-          await patch({'due_date': picked.millisecondsSinceEpoch},
-              fail: '设置截止失败');
+          await patch({
+            'due_date': picked.millisecondsSinceEpoch,
+          }, fail: '设置截止失败');
         }
         return;
       }
@@ -252,9 +259,10 @@ Future<void> _pickPriority(
     items: [
       for (var p = 0; p <= 5; p++)
         SelectItem(
-            value: p,
-            label: priorityLabel(p),
-            colorDot: hexToColor(priorityColorHex(p))),
+          value: p,
+          label: priorityLabel(p),
+          colorDot: hexToColor(priorityColorHex(p)),
+        ),
     ],
     onSelect: (p) => patch({'priority': p}, fail: '设置优先级失败'),
   );
@@ -267,7 +275,8 @@ Future<void> _pickProject(
   TodoTask task,
   Future<void> Function(Map<String, Object?>, {String fail}) patch,
 ) async {
-  final projects = ref.read(todoProjectsProvider).value ?? const <TodoProject>[];
+  final projects =
+      ref.read(todoProjectsProvider).value ?? const <TodoProject>[];
   await showSelectBottomSheet<int?>(
     context,
     title: '更换项目',
@@ -276,7 +285,10 @@ Future<void> _pickProject(
       const SelectItem<int?>(value: null, label: '未分组'),
       for (final p in projects)
         SelectItem<int?>(
-            value: p.id, label: p.title, colorDot: hexToColor(p.hexColor)),
+          value: p.id,
+          label: p.title,
+          colorDot: hexToColor(p.hexColor),
+        ),
     ],
     onSelect: (id) => patch({'project_id': id}, fail: '更换项目失败'),
   );
@@ -299,8 +311,7 @@ Future<void> _addReminder(
         durationMinutes: task.durationMinutes,
       ))
         SelectItem<String>(value: '${p.ms}', label: p.label),
-      const SelectItem<String>(
-          value: menuReminderCustomKey, label: '自定义时间…'),
+      const SelectItem<String>(value: menuReminderCustomKey, label: '自定义时间…'),
     ],
     onSelect: (v) async {
       int? ms;
@@ -317,8 +328,11 @@ Future<void> _addReminder(
       }
       if (ms == null) return;
       try {
-        await ref.read(orbitBridgeProvider).todoReminderCreate(
-            TodoReminderCreateInput(taskId: task.id, remindAt: ms));
+        await ref
+            .read(orbitBridgeProvider)
+            .todoReminderCreate(
+              TodoReminderCreateInput(taskId: task.id, remindAt: ms),
+            );
         ref.invalidate(taskRemindersProjectionProvider);
         ref.invalidate(taskDetailProvider(task.id));
         onChanged();
@@ -337,21 +351,26 @@ Future<void> _addComment(
   TodoTask task,
   VoidCallback onChanged,
 ) async {
-  final colors = AppColors.ofContext(context);
   String draft = '';
   await showModalBottomSheet<void>(
     context: context,
     useRootNavigator: true,
     isScrollControlled: true,
-    backgroundColor: colors.popup,
+    backgroundColor: Colors.transparent,
     shape: bottomSheetTopShape,
+    sheetAnimationStyle: bottomSheetMotion,
     builder: (sheetCtx) => Padding(
-      padding:
-          EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(sheetCtx).bottom),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.viewInsetsOf(sheetCtx).bottom,
+      ),
       child: OrbitSheetScaffold(
         title: '添加评论',
         contentPadding: const EdgeInsets.fromLTRB(
-            AppDimens.space16, 0, AppDimens.space16, AppDimens.space16),
+          AppDimens.space16,
+          0,
+          AppDimens.space16,
+          AppDimens.space16,
+        ),
         content: OrbitTextField(
           onChanged: (v) => draft = v,
           minLines: 3,
@@ -370,8 +389,11 @@ Future<void> _addComment(
   final content = draft.trim();
   if (content.isEmpty) return;
   try {
-    await ref.read(orbitBridgeProvider).todoCommentCreate(
-        TodoCommentCreateInput(taskId: task.id, content: content));
+    await ref
+        .read(orbitBridgeProvider)
+        .todoCommentCreate(
+          TodoCommentCreateInput(taskId: task.id, content: content),
+        );
     ref.invalidate(taskDetailProvider(task.id));
     onChanged();
     if (context.mounted) WaitToast.success('评论已添加');
@@ -416,8 +438,9 @@ Future<void> _editLabels(
     context: context,
     useRootNavigator: true,
     isScrollControlled: true,
-    backgroundColor: colors.popup,
+    backgroundColor: Colors.transparent,
     shape: bottomSheetTopShape,
+    sheetAnimationStyle: bottomSheetMotion,
     builder: (sheetCtx) => StatefulBuilder(
       builder: (ctx, setSheet) => OrbitSheetScaffold(
         title: '修改标签',
@@ -434,8 +457,11 @@ Future<void> _editLabels(
                       setSheet(() => linked.remove(label.id));
                     } else {
                       final row = await bridge.todoTaskLabelCreate(
-                          TodoTaskLabelCreateInput(
-                              taskId: task.id, labelId: label.id));
+                        TodoTaskLabelCreateInput(
+                          taskId: task.id,
+                          labelId: label.id,
+                        ),
+                      );
                       setSheet(() => linked[label.id] = row.taskLabelId);
                     }
                     ref.invalidate(taskLabelsProjectionProvider);
@@ -470,8 +496,10 @@ Future<void> _editLabels(
                           label.title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style:
-                              TextStyle(fontSize: 15, color: colors.bodyText),
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: colors.bodyText,
+                          ),
                         ),
                       ),
                     ],

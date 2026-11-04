@@ -349,12 +349,11 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
   /// 新建项目名称输入抽屉（返回 trim 后的名称；取消/下滑关闭返回 null）
   Future<String?> _askProjectName() {
     final controller = TextEditingController();
-    final colors = AppColors.ofContext(context);
     return showModalBottomSheet<String>(
       context: context,
       useRootNavigator: true,
       isScrollControlled: true,
-      backgroundColor: colors.popup,
+      backgroundColor: Colors.transparent,
       shape: bottomSheetTopShape,
       sheetAnimationStyle: bottomSheetMotion,
       // 控制器交给抽屉子树释放（退出动画期间表单会重建一次，提前 dispose
@@ -1118,5 +1117,3 @@ class CountBadge extends StatelessWidget {
     );
   }
 }
-
-

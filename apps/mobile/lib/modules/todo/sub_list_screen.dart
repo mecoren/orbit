@@ -616,8 +616,9 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
       context: context,
       useRootNavigator: true,
       isScrollControlled: true,
-      backgroundColor: colors.popup,
+      backgroundColor: Colors.transparent,
       shape: bottomSheetTopShape,
+      sheetAnimationStyle: bottomSheetMotion,
       builder: (sheetContext) => Consumer(
         builder: (context, ref, _) {
           final prefs = ref.watch(displayPrefsProvider);
@@ -735,21 +736,24 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
       context: context,
       useRootNavigator: true,
       isScrollControlled: true,
-      backgroundColor: AppColors.ofContext(context).popup,
+      backgroundColor: Colors.transparent,
       shape: bottomSheetTopShape,
       sheetAnimationStyle: bottomSheetMotion,
       builder: (sheetContext) => OrbitSheetScaffold(
         title: '每日容量（分钟）',
-        content: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppDimens.space16),
-          child: OrbitTextField(
-            controller: controller,
-            autofocus: true,
-            keyboardType: TextInputType.number,
-            hintText: '例如 480 = 8 小时；留空 = 不做超载判定',
-            onSubmitted: (v) =>
-                Navigator.of(sheetContext).pop(_parseBudget(v.trim())),
-          ),
+        contentPadding: const EdgeInsets.fromLTRB(
+          AppDimens.space16,
+          0,
+          AppDimens.space16,
+          AppDimens.space16,
+        ),
+        content: OrbitTextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          hintText: '例如 480 = 8 小时；留空 = 不做超载判定',
+          onSubmitted: (v) =>
+              Navigator.of(sheetContext).pop(_parseBudget(v.trim())),
         ),
         actions: OrbitSheetActions(
           confirmLabel: '保存',
@@ -808,8 +812,9 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
       context: context,
       useRootNavigator: true,
       isScrollControlled: true,
-      backgroundColor: colors.popup,
+      backgroundColor: Colors.transparent,
       shape: bottomSheetTopShape,
+      sheetAnimationStyle: bottomSheetMotion,
       builder: (sheetContext) => StatefulBuilder(
         builder: (sheetContext, setSheetState) => OrbitSheetScaffold(
           maxHeightFactor: 0.7,
