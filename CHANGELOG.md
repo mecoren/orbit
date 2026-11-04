@@ -17,6 +17,12 @@
 
 ## [Unreleased]
 
+### 优化：移动端单选浮层卡面升级为澎湃 OS4 玻璃（2026-11-04）
+
+- 卡面从白色实色卡（`surfaceContainer` + e4 阴影）换成 `miuixGlassSurface` 的菜单档玻璃面——与页头 ⋮ 面板 / 快加快捷卡片（`OrbitFloatCard`）同源同档：`puredThinGlass` 提到 blurRadius 32 + 浮层阴影 + shader 自带高光描边，`shading: false` 不做仿生折射；不用库默认 `popupViewGlass(60)`（进场动画期纹理缓存逐帧失效，真机掉帧明显）。
+- 玻璃采样器在**调用方** context 解析（弹层挂在 Navigator 路由上，位于壳层 `OrbitGlassScope` 之外，与 `showMoreActionsSheet` 同一套路）；无壳（测试裸页）取不到时库内退实色，几何与交互不受影响。
+- 行几何、锚点定位、49 处存量调用点零变化；透明 `Material` 承担圆角裁切与黄线下划线回归防护。
+
 ### 优化：移动端外观设置页改版为 miuix 下拉偏好（2026-11-03）
 
 外观页四行原为「右箭头跳页」形态（值 + `>`），强调色又走底部抽屉，与「就地选一个值」的语义不符。现按 flutter_miuix `DropdownPreference (Overlay)` 口径整体重做：

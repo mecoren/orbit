@@ -5,8 +5,9 @@
 ///   上方，左右/上下钳在安全区内（不遮住当前值）；
 /// - 行：`MiuixDropdownImpl`（与库内下拉同款：未选中**正文色**、选中
 ///   **强调色文字 + 右端对勾**、首末行内边距由库给）；
-/// - 卡面：`MiuixTheme.colors.surfaceContainer` 圆角 16（库内列表浮层口径）
-///   + 浮层阴影，选项多时可滚（限高 0.6 屏）。
+/// - 卡面：OS4 玻璃（`miuixGlassSurface` 菜单档，与页头 ⋮ 面板/
+///   [OrbitFloatCard] 同源同档），圆角 16（库内列表浮层口径），选项多时
+///   可滚（限高 0.6 屏）。
 ///
 /// **锚点三级回退**：显式 [anchor] / 调用方 context 是行尺度取自身矩形 /
 /// 最近一次指针按下位置（[OrbitPointerAnchor]，`main()` 首帧前安装）。
@@ -22,7 +23,7 @@ import 'package:flutter_miuix/miuix.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimens.dart';
-import '../../../core/theme/app_elevation.dart';
+import 'orbit_glass_surface.dart';
 
 /// 弹层卡片圆角 —— 对齐 miuix 下拉弹层（Overlay）口径
 ///
@@ -78,6 +79,10 @@ Future<void> showOrbitSelectPopup<T>(
   final resolvedAnchor = anchor ??
       (useContextAnchor ? _anchorFromContext(context) : null) ??
       OrbitPointerAnchor.recentRect;
+  // 玻璃采样器必须在**调用方** context 上取：弹层挂在 Navigator 路由上，
+  // 位于壳层 OrbitGlassScope 之外（与 showMoreActionsSheet 同一套路）；
+  // 无壳（测试裸页）取不到 → 库内退实色，几何与交互不受影响
+  final backdrop = OrbitGlassScope.maybeOf(context);
   return showGeneralDialog<void>(
     context: context,
     barrierDismissible: true,
@@ -90,6 +95,7 @@ Future<void> showOrbitSelectPopup<T>(
       items: items,
       current: current,
       anchor: resolvedAnchor,
+      backdrop: backdrop,
       onPick: (value) {
         Navigator.of(dialogContext).pop();
         onSelect(value);
@@ -177,6 +183,7 @@ class _OrbitSelectPopupBody<T> extends StatelessWidget {
     required this.items,
     required this.current,
     required this.anchor,
+    required this.backdrop,
     required this.onPick,
   });
 
@@ -185,13 +192,15 @@ class _OrbitSelectPopupBody<T> extends StatelessWidget {
   final List<SelectItem<T>> items;
   final T? current;
   final Rect? anchor;
+
+  /// OS4 玻璃背景采样器（调用方从壳层 scope 取；null = 库内退实色）
+  final MiuixLayerBackdrop? backdrop;
   final ValueChanged<T> onPick;
 
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
     final brightness = Theme.of(context).brightness;
-    final theme = MiuixTheme.of(context);
     final screen = MediaQuery.sizeOf(context);
     final viewPadding = MediaQuery.viewPaddingOf(context);
 
@@ -222,6 +231,18 @@ class _OrbitSelectPopupBody<T> extends StatelessWidget {
         ),
     ];
 
+    // OS4 玻璃卡面（与 OrbitFloatCard 同源同档）：puredThinGlass 提到
+    // blurRadius 32 的菜单档——不用库默认 popupViewGlass(60)，进场动画期
+    // 纹理缓存逐帧失效、每帧重算 sigma≈27 的离屏模糊，真机掉帧明显；
+    // 描边/浮层阴影交给 miuixGlassSurface 默认值（shader 自带高光描边，
+    // 再手绘 1px 边线会像实色卡片）。
+    final surface = miuixGlassSurface(
+      backdrop: backdrop,
+      material:
+          MiuixGlassMaterials.puredThinGlass(brightness == Brightness.dark)
+              .copyWith(blurRadius: 32),
+      shadow: MiuixGlassShadows.floating,
+    );
     return Semantics(
       label: title,
       child: CustomSingleChildLayout(
@@ -229,26 +250,25 @@ class _OrbitSelectPopupBody<T> extends StatelessWidget {
           anchor: anchor,
           viewPadding: viewPadding,
         ),
-        child: Material(
-          // showGeneralDialog 不像 showDialog / 底部抽屉那样自带 Material：
-          // 缺了这层，DefaultTextStyle 落到 MaterialApp 的警告样式，
-          // 选项文字下面会画出一条黄线（2026-11-04 外观页截图暴露）。
-          // transparency 不上底色，卡面仍由下面的 DecoratedBox 承担。
-          type: MaterialType.transparency,
-          child: DecoratedBox(
+        child: surface(
+          context,
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(orbitSelectPopupRadius),
+          ),
+          Material(
+            // showGeneralDialog 不像 showDialog / 底部抽屉那样自带 Material：
+            // 缺了这层，DefaultTextStyle 落到 MaterialApp 的警告样式，
+            // 选项文字下面会画出一条黄线（2026-11-04 外观页截图暴露）。
+            // 透明底不上色，卡面由玻璃面承担；这层同时负责圆角裁切
+            // （选项滚动时不出卡），key 挂这供测试取卡片矩形。
             key: orbitSelectPopupKey,
-            decoration: BoxDecoration(
-              color: theme.colors.surfaceContainer,
-              borderRadius: BorderRadius.circular(orbitSelectPopupRadius),
-              boxShadow: AppElevation.e4(brightness),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(orbitSelectPopupRadius),
-              child: ConstrainedBox(
-                // 选项多时可滚（不把弹层顶出屏幕）
-                constraints: BoxConstraints(maxHeight: screen.height * 0.6),
-                child: MiuixListPopupColumn(children: rows),
-              ),
+            color: colors.popup.withValues(alpha: 0.0),
+            borderRadius: BorderRadius.circular(orbitSelectPopupRadius),
+            clipBehavior: Clip.antiAlias,
+            child: ConstrainedBox(
+              // 选项多时可滚（不把弹层顶出屏幕）
+              constraints: BoxConstraints(maxHeight: screen.height * 0.6),
+              child: MiuixListPopupColumn(children: rows),
             ),
           ),
         ),
