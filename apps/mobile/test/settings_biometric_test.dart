@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_miuix/miuix.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -6,8 +7,6 @@ import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/biometric_provider.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/settings/settings_screen.dart';
-import 'package:orbit/shared/widgets/shadcn/orbit_section_card.dart';
-import 'package:orbit/shared/widgets/shadcn/orbit_switch.dart';
 import 'package:orbit/services/biometric_service.dart';
 import 'package:orbit/data/api/orbit_bridge.dart' show BiometricSecretBundle;
 import 'support/orbit_test_app.dart';
@@ -66,12 +65,12 @@ Future<void> _dragUntilVisible(WidgetTester tester, Finder finder,
   }
 }
 
-/// 安全卡内的指纹开关（G3 摘要提醒卡加入后全页有两个 OrbitSwitch，
-/// `find.byType(OrbitSwitch)` 不再唯一——收窄到「指纹解锁」行所在的 SectionCard）
+/// 安全卡内的指纹开关（2026-11-04 设置页 miuix 化后行组件是
+/// MiuixSwitchPreference → 库内 MiuixSwitch；按「指纹解锁」行所在分组卡收窄）
 Finder _bioSwitch() => find.descendant(
       of: find.ancestor(
-          of: find.text('指纹解锁'), matching: find.byType(SectionCard)),
-      matching: find.byType(OrbitSwitch),
+          of: find.text('指纹解锁'), matching: find.byType(MiuixCard)),
+      matching: find.byType(MiuixSwitch),
     );
 
 /// 把目标滚进「标题栏之下、视口下沿之上」的可命中区间。
@@ -140,7 +139,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // 开关翻转 + 三件套已落存储
-    final sw = tester.widget<OrbitSwitch>(switchFinder);
+    final sw = tester.widget<MiuixSwitch>(switchFinder);
     expect(sw.value, true);
     expect(store.bundle, isNotNull);
     await drainToastTimers(tester);
@@ -166,7 +165,7 @@ void main() {
 
     await _dragUntilVisible(tester, find.text('指纹解锁'));
     final switchFinder = _bioSwitch();
-    expect(tester.widget<OrbitSwitch>(switchFinder).value, true);
+    expect(tester.widget<MiuixSwitch>(switchFinder).value, true);
 
     // 同「打开开关」：先滚进可命中区间再点
     await _scrollToTappable(tester, switchFinder);
@@ -179,7 +178,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
 
-    expect(tester.widget<OrbitSwitch>(switchFinder).value, false);
+    expect(tester.widget<MiuixSwitch>(switchFinder).value, false);
     expect(store.bundle, isNull);
     await drainToastTimers(tester);
   });

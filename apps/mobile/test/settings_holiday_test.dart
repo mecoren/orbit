@@ -5,13 +5,12 @@
 // 「每日固定更新时刻」口径已随对齐 PiggyCount 下线（改为每月一次 + 总开关），
 // 原 08:00 值行/时刻抽屉用例一并删除。
 import 'package:flutter/material.dart';
+import 'package:flutter_miuix/miuix.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/settings/settings_screen.dart';
-import 'package:orbit/shared/widgets/shadcn/orbit_section_card.dart';
-import 'package:orbit/shared/widgets/shadcn/orbit_switch.dart';
 import 'support/orbit_test_app.dart';
 
 Widget _wrap(MockOrbitBridge bridge) => ProviderScope(
@@ -54,13 +53,14 @@ Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
   }
 }
 
-/// 「日历与节假日」卡内的开关（按卡片作用域取，避免与其它卡开关串号）
+/// 「日历与节假日」卡内的开关（2026-11-04 设置页 miuix 化后行组件是
+/// MiuixSwitchPreference → 库内 MiuixSwitch；按分组卡作用域取避免串号）
 Finder _holidaySwitch() => find.descendant(
       of: find.ancestor(
-        of: find.text('日历与节假日'),
-        matching: find.byType(SectionCard),
+        of: find.text('自动更新'),
+        matching: find.byType(MiuixCard),
       ),
-      matching: find.byType(OrbitSwitch),
+      matching: find.byType(MiuixSwitch),
     );
 
 void main() {
@@ -73,14 +73,14 @@ void main() {
     expect(find.text('自动更新'), findsOneWidget);
     // core 缺省开启（cfg_kv 无键按 1 处理），Mock 同口径
     expect(bridge.store.holidayAutoEnabled, isTrue);
-    expect(tester.widget<OrbitSwitch>(_holidaySwitch()).value, isTrue);
+    expect(tester.widget<MiuixSwitch>(_holidaySwitch()).value, isTrue);
     expect(find.textContaining('每月自动联网更新一次'), findsOneWidget);
 
     await tester.tap(_holidaySwitch());
     await _settle(tester);
 
     expect(bridge.store.holidayAutoEnabled, isFalse);
-    expect(tester.widget<OrbitSwitch>(_holidaySwitch()).value, isFalse);
+    expect(tester.widget<MiuixSwitch>(_holidaySwitch()).value, isFalse);
     expect(find.textContaining('自动更新已关闭'), findsOneWidget);
     await drainToastTimers(tester);
   });
@@ -91,7 +91,7 @@ void main() {
     await _settle(tester);
 
     await _scrollTo(tester, find.text('自动更新'));
-    expect(tester.widget<OrbitSwitch>(_holidaySwitch()).value, isFalse);
+    expect(tester.widget<MiuixSwitch>(_holidaySwitch()).value, isFalse);
     expect(find.textContaining('自动更新已关闭'), findsOneWidget);
   });
 }

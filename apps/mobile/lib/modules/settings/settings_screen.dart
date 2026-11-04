@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
+import 'package:flutter_miuix/miuix.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -19,28 +20,31 @@ import '../../data/api/orbit_bridge.dart'
 import '../../data/providers/biometric_provider.dart';
 import '../../data/providers/todo_widget_provider.dart';
 import '../../data/providers/bridge_provider.dart';
-import '../../shared/widgets/shadcn/orbit_arrow_tile.dart';
 import '../../shared/widgets/shadcn/orbit_bottom_nav.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_password_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/utils/sync_status_text.dart';
-import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
-import '../../shared/widgets/shadcn/orbit_switch.dart';
 import '../../shared/widgets/shadcn/orbit_button.dart';
 import '../../shared/widgets/shadcn/orbit_progress_bar.dart';
 import '../../shared/widgets/shadcn/orbit_filter_chip.dart';
-import '../../shared/widgets/shadcn/orbit_divider.dart';
 import '../shell/db_invalidation.dart';
 import '../todo/logic/task_logic.dart' show formatDateTime;
 import '../todo/providers/todo_providers.dart';
 import '../../core/theme/icon_map.dart';
 import '../../services/digest_scheduler.dart';
 
-/// 设置页 /settings（移动端任务书卡片结构）
+/// 设置页 /settings
+///
+/// 版式与 flutter_miuix `example/lib/showcase/preferences.dart` 的「列表项
+/// Item」**逐像素同构**（2026-11-04 对齐）：分组 = 卡外 [MiuixSmallTitle] +
+/// [MiuixCard] 分组卡（h:12 外距、零内边距，行自带 16×14 内边距），行间
+/// 左缩进 56 的 [MiuixHorizontalDivider]；行 = [MiuixArrowPreference] /
+/// [MiuixSwitchPreference] / [MiuixBasicComponent]，值文本取
+/// `onSurfaceVariantActions`（中性灰）。
 ///
 /// - 同步卡：引擎摘要（脱敏 endpoint host/bucket）+ 上次同步时间 +
 ///   "立即同步" + "云同步设置"入口行（→ /settings/sync 配置页）；
@@ -50,6 +54,109 @@ import '../../services/digest_scheduler.dart';
 ///   回退只读提示）+ 桌面端迁移说明；
 /// - 数据导出/CSV 导入卡（07 报告 #15）；
 /// - 关于卡：版本 → push /about。
+
+// ══ 「列表项 Item」示例同构版式件 ══
+// 对齐 example/lib/showcase/preferences.dart + common.dart：行内边距取示例
+// _itemMargin（16×14）；分隔线缩进 56 对齐行标题；说明段/按钮区水平 16 与
+// 行内边距同线。
+
+/// 行内边距（示例 `_itemMargin` 同值）
+const EdgeInsets _rowMargin = EdgeInsets.symmetric(horizontal: 16, vertical: 14);
+
+/// 分组卡（示例 `GroupCard` 同构：h:12 外距 + 零内边距 MiuixCard）
+Widget _sectionCard(List<Widget> children) => Padding(
+  padding: const EdgeInsets.symmetric(horizontal: 12),
+  child: MiuixCard(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: children,
+    ),
+  ),
+);
+
+/// 行间分隔线（示例 `IndentDivider` 同款：左缩进 56 对齐行标题）
+class _RowDivider extends StatelessWidget {
+  const _RowDivider();
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(left: 56),
+    child: const MiuixHorizontalDivider(),
+  );
+}
+
+/// 卡内说明段（卡片顶部描述文字，水平 16 与行内边距同线）
+Widget _sectionDesc(AppColorSet colors, String text, {bool faint = false}) =>
+    Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 12,
+          color: colors.secondaryText.withValues(alpha: faint ? 0.7 : 1),
+        ),
+      ),
+    );
+
+/// 卡内尾注（行区之下的补充说明）
+Widget _sectionNote(AppColorSet colors, String text, {bool faint = false}) =>
+    Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 12,
+          color: colors.secondaryText.withValues(alpha: faint ? 0.7 : 1),
+        ),
+      ),
+    );
+
+/// 卡内按钮区（水平 16，与行内边距同线）
+Widget _sectionButtons(Widget child) => Padding(
+  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+  child: child,
+);
+
+/// 箭头跳转行：值文本取 `onSurfaceVariantActions` 灰（示例同款），
+/// [trailing] 排在内置箭头之前（角标/转环等小件）
+Widget _arrowRow(
+  BuildContext context,
+  String title, {
+  String? summary,
+  String? value,
+  Color? titleColor,
+  VoidCallback? onClick,
+  bool enabled = true,
+  Widget? trailing,
+}) {
+  final theme = MiuixTheme.of(context);
+  return MiuixArrowPreference(
+    title: title,
+    summary: summary,
+    titleColor: titleColor == null
+        ? null
+        : MiuixBasicComponentColors(
+            color: titleColor,
+            disabledColor: theme.colors.disabledOnSecondaryVariant,
+          ),
+    insideMargin: _rowMargin,
+    onClick: onClick,
+    enabled: enabled,
+    endActions: [
+      if (value != null)
+        MiuixText(
+          value,
+          fontSize: theme.textStyles.body2.fontSize,
+          color: enabled
+              ? theme.colors.onSurfaceVariantActions
+              : theme.colors.disabledOnSecondaryVariant,
+        ),
+      ?trailing,
+    ],
+  );
+}
+
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key, this.showBack = true});
 
@@ -926,480 +1033,386 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     MediaQuery.of(context).padding.top +
                     OrbitPageHeader.rowHeight +
                     AppDimens.space16,
-                left: AppDimens.space16,
-                right: AppDimens.space16,
+                // 卡体自带 h:12 外距（_sectionCard），列表不再加水平边距
                 // 悬浮底栏净空 + 呼吸留白（末张设置卡不被玻璃栏扣住）
                 bottom:
                     OrbitBottomNav.clearanceOf(context) + AppDimens.space32,
               ),
               children: [
                 // 一、同步卡
-                SectionCard(
-                  title: '同步',
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        config == null ? '未配置同步引擎' : engineSummary(config),
-                        style: TextStyle(fontSize: 14, color: colors.bodyText),
-                      ),
-                      const SizedBox(height: AppDimens.space4),
-                      Text(
-                        config?.lastSyncedAt == null
-                            ? '从未同步'
-                            : '上次同步：${formatDateTime(config!.lastSyncedAt!)}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: colors.secondaryText,
-                        ),
-                      ),
-                      if (config == null) ...[
-                        const SizedBox(height: AppDimens.space8),
-                        Text(
-                          '请在桌面端完成配置',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: colors.secondaryText.withValues(alpha: 0.7),
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: AppDimens.space12),
-                      // 云同步设置入口（未配置/已配置均可进入，移动端可本机完成配置）
-                      OrbitArrowTile(
-                        title: '云同步设置',
-                        titleColor: OrbitAccents.themeAccent,
-                        onClick: () => context.push('/settings/sync'),
-                      ),
-                      const SizedBox(height: AppDimens.space4),
-                      // 冲突记录入口（03 §八）：待处理数 > 0 时显示角标
-                      OrbitArrowTile(
-                        title: '冲突记录',
-                        titleColor: OrbitAccents.themeAccent,
-                        onClick: () async {
-                          await context.push('/settings/conflicts');
-                          _refreshConflictPending();
-                        },
-                        trailing: FutureBuilder<int>(
-                          future: _conflictPending,
-                          builder: (context, snap) {
-                            final n = snap.data ?? 0;
-                            if (n <= 0) return const SizedBox.shrink();
-                            return Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: AppDimens.space6,
-                                vertical: 1,
-                              ),
-                              decoration: BoxDecoration(
-                                color: colors.warning.withValues(alpha: 0.18),
-                                borderRadius: AppShapes.small,
-                              ),
-                              child: Text(
-                                '待处理 $n',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: colors.warning,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: AppDimens.space4),
-                      SizedBox(
-                        width: double.infinity,
-                        // N33：运行中把「立即同步」换成「取消同步」——大附件
-                        // 分片上传可持续数十秒，只留转环等于让用户干等
-                        child: _syncing
-                            ? OrbitButton.icon(variant: OrbitButtonVariant.outline, 
-                                onPressed: _cancellingSync
-                                    ? null
-                                    : () => _cancelSync(),
-                                icon: _cancellingSync
-                                    ? OrbitSpinner(
-                                        size: AppDimens.iconSizeSm,
-                                        color: OrbitAccents.themeAccent,
-                                      )
-                                    : const Icon(
-                                        OrbitIcons.close,
-                                        size: AppDimens.iconSizeSm + 2,
-                                      ),
-                                label: Text(
-                                  _cancellingSync ? '取消中…' : '取消同步',
-                                ),
-                              )
-                            : OrbitButton.icon(variant: OrbitButtonVariant.primary, 
-                                onPressed: config == null ? null : _syncNow,
-                                icon: const Icon(
-                                  OrbitIcons.refresh,
-                                  size: AppDimens.iconSizeSm + 2,
-                                ),
-                                label: const Text('立即同步'),
-                              ),
-                      ),
-                    ],
+                MiuixSmallTitle('同步'),
+                _sectionCard([
+                  MiuixBasicComponent(
+                    title: config == null ? '未配置同步引擎' : engineSummary(config),
+                    summary: config == null
+                        ? '从未同步 · 请在桌面端完成配置'
+                        : config.lastSyncedAt == null
+                        ? '从未同步'
+                        : '上次同步：${formatDateTime(config.lastSyncedAt!)}',
+                    insideMargin: _rowMargin,
                   ),
-                ),
+                  const _RowDivider(),
+                  // 云同步设置入口（未配置/已配置均可进入，移动端可本机完成配置）
+                  _arrowRow(
+                    context,
+                    '云同步设置',
+                    onClick: () => context.push('/settings/sync'),
+                  ),
+                  const _RowDivider(),
+                  // 冲突记录入口（03 §八）：待处理数 > 0 时显示角标
+                  _arrowRow(
+                    context,
+                    '冲突记录',
+                    onClick: () async {
+                      await context.push('/settings/conflicts');
+                      _refreshConflictPending();
+                    },
+                    trailing: FutureBuilder<int>(
+                      future: _conflictPending,
+                      builder: (context, snap) {
+                        final n = snap.data ?? 0;
+                        if (n <= 0) return const SizedBox.shrink();
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppDimens.space6,
+                            vertical: 1,
+                          ),
+                          decoration: BoxDecoration(
+                            color: colors.warning.withValues(alpha: 0.18),
+                            borderRadius: AppShapes.small,
+                          ),
+                          child: Text(
+                            '待处理 $n',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: colors.warning,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const _RowDivider(),
+                  _sectionButtons(
+                    SizedBox(
+                      width: double.infinity,
+                      // N33：运行中把「立即同步」换成「取消同步」——大附件
+                      // 分片上传可持续数十秒，只留转环等于让用户干等
+                      child: _syncing
+                          ? OrbitButton.icon(variant: OrbitButtonVariant.outline,
+                              onPressed: _cancellingSync
+                                  ? null
+                                  : () => _cancelSync(),
+                              icon: _cancellingSync
+                                  ? OrbitSpinner(
+                                      size: AppDimens.iconSizeSm,
+                                      color: OrbitAccents.themeAccent,
+                                    )
+                                  : const Icon(
+                                      OrbitIcons.close,
+                                      size: AppDimens.iconSizeSm + 2,
+                                    ),
+                              label: Text(
+                                _cancellingSync ? '取消中…' : '取消同步',
+                              ),
+                            )
+                          : OrbitButton.icon(variant: OrbitButtonVariant.primary,
+                              onPressed: config == null ? null : _syncNow,
+                              icon: const Icon(
+                                OrbitIcons.refresh,
+                                size: AppDimens.iconSizeSm + 2,
+                              ),
+                              label: const Text('立即同步'),
+                            ),
+                    ),
+                  ),
+                ]),
                 const SizedBox(height: AppDimens.space12),
                 // 二、回收站卡（保留时间档位 + 回收站入口）
-                SectionCard(
-                  title: '回收站',
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '删除的任务进入回收站，超过保留时间后自动清除。',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: colors.secondaryText,
-                        ),
-                      ),
-                      const SizedBox(height: AppDimens.space4),
-                      Text(
-                        '保留时间为本机设置，不随云同步。',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: colors.secondaryText.withValues(alpha: 0.7),
-                        ),
-                      ),
-                      const SizedBox(height: AppDimens.space4),
-                      OrbitArrowTile(
-                        title: '保留时间',
-                        value: _trashRetentionLabel(
-                          ref.watch(trashMetaProvider).value?.retentionDays,
-                        ),
-                        valueColor: OrbitAccents.themeAccent,
-                        onClick: _pickTrashRetention,
-                      ),
-                      const SizedBox(height: AppDimens.space4),
-                      OrbitArrowTile(
-                        title: '查看回收站',
-                        onClick: () => context.go('/todo/trash'),
-                      ),
-                      const SizedBox(height: AppDimens.space4),
-                      InkWell(
-                        borderRadius: AppShapes.medium,
-                        onTap: _purgeExpiredTrash,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            vertical: AppDimens.space8,
-                          ),
-                          child: Row(
-                            children: [
-                              Text(
-                                '立即清理过期',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: colors.bodyText,
-                                ),
-                              ),
-                              const Spacer(),
-                              Icon(
-                                OrbitIcons.refresh,
-                                size: AppDimens.iconSizeSm,
-                                color: colors.secondaryText,
-                              ),
-                            ],
-                          ),
-                        ),
+                MiuixSmallTitle('回收站'),
+                _sectionCard([
+                  _sectionDesc(
+                    colors,
+                    '删除的任务进入回收站，超过保留时间后自动清除。'
+                    '保留时间为本机设置，不随云同步。',
+                  ),
+                  const _RowDivider(),
+                  _arrowRow(
+                    context,
+                    '保留时间',
+                    value: _trashRetentionLabel(
+                      ref.watch(trashMetaProvider).value?.retentionDays,
+                    ),
+                    onClick: _pickTrashRetention,
+                  ),
+                  const _RowDivider(),
+                  _arrowRow(
+                    context,
+                    '查看回收站',
+                    onClick: () => context.go('/todo/trash'),
+                  ),
+                  const _RowDivider(),
+                  MiuixBasicComponent(
+                    title: '立即清理过期',
+                    insideMargin: _rowMargin,
+                    endActions: [
+                      Icon(
+                        OrbitIcons.refresh,
+                        size: AppDimens.iconSizeSm,
+                        color: MiuixTheme.of(
+                          context,
+                        ).colors.onSurfaceVariantActions,
                       ),
                     ],
+                    onClick: _purgeExpiredTrash,
                   ),
-                ),
+                ]),
                 const SizedBox(height: AppDimens.space12),
                 // 每日摘要提醒卡（G3，对标 TickTick Daily Reminder）：
                 // 开关 + 时刻选择；到点由系统闹钟发一条汇总通知
-                SectionCard(
-                  title: '每日摘要提醒',
-                  child: _buildDigestCard(context, colors),
-                ),
+                MiuixSmallTitle('每日摘要提醒'),
+                _sectionCard(_buildDigestCard(context, colors)),
                 const SizedBox(height: AppDimens.space12),
                 // 三、安全卡：生物识别开关（无指纹硬件回退只读提示）
-                SectionCard(title: '安全', child: _buildSecurityCard(context)),
+                MiuixSmallTitle('安全'),
+                _sectionCard(_buildSecurityCard(context)),
                 const SizedBox(height: AppDimens.space12),
                 // 组织卡：标签体系与任务模板的管理入口（此前只能新建，
                 // 改名/改色/删除与模板 CRUD 都没有 UI）
-                SectionCard(
-                  title: '组织',
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '标签用于跨项目归类任务；模板用于一键生成常用任务；'
-                        '编辑操作决定任务列表页底部快速添加面板显示哪些按钮。',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: colors.secondaryText,
-                        ),
-                      ),
-                      const SizedBox(height: AppDimens.space4),
-                      _navRow(
-                        colors,
-                        label: '标签管理',
-                        onTap: () => context.push('/settings/labels'),
-                      ),
-                      _navRow(
-                        colors,
-                        label: '任务模板',
-                        onTap: () => context.push('/settings/templates'),
-                      ),
-                      _navRow(
-                        colors,
-                        label: '编辑操作',
-                        onTap: () => context.push('/settings/quick-actions'),
-                      ),
-                      _navRow(
-                        colors,
-                        label: '外观设置',
-                        onTap: () => context.push('/settings/appearance'),
-                      ),
-                      _navRow(
-                        colors,
-                        label: '通知历史',
-                        onTap: () => context.push('/settings/notifications'),
-                      ),
-                      _navRow(
-                        colors,
-                        label: '存储清理',
-                        onTap: () => context.push('/settings/storage'),
-                      ),
-                      _navRow(
-                        colors,
-                        label: '诊断',
-                        onTap: () => context.push('/settings/diagnostics'),
-                      ),
-                      // 测试数据（仅开发构建：入口按 kDebugMode 隐藏，页面与
-                      // Rust 桥层各自再拒一次，release 包不出现该链路）
-                      if (kDebugMode)
-                        _navRow(
-                          colors,
-                          label: '测试数据',
-                          onTap: () => context.push('/settings/test-data'),
-                        ),
-                    ],
+                MiuixSmallTitle('组织'),
+                _sectionCard([
+                  _sectionDesc(
+                    colors,
+                    '标签用于跨项目归类任务；模板用于一键生成常用任务；'
+                    '编辑操作决定任务列表页底部快速添加面板显示哪些按钮。',
                   ),
-                ),
+                  const _RowDivider(),
+                  _arrowRow(
+                    context,
+                    '标签管理',
+                    onClick: () => context.push('/settings/labels'),
+                  ),
+                  const _RowDivider(),
+                  _arrowRow(
+                    context,
+                    '任务模板',
+                    onClick: () => context.push('/settings/templates'),
+                  ),
+                  const _RowDivider(),
+                  _arrowRow(
+                    context,
+                    '编辑操作',
+                    onClick: () => context.push('/settings/quick-actions'),
+                  ),
+                  const _RowDivider(),
+                  _arrowRow(
+                    context,
+                    '外观设置',
+                    onClick: () => context.push('/settings/appearance'),
+                  ),
+                  const _RowDivider(),
+                  _arrowRow(
+                    context,
+                    '通知历史',
+                    onClick: () => context.push('/settings/notifications'),
+                  ),
+                  const _RowDivider(),
+                  _arrowRow(
+                    context,
+                    '存储清理',
+                    onClick: () => context.push('/settings/storage'),
+                  ),
+                  const _RowDivider(),
+                  _arrowRow(
+                    context,
+                    '诊断',
+                    onClick: () => context.push('/settings/diagnostics'),
+                  ),
+                  // 测试数据（仅开发构建：入口按 kDebugMode 隐藏，页面与
+                  // Rust 桥层各自再拒一次，release 包不出现该链路）
+                  if (kDebugMode) ...[
+                    const _RowDivider(),
+                    _arrowRow(
+                      context,
+                      '测试数据',
+                      onClick: () => context.push('/settings/test-data'),
+                    ),
+                  ],
+                ]),
                 const SizedBox(height: AppDimens.space12),
                 // 日历与节假日卡：每月自动更新总开关（core 侧跨月调度 +
                 // 跨月后下次启动补更）+ 缓存页入口（按年补写 / 清理）
-                SectionCard(
-                  title: '日历与节假日',
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '日历里的放假/调休数据每月联网更新一次，跨月后下次启动即补更；'
-                        '也可在日历页手动更新，或在缓存页按年份补写历史数据。',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: colors.secondaryText,
-                        ),
-                      ),
-                      const SizedBox(height: AppDimens.space8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              '自动更新',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: colors.bodyText,
-                              ),
-                            ),
-                          ),
-                          OrbitSwitch(
-                            value: holidayAuto,
-                            onChanged: _holidayAutoBusy
-                                ? null
-                                : (v) => _toggleHolidayAuto(v),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: AppDimens.space4),
-                      Text(
-                        holidayAuto
-                            ? '每月自动联网更新一次；关闭后仅保留手动更新与按年补写。'
-                            : '自动更新已关闭：需要时请在日历页手动更新，或在缓存页按年补写。',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: colors.secondaryText,
-                        ),
-                      ),
-                      const SizedBox(height: AppDimens.space4),
-                      _navRow(
-                        colors,
-                        label: '节假日数据缓存',
-                        onTap: () => context.push('/settings/holidays'),
-                      ),
-                    ],
+                MiuixSmallTitle('日历与节假日'),
+                _sectionCard([
+                  _sectionDesc(
+                    colors,
+                    '日历里的放假/调休数据每月联网更新一次，跨月后下次启动即补更；'
+                    '也可在日历页手动更新，或在缓存页按年份补写历史数据。',
                   ),
-                ),
+                  const _RowDivider(),
+                  MiuixSwitchPreference(
+                    title: '自动更新',
+                    summary: holidayAuto
+                        ? '每月自动联网更新一次；关闭后仅保留手动更新与按年补写。'
+                        : '自动更新已关闭：需要时请在日历页手动更新，或在缓存页按年补写。',
+                    value: holidayAuto,
+                    onChanged: _holidayAutoBusy
+                        ? (v) {}
+                        : (v) => _toggleHolidayAuto(v),
+                    enabled: !_holidayAutoBusy,
+                    insideMargin: _rowMargin,
+                  ),
+                  const _RowDivider(),
+                  _arrowRow(
+                    context,
+                    '节假日数据缓存',
+                    onClick: () => context.push('/settings/holidays'),
+                  ),
+                ]),
                 const SizedBox(height: AppDimens.space12),
                 // 数据安全卡：全量加密备份（导出/恢复，数据安全兜底）
-                SectionCard(
-                  title: '数据安全',
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '加密的全量备份可导出到本机或云端，换机/误删时可完整恢复；'
-                        '与明文导出不同，备份包只有同一同步密码才能打开。',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: colors.secondaryText,
-                        ),
-                      ),
-                      const SizedBox(height: AppDimens.space4),
-                      OrbitArrowTile(
-                        title: '备份与恢复',
-                        onClick: () => context.push('/settings/backup'),
-                      ),
-                    ],
+                MiuixSmallTitle('数据安全'),
+                _sectionCard([
+                  _sectionDesc(
+                    colors,
+                    '加密的全量备份可导出到本机或云端，换机/误删时可完整恢复；'
+                    '与明文导出不同，备份包只有同一同步密码才能打开。',
                   ),
-                ),
+                  const _RowDivider(),
+                  _arrowRow(
+                    context,
+                    '备份与恢复',
+                    onClick: () => context.push('/settings/backup'),
+                  ),
+                ]),
                 const SizedBox(height: AppDimens.space12),
                 // 小组件卡（#3）：Android 桌面小组件与快捷设置磁贴引导
                 if (Platform.isAndroid) _buildWidgetCard(context),
                 const SizedBox(height: AppDimens.space12),
                 // 数据导出卡（07 报告 #15）：明文 JSON/CSV，保存到应用文档目录
-                SectionCard(
-                  title: '数据导出（明文）',
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '将待办数据导出为开放格式（未加密明文，请妥善保管）：'
-                        'JSON 为 8 张业务表结构化全量；CSV 为任务主视图，'
-                        'Excel 可直接打开；ICS 为标准日历文件，任务以'
-                        ' VTODO 输出、可导入系统日历或其他日历软件。'
-                        '文件保存到应用文档目录。',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: colors.secondaryText,
-                        ),
-                      ),
-                      const SizedBox(height: AppDimens.space12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OrbitButton.icon(variant: OrbitButtonVariant.outline, 
-                              onPressed: _exporting != null
-                                  ? null
-                                  : () => _exportData('json'),
-                              icon: _exporting == 'json'
-                                  ? OrbitSpinner(
-                                      size: AppDimens.iconSizeSm,
-                                      color: colors.secondaryText,
-                                    )
-                                  : const Icon(
-                                      OrbitIcons.braces,
-                                      size: AppDimens.iconSizeSm,
-                                    ),
-                              label: const Text('导出 JSON'),
-                            ),
-                          ),
-                          const SizedBox(width: AppDimens.space8),
-                          Expanded(
-                            child: OrbitButton.icon(variant: OrbitButtonVariant.outline, 
-                              onPressed: _exporting != null
-                                  ? null
-                                  : () => _exportData('csv'),
-                              icon: _exporting == 'csv'
-                                  ? OrbitSpinner(
-                                      size: AppDimens.iconSizeSm,
-                                      color: colors.secondaryText,
-                                    )
-                                  : const Icon(
-                                      OrbitIcons.table,
-                                      size: AppDimens.iconSizeSm,
-                                    ),
-                              label: const Text('导出 CSV'),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: AppDimens.space8),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OrbitButton.icon(variant: OrbitButtonVariant.outline, 
-                          onPressed: _exporting != null
-                              ? null
-                              : () => _exportData('ics'),
-                          icon: _exporting == 'ics'
-                              ? OrbitSpinner(
-                                  size: AppDimens.iconSizeSm,
-                                  color: colors.secondaryText,
-                                )
-                              : const Icon(
-                                  OrbitIcons.calendarDays,
-                                  size: AppDimens.iconSizeSm,
-                                ),
-                          label: const Text('导出日历（ICS）'),
-                        ),
-                      ),
-                    ],
+                MiuixSmallTitle('数据导出（明文）'),
+                _sectionCard([
+                  _sectionDesc(
+                    colors,
+                    '将待办数据导出为开放格式（未加密明文，请妥善保管）：'
+                    'JSON 为 8 张业务表结构化全量；CSV 为任务主视图，'
+                    'Excel 可直接打开；ICS 为标准日历文件，任务以'
+                    ' VTODO 输出、可导入系统日历或其他日历软件。'
+                    '文件保存到应用文档目录。',
                   ),
-                ),
+                  _sectionButtons(
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OrbitButton.icon(variant: OrbitButtonVariant.outline,
+                            onPressed: _exporting != null
+                                ? null
+                                : () => _exportData('json'),
+                            icon: _exporting == 'json'
+                                ? OrbitSpinner(
+                                    size: AppDimens.iconSizeSm,
+                                    color: colors.secondaryText,
+                                  )
+                                : const Icon(
+                                    OrbitIcons.braces,
+                                    size: AppDimens.iconSizeSm,
+                                  ),
+                            label: const Text('导出 JSON'),
+                          ),
+                        ),
+                        const SizedBox(width: AppDimens.space8),
+                        Expanded(
+                          child: OrbitButton.icon(variant: OrbitButtonVariant.outline,
+                            onPressed: _exporting != null
+                                ? null
+                                : () => _exportData('csv'),
+                            icon: _exporting == 'csv'
+                                ? OrbitSpinner(
+                                    size: AppDimens.iconSizeSm,
+                                    color: colors.secondaryText,
+                                  )
+                                : const Icon(
+                                    OrbitIcons.table,
+                                    size: AppDimens.iconSizeSm,
+                                  ),
+                            label: const Text('导出 CSV'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _sectionButtons(
+                    SizedBox(
+                      width: double.infinity,
+                      child: OrbitButton.icon(variant: OrbitButtonVariant.outline,
+                        onPressed: _exporting != null
+                            ? null
+                            : () => _exportData('ics'),
+                        icon: _exporting == 'ics'
+                            ? OrbitSpinner(
+                                size: AppDimens.iconSizeSm,
+                                color: colors.secondaryText,
+                              )
+                            : const Icon(
+                                OrbitIcons.calendarDays,
+                                size: AppDimens.iconSizeSm,
+                              ),
+                        label: const Text('导出日历（ICS）'),
+                      ),
+                    ),
+                  ),
+                ]),
                 const SizedBox(height: AppDimens.space12),
                 // 数据库维护卡（性能批次）：一键 WAL checkpoint / 附件 GC /
                 // 查询统计 / VACUUM，量化结果就地展示
-                SectionCard(
-                  title: '数据库维护',
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '一键优化本地数据库：回收 WAL 日志与磁盘碎片、清理无引用'
-                        '附件文件、更新查询统计（列表/搜索提速）。不改动任何'
-                        '数据与同步状态，建议偶发卡顿时手动执行。',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: colors.secondaryText,
-                        ),
-                      ),
-                      const SizedBox(height: AppDimens.space12),
-                      if (_maintenanceResult != null)
-                        Padding(
-                          padding: const EdgeInsets.only(
-                            bottom: AppDimens.space12,
-                          ),
-                          child: Text(
-                            '回收碎片页 ${_maintenanceResult!.pagesReclaimed} ·'
-                            ' 附件清理 ${_maintenanceResult!.attachmentsCleaned} ·'
-                            ' 日志清理 ${_maintenanceResult!.logRowsPruned} ·'
-                            ' WAL 残留 ${_maintenanceResult!.walBytesAfterCheckpoint} B',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: colors.secondaryText,
-                            ),
-                          ),
-                        ),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OrbitButton.icon(variant: OrbitButtonVariant.outline, 
-                          onPressed: _maintaining ? null : _runMaintenance,
-                          icon: _maintaining
-                              ? OrbitSpinner(
-                                  size: AppDimens.iconSizeSm,
-                                  color: colors.secondaryText,
-                                )
-                              : const Icon(
-                                  OrbitIcons.wrench,
-                                  size: AppDimens.iconSizeSm,
-                                ),
-                          label: const Text('立即维护'),
-                        ),
-                      ),
-                    ],
+                MiuixSmallTitle('数据库维护'),
+                _sectionCard([
+                  _sectionDesc(
+                    colors,
+                    '一键优化本地数据库：回收 WAL 日志与磁盘碎片、清理无引用'
+                    '附件文件、更新查询统计（列表/搜索提速）。不改动任何'
+                    '数据与同步状态，建议偶发卡顿时手动执行。',
                   ),
-                ),
+                  if (_maintenanceResult != null)
+                    _sectionNote(
+                      colors,
+                      '回收碎片页 ${_maintenanceResult!.pagesReclaimed} ·'
+                      ' 附件清理 ${_maintenanceResult!.attachmentsCleaned} ·'
+                      ' 日志清理 ${_maintenanceResult!.logRowsPruned} ·'
+                      ' WAL 残留 ${_maintenanceResult!.walBytesAfterCheckpoint} B',
+                    ),
+                  _sectionButtons(
+                    SizedBox(
+                      width: double.infinity,
+                      child: OrbitButton.icon(variant: OrbitButtonVariant.outline,
+                        onPressed: _maintaining ? null : _runMaintenance,
+                        icon: _maintaining
+                            ? OrbitSpinner(
+                                size: AppDimens.iconSizeSm,
+                                color: colors.secondaryText,
+                              )
+                            : const Icon(
+                                OrbitIcons.wrench,
+                                size: AppDimens.iconSizeSm,
+                              ),
+                        label: const Text('立即维护'),
+                      ),
+                    ),
+                  ),
+                ]),
                 const SizedBox(height: AppDimens.space12),
                 // CSV 导入卡（迁移路径）：与其他应用迁入任务
-                SectionCard(
-                  title: '导入文件（迁移）',
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
+                //
+                // 本卡内容是表单流（chips + 按钮组 + 进度/结果文本）而非
+                // 偏好行，不做行化拆分：整块内容包一层 16 内边距放进分组卡。
+                MiuixSmallTitle('导入文件（迁移）'),
+                _sectionCard([
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
                         '从其他应用迁入任务：支持 Orbit 导出格式、Todoist 与'
                         ' TickTick 模板，以及 ICS 日历文件（只收 VTODO 待办）。'
                         '导入前先预览；项目不存在会自动创建。',
@@ -1562,20 +1575,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           ),
                         ),
                       ],
-                    ],
+                      ],
+                    ),
                   ),
-                ),
+                ]),
                 const SizedBox(height: AppDimens.space12),
                 // 三、关于卡
-                SectionCard(
-                  title: '关于',
-                  child: OrbitArrowTile(
-                    title: '版本',
+                MiuixSmallTitle('关于'),
+                _sectionCard([
+                  _arrowRow(
+                    context,
+                    '版本',
                     value: _appVersion,
-                    valueColor: OrbitAccents.themeAccent,
                     onClick: () => context.push('/about'),
                   ),
-                ),
+                ]),
               ],
             ),
           ),
@@ -1593,55 +1607,57 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   /// 小组件卡：快照立即刷新 + 添加磁贴（API 33+）引导
   Widget _buildWidgetCard(BuildContext context) {
     final colors = AppColors.ofContext(context);
-    return SectionCard(
-      title: '桌面小组件',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const MiuixSmallTitle('桌面小组件'),
+        _sectionCard([
+          _sectionDesc(
+            colors,
             '在桌面添加「循迹」小组件，不进应用即可勾掉今天截止或逾期的任务；'
             '勾选与完成语义一致（重复任务自动推进下一实例）。',
-            style: TextStyle(fontSize: 12, color: colors.secondaryText),
           ),
-          const SizedBox(height: AppDimens.space12),
-          Row(
-            children: [
-              Expanded(
-                child: OrbitButton.icon(variant: OrbitButtonVariant.outline, 
-                  onPressed: _widgetBusy ? null : _widgetRefresh,
-                  icon: _widgetBusy
-                      ? OrbitSpinner(
-                          size: AppDimens.iconSizeSm,
-                          color: colors.secondaryText,
-                        )
-                      : const Icon(
-                          OrbitIcons.layoutGrid,
-                          size: AppDimens.iconSizeSm,
-                        ),
-                  label: const Text('刷新小组件'),
+          _sectionButtons(
+            Row(
+              children: [
+                Expanded(
+                  child: OrbitButton.icon(variant: OrbitButtonVariant.outline,
+                    onPressed: _widgetBusy ? null : _widgetRefresh,
+                    icon: _widgetBusy
+                        ? OrbitSpinner(
+                            size: AppDimens.iconSizeSm,
+                            color: colors.secondaryText,
+                          )
+                        : const Icon(
+                            OrbitIcons.layoutGrid,
+                            size: AppDimens.iconSizeSm,
+                          ),
+                    label: const Text('刷新小组件'),
+                  ),
                 ),
-              ),
-              const SizedBox(width: AppDimens.space8),
-              Expanded(
-                child: OrbitButton.icon(variant: OrbitButtonVariant.outline, 
-                  onPressed: _pinTile,
-                  icon: const Icon(OrbitIcons.grid, size: AppDimens.iconSizeSm),
-                  label: const Text('添加快捷磁贴'),
+                const SizedBox(width: AppDimens.space8),
+                Expanded(
+                  child: OrbitButton.icon(variant: OrbitButtonVariant.outline,
+                    onPressed: _pinTile,
+                    icon: const Icon(
+                      OrbitIcons.grid,
+                      size: AppDimens.iconSizeSm,
+                    ),
+                    label: const Text('添加快捷磁贴'),
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppDimens.space4),
-          Text(
-            '小组件：桌面长按空白处 → 小工具 → 循迹。磁贴：下拉快捷设置面板'
-            '编辑磁贴中添加「今日待办」（Android 13+ 支持一键添加）。',
-            style: TextStyle(
-              fontSize: 12,
-              color: colors.secondaryText.withValues(alpha: 0.7),
+              ],
             ),
           ),
-        ],
-      ),
+          _sectionNote(
+            colors,
+            '小组件：桌面长按空白处 → 小工具 → 循迹。磁贴：下拉快捷设置面板'
+            '编辑磁贴中添加「今日待办」（Android 13+ 支持一键添加）。',
+            faint: true,
+          ),
+        ]),
+      ],
     );
   }
 
@@ -1667,68 +1683,47 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   /// 到点由系统闹钟（`zonedSchedule` + 每日重复）发一条汇总本地通知——
   /// 手机进程被杀也准时到达；文案在排程时快照，故这里额外给出「当前口径」
   /// 让用户知道此刻的计数，不承诺它就是通知里的数字。
-  Widget _buildDigestCard(BuildContext context, AppColorSet colors) {
+  List<Widget> _buildDigestCard(BuildContext context, AppColorSet colors) {
     final prefs = ref.watch(digestPrefsProvider).value ?? DigestPrefs.fallback;
     final summary = ref.watch(digestSummaryProvider).value;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '每天固定时刻一条汇总通知，回顾今天的待办与逾期；'
-          '应用不在前台也会准时提醒。',
-          style: TextStyle(fontSize: 12, color: colors.secondaryText),
-        ),
-        const SizedBox(height: AppDimens.space8),
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                '开启摘要提醒',
-                style: TextStyle(fontSize: 14, color: colors.bodyText),
-              ),
-            ),
-            OrbitSwitch(
-              value: prefs.enabled,
-              onChanged: _digestBusy ? null : (v) => _toggleDigest(v),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppDimens.space4),
-        OrbitArrowTile(
-          title: '提醒时刻',
-          value: prefs.label,
-          valueColor: prefs.enabled
-              ? OrbitAccents.themeAccent
-              : colors.secondaryText,
-          onClick: prefs.enabled ? _pickDigestTime : null,
-        ),
-        const SizedBox(height: AppDimens.space4),
-        Text(
-          summary == null
-              ? '当前口径：统计中…'
-              : '当前口径：今日截止 ${summary.dueToday} · 逾期 ${summary.overdue} · '
-                    '今日已完成 ${summary.doneToday}',
-          style: TextStyle(fontSize: 12, color: colors.secondaryText),
-        ),
-        const SizedBox(height: AppDimens.space4),
-        Text(
-          '提醒时刻为本机设置，不随云同步；同一天只提醒一次。',
-          style: TextStyle(
-            fontSize: 12,
-            color: colors.secondaryText.withValues(alpha: 0.7),
-          ),
-        ),
-      ],
-    );
+    return <Widget>[
+      _sectionDesc(
+        colors,
+        '每天固定时刻一条汇总通知，回顾今天的待办与逾期；'
+        '应用不在前台也会准时提醒。',
+      ),
+      const _RowDivider(),
+      MiuixSwitchPreference(
+        title: '开启摘要提醒',
+        value: prefs.enabled,
+        // 忙碌期整行禁用（miuix 禁用项口径：标题/开关同转灰）
+        onChanged: _digestBusy ? (v) {} : (v) => _toggleDigest(v),
+        enabled: !_digestBusy,
+        insideMargin: _rowMargin,
+      ),
+      const _RowDivider(),
+      _arrowRow(
+        context,
+        '提醒时刻',
+        value: prefs.label,
+        enabled: prefs.enabled,
+        onClick: prefs.enabled ? _pickDigestTime : null,
+      ),
+      _sectionNote(
+        colors,
+        summary == null
+            ? '当前口径：统计中…'
+            : '当前口径：今日截止 ${summary.dueToday} · 逾期 ${summary.overdue} · '
+                  '今日已完成 ${summary.doneToday}',
+      ),
+      _sectionNote(
+        colors,
+        '提醒时刻为本机设置，不随云同步；同一天只提醒一次。',
+        faint: true,
+      ),
+    ];
   }
-
-  /// 通用导航行（卡片内的跳转入口，统一走 [OrbitArrowTile] 原语）
-  Widget _navRow(
-    AppColorSet colors, {
-    required String label,
-    required VoidCallback onTap,
-  }) => OrbitArrowTile(title: label, onClick: onTap);
 
   /// 安全卡内容：库加密态（明文/加密）+ 主密码操作 + 指纹解锁开关
   ///
@@ -1736,108 +1731,90 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   /// 1. 加密态说明与迁移入口（明文库 → 开启加密；加密库 → 关闭加密）；
   /// 2. 主密码修改（仅加密库；只换开屏密码包装，DB Key 不变）；
   /// 3. 指纹解锁开关（硬件可用才有；无硬件给只读说明而非整卡降级）。
-  Widget _buildSecurityCard(BuildContext context) {
+  List<Widget> _buildSecurityCard(BuildContext context) {
     final colors = AppColors.ofContext(context);
     final encrypted = _masterAuthSet;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(
-              encrypted == true ? OrbitIcons.lock : OrbitIcons.lockOpen,
-              size: AppDimens.iconSizeMd,
-              color: encrypted == true ? colors.success : colors.secondaryText,
-            ),
-            const SizedBox(width: AppDimens.space8),
-            Text(
-              encrypted == null
-                  ? '检测中…'
-                  : encrypted
-                  ? '数据库已加密（SQLCipher）'
-                  : '数据库为明文',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: colors.bodyText,
-              ),
-            ),
-          ],
+    return <Widget>[
+      // 加密态行（示例「通用列表项」同构：起始图标 + 标题 + 摘要）
+      MiuixBasicComponent(
+        title: encrypted == null
+            ? '检测中…'
+            : encrypted
+            ? '数据库已加密（SQLCipher）'
+            : '数据库为明文',
+        summary: encrypted == true
+            ? '每次启动需输入主密码解锁；主密码只保护本机文件，云端数据由同步密码端到端加密。'
+            : '本机文件未加密，任何能访问设备的进程都能直接读取待办数据。',
+        startAction: Icon(
+          encrypted == true ? OrbitIcons.lock : OrbitIcons.lockOpen,
+          size: AppDimens.iconSizeMd,
+          color: encrypted == true ? colors.success : colors.secondaryText,
         ),
-        const SizedBox(height: AppDimens.space4),
-        Text(
-          encrypted == true
-              ? '每次启动需输入主密码解锁；主密码只保护本机文件，云端数据由同步密码端到端加密。'
-              : '本机文件未加密，任何能访问设备的进程都能直接读取待办数据。',
-          style: TextStyle(fontSize: 12, color: colors.secondaryText),
+        insideMargin: _rowMargin,
+      ),
+      if (encrypted == true) ...[
+        const _RowDivider(),
+        _arrowRow(
+          context,
+          '修改主密码',
+          enabled: !_secBusy,
+          onClick: _changeMasterPassword,
         ),
-        const SizedBox(height: AppDimens.space8),
-        if (encrypted == true)
-          OrbitArrowTile(
-            title: '修改主密码',
-            enabled: !_secBusy,
-            onClick: _changeMasterPassword,
-          ),
-        // 清除主密码：加密库下单独清除会打不开库，入口先确认再路由
-        // 到「关闭加密」完成库迁移（db_migrate_to_plaintext + clear +
-        // 重开），与桌面关闭加密口径一致
-        if (encrypted == true)
-          OrbitArrowTile(
-            title: '清除主密码…',
-            titleColor: colors.destructive,
-            enabled: !_secBusy,
-            onClick: _clearMasterPassword,
-          ),
-        if (encrypted != null)
-          OrbitArrowTile(
-            title: encrypted ? '关闭加密（转为明文库）' : '开启加密（设置主密码）',
-            titleColor: encrypted ? colors.destructive : null,
-            enabled: !_secBusy,
-            onClick: encrypted ? _disableEncryption : _enableEncryption,
-            trailing: _secBusy
-                ? OrbitSpinner(
-                    size: AppDimens.iconSizeSm,
-                    color: OrbitAccents.themeAccent,
-                  )
-                : null,
-          ),
-        const OrbitDivider(height: AppDimens.space24),
-        if (_bioAvailable == true) ...[
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '指纹解锁',
-                  style: TextStyle(fontSize: 14, color: colors.bodyText),
-                ),
-              ),
-              OrbitSwitch(
-                value: _bioEnabled == true,
-                // 明文库无需解锁，指纹开关不可用（_masterAuthSet 探测中同样置灰）
-                onChanged:
-                    (_bioBusy || _bioEnabled == null || encrypted != true)
-                    ? null
-                    : (v) => v ? _bioEnable() : _bioDisable(),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppDimens.space4),
-          Text(
-            _bioEnabled == true
-                ? '开启后可在解锁页用指纹代替主密码（密钥链存于系统安全存储，不离开本机）。'
-                : encrypted == true
-                ? '用指纹代替主密码解锁加密库；密钥链存于系统安全存储，不参与云同步。'
-                : '明文库无需解锁，指纹解锁不可用；开启加密后即可启用。',
-            style: TextStyle(fontSize: 12, color: colors.secondaryText),
-          ),
-        ] else if (_bioAvailable == false)
-          Text(
-            '本机未检测到指纹硬件，无法开启指纹解锁。',
-            style: TextStyle(fontSize: 12, color: colors.secondaryText),
-          ),
       ],
-    );
+      // 清除主密码：加密库下单独清除会打不开库，入口先确认再路由
+      // 到「关闭加密」完成库迁移（db_migrate_to_plaintext + clear +
+      // 重开），与桌面关闭加密口径一致
+      if (encrypted == true) ...[
+        const _RowDivider(),
+        _arrowRow(
+          context,
+          '清除主密码…',
+          titleColor: colors.destructive,
+          enabled: !_secBusy,
+          onClick: _clearMasterPassword,
+        ),
+      ],
+      if (encrypted != null) ...[
+        const _RowDivider(),
+        _arrowRow(
+          context,
+          encrypted ? '关闭加密（转为明文库）' : '开启加密（设置主密码）',
+          titleColor: encrypted ? colors.destructive : null,
+          enabled: !_secBusy,
+          onClick: encrypted ? _disableEncryption : _enableEncryption,
+          trailing: _secBusy
+              ? OrbitSpinner(
+                  size: AppDimens.iconSizeSm,
+                  color: OrbitAccents.themeAccent,
+                )
+              : null,
+        ),
+      ],
+      if (_bioAvailable == true) ...[
+        const _RowDivider(),
+        MiuixSwitchPreference(
+          title: '指纹解锁',
+          summary: _bioEnabled == true
+              ? '开启后可在解锁页用指纹代替主密码（密钥链存于系统安全存储，不离开本机）。'
+              : encrypted == true
+              ? '用指纹代替主密码解锁加密库；密钥链存于系统安全存储，不参与云同步。'
+              : '明文库无需解锁，指纹解锁不可用；开启加密后即可启用。',
+          value: _bioEnabled == true,
+          // 明文库无需解锁，指纹开关不可用（_masterAuthSet 探测中同样置灰）
+          onChanged: (_bioBusy || _bioEnabled == null || encrypted != true)
+              ? (v) {}
+              : (v) => v ? _bioEnable() : _bioDisable(),
+          enabled: !(_bioBusy || _bioEnabled == null || encrypted != true),
+          insideMargin: _rowMargin,
+        ),
+      ] else if (_bioAvailable == false)
+        _sectionNote(
+          colors,
+          '本机未检测到指纹硬件，无法开启指纹解锁。',
+          faint: true,
+        ),
+    ];
   }
 }
 
