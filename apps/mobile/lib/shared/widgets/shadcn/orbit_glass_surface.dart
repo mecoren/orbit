@@ -44,13 +44,50 @@ class OrbitGlassScope extends InheritedWidget {
   final MiuixLayerBackdrop backdrop;
 
   /// 取最近的采样器（无壳/测试裸页时返回 null，消费方自动回落实时模糊）
-  static MiuixLayerBackdrop? maybeOf(BuildContext context) => context
-      .dependOnInheritedWidgetOfExactType<OrbitGlassScope>()
-      ?.backdrop;
+  static MiuixLayerBackdrop? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<OrbitGlassScope>()?.backdrop;
 
   @override
   bool updateShouldNotify(OrbitGlassScope oldWidget) =>
       backdrop != oldWidget.backdrop;
+}
+
+/// 页面级玻璃作用域（根级推入页专用，2026-11-04）
+///
+/// 根级推入页（`/settings/*`、任务详情等）挂在 Navigator 的 Overlay 上，与
+/// `HomeShell` 是**兄弟**，向下取不到壳层的 [OrbitGlassScope]——页内玻璃弹层
+/// 只能退到实时模糊，而实时模糊叠在白底页面上等于一块灰白板（2026-11-04
+/// 外观页下拉截图）。本组件给这类页面自建一份采样器：内容包进
+/// [MiuixLayerBackdropCapture]，同一实例经 [OrbitGlassScope] 向下暴露。
+///
+/// **消费方必须在捕获树之外**：页内弹层经 `OverlayPortal` 挂到根 Overlay
+/// （捕获树的兄弟层），拿到的快照不含弹层自己；页头这类**在捕获树内**的
+/// 玻璃件仍应走实时模糊（传 backdrop 会把自己拍进背景，越糊越实）。
+class OrbitGlassPage extends StatefulWidget {
+  const OrbitGlassPage({super.key, required this.child});
+
+  /// 页面本体（通常直接是 `Scaffold`）
+  final Widget child;
+
+  @override
+  State<OrbitGlassPage> createState() => _OrbitGlassPageState();
+}
+
+class _OrbitGlassPageState extends State<OrbitGlassPage> {
+  /// 采样器随 State 生命周期持有（dispose 释放快照图像）
+  final MiuixLayerBackdrop _backdrop = MiuixLayerBackdrop();
+
+  @override
+  void dispose() {
+    _backdrop.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => OrbitGlassScope(
+    backdrop: _backdrop,
+    child: MiuixLayerBackdropCapture(backdrop: _backdrop, child: widget.child),
+  );
 }
 
 /// 圆角玻璃表面（见文件头）

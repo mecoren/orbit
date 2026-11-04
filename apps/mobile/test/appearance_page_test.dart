@@ -1,4 +1,4 @@
-// 外观页回归（2026-11-03 改版为 miuix 下拉偏好口径后）：
+// 外观页回归（2026-11-04 下拉面板改用库内 OS4 玻璃弹层后）：
 // 1) 选中判据必须用原始档位键（system/light/dark 等），不能用中文文案
 //    （`themeLabel`/`fontSizeLabel` 与 SelectItem.value 永不相等，弹层会
 //    一项都不打勾——2026-11-03 外观页截图暴露）；
@@ -21,8 +21,8 @@ void main() {
     await tester.tap(find.text('字号'));
     await tester.pumpAndSettle();
 
-    expect(selectPopup(), findsOneWidget);
-    expect(selectedPopupLabels(tester), ['标准'], reason: '默认字号档必须回勾「标准」');
+    expect(dropdownPopup(), findsOneWidget);
+    expect(selectedDropdownLabels(tester), ['标准'], reason: '默认字号档必须回勾「标准」');
   });
 
   testWidgets('外观页：主题弹层回勾当前档（默认跟随系统）', (tester) async {
@@ -32,7 +32,7 @@ void main() {
     await tester.tap(find.text('主题模式'));
     await tester.pumpAndSettle();
 
-    expect(selectedPopupLabels(tester), ['跟随系统']);
+    expect(selectedDropdownLabels(tester), ['跟随系统']);
   });
 
   testWidgets('外观页：四行尾随当前档（含强调色 #RRGGBB）', (tester) async {
@@ -52,8 +52,10 @@ void main() {
     await tester.tap(find.text('强调色'));
     await tester.pumpAndSettle();
 
-    expect(selectPopup(), findsOneWidget);
-    expect(selectedPopupLabels(tester), [colorToHex(OrbitAccents.themeAccent)]);
+    expect(dropdownPopup(), findsOneWidget);
+    expect(selectedDropdownLabels(tester), [
+      colorToHex(OrbitAccents.themeAccent),
+    ]);
     expect(find.text('自定义…'), findsOneWidget);
   });
 }

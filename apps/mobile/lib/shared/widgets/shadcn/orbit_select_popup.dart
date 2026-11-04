@@ -5,9 +5,12 @@
 ///   上方，左右/上下钳在安全区内（不遮住当前值）；
 /// - 行：`MiuixDropdownImpl`（与库内下拉同款：未选中**正文色**、选中
 ///   **强调色文字 + 右端对勾**、首末行内边距由库给）；
-/// - 卡面：OS4 玻璃（`miuixGlassSurface` 菜单档，与页头 ⋮ 面板/
-///   [OrbitFloatCard] 同源同档），圆角 16（库内列表浮层口径），选项多时
-///   可滚（限高 0.6 屏）。
+/// - 卡面：OS4 玻璃（[OrbitGlassSurface]：有采样器走 shader 玻璃、
+///   无采样器退实时模糊），圆角 16（库内列表浮层口径），选项多时可滚
+///   （限高 0.6 屏）；
+/// - 形变：库内 dropdown motion 同口径——卡面矩形从**触发行矩形**插值到落位
+///   矩形（内容等比缩放并贴左上角裁切，锚点比卡面宽时只「揭开」不缩小），
+///   260ms easeOutCubic，前 35% 顺带淡入；不压暗下层（OS4 菜单同款）。
 ///
 /// **锚点三级回退**：显式 [anchor] / 调用方 context 是行尺度取自身矩形 /
 /// 最近一次指针按下位置（[OrbitPointerAnchor]，`main()` 首帧前安装）。
@@ -16,6 +19,7 @@
 library;
 
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -23,6 +27,7 @@ import 'package:flutter_miuix/miuix.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimens.dart';
+import '../../../core/theme/app_elevation.dart';
 import 'orbit_glass_surface.dart';
 
 /// 弹层卡片圆角 —— 对齐 miuix 下拉弹层（Overlay）口径
@@ -79,17 +84,20 @@ Future<void> showOrbitSelectPopup<T>(
   final resolvedAnchor = anchor ??
       (useContextAnchor ? _anchorFromContext(context) : null) ??
       OrbitPointerAnchor.recentRect;
-  // 玻璃采样器必须在**调用方** context 上取：弹层挂在 Navigator 路由上，
-  // 位于壳层 OrbitGlassScope 之外（与 showMoreActionsSheet 同一套路）；
-  // 无壳（测试裸页）取不到 → 库内退实色，几何与交互不受影响
+  // 玻璃采样器在**调用方** context 上取：弹层挂在 Navigator 路由上，位于
+  // 壳层 OrbitGlassScope 之外（与 showMoreActionsSheet 同一套路）。push 出来
+  // 的页面（设置子页等）连调用方也取不到 → null，卡面自动走实时模糊路径
   final backdrop = OrbitGlassScope.maybeOf(context);
   return showGeneralDialog<void>(
     context: context,
     barrierDismissible: true,
     barrierLabel: '关闭选择',
-    // miuix 下拉 Overlay 带一档轻遮罩（截图里下层明显压暗）
-    barrierColor: Colors.black.withValues(alpha: 0.12),
-    transitionDuration: const Duration(milliseconds: 170),
+    // OS4 菜单不压暗下层（参考图里页面照常可见），只留一条透明拦截层
+    // 接「点外部关闭」；压暗会把玻璃采样到的背景再蒙一层灰
+    barrierColor: Colors.transparent,
+    // 形变靠下面 body 自己的「锚点矩形 → 卡面矩形」插值驱动：
+    // 路由只提供同一条 animation（进出场同 260ms），不再叠淡入缩放
+    transitionDuration: const Duration(milliseconds: 260),
     pageBuilder: (dialogContext, _, _) => _OrbitSelectPopupBody<T>(
       title: title,
       items: items,
@@ -101,22 +109,6 @@ Future<void> showOrbitSelectPopup<T>(
         onSelect(value);
       },
     ),
-    transitionBuilder: (context, animation, _, child) {
-      final curved = CurvedAnimation(
-        parent: animation,
-        curve: Curves.easeOutCubic,
-        reverseCurve: Curves.easeInCubic,
-      );
-      return FadeTransition(
-        opacity: curved,
-        child: ScaleTransition(
-          scale: Tween<double>(begin: 0.96, end: 1).animate(curved),
-          // 自右上角生长（下拉行右沿对齐，弹层向左下展开）
-          alignment: Alignment.topRight,
-          child: child,
-        ),
-      );
-    },
   );
 }
 
@@ -177,7 +169,7 @@ class OrbitPointerAnchor {
   }
 }
 
-class _OrbitSelectPopupBody<T> extends StatelessWidget {
+class _OrbitSelectPopupBody<T> extends StatefulWidget {
   const _OrbitSelectPopupBody({
     required this.title,
     required this.items,
@@ -193,19 +185,48 @@ class _OrbitSelectPopupBody<T> extends StatelessWidget {
   final T? current;
   final Rect? anchor;
 
-  /// OS4 玻璃背景采样器（调用方从壳层 scope 取；null = 库内退实色）
+  /// OS4 玻璃背景采样器（调用方从壳层 scope 取；null = 实时模糊路径）
   final MiuixLayerBackdrop? backdrop;
   final ValueChanged<T> onPick;
 
   @override
+  State<_OrbitSelectPopupBody<T>> createState() =>
+      _OrbitSelectPopupBodyState<T>();
+}
+
+class _OrbitSelectPopupBodyState<T> extends State<_OrbitSelectPopupBody<T>> {
+  /// 卡面实测尺寸：首帧在离屏位布局一次取尺寸，拿到后才跑形变
+  /// （形变终点就是「卡面矩形」，不知道尺寸无从插值）
+  Size? _cardSize;
+
+  final GlobalKey _probeKey = GlobalKey();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _measureCard());
+  }
+
+  void _measureCard() {
+    if (!mounted || _cardSize != null) return;
+    final box = _probeKey.currentContext?.findRenderObject();
+    if (box is! RenderBox || !box.hasSize) return;
+    setState(() => _cardSize = box.size);
+  }
+
+  BoxConstraints _cardConstraints(Size screen) => BoxConstraints.loose(
+        Size(screen.width - _edge * 2, screen.height * 0.6),
+      );
+
+  @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
-    final brightness = Theme.of(context).brightness;
     final screen = MediaQuery.sizeOf(context);
     final viewPadding = MediaQuery.viewPaddingOf(context);
+    final radius = BorderRadius.circular(orbitSelectPopupRadius);
 
     // 行配色直接吃库内下拉默认值（未选中正文色、选中强调色 + 强调色对勾），
-    // 只把行底改透明——卡面由本浮层自己的 DecoratedBox 承担
+    // 只把行底改透明——卡面由下面的玻璃面承担
     final dropdownColors = MiuixDropdownDefaults.dropdownColors(
       context,
       containerColor: Colors.transparent,
@@ -213,65 +234,171 @@ class _OrbitSelectPopupBody<T> extends StatelessWidget {
     );
 
     final rows = <Widget>[
-      for (var i = 0; i < items.length; i++)
+      for (var i = 0; i < widget.items.length; i++)
         MiuixDropdownImpl(
           item: MiuixDropdownItem(
-            text: items[i].label,
-            selected: items[i].value == current,
-            icon: _leading(items[i], colors),
-            summary: items[i].hint,
+            text: widget.items[i].label,
+            selected: widget.items[i].value == widget.current,
+            icon: _leading(widget.items[i], colors),
+            summary: widget.items[i].hint,
           ),
-          optionSize: items.length,
-          isSelected: items[i].value == current,
+          optionSize: widget.items.length,
+          isSelected: widget.items[i].value == widget.current,
           index: i,
           isFirst: i == 0,
-          isLast: i == items.length - 1,
+          isLast: i == widget.items.length - 1,
           dropdownColors: dropdownColors,
-          onSelectedIndexChange: (_) => onPick(items[i].value),
+          onSelectedIndexChange: (_) => widget.onPick(widget.items[i].value),
         ),
     ];
 
-    // OS4 玻璃卡面（与 OrbitFloatCard 同源同档）：puredThinGlass 提到
-    // blurRadius 32 的菜单档——不用库默认 popupViewGlass(60)，进场动画期
-    // 纹理缓存逐帧失效、每帧重算 sigma≈27 的离屏模糊，真机掉帧明显；
-    // 描边/浮层阴影交给 miuixGlassSurface 默认值（shader 自带高光描边，
-    // 再手绘 1px 边线会像实色卡片）。
-    final surface = miuixGlassSurface(
-      backdrop: backdrop,
-      material:
-          MiuixGlassMaterials.puredThinGlass(brightness == Brightness.dark)
-              .copyWith(blurRadius: 32),
-      shadow: MiuixGlassShadows.floating,
+    // 卡片内容（材质之外的纯内容）：形变期它按等比缩放贴面板左上角裁切，
+    // 玻璃面板本身由外层按动画矩形逐帧铺满（见下）
+    final content = Material(
+      // showGeneralDialog 不像 showDialog / 底部抽屉那样自带 Material：
+      // 缺了这层，DefaultTextStyle 落到 MaterialApp 的警告样式，
+      // 选项文字下面会画出一条黄线（2026-11-04 外观页截图暴露）。
+      // 透明底不上色，卡面由玻璃面承担；这层同时负责圆角裁切
+      // （选项滚动时不出卡），key 挂这供测试取卡片矩形。
+      key: orbitSelectPopupKey,
+      color: Colors.transparent,
+      borderRadius: radius,
+      clipBehavior: Clip.antiAlias,
+      child: ConstrainedBox(
+        // 选项多时可滚（不把弹层顶出屏幕）
+        constraints: BoxConstraints(maxHeight: screen.height * 0.6),
+        child: MiuixListPopupColumn(children: rows),
+      ),
     );
-    return Semantics(
-      label: title,
-      child: CustomSingleChildLayout(
-        delegate: _OrbitSelectPopupLayout(
-          anchor: anchor,
-          viewPadding: viewPadding,
-        ),
-        child: surface(
-          context,
-          RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(orbitSelectPopupRadius),
-          ),
-          Material(
-            // showGeneralDialog 不像 showDialog / 底部抽屉那样自带 Material：
-            // 缺了这层，DefaultTextStyle 落到 MaterialApp 的警告样式，
-            // 选项文字下面会画出一条黄线（2026-11-04 外观页截图暴露）。
-            // 透明底不上色，卡面由玻璃面承担；这层同时负责圆角裁切
-            // （选项滚动时不出卡），key 挂这供测试取卡片矩形。
-            key: orbitSelectPopupKey,
-            color: colors.popup.withValues(alpha: 0.0),
-            borderRadius: BorderRadius.circular(orbitSelectPopupRadius),
-            clipBehavior: Clip.antiAlias,
-            child: ConstrainedBox(
-              // 选项多时可滚（不把弹层顶出屏幕）
-              constraints: BoxConstraints(maxHeight: screen.height * 0.6),
-              child: MiuixListPopupColumn(children: rows),
+
+    final size = _cardSize;
+    if (size == null) {
+      // 首帧：离屏布局一次取尺寸（Offstage 只排版不上屏），下一帧开始形变
+      return Stack(
+        children: [
+          Positioned(
+            left: 0,
+            top: 0,
+            child: Offstage(
+              child: ConstrainedBox(
+                constraints: _cardConstraints(screen),
+                child: KeyedSubtree(key: _probeKey, child: content),
+              ),
             ),
           ),
-        ),
+        ],
+      );
+    }
+
+    final placement = _placePopup(
+      screen: screen,
+      child: size,
+      anchor: widget.anchor,
+      viewPadding: viewPadding,
+    );
+    final settled = placement.position & size;
+    // 库内 dropdown motion（`miuixGlassPopupFrame`）：面板从落位右上角
+    // 一小块（0.69 宽 × 0.2 高，圆角 4）弹到整块（圆角 16），中心同步归位；
+    // 内容按 `rect.width / 卡面宽` 等比缩放、贴左上角裁切，所以早期只「揭开」
+    // 正在长出来的那块，不会把整张卡缩成一点
+    final ratio = size.height / size.width;
+    final startWidth = size.width * 0.69;
+    final startHeight = startWidth * 0.2;
+    final startCenter = placement.alignTop
+        ? Offset(settled.right - startWidth / 2, settled.top + startHeight / 2)
+        : Offset(settled.right - startWidth / 2, settled.bottom - startHeight / 2);
+    final animation = ModalRoute.of(context)?.animation;
+    return Semantics(
+      label: widget.title,
+      child: AnimatedBuilder(
+        animation: animation ?? const AlwaysStoppedAnimation<double>(1),
+        builder: (context, _) {
+          final raw = (animation?.value ?? 1.0).clamp(0.0, 1.0);
+          final t = Curves.easeOutCubic.transform(raw);
+          final width =
+              ui.lerpDouble(startWidth, size.width, t)!.clamp(1.0, 1e5);
+          final height = math.max(
+            1.0,
+            width * ui.lerpDouble(0.2, ratio, t)!,
+          );
+          final center =
+              Offset.lerp(startCenter, settled.center, t)!;
+          final rect =
+              Rect.fromCenter(center: center, width: width, height: height);
+          final animatedRadius =
+              ui.lerpDouble(4, orbitSelectPopupRadius, t)!;
+          // 内容等比缩放：早期矩形没卡面宽时只揭开一部分，绝不把文字拉小
+          final scale = math.min(1.0, rect.width / math.max(size.width, 1));
+          // 淡入只占前 35%，形变本身承担「从行尾弹开」的观感
+          final opacity = (t / 0.35).clamp(0.0, 1.0);
+          final shape = BorderRadius.circular(animatedRadius);
+          return Stack(
+            children: [
+              Positioned.fromRect(
+                rect: rect,
+                child: DecoratedBox(
+                  // 实时模糊路径没有玻璃面板自带的投影，这里补一层
+                  // （OS4 采样路径由面板自带，不叠）。投影画在玻璃**之下**：
+                  // `BackdropFilter` 只糊自身边界内的背景，卡外那圈投影不受
+                  // 影响；卡内那点内溢正好被玻璃盖住。
+                  decoration: BoxDecoration(
+                    borderRadius: shape,
+                    boxShadow: widget.backdrop == null
+                        ? AppElevation.e4(Theme.of(context).brightness)
+                        : null,
+                  ),
+                  child: DecoratedBox(
+                    // 描边必须画在玻璃**之上**（foreground）。画在下面会被
+                    // `BackdropFilter` 连同背景一起高斯糊掉，再被半透明表面色
+                    // 洗一遍——2026-11-04 截图里弹层「没有边、糊成一块脏斑」
+                    // 的根因。色值吃 `outline` 而非 `popup`（surfaceElevated）：
+                    // 浅色下两者都是白，白描边落在白卡上等于没画。
+                    position: DecorationPosition.foreground,
+                    decoration: BoxDecoration(
+                      borderRadius: shape,
+                      border: widget.backdrop == null
+                          ? Border.all(color: colors.outline, width: 0.8)
+                          : null,
+                    ),
+                    // 卡面走 [OrbitGlassSurface]，**不要**直接用
+                    // `miuixGlassSurface`：后者拿不到采样快照时不回退，库内
+                    // 直接填成实色白卡——设置页这类 push 出来的路由挂在 Overlay
+                    // 上、与 HomeShell 平级，取不到 `OrbitGlassScope`
+                    // （2026-11-04「怎么没变玻璃」的根因）。
+                    // 实时路径按 ⋮ 菜单的 puredThinGlass 档调参（sigma 14
+                    // 同档、表面白度压低、描边由外层补），别用库默认 0.72 白
+                    // ——那档在浅色页面上会糊成一块实色卡。
+                    child: OrbitGlassSurface(
+                      backdrop: widget.backdrop,
+                      borderRadius: shape,
+                      realtimeSigma: 16,
+                      realtimeSurfaceOpacity: 0.5,
+                      child: OverflowBox(
+                        alignment: Alignment.topLeft,
+                        minWidth: size.width,
+                        maxWidth: size.width,
+                        minHeight: size.height,
+                        maxHeight: size.height,
+                        child: Opacity(
+                          opacity: opacity,
+                          child: Transform.scale(
+                            scale: scale,
+                            alignment: Alignment.topLeft,
+                            child: SizedBox(
+                              width: size.width,
+                              height: size.height,
+                              child: content,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -310,50 +437,44 @@ class _OrbitSelectPopupBody<T> extends StatelessWidget {
   }
 }
 
-/// 弹层定位：锚点下方优先、放不下翻上方；无锚点则底部居中。
-class _OrbitSelectPopupLayout extends SingleChildLayoutDelegate {
-  _OrbitSelectPopupLayout({required this.anchor, required this.viewPadding});
-
-  final Rect? anchor;
-  final EdgeInsets viewPadding;
-
-  @override
-  BoxConstraints getConstraintsForChild(BoxConstraints constraints) =>
-      BoxConstraints.loose(
-        Size(
-          math.max(0, constraints.maxWidth - _edge * 2),
-          constraints.maxHeight * 0.6,
-        ),
-      );
-
-  @override
-  Offset getPositionForChild(Size size, Size childSize) {
-    final minX = _edge;
-    final maxX = math.max(minX, size.width - childSize.width - _edge);
-    final minY = _edge + viewPadding.top;
-    final maxY =
-        math.max(minY, size.height - childSize.height - _edge - viewPadding.bottom);
-    final anchorRect = anchor;
-    if (anchorRect == null) {
-      return Offset(
-        ((size.width - childSize.width) / 2).clamp(minX, maxX),
+/// 卡面最终落位：锚点下方优先、放不下翻上方；无锚点则底部居中。
+///
+/// 纯函数：形变动效要拿「落位矩形」当插值终点，不能再藏在 layout delegate 里
+/// （delegate 只在排版期存在，动画取不到）。
+({Offset position, bool alignTop}) _placePopup({
+  required Size screen,
+  required Size child,
+  required Rect? anchor,
+  required EdgeInsets viewPadding,
+}) {
+  final minX = _edge;
+  final maxX = math.max(minX, screen.width - child.width - _edge);
+  final minY = _edge + viewPadding.top;
+  final maxY =
+      math.max(minY, screen.height - child.height - _edge - viewPadding.bottom);
+  final anchorRect = anchor;
+  if (anchorRect == null) {
+    return (
+      position: Offset(
+        ((screen.width - child.width) / 2).clamp(minX, maxX),
         maxY,
-      );
-    }
-    final bottomLimit = size.height - _edge - viewPadding.bottom;
-    var y = anchorRect.bottom + _gap;
-    if (y + childSize.height > bottomLimit) {
-      // 下方空间不足 → 翻到锚点上方
-      y = anchorRect.top - _gap - childSize.height;
-    }
-    // 右沿对齐触发行（miuix end 口径）；1px 指针锚点用点击 x，向左下展开
-    final x =
-        (anchorRect.width < 32 ? anchorRect.center.dx : anchorRect.right) -
-            childSize.width;
-    return Offset(x.clamp(minX, maxX), y.clamp(minY, maxY));
+      ),
+      alignTop: true,
+    );
   }
-
-  @override
-  bool shouldRelayout(_OrbitSelectPopupLayout oldDelegate) =>
-      oldDelegate.anchor != anchor || oldDelegate.viewPadding != viewPadding;
+  final bottomLimit = screen.height - _edge - viewPadding.bottom;
+  var y = anchorRect.bottom + _gap;
+  var alignTop = true;
+  if (y + child.height > bottomLimit) {
+    // 下方空间不足 → 翻到锚点上方（形变起点也换到底边）
+    y = anchorRect.top - _gap - child.height;
+    alignTop = false;
+  }
+  // 右沿对齐触发行（miuix end 口径）；1px 指针锚点用点击 x，向左下展开
+  final x = (anchorRect.width < 32 ? anchorRect.center.dx : anchorRect.right) -
+      child.width;
+  return (
+    position: Offset(x.clamp(minX, maxX), y.clamp(minY, maxY)),
+    alignTop: alignTop,
+  );
 }

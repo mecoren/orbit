@@ -9,6 +9,7 @@ import '../../services/appearance.dart';
 import '../../shared/utils/hex_color.dart';
 import '../../shared/widgets/shadcn/orbit_color_picker.dart';
 import '../../shared/widgets/shadcn/orbit_dropdown_tile.dart';
+import '../../shared/widgets/shadcn/orbit_glass_surface.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_select_popup.dart';
@@ -17,8 +18,9 @@ import '../../shared/widgets/shadcn/orbit_toast.dart';
 /// 外观设置页 /settings/appearance
 ///
 /// 四行统一走 [OrbitDropdownTile]（miuix 下拉偏好口径）：标题 + 摘要 → 尾随
-/// 当前值 + 上下双箭头，点行**就地**弹出贴着本行的锚定单选浮层，当前档在
-/// 浮层里转强调色并打勾（不再用「右箭头」——那是跳页语义，不是选项切换）。
+/// 当前值 + 上下双箭头，点行**就地**弹出贴着本行的 OS4 玻璃下拉面板（库内
+/// [MiuixGlassDropdownPopup]），当前档在面板里转强调色并打勾（不再用
+/// 「右箭头」——那是跳页语义，不是选项切换）。
 ///
 /// 主题三态（跟随系统/浅色/深色）+ 字号三档（小/标准/大）+ 字重三档
 /// （常规/适中/加粗）+ 强调色（10 色预设 + 自定义取色）全走 LocalPrefs
@@ -102,85 +104,89 @@ class _AppearancePageState extends State<AppearancePage> {
         icon: OrbitIcons.edit,
       ),
     ];
-    return Scaffold(
-      body: Stack(
-        children: [
-          ListView(
-            controller: _scrollController,
-            padding: EdgeInsets.only(
-              top:
-                  MediaQuery.of(context).padding.top +
-                  OrbitPageHeader.rowHeight +
-                  AppDimens.space16,
-              left: AppDimens.pageInline,
-              right: AppDimens.pageInline,
-              bottom: AppDimens.gestureInsetFallback + AppDimens.space32,
-            ),
-            children: [
-              SectionCard(
-                title: '外观',
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    OrbitDropdownTile<String>(
-                      title: '主题模式',
-                      summary: '亮暗随系统或手动指定',
-                      items: const [
-                        SelectItem(value: 'system', label: '跟随系统'),
-                        SelectItem(value: 'light', label: '浅色'),
-                        SelectItem(value: 'dark', label: '深色'),
-                      ],
-                      current: Appearance.themeValue(),
-                      onSelect: _pickTheme,
-                    ),
-                    OrbitDropdownTile<String>(
-                      title: '字号',
-                      summary: '全文文本缩放档位',
-                      items: const [
-                        SelectItem(value: 'small', label: '小'),
-                        SelectItem(value: 'standard', label: '标准'),
-                        SelectItem(value: 'large', label: '大'),
-                      ],
-                      current: Appearance.fontSizeValue(),
-                      onSelect: _pickFontSize,
-                    ),
-                    OrbitDropdownTile<String>(
-                      title: '字重',
-                      summary: '标题与正文的笔画粗细',
-                      items: const [
-                        SelectItem(value: 'regular', label: '常规'),
-                        SelectItem(value: 'medium', label: '适中'),
-                        SelectItem(value: 'bold', label: '加粗'),
-                      ],
-                      current: Appearance.fontWeightValue(),
-                      onSelect: _pickFontWeight,
-                    ),
-                    // 桌面早已有 10 色板 + 自定义，移动此前只能用默认蓝
-                    OrbitDropdownTile<String>(
-                      title: '强调色',
-                      summary: 'Fab、载入指示与链接',
-                      items: accentItems,
-                      current: accentHex,
-                      onSelect: _pickAccent,
-                    ),
-                  ],
+    // 根级推入页取不到壳层 OrbitGlassScope：本页自建采样器，下拉弹层才有
+    // 真玻璃（否则库内无快照分支退成实色白卡）
+    return OrbitGlassPage(
+      child: Scaffold(
+        body: Stack(
+          children: [
+            ListView(
+              controller: _scrollController,
+              padding: EdgeInsets.only(
+                top:
+                    MediaQuery.of(context).padding.top +
+                    OrbitPageHeader.rowHeight +
+                    AppDimens.space16,
+                left: AppDimens.pageInline,
+                right: AppDimens.pageInline,
+                bottom: AppDimens.gestureInsetFallback + AppDimens.space32,
+              ),
+              children: [
+                SectionCard(
+                  title: '外观',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      OrbitDropdownTile<String>(
+                        title: '主题模式',
+                        summary: '亮暗随系统或手动指定',
+                        items: const [
+                          SelectItem(value: 'system', label: '跟随系统'),
+                          SelectItem(value: 'light', label: '浅色'),
+                          SelectItem(value: 'dark', label: '深色'),
+                        ],
+                        current: Appearance.themeValue(),
+                        onSelect: _pickTheme,
+                      ),
+                      OrbitDropdownTile<String>(
+                        title: '字号',
+                        summary: '全文文本缩放档位',
+                        items: const [
+                          SelectItem(value: 'small', label: '小'),
+                          SelectItem(value: 'standard', label: '标准'),
+                          SelectItem(value: 'large', label: '大'),
+                        ],
+                        current: Appearance.fontSizeValue(),
+                        onSelect: _pickFontSize,
+                      ),
+                      OrbitDropdownTile<String>(
+                        title: '字重',
+                        summary: '标题与正文的笔画粗细',
+                        items: const [
+                          SelectItem(value: 'regular', label: '常规'),
+                          SelectItem(value: 'medium', label: '适中'),
+                          SelectItem(value: 'bold', label: '加粗'),
+                        ],
+                        current: Appearance.fontWeightValue(),
+                        onSelect: _pickFontWeight,
+                      ),
+                      // 桌面早已有 10 色板 + 自定义，移动此前只能用默认蓝
+                      OrbitDropdownTile<String>(
+                        title: '强调色',
+                        summary: 'Fab、载入指示与链接',
+                        items: accentItems,
+                        current: accentHex,
+                        onSelect: _pickAccent,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: AppDimens.cardGap),
-              Text(
-                '预览：字号与字重即时作用于全文，主题即时切换亮暗'
-                '（默认跟随系统）。',
-                style: TextStyle(fontSize: 12, color: colors.secondaryText),
-              ),
-            ],
-          ),
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: OrbitPageHeader(title: '外观'),
-          ),
-        ],
+                const SizedBox(height: AppDimens.cardGap),
+                Text(
+                  '预览：字号与字重即时作用于全文，主题即时切换亮暗'
+                  '（默认跟随系统）。',
+                  style: TextStyle(fontSize: 12, color: colors.secondaryText),
+                ),
+              ],
+            ),
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: OrbitPageHeader(title: '外观'),
+            ),
+          ],
+        ),
       ),
     );
   }

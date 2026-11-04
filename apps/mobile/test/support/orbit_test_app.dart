@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/core/routing/router_keys.dart';
 import 'package:orbit/core/theme/app_theme.dart';
 import 'package:orbit/core/theme/miuix_theme.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_dropdown_tile.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_select_popup.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_toast.dart';
 
@@ -23,33 +24,31 @@ Widget orbitTestApp({
   required Widget home,
   Brightness brightness = Brightness.light,
   Locale? locale,
-}) =>
-    MaterialApp(
-      navigatorKey: rootNavigatorKey,
-      debugShowCheckedModeBanner: false,
-      theme: buildAppTheme(brightness: brightness),
-      locale: locale,
-      home: home,
-      builder: (context, child) => _orbitRootLayers(
-        brightness: brightness,
-        child: child ?? const SizedBox.shrink(),
-      ),
-    );
+}) => MaterialApp(
+  navigatorKey: rootNavigatorKey,
+  debugShowCheckedModeBanner: false,
+  theme: buildAppTheme(brightness: brightness),
+  locale: locale,
+  home: home,
+  builder: (context, child) => _orbitRootLayers(
+    brightness: brightness,
+    child: child ?? const SizedBox.shrink(),
+  ),
+);
 
 /// 路由形态的测试壳（GoRouter 用）：与 [orbitTestApp] 同构。
 Widget orbitTestAppRouter({
   required RouterConfig<Object> routerConfig,
   Brightness brightness = Brightness.light,
-}) =>
-    MaterialApp.router(
-      routerConfig: routerConfig,
-      debugShowCheckedModeBanner: false,
-      theme: buildAppTheme(brightness: brightness),
-      builder: (context, child) => _orbitRootLayers(
-        brightness: brightness,
-        child: child ?? const SizedBox.shrink(),
-      ),
-    );
+}) => MaterialApp.router(
+  routerConfig: routerConfig,
+  debugShowCheckedModeBanner: false,
+  theme: buildAppTheme(brightness: brightness),
+  builder: (context, child) => _orbitRootLayers(
+    brightness: brightness,
+    child: child ?? const SizedBox.shrink(),
+  ),
+);
 
 /// 浮层根装配（`lib/app.dart` 同款）：MiuixTheme（HyperOS 组件取色）
 /// → 路由内容 + 全局 toast 宿主（浮层，原 ShadcnLayer 的层级语义）。
@@ -59,16 +58,15 @@ Widget orbitTestAppRouter({
 Widget _orbitRootLayers({
   required Widget child,
   required Brightness brightness,
-}) =>
-    OrbitMiuixTheme(
-      brightness: brightness,
-      child: Stack(
-        children: [
-          child,
-          const Positioned.fill(child: OrbitToastHost()),
-        ],
-      ),
-    );
+}) => OrbitMiuixTheme(
+  brightness: brightness,
+  child: Stack(
+    children: [
+      child,
+      const Positioned.fill(child: OrbitToastHost()),
+    ],
+  ),
+);
 
 /// 单选浮层（OS4 玻璃菜单）finder
 ///
@@ -77,6 +75,24 @@ Widget _orbitRootLayers({
 /// 文本/选中态」时用本 finder，不要再用 `find.byType(BottomSheet)`——那是
 /// 确认/更多操作/表单抽屉的承载。
 Finder selectPopup() => find.byKey(orbitSelectPopupKey);
+
+/// 下拉偏好行的玻璃面板 finder（`OrbitDropdownTile` 展开后库内
+/// `MiuixGlassDropdownPopup` 的内容节点）
+Finder dropdownPopup() => find.byKey(orbitDropdownPopupKey);
+
+/// 下拉面板里打勾的条目文案
+///
+/// 行是 miuix 的 `MiuixGlassPopupItem`，选中态在 `selected` 上（勾本身是
+/// 图标，直接按 icon 数断言拿不到），故读行数据。
+Iterable<String> selectedDropdownLabels(WidgetTester tester) => tester
+    .widgetList<MiuixGlassPopupItem>(
+      find.descendant(
+        of: dropdownPopup(),
+        matching: find.byType(MiuixGlassPopupItem),
+      ),
+    )
+    .where((row) => row.selected)
+    .map((row) => row.text);
 
 /// 单选浮层里打勾的条目文案
 ///
@@ -90,9 +106,7 @@ Iterable<String> selectedPopupLabels(WidgetTester tester) {
       matching: find.byType(MiuixDropdownImpl),
     ),
   );
-  return rows
-      .where((row) => row.isSelected)
-      .map((row) => row.item.text);
+  return rows.where((row) => row.isSelected).map((row) => row.item.text);
 }
 
 /// 收尾：推掉 toast 的停留计时器与残留动画，并清空全局队列。
@@ -113,9 +127,7 @@ Future<void> drainToastTimers(
   WidgetTester tester, {
   bool holdForever = false,
 }) async {
-  await tester.pump(
-    holdForever ? WaitToast.holdForever : WaitToast.undoDwell,
-  );
+  await tester.pump(holdForever ? WaitToast.holdForever : WaitToast.undoDwell);
   await tester.pump(const Duration(milliseconds: 500));
   await WaitToast.debugFlushForTest();
   await tester.pumpAndSettle();

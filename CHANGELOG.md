@@ -17,10 +17,22 @@
 
 ## [Unreleased]
 
+### 优化：移动端下拉偏好面板直接改用库内 OS4 玻璃弹层（2026-11-04）
+
+外观页四行的下拉面板不再自建「`showGeneralDialog` 路由 + 玻璃卡面 + 形变插值」，**直接取 flutter_miuix 的 `MiuixGlassDropdownPopup` + `MiuixGlassPopupItem`**（对齐库内 `example/lib/showcase/os4.dart` 的「弹层」示例——库里有现成的就用现成的，自建一套视觉必然长期漂移）：
+
+- `OrbitDropdownTile` 内部改成声明式承载：面板由库内 `OverlayPortal` 挂到根 Overlay，进出场走库内 dropdown motion（圆角 4 → 24、从锚点右上角一片揭到整块、260ms 弹簧），点外部 / 返回键收起由库内负责；行是 `MiuixGlassPopupItem`（未选中正文色，选中主题色 + 右端对勾，色点 / 语义图标 / 副标题信息位全保留）。
+- **锚点走 `anchorBounds` 而不是 `MiuixGlassAnchor`**：库内 dropdown motion 会隐藏锚点控件内容（当它是「长出来的触发钮」），而本行的当前值必须留在原处可见。改传一条**零高度矩形**（本行下沿 +8px）——库内落位是「y = 锚点 top、右沿对齐锚点右沿」，于是面板正好落在行下方且不吞掉行本身。
+- 材质档取 `puredThinGlass` + `blurRadius 32`（与 `OrbitGlassMenu` 同档）：库默认 `popupViewGlass` 的 60 档在动画期 `origin/size` 逐帧变、纹理缓存逐帧失效，真机每帧重算 sigma≈27 的离屏模糊会掉帧。
+- 新增页面级玻璃原语 `OrbitGlassPage`：根级推入页（`/settings/*` 等）挂在 Navigator 的 Overlay 上、与 `HomeShell` 平级，向下取不到壳层 `OrbitGlassScope`，页内弹层只能退实时模糊（叠在白底页面上就是一块灰白板）。本组件给这类页面自建 `MiuixLayerBackdrop` + `MiuixLayerBackdropCapture`，同一实例经 `OrbitGlassScope` 暴露；消费方（弹层）在捕获树之外，不会把自己拍进背景。
+- **验证**：`flutter analyze` 0 issue；`flutter test` **1134 绿**（`appearance_page_test` 改用 `dropdownPopup()` / `selectedDropdownLabels()` 助手，按 `MiuixGlassPopupItem.selected` 判勾）。
+
 ### 优化：移动端单选浮层卡面升级为澎湃 OS4 玻璃（2026-11-04）
 
-- 卡面从白色实色卡（`surfaceContainer` + e4 阴影）换成 `miuixGlassSurface` 的菜单档玻璃面——与页头 ⋮ 面板 / 快加快捷卡片（`OrbitFloatCard`）同源同档：`puredThinGlass` 提到 blurRadius 32 + 浮层阴影 + shader 自带高光描边，`shading: false` 不做仿生折射；不用库默认 `popupViewGlass(60)`（进场动画期纹理缓存逐帧失效，真机掉帧明显）。
-- 玻璃采样器在**调用方** context 解析（弹层挂在 Navigator 路由上，位于壳层 `OrbitGlassScope` 之外，与 `showMoreActionsSheet` 同一套路）；无壳（测试裸页）取不到时库内退实色，几何与交互不受影响。
+- 卡面从白色实色卡（`surfaceContainer` + e4 阴影）换成 OS4 玻璃，走项目原语 `OrbitGlassSurface`：**有采样器**时用 `MiuixGlassPanel` + `puredThinGlass` 的 shader 玻璃，**没有采样器/快照未就绪**时退实时 `BackdropFilter` 模糊 + 半透明表面色，两条路径观感同档。
+- **不能**直接用 `miuixGlassSurface`：设置页这类 push 出来的路由挂在 Overlay 上、与 `HomeShell` 平级，调用方取不到 `OrbitGlassScope` → `backdrop` 为 null → 库内无快照分支会填成**实色白卡**（2026-11-04 用户截图「怎么没变玻璃」的根因）。
+- 采样器仍在调用方 context 解析（与 `showMoreActionsSheet` 同一套路）；实时模糊路径补一圈 `e4` 浮层阴影 + `outline` 发丝边框（OS4 路径由玻璃面板自带描边/阴影，不叠）。描边必须画在玻璃**之上**（`DecorationPosition.foreground`）：画在下面会被 `BackdropFilter` 连同背景一起糊掉、再被半透明表面色洗一遍，浅色下白描边落在白卡上等于没画，弹层会糊成一块「脏斑」。
+- **弹出动效换成 OS4 dropdown motion**：卡面矩形从**触发行矩形**插值到落位矩形（内容等比缩放 + 贴左上角裁切，锚点比卡面宽时只「揭开」不缩小），260ms `easeOutCubic`，前 35% 顺带淡入；退场沿同一曲线收回行内。原先的「260ms 内 0.96→1 微缩放 + 12% 压暗」几乎看不出形变，且压暗会把玻璃采样到的背景再蒙一层灰——遮罩改透明（点外部仍关闭）。
 - 行几何、锚点定位、49 处存量调用点零变化；透明 `Material` 承担圆角裁切与黄线下划线回归防护。
 
 ### 优化：移动端外观设置页改版为 miuix 下拉偏好（2026-11-03）

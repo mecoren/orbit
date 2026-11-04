@@ -90,6 +90,30 @@ void main() {
     );
   });
 
+  testWidgets('单选浮层：卡面是玻璃（无采样器走实时模糊，不是实色白卡）',
+      (tester) async {
+    final ctx = await pumpHost(tester);
+    showSelectBottomSheet<String>(
+      ctx,
+      title: '视图模式',
+      items: const [SelectItem(value: 'list', label: '列表')],
+      current: 'list',
+      onSelect: (_) {},
+    );
+    await tester.pumpAndSettle();
+
+    // 测试裸页没有壳层 OrbitGlassScope：卡面必须退到实时 BackdropFilter
+    // 模糊路径（2026-11-04「怎么没变玻璃」——直接用 miuixGlassSurface 时
+    // 无快照会被库内填成实色白卡）
+    expect(
+      find.ancestor(
+        of: find.byKey(orbitSelectPopupKey),
+        matching: find.byType(BackdropFilter),
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('单选浮层：路由内容必须包 Material（黄线下划线回归）',
       (tester) async {
     final ctx = await pumpHost(tester);
