@@ -25,7 +25,14 @@ class SectionCard extends StatelessWidget {
     this.subtitle,
     this.trailing,
     required this.child,
+    this.padding = const EdgeInsets.all(AppDimens.cardPadding),
   });
+
+  /// 卡片内边距（默认全 16）。由本组件分派给头行与内容（[OrbitCard] 归零），
+  /// 默认值下与旧「整卡 16」渲染逐像素一致；内容行自带水平内边距的
+  /// 「贴边高亮」布局（miuix GroupCard 口径）传仅含 bottom 的内边距，
+  /// 行按压灰底即可横贯整卡、由卡片圆角裁切。
+  final EdgeInsetsGeometry padding;
 
   /// 头部标题；缺省不渲染头行（详情标题区为无头卡片）
   final String? title;
@@ -41,43 +48,78 @@ class SectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
+    final p =
+        padding.resolve(Directionality.maybeOf(context) ?? TextDirection.ltr);
     return OrbitCard(
+      padding: EdgeInsets.zero,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
           if (title != null) ...[
-            Row(
-              children: [
-                Flexible(
-                  child: Text(
-                    title!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: OrbitAccents.todoAccent,
+            Padding(
+              padding: EdgeInsets.only(
+                left: p.left,
+                right: p.right,
+                top: p.top,
+              ),
+              child: Row(
+                children: [
+                  // 标题+副标题整体 Expanded、内部各自 Flexible：不能用
+                  // 「Flexible(标题) + Spacer」并列——两个 flex 子项平分剩余
+                  // 空间，标题用不完的份额按 mainAxisAlignment.start 堆到
+                  // 行尾，trailing 会悬在中间不贴右（2026-11-04 同步配置页
+                  // 两处「刷新」踩坑）。内层行剩余空间天然落在文案与
+                  // trailing 之间，trailing 恒贴右。
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            title!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: OrbitAccents.todoAccent,
+                            ),
+                          ),
+                        ),
+                        if (subtitle != null) ...[
+                          const SizedBox(width: AppDimens.space8),
+                          Flexible(
+                            child: Text(
+                              subtitle!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: colors.secondaryText,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
-                ),
-                if (subtitle != null) ...[
-                  const SizedBox(width: AppDimens.space8),
-                  Text(
-                    subtitle!,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: colors.secondaryText,
-                    ),
-                  ),
+                  if (trailing != null) ...[
+                    const SizedBox(width: AppDimens.space8),
+                    trailing!,
+                  ],
                 ],
-                const Spacer(),
-                ?trailing,
-              ],
+              ),
             ),
             const SizedBox(height: AppDimens.space12),
           ],
-          child,
+          Padding(
+            padding: EdgeInsets.only(
+              left: p.left,
+              right: p.right,
+              bottom: p.bottom,
+            ),
+            child: child,
+          ),
         ],
       ),
     );

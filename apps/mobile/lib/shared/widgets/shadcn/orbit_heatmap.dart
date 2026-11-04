@@ -162,16 +162,20 @@ class _OrbitHeatmapState extends State<OrbitHeatmap> {
               '多',
               style: TextStyle(fontSize: 11, color: colors.secondaryText),
             ),
-            const Spacer(),
+            // Expanded 与 Spacer 二选一：两者并列会平分剩余空间，文案
+            // 悬在行中间不贴右（与 SectionCard 头行 2026-11-04 同类踩坑）
             if (_pickedDate != null)
-              Flexible(
+              Expanded(
                 child: Text(
                   '$_pickedDate: $picked 个完成',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.right,
                   style: TextStyle(fontSize: 12, color: colors.titleText),
                 ),
-              ),
+              )
+            else
+              const Spacer(),
           ],
         ),
       ],
