@@ -229,19 +229,26 @@ class _OrbitSelectPopupBody<T> extends StatelessWidget {
           anchor: anchor,
           viewPadding: viewPadding,
         ),
-        child: DecoratedBox(
-          key: orbitSelectPopupKey,
-          decoration: BoxDecoration(
-            color: theme.colors.surfaceContainer,
-            borderRadius: BorderRadius.circular(orbitSelectPopupRadius),
-            boxShadow: AppElevation.e4(brightness),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(orbitSelectPopupRadius),
-            child: ConstrainedBox(
-              // 选项多时可滚（不把弹层顶出屏幕）
-              constraints: BoxConstraints(maxHeight: screen.height * 0.6),
-              child: MiuixListPopupColumn(children: rows),
+        child: Material(
+          // showGeneralDialog 不像 showDialog / 底部抽屉那样自带 Material：
+          // 缺了这层，DefaultTextStyle 落到 MaterialApp 的警告样式，
+          // 选项文字下面会画出一条黄线（2026-11-04 外观页截图暴露）。
+          // transparency 不上底色，卡面仍由下面的 DecoratedBox 承担。
+          type: MaterialType.transparency,
+          child: DecoratedBox(
+            key: orbitSelectPopupKey,
+            decoration: BoxDecoration(
+              color: theme.colors.surfaceContainer,
+              borderRadius: BorderRadius.circular(orbitSelectPopupRadius),
+              boxShadow: AppElevation.e4(brightness),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(orbitSelectPopupRadius),
+              child: ConstrainedBox(
+                // 选项多时可滚（不把弹层顶出屏幕）
+                constraints: BoxConstraints(maxHeight: screen.height * 0.6),
+                child: MiuixListPopupColumn(children: rows),
+              ),
             ),
           ),
         ),

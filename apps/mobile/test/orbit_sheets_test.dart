@@ -90,6 +90,25 @@ void main() {
     );
   });
 
+  testWidgets('单选浮层：路由内容必须包 Material（黄线下划线回归）',
+      (tester) async {
+    final ctx = await pumpHost(tester);
+    showSelectBottomSheet<String>(
+      ctx,
+      title: '视图模式',
+      items: const [SelectItem(value: 'list', label: '列表')],
+      current: 'list',
+      onSelect: (_) {},
+    );
+    await tester.pumpAndSettle();
+
+    // `showGeneralDialog` 不像 showDialog / 底部抽屉那样自带 Material；缺层
+    // 时 DefaultTextStyle 落到 MaterialApp 的警告样式（黄双下划线）。
+    final style = DefaultTextStyle.of(tester.element(find.text('列表'))).style;
+    expect(style.decoration, isNot(TextDecoration.underline),
+        reason: '弹层缺 Material 祖先时选项文字会画黄线下划线');
+  });
+
   testWidgets('单选浮层：贴锚点行下方、右沿对齐（下拉偏好 Overlay 口径）',
       (tester) async {
     final ctx = await pumpHost(tester);
