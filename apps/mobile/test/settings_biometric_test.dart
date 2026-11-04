@@ -65,12 +65,12 @@ Future<void> _dragUntilVisible(WidgetTester tester, Finder finder,
   }
 }
 
-/// 安全卡内的指纹开关（2026-11-04 设置页 miuix 化后行组件是
-/// MiuixSwitchPreference → 库内 MiuixSwitch；按「指纹解锁」行所在分组卡收窄）
+/// 安全卡内的指纹开关（2026-11-04 开关统一为 OrbitSwitch → Material
+/// `Switch`；按「指纹解锁」行所在分组卡收窄）
 Finder _bioSwitch() => find.descendant(
       of: find.ancestor(
           of: find.text('指纹解锁'), matching: find.byType(MiuixCard)),
-      matching: find.byType(MiuixSwitch),
+      matching: find.byType(Switch),
     );
 
 /// 把目标滚进「标题栏之下、视口下沿之上」的可命中区间。
@@ -139,7 +139,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // 开关翻转 + 三件套已落存储
-    final sw = tester.widget<MiuixSwitch>(switchFinder);
+    final sw = tester.widget<Switch>(switchFinder);
     expect(sw.value, true);
     expect(store.bundle, isNotNull);
     await drainToastTimers(tester);
@@ -165,7 +165,7 @@ void main() {
 
     await _dragUntilVisible(tester, find.text('指纹解锁'));
     final switchFinder = _bioSwitch();
-    expect(tester.widget<MiuixSwitch>(switchFinder).value, true);
+    expect(tester.widget<Switch>(switchFinder).value, true);
 
     // 同「打开开关」：先滚进可命中区间再点
     await _scrollToTappable(tester, switchFinder);
@@ -178,7 +178,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
 
-    expect(tester.widget<MiuixSwitch>(switchFinder).value, false);
+    expect(tester.widget<Switch>(switchFinder).value, false);
     expect(store.bundle, isNull);
     await drainToastTimers(tester);
   });

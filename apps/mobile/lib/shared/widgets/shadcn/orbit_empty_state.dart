@@ -10,8 +10,9 @@ import 'orbit_button.dart';
 /// **公共 API 与旧 `EmptyState` 逐字一致**（6 处调用，6 个文件）：
 /// 新增的 [actionLabel] / [onAction] 全部可选，不传则保持原样——
 /// 空态给一个出口能显著降低「不知道下一步做什么」的死路感。
-/// 用描边钮（[OrbitButton.outline]）而非实心钮：空态里已经有一个显眼的图标，
-/// 再压一个主色实心块会盖过页面本身；且不少空态旁已有 FAB 同款入口。
+/// 用次级实心钮（[OrbitButton.outline]，2026-11-04 起渲染为 miuix 默认
+/// 浅灰实心形态）而非主色实心钮：空态里已经有一个显眼的图标，再压一个
+/// 强调色实心块会盖过页面本身；且不少空态旁已有 FAB 同款入口。
 class EmptyState extends StatelessWidget {
   const EmptyState({
     super.key,

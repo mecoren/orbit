@@ -53,14 +53,14 @@ Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
   }
 }
 
-/// 「日历与节假日」卡内的开关（2026-11-04 设置页 miuix 化后行组件是
-/// MiuixSwitchPreference → 库内 MiuixSwitch；按分组卡作用域取避免串号）
+/// 「日历与节假日」卡内的开关（2026-11-04 开关统一为 OrbitSwitch →
+/// Material `Switch`；按分组卡作用域取避免串号）
 Finder _holidaySwitch() => find.descendant(
       of: find.ancestor(
         of: find.text('自动更新'),
         matching: find.byType(MiuixCard),
       ),
-      matching: find.byType(MiuixSwitch),
+      matching: find.byType(Switch),
     );
 
 void main() {
@@ -73,14 +73,14 @@ void main() {
     expect(find.text('自动更新'), findsOneWidget);
     // core 缺省开启（cfg_kv 无键按 1 处理），Mock 同口径
     expect(bridge.store.holidayAutoEnabled, isTrue);
-    expect(tester.widget<MiuixSwitch>(_holidaySwitch()).value, isTrue);
+    expect(tester.widget<Switch>(_holidaySwitch()).value, isTrue);
     expect(find.textContaining('每月自动联网更新一次'), findsOneWidget);
 
     await tester.tap(_holidaySwitch());
     await _settle(tester);
 
     expect(bridge.store.holidayAutoEnabled, isFalse);
-    expect(tester.widget<MiuixSwitch>(_holidaySwitch()).value, isFalse);
+    expect(tester.widget<Switch>(_holidaySwitch()).value, isFalse);
     expect(find.textContaining('自动更新已关闭'), findsOneWidget);
     await drainToastTimers(tester);
   });
@@ -91,7 +91,7 @@ void main() {
     await _settle(tester);
 
     await _scrollTo(tester, find.text('自动更新'));
-    expect(tester.widget<MiuixSwitch>(_holidaySwitch()).value, isFalse);
+    expect(tester.widget<Switch>(_holidaySwitch()).value, isFalse);
     expect(find.textContaining('自动更新已关闭'), findsOneWidget);
   });
 }

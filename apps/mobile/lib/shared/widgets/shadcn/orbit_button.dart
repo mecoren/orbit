@@ -15,7 +15,9 @@ enum OrbitButtonVariant {
   /// 实心次级（HyperOS 默认按钮形态：浅灰底深字；原 `FilledButton.tonal`）
   secondary,
 
-  /// 描边（原 `OutlinedButton`）
+  /// 历史描边档（原 `OutlinedButton`）：**2026-11-04 起并入 miuix 默认实心
+  /// 形态**（与 [OrbitButtonVariant.secondary] 同观感），描边语言废弃——
+  /// 枚举名仅为既有 17 处调用点保留，新代码请直接用 secondary。
   outline,
 
   /// 纯文字（原 `TextButton`）
@@ -31,11 +33,15 @@ enum OrbitButtonVariant {
 /// 几何语言）+ `MiuixPressable` 的按压遮罩/弹簧反馈（源端 Compose `Button`
 /// 同款手感），颜色仍由 `core/theme` token 派生（不写裸色值）。
 ///
-/// **三种形态的色板口径**（与既有主题同源，避免"换组件顺带换配色"）：
+/// **变体色板口径**（与既有主题同源，避免"换组件顺带换配色"）：
 /// - primary：主题强调色底 + 白字（= 原 `filledButtonTheme`）；
-/// - outline：透明底 + 强调色描边 + 强调色字（= 原 `outlinedButtonTheme`）；
+/// - secondary / outline：浅灰实心底 + 深字（HyperOS 默认按钮形态，=
+///   `MiuixButtonDefaults.buttonColors` 的仓库同源映射）。outline 原为
+///   「透明底 + 强调色描边」（= 原 `outlinedButtonTheme`），2026-11-04 起
+///   并入同一实心形态，描边语言废弃（`_ButtonOutlinePainter` 已删）；
 /// - text：透明底 + 强调色字（= 原 `textButtonTheme`）；
-/// - destructive：破坏性色底/描边（删除类），替代各处
+/// - destructive：破坏性语义（primary 主色底 / secondary·outline 红字，
+///   删除类），替代各处
 ///   `OutlinedButton.styleFrom(foregroundColor: colors.destructive)` 的手写样式。
 ///
 /// **尺寸口径**：`MiuixButton` 的 `minHeight` 默认 40，本仓库触控目标是 48
@@ -55,6 +61,7 @@ class OrbitButton extends StatelessWidget {
     this.destructive = false,
     this.compact = false,
     this.expand = false,
+    this.pill = false,
     this.iconGap = AppDimens.space8,
   });
 
@@ -66,6 +73,7 @@ class OrbitButton extends StatelessWidget {
     this.destructive = false,
     this.compact = false,
     this.expand = false,
+    this.pill = false,
     this.iconGap = AppDimens.space8,
   }) : variant = OrbitButtonVariant.primary;
 
@@ -77,10 +85,11 @@ class OrbitButton extends StatelessWidget {
     this.destructive = false,
     this.compact = false,
     this.expand = false,
+    this.pill = false,
     this.iconGap = AppDimens.space8,
   }) : variant = OrbitButtonVariant.secondary;
 
-  /// 描边按钮
+  /// 描边按钮（历史名：现渲染为与 secondary 同款的 miuix 实心形态）
   const OrbitButton.outline({
     super.key,
     required this.onPressed,
@@ -88,6 +97,7 @@ class OrbitButton extends StatelessWidget {
     this.destructive = false,
     this.compact = false,
     this.expand = false,
+    this.pill = false,
     this.iconGap = AppDimens.space8,
   }) : variant = OrbitButtonVariant.outline;
 
@@ -99,6 +109,7 @@ class OrbitButton extends StatelessWidget {
     this.destructive = false,
     this.compact = false,
     this.expand = false,
+    this.pill = false,
     this.iconGap = AppDimens.space8,
   }) : variant = OrbitButtonVariant.text;
 
@@ -112,6 +123,7 @@ class OrbitButton extends StatelessWidget {
     this.destructive = false,
     this.compact = false,
     this.expand = false,
+    this.pill = false,
     this.iconGap = AppDimens.space8,
   }) : child = _IconLabel(icon: icon, label: label, gap: iconGap);
 
@@ -131,6 +143,10 @@ class OrbitButton extends StatelessWidget {
   /// 撑满可用宽度（`MiuixButton` 本身贴内容尺寸）
   final bool expand;
 
+  /// 胶囊形态（全圆角，半径 = 高度一半；常规按钮一律走项目统一档
+  /// [AppShapes.radiusMedium]，此档仅留给特殊场景）
+  final bool pill;
+
   /// 图标与文案间距（仅 [OrbitButton.icon] 使用）
   final double iconGap;
 
@@ -148,17 +164,14 @@ class OrbitButton extends StatelessWidget {
           contentColor: mColors.onPrimary,
           disabledContentColor: colors.deactivatedText,
         ),
-      OrbitButtonVariant.secondary => MiuixButtonColors(
+      // secondary / outline：浅灰实心（HyperOS 默认形态）；outline 历史
+      // 描边档并入同一观感（见枚举注释），destructive 用红字区分
+      OrbitButtonVariant.secondary ||
+      OrbitButtonVariant.outline =>
+        MiuixButtonColors(
           color: colors.surfaceSecondary,
           disabledColor: colors.divider,
           contentColor: destructive ? colors.destructive : colors.bodyText,
-          disabledContentColor: colors.deactivatedText,
-        ),
-      // 描边/文字：底透明，靠描边或文字色表达强调
-      OrbitButtonVariant.outline => MiuixButtonColors(
-          color: Colors.transparent,
-          disabledColor: Colors.transparent,
-          contentColor: accent,
           disabledContentColor: colors.deactivatedText,
         ),
       OrbitButtonVariant.text => MiuixButtonColors(
@@ -172,8 +185,10 @@ class OrbitButton extends StatelessWidget {
     Widget button = MiuixButton(
       onPressed: onPressed,
       minHeight: minHeight,
-      // 圆角：与卡片同一档（squircle 几何由 MiuixButton 内部构造）
-      cornerRadius: AppShapes.radiusMedium,
+      // 圆角：项目统一档 AppShapes.radiusMedium（14，与卡片/输入框同档，
+      // docs/05 底部抽屉口径）；squircle 几何由 MiuixButton 内部构造。
+      // pill 仅特殊场景使用，取高度一半
+      cornerRadius: pill ? minHeight / 2 : AppShapes.radiusMedium,
       insideMargin: EdgeInsets.symmetric(
         horizontal: compact ? AppDimens.space12 : AppDimens.space16,
         vertical: compact ? AppDimens.space8 : AppDimens.space12,
@@ -181,16 +196,6 @@ class OrbitButton extends StatelessWidget {
       colors: buttonColors,
       child: child,
     );
-
-    if (variant == OrbitButtonVariant.outline) {
-      button = CustomPaint(
-        foregroundPainter: _ButtonOutlinePainter(
-          color: onPressed == null ? colors.outline : accent,
-          radius: AppShapes.radiusMedium,
-        ),
-        child: button,
-      );
-    }
 
     if (expand) {
       return SizedBox(width: double.infinity, child: button);
@@ -216,31 +221,6 @@ class _IconLabel extends StatelessWidget {
           label,
         ],
       );
-}
-
-/// 描边按钮的 1px 描边（与卡面同形的超椭圆路径）
-class _ButtonOutlinePainter extends CustomPainter {
-  const _ButtonOutlinePainter({required this.color, required this.radius});
-
-  final Color color;
-  final double radius;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (size.isEmpty) return;
-    final shape = MiuixSquircleBorder(cornerRadius: radius);
-    canvas.drawPath(
-      shape.getOuterPath(Offset.zero & size),
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1
-        ..color = color,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_ButtonOutlinePainter old) =>
-      old.color != color || old.radius != radius;
 }
 
 

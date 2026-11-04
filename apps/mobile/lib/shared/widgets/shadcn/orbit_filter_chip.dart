@@ -14,7 +14,7 @@ import '../../../core/theme/orbit_accents.dart';
 /// （`sub_list_screen._filterChip` / `sync_conflicts_page._filterChip`）。
 /// 视觉上圆角、内边距、选中底色的透明度各不相同。
 ///
-/// 本原语把口径收成一套（与 `OrbitButton.outline` 同源的 squircle 描边语言）：
+/// 本原语把口径收成一套（squircle 描边语言，与卡片描边同源）：
 /// - 选中：强调色 16% 底 + 强调色 1px 描边 + 强调色字；
 /// - 未选：透明底 + `divider` 描边 + 正文色字；
 /// - 可选色点（[dotColor]，项目/优先级色即语义的场景）；
