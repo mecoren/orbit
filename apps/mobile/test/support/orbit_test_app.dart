@@ -80,6 +80,22 @@ Finder selectPopup() => find.byKey(orbitSelectPopupKey);
 /// `MiuixGlassDropdownPopup` 的内容节点）
 Finder dropdownPopup() => find.byKey(orbitDropdownPopupKey);
 
+/// 库内下拉偏好行（`MiuixWindowDropdownPreference`，2026-11-04 外观页起用）
+/// 展开后的弹层选项行 finder
+///
+/// Window 变体的弹层直接挂根 Overlay，页面内无其它同型行，全局找
+/// `MiuixDropdownImpl` 即可（弹层收起后条目随 OverlayEntry 移除）。
+Finder dropdownPreferencePopupRows() => find.byType(MiuixDropdownImpl);
+
+/// 下拉偏好弹层里打勾的条目文案
+///
+/// 行是库内 `MiuixDropdownImpl`，选中态在 `isSelected` 上（勾本身是
+/// CustomPaint，直接按 icon 数断言拿不到），故读行数据。
+Iterable<String> selectedDropdownPreferenceLabels(WidgetTester tester) => tester
+    .widgetList<MiuixDropdownImpl>(dropdownPreferencePopupRows())
+    .where((row) => row.isSelected)
+    .map((row) => row.item.text);
+
 /// 下拉面板里打勾的条目文案
 ///
 /// 行是 miuix 的 `MiuixGlassPopupItem`，选中态在 `selected` 上（勾本身是

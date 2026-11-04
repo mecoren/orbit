@@ -90,7 +90,11 @@ MiuixColors buildMiuixColors(Brightness brightness) {
     surfaceVariant: c.surfaceSecondary,
     onSurfaceSecondary: c.secondaryText,
     onSurfaceVariantSummary: c.secondaryText,
-    onSurfaceVariantActions: c.accent,
+    // 「操作位」色（下拉/微调/箭头偏好的尾随值与箭头）：库内默认是中性灰
+    // （浅 0x66000000 / 深 0x66FFFFFF），monet 映射也落 onSurfaceVariant——
+    // 不是强调色。此前映射到 accent 导致外观页尾随值发蓝（2026-11-04 截图），
+    // 改取 iconText（既有中间灰 token，明度与库内默认最接近）。
+    onSurfaceVariantActions: c.iconText,
     disabledOnSurface: c.deactivatedText,
     surfaceContainer: c.surface,
     onSurfaceContainer: c.titleText,
