@@ -113,11 +113,7 @@ async fn record_incremental_history(
         Err(e) => {
             // N33：取消是用户操作而非故障，历史记 cancelled（中性色展示），
             // 「失败」只留给真正的错误，避免把主动取消算进失败率
-            let status = if e.is_cancelled() {
-                "cancelled"
-            } else {
-                "failed"
-            };
+            let status = if e.is_cancelled() { "cancelled" } else { "failed" };
             (status, 0, 0, 0, Some(e.to_string()))
         }
     };
@@ -2595,11 +2591,12 @@ mod tests {
             "主动取消不是故障，历史记 cancelled 而非 failed"
         );
 
-        let ledger: (Option<i64>,) =
-            sqlx::query_as("SELECT last_synced_at FROM sync_configs WHERE is_active = 1")
-                .fetch_one(&engine.db_pool)
-                .await
-                .unwrap();
+        let ledger: (Option<i64>,) = sqlx::query_as(
+            "SELECT last_synced_at FROM sync_configs WHERE is_active = 1",
+        )
+        .fetch_one(&engine.db_pool)
+        .await
+        .unwrap();
         assert!(
             ledger.0.is_none(),
             "取消轮次不得推进 last_synced_at（回收站守卫线）"

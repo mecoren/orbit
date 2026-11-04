@@ -16,8 +16,8 @@
 
 mod common;
 
-use std::sync::Arc;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use std::time::Duration;
 
 use common::{FakeCloud, Protocol};
@@ -188,9 +188,7 @@ async fn webdav_cancel_mid_parts_stops_before_manifest() {
     assert!(err.is_cancelled(), "应为取消错误: {err}");
     let requests = cloud.requests();
     assert!(
-        !requests
-            .iter()
-            .any(|r| r.contains("head.json") && !r.contains("404")),
+        !requests.iter().any(|r| r.contains("head.json") && !r.contains("404")),
         "取消后不得写 head.json（清单是完成信号）: {requests:?}"
     );
     assert!(
