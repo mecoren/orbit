@@ -671,6 +671,10 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
               right: 0,
               child: OrbitPageHeader(
                 title: '循迹',
+                // 根页走 OS4 折叠栏形态（标题 + 日期副标居中、两侧圆形玻璃钮），
+                // 其余页仍是左对齐单行标题（见 orbit_page_header.dart 文件头）
+                os4: true,
+                subtitle: todayHeaderLabel(DateTime.now()),
                 showMenu: false,
                 showBack: false,
                 // 左端云同步图标（未配置/未解锁直达配置页；就绪弹信息面板）

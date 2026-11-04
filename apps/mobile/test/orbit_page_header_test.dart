@@ -2,6 +2,7 @@
 // 页头由 `Positioned(top: 0)` 挂在页面 Stack 顶部，因此自身必须避让状态栏，
 // 否则标题被状态栏压到顶部（各页内容区让位却是「状态栏 + rowHeight」）。
 import 'package:flutter/material.dart';
+import 'package:flutter_miuix/miuix.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_page_header.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_progressive_blur.dart';
@@ -114,5 +115,55 @@ void main() {
     final pageWidth = tester.getSize(find.byType(OrbitPageHeader)).width;
     final bar = find.descendant(of: line, matching: find.byType(Container)).first;
     expect(tester.getSize(bar).width, closeTo(pageWidth * 0.5, 1.5));
+  });
+
+  testWidgets('OS4 形态：标题+副标居中，leading/actions 套圆形玻璃底，几何口径不变',
+      (tester) async {
+    await tester.pumpWidget(orbitTestApp(
+      home: MediaQuery(
+        data: const MediaQueryData(padding: EdgeInsets.only(top: 24)),
+        child: Stack(
+          children: [
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: OrbitPageHeader(
+                title: '循迹',
+                os4: true,
+                subtitle: '11月4日 周三',
+                // 对称占位（各 48 热区）：居中基准依赖两侧等宽
+                leading: const SizedBox.square(dimension: 48),
+                actions: const [SizedBox.square(dimension: 48)],
+              ),
+            ),
+          ],
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    final headerSize = tester.getSize(find.byType(OrbitPageHeader));
+    // 行高 / 状态栏避让与普通形态同口径，各页内容区让位无需调整
+    expect(headerSize.height, 24 + OrbitPageHeader.rowHeight);
+
+    // 标题与副标都落在屏幕中轴上
+    expect(
+      tester.getCenter(find.text('循迹')).dx,
+      closeTo(headerSize.width / 2, 1),
+    );
+    expect(
+      tester.getCenter(find.text('11月4日 周三')).dx,
+      closeTo(headerSize.width / 2, 1),
+    );
+
+    // leading / actions 各套一枚圆形玻璃底（OS4 折叠栏静止态的承载面）
+    expect(
+      find.descendant(
+        of: find.byType(OrbitPageHeader),
+        matching: find.byType(MiuixGlassPanel),
+      ),
+      findsNWidgets(2),
+    );
   });
 }

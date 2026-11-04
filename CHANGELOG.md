@@ -17,6 +17,10 @@
 
 ## [Unreleased]
 
+### 优化：移动端首页页头切换 HyperOS 4 折叠栏形态（2026-11-04）
+
+清单首屏（「循迹」）页头按 flutter_miuix `MiuixGlassTopAppBar` 的 HyperOS 4 观感重排：标题与日期副标（`M月D日 周X`）两行**居中**，左端云同步图标与右端设置钮各套 **44dp 圆形玻璃底**（`MiuixGlassPanel` + `puredThinGlass` + small 描边，与 OS4 顶栏按钮同档）。实现为 `OrbitPageHeader` 新增的逐页开关 `os4` / `subtitle`（其余 27 页保留左对齐单行标题——它们的标题槽是月份导航、计数徽标等自定义内容，居中化会改版式）；行高 / 状态栏避让 / 进度线三条几何口径不变，各页内容区让位无需调整。**验证**：`flutter analyze` 0 issue；`flutter test` 1135 绿（页头用例补 OS4 形态几何断言：标题/副标落屏幕中轴、leading/actions 各一枚玻璃圆片、占高不变）。
+
 ### 优化：移动端下拉偏好面板直接改用库内 OS4 玻璃弹层（2026-11-04）
 
 外观页四行的下拉面板不再自建「`showGeneralDialog` 路由 + 玻璃卡面 + 形变插值」，**直接取 flutter_miuix 的 `MiuixGlassDropdownPopup` + `MiuixGlassPopupItem`**（对齐库内 `example/lib/showcase/os4.dart` 的「弹层」示例——库里有现成的就用现成的，自建一套视觉必然长期漂移）：

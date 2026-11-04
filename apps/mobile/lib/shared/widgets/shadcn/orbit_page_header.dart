@@ -24,6 +24,13 @@ import 'orbit_icon_button.dart';
 /// 一致、无回归」相冲突。故这里**只取 OS4 玻璃材质**（`MiuixGlassPanel`），
 /// 布局仍由本组件承担。
 ///
+/// **OS4 形态（[os4]，2026-11-04）**：根页（首页「循迹」）切到 HyperOS 4
+/// 折叠栏的观感——标题 + [subtitle] 两行居中、leading/返回/菜单与 actions
+/// 各包一枚 44dp 圆形玻璃底（与 `MiuixGlassTopAppBar` 的按钮同档）。其余
+/// 页面保留左对齐单行标题：它们的标题槽是自定义内容（月份导航、未完成计数、
+/// 年份箭头），居中化会改版式，故这是**逐页开关**而不是整栏替换；行高 /
+/// 状态栏避让 / 进度线三条几何口径不变，各页内容区让位无需调整。
+///
 /// 表面材质两条路径：
 /// - 宿主传了 [backdrop]（`MiuixLayerBackdropCapture` 的采样器）→ OS4 液态
 ///   玻璃：库内 fragment shader 的**模糊 + 混色 + 描边**，材质取
@@ -57,6 +64,9 @@ class OrbitPageHeader extends StatelessWidget implements PreferredSizeWidget {
     this.progress,
     // OS4 玻璃背景采样器（null = 实时背景滤镜路径）
     this.backdrop,
+    // OS4 折叠栏形态（标题居中 + 圆形玻璃钮；逐页开启）
+    this.os4 = false,
+    this.subtitle,
   });
 
   /// 行高（页面内容区让位基准；与各页 `OrbitPageHeader.rowHeight` 同值同义）
@@ -65,6 +75,9 @@ class OrbitPageHeader extends StatelessWidget implements PreferredSizeWidget {
   /// 实时模糊路径的模糊强度（逻辑像素 sigma）：与移动端设计基准同档，
   /// 改这里即全站页头同步
   static const double glassSigma = 5;
+
+  /// OS4 形态的圆形玻璃钮边长（与 flutter_miuix 顶栏 `buttonSize` 同档）
+  static const double os4ButtonSize = 44;
 
   /// 返回回调；为 null 时默认 `Navigator.maybePop`
   final VoidCallback? onBack;
@@ -93,6 +106,13 @@ class OrbitPageHeader extends StatelessWidget implements PreferredSizeWidget {
   /// OS4 玻璃的背景采样器（与宿主 `MiuixLayerBackdropCapture` 同一个实例）。
   /// null → 走实时 `BackdropFilter` 路径（观感同档，无需宿主接线）。
   final MiuixLayerBackdrop? backdrop;
+
+  /// OS4（HyperOS 4）折叠栏形态开关（见文件头）：标题与 [subtitle] 居中，
+  /// leading/返回/菜单与 actions 自动套 44dp 圆形玻璃底
+  final bool os4;
+
+  /// 副标题（仅 [os4] 形态渲染）：标题下方的次要文字，居中单行省略
+  final String? subtitle;
 
   @override
   Size get preferredSize => const Size.fromHeight(rowHeight);
@@ -190,8 +210,9 @@ class OrbitPageHeader extends StatelessWidget implements PreferredSizeWidget {
   }
 
   Widget? _buildLeading(BuildContext context, AppColorSet colors) {
+    Widget? slot;
     if (showMenu) {
-      return OrbitIconButton(
+      slot = OrbitIconButton(
         tooltip: '菜单',
         icon: Icon(
           OrbitIcons.menu,
@@ -200,9 +221,8 @@ class OrbitPageHeader extends StatelessWidget implements PreferredSizeWidget {
         ),
         onPressed: onMenuTap,
       );
-    }
-    if (showBack) {
-      return OrbitIconButton(
+    } else if (showBack) {
+      slot = OrbitIconButton(
         tooltip: '返回',
         icon: Icon(
           OrbitIcons.back,
@@ -211,27 +231,104 @@ class OrbitPageHeader extends StatelessWidget implements PreferredSizeWidget {
         ),
         onPressed: onBack ?? () => Navigator.of(context).maybePop(),
       );
+    } else {
+      slot = leading;
     }
-    return leading;
+    return _glassSlot(slot);
   }
 
   Widget _buildTitle(BuildContext context, AppColorSet colors) {
-    return titleWidget ??
+    final custom = titleWidget;
+    if (custom != null) return custom;
+    final text = Text(
+      title ?? '',
+      style: TextStyle(
+        fontSize: os4 ? 20 : 18,
+        fontWeight: FontWeight.w600,
+        color: colors.titleText,
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      textAlign: os4 ? TextAlign.center : TextAlign.start,
+    );
+    final sub = subtitle;
+    if (!os4 || sub == null) return text;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        text,
         Text(
-          title ?? '',
+          sub,
           style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: colors.titleText,
+            fontSize: 12,
+            height: 1.2,
+            color: colors.secondaryText,
           ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-        );
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
   }
 
   Widget _buildTrailing() {
     if (actions == null || actions!.isEmpty) return const SizedBox.shrink();
-    return Row(mainAxisSize: MainAxisSize.min, children: [...actions!]);
+    // OS4 形态下每个动作各占一枚圆形玻璃钮，钮间留 8（miuix 顶栏同档间距）
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < actions!.length; i++) ...[
+          if (os4 && i > 0) const SizedBox(width: AppDimens.space8),
+          _glassSlot(actions![i])!,
+        ],
+      ],
+    );
+  }
+
+  /// OS4 形态的图标槽：44dp 圆形玻璃底 + 原控件居中叠放。
+  ///
+  /// 不替换调用方控件（tooltip / 语义 / 状态色都留在原地），只在下面垫一层
+  /// 玻璃圆片；外框收紧到 [os4ButtonSize]，`OrbitIconButton` 的热区随之
+  /// 收到 44（与 miuix 顶栏按钮同为 44），按压遮罩不会溢出圆片。
+  Widget? _glassSlot(Widget? child) {
+    if (!os4 || child == null) return child;
+    return SizedBox.square(
+      dimension: os4ButtonSize,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          const Positioned.fill(child: _Os4GlassCircle()),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+/// OS4 顶栏图标钮的圆形玻璃底（HyperOS 4 折叠栏静止态）
+///
+/// `MiuixGlassPanel` + `puredThinGlass` + 圆形 shape + small 描边 +
+/// regular 阴影，与库内 `MiuixGlassIconButton` 的承载面同档。页头在壳层的
+/// 采样捕获树之内，拿不到 backdrop（传进来会把自己拍进背景，越糊越实），
+/// 库内退到实色填充——正好是 OS4 静止态「白圆 + 细描边 + 轻投影」的观感；
+/// 内容从页头下滚过时，底色仍由下面那层渐进模糊透出来。
+class _Os4GlassCircle extends StatelessWidget {
+  const _Os4GlassCircle();
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return MiuixGlassPanel(
+      material: MiuixGlassMaterials.puredThinGlass(isDark),
+      shape: const MiuixGlassShape(
+        cornerRadius: OrbitPageHeader.os4ButtonSize / 2,
+      ),
+      stroke: MiuixGlassStrokes.small(isDark),
+      shading: false,
+      child: const SizedBox.expand(),
+    );
   }
 }
 
