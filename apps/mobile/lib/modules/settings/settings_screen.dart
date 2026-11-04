@@ -25,8 +25,9 @@ import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_password_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/utils/sync_status_text.dart';
-import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_dropdown_preference.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
+import '../../shared/widgets/shadcn/orbit_switch.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../shared/widgets/shadcn/orbit_button.dart';
 import '../../shared/widgets/shadcn/orbit_progress_bar.dart';
@@ -43,7 +44,8 @@ import '../../services/digest_scheduler.dart';
 /// Item」**逐像素同构**（2026-11-04 对齐）：分组 = 卡外 [MiuixSmallTitle] +
 /// [MiuixCard] 分组卡（h:12 外距、零内边距，行自带 16×14 内边距），行间
 /// 左缩进 56 的 [MiuixHorizontalDivider]；行 = [MiuixArrowPreference] /
-/// [MiuixSwitchPreference] / [MiuixBasicComponent]，值文本取
+/// 开关行（[_switchRow]：MiuixBasicComponent + OrbitSwitch）/
+/// [MiuixBasicComponent]，值文本取
 /// `onSurfaceVariantActions`（中性灰）。
 ///
 /// - 同步卡：引擎摘要（脱敏 endpoint host/bucket）+ 上次同步时间 +
@@ -153,6 +155,28 @@ Widget _arrowRow(
               : theme.colors.disabledOnSecondaryVariant,
         ),
       ?trailing,
+    ],
+  );
+}
+
+/// 开关行（与 [_arrowRow] 同构，右侧为 [OrbitSwitch] 蓝色开关）
+///
+/// 整行可点切换；禁用时回调传 null（标题/摘要同转灰，开关不可用，
+/// miuix 禁用项口径）。onChanged 为 null 即禁用。
+Widget _switchRow(
+  BuildContext context,
+  String title, {
+  String? summary,
+  required bool value,
+  ValueChanged<bool>? onChanged,
+}) {
+  return MiuixBasicComponent(
+    title: title,
+    summary: summary,
+    insideMargin: _rowMargin,
+    onClick: onChanged == null ? null : () => onChanged(!value),
+    endActions: [
+      OrbitSwitch(value: value, onChanged: onChanged, semanticLabel: title),
     ],
   );
 }
@@ -651,30 +675,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   /// 设置回收站保留档位（7/30/90/永久；本地偏好不同步）
-  Future<void> _pickTrashRetention() async {
+  Future<void> _setTrashRetention(int days) async {
     final bridge = ref.read(orbitBridgeProvider);
     final current = ref.read(trashMetaProvider).value?.retentionDays ?? 30;
-    await showSelectBottomSheet<int>(
-      context,
-      title: '回收站保留时间',
-      items: const [
-        SelectItem(value: 7, label: '7 天'),
-        SelectItem(value: 30, label: '30 天'),
-        SelectItem(value: 90, label: '90 天'),
-        SelectItem(value: 0, label: '永久'),
-      ],
-      current: current,
-      onSelect: (days) async {
-        if (days == current) return;
-        try {
-          await bridge.trashSetRetentionDays(days);
-          ref.invalidate(trashMetaProvider);
-          WaitToast.success(days == 0 ? '回收站已设为永久保留' : '保留时间已设为 $days 天');
-        } catch (_) {
-          WaitToast.destructive('保存失败');
-        }
-      },
-    );
+    if (days == current) return;
+    try {
+      await bridge.trashSetRetentionDays(days);
+      ref.invalidate(trashMetaProvider);
+      WaitToast.success(days == 0 ? '回收站已设为永久保留' : '保留时间已设为 $days 天');
+    } catch (_) {
+      WaitToast.destructive('保存失败');
+    }
   }
 
   /// 切换每日摘要提醒开关（G3）：改写 cfg_kv 偏好后立即重排系统闹钟
@@ -1018,6 +1029,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
     final config = ref.watch(syncConfigProvider).value;
+    // 回收站保留档位（下拉偏好行的尾随值与对勾同取这一份当前值）
+    final retentionDays = ref.watch(trashMetaProvider).value?.retentionDays ?? 30;
     // 节假日自动更新总开关（core 缺省开启；记账未取到按开启显示）
     final holidayAuto =
         ref.watch(holidayMetaProvider).value?.autoEnabled ?? true;
@@ -1137,13 +1150,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     '保留时间为本机设置，不随云同步。',
                   ),
                   const _RowDivider(),
-                  _arrowRow(
-                    context,
-                    '保留时间',
-                    value: _trashRetentionLabel(
-                      ref.watch(trashMetaProvider).value?.retentionDays,
-                    ),
-                    onClick: _pickTrashRetention,
+                  // 与外观页同款下拉偏好行：当前值 + 上下双箭头，就地展开
+                  OrbitDropdownPreference<int>(
+                    title: '保留时间',
+                    items: _trashRetentionItems(retentionDays),
+                    current: retentionDays,
+                    onSelect: _setTrashRetention,
+                    insideMargin: _rowMargin,
                   ),
                   const _RowDivider(),
                   _arrowRow(
@@ -1250,17 +1263,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     '也可在日历页手动更新，或在缓存页按年份补写历史数据。',
                   ),
                   const _RowDivider(),
-                  MiuixSwitchPreference(
-                    title: '自动更新',
+                  _switchRow(
+                    context,
+                    '自动更新',
                     summary: holidayAuto
                         ? '每月自动联网更新一次；关闭后仅保留手动更新与按年补写。'
                         : '自动更新已关闭：需要时请在日历页手动更新，或在缓存页按年补写。',
                     value: holidayAuto,
                     onChanged: _holidayAutoBusy
-                        ? (v) {}
+                        ? null
                         : (v) => _toggleHolidayAuto(v),
-                    enabled: !_holidayAutoBusy,
-                    insideMargin: _rowMargin,
                   ),
                   const _RowDivider(),
                   _arrowRow(
@@ -1694,13 +1706,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         '应用不在前台也会准时提醒。',
       ),
       const _RowDivider(),
-      MiuixSwitchPreference(
-        title: '开启摘要提醒',
+      _switchRow(
+        context,
+        '开启摘要提醒',
         value: prefs.enabled,
         // 忙碌期整行禁用（miuix 禁用项口径：标题/开关同转灰）
-        onChanged: _digestBusy ? (v) {} : (v) => _toggleDigest(v),
-        enabled: !_digestBusy,
-        insideMargin: _rowMargin,
+        onChanged: _digestBusy ? null : (v) => _toggleDigest(v),
       ),
       const _RowDivider(),
       _arrowRow(
@@ -1793,8 +1804,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ],
       if (_bioAvailable == true) ...[
         const _RowDivider(),
-        MiuixSwitchPreference(
-          title: '指纹解锁',
+        _switchRow(
+          context,
+          '指纹解锁',
           summary: _bioEnabled == true
               ? '开启后可在解锁页用指纹代替主密码（密钥链存于系统安全存储，不离开本机）。'
               : encrypted == true
@@ -1803,10 +1815,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           value: _bioEnabled == true,
           // 明文库无需解锁，指纹开关不可用（_masterAuthSet 探测中同样置灰）
           onChanged: (_bioBusy || _bioEnabled == null || encrypted != true)
-              ? (v) {}
+              ? null
               : (v) => v ? _bioEnable() : _bioDisable(),
-          enabled: !(_bioBusy || _bioEnabled == null || encrypted != true),
-          insideMargin: _rowMargin,
         ),
       ] else if (_bioAvailable == false)
         _sectionNote(
@@ -1823,6 +1833,16 @@ String _trashRetentionLabel(int? days) {
   if (days == null || days == 30) return '30 天';
   return days == 0 ? '永久' : '$days 天';
 }
+
+/// 保留档位下拉项（存量非档位值补一项「当前」，保证尾随值与对勾都在线）
+List<SelectItem<int>> _trashRetentionItems(int current) => [
+  if (current != 7 && current != 30 && current != 90 && current != 0)
+    SelectItem(value: current, label: _trashRetentionLabel(current)),
+  const SelectItem(value: 7, label: '7 天'),
+  const SelectItem(value: 30, label: '30 天'),
+  const SelectItem(value: 90, label: '90 天'),
+  const SelectItem(value: 0, label: '永久'),
+];
 
 /// 引擎摘要（脱敏不显示凭据）：webdav → endpoint host；s3 → bucket
 String engineSummary(SyncConfigView config) {

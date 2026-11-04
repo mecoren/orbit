@@ -9,6 +9,7 @@
 // 3. 首次设置走共享密码抽屉（`showPasswordSheet`）：点「设置密码」入口拉起
 //    抽屉，字段是抽屉内 OrbitTextField；页内仅剩解锁态一个「同步密码」输入框。
 import 'package:flutter/material.dart';
+import 'package:flutter_miuix/miuix.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -16,6 +17,8 @@ import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/settings/sync_settings_page.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_button.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_card.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_switch.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_text_field.dart';
 import 'support/orbit_test_app.dart';
 
@@ -93,10 +96,65 @@ void main() {
     // 切换 S3：bucket/region 出现
     await tester.tap(find.text('WebDAV'));
     await tester.pumpAndSettle();
+    // 外观同款下拉偏好行：弹层内当前档回勾 WebDAV，尾随值常驻行内
+    expect(dropdownPreferencePopupRows(), findsWidgets);
+    expect(selectedDropdownPreferenceLabels(tester), ['WebDAV']);
     await tester.tap(find.text('S3 兼容存储').last);
     await tester.pumpAndSettle();
     expect(find.text('存储桶'), findsOneWidget);
     expect(find.text('Region'), findsOneWidget);
+  });
+
+  testWidgets('定时同步间隔：下拉偏好行回勾当前档 + 关闭总开关后不可展开', (tester) async {
+    await tester.pumpWidget(_wrap(MockOrbitBridge()));
+    await _flush(tester);
+
+    await _scrollTo(tester, find.text('每 60 分钟'));
+    await tester.tap(find.text('每 60 分钟'));
+    await tester.pumpAndSettle();
+    expect(selectedDropdownPreferenceLabels(tester), ['每 60 分钟']);
+
+    await tester.tap(find.text('每 2 小时').last);
+    await tester.pumpAndSettle();
+    expect(find.text('每 2 小时'), findsOneWidget);
+
+    // 关掉「定时同步」总开关 → 间隔行整行禁用，点不开弹层
+    await tester.tap(find.byType(OrbitSwitch).first);
+    await tester.pumpAndSettle();
+    // 开关并入同一偏好行后，点开关不能顺带把下拉展开
+    expect(dropdownPreferencePopupRows(), findsNothing);
+    await tester.tap(find.text('每 2 小时'));
+    await tester.pumpAndSettle();
+    expect(dropdownPreferencePopupRows(), findsNothing);
+  });
+
+  testWidgets('下拉展开阴影撑满整卡：两行宽度 = 卡宽，开关并入同一行', (tester) async {
+    await tester.pumpWidget(_wrap(MockOrbitBridge()));
+    await _flush(tester);
+
+    Finder row(String title) => find.byWidgetPredicate(
+          (w) => w is MiuixWindowDropdownPreference && w.title == title,
+        );
+    final cardWidth = tester.getRect(find.byType(OrbitCard).first).width;
+    expect(tester.getRect(row('引擎')).width,
+        moreOrLessEquals(cardWidth, epsilon: 1),
+        reason: '引擎行按压灰底必须横贯整卡');
+
+    // 定时同步行在首屏下方，先滚入树再量宽度
+    await _scrollTo(tester, find.text('每 60 分钟'));
+    expect(tester.getRect(row('定时同步')).width,
+        moreOrLessEquals(cardWidth, epsilon: 1),
+        reason: '开关右侧那一段不算撑满');
+    expect(
+      find.byWidgetPredicate(
+        (w) =>
+            w is MiuixWindowDropdownPreference &&
+            w.title == '定时同步' &&
+            w.startAction != null,
+      ),
+      findsOneWidget,
+      reason: '总开关必须作为行首动作并入同一偏好行',
+    );
   });
 
   testWidgets('保存：endpoint 必填（空则禁用）→ 填写后成功落库', (tester) async {

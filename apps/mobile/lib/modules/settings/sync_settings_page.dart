@@ -16,9 +16,10 @@ import '../../shared/utils/sync_status_text.dart';
 import '../../shared/widgets/shadcn/orbit_checkbox.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_password_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_card.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
-import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_dropdown_preference.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_text_field.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
@@ -228,14 +229,13 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
                 bottom: AppDimens.gestureInsetFallback + AppDimens.space32,
               ),
               children: [
-                SectionCard(
-                  title: '云同步连接',
-                  subtitle: _config == null
-                      ? null
-                      : '已配置 · ${_engineLabel(_engine)}',
+                OrbitCard(
+                  // 整卡零水平内边距：下拉偏好行展开时的按压灰底才能横贯整卡
+                  // （撑满），头行与表单字段各自补 16 水平内边距。
+                  padding: const EdgeInsets.only(bottom: AppDimens.cardPadding),
                   child: _loading
                       ? Padding(
-                          padding: const EdgeInsets.all(AppDimens.space16),
+                          padding: const EdgeInsets.all(AppDimens.cardPadding),
                           child: Center(
                             child: OrbitSpinner(
                               size: AppDimens.iconSizeLg,
@@ -271,6 +271,12 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
 
   String _engineLabel(String engine) => engine == 's3' ? 'S3' : 'WebDAV';
 
+  /// 引擎档位（两档；值即保存口径）
+  static const List<SelectItem<String>> _engineItems = [
+    SelectItem(value: 'webdav', label: 'WebDAV'),
+    SelectItem(value: 's3', label: 'S3 兼容存储'),
+  ];
+
   /// 定时同步间隔档位（桌面同款五档；存量配置的非档位值按分钟/小时回显）
   static const _intervalChoices = <int, String>{
     10: '每 10 分钟',
@@ -284,123 +290,33 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
       _intervalChoices[minutes] ??
       (minutes % 60 == 0 ? '每 ${minutes ~/ 60} 小时' : '每 $minutes 分钟');
 
-  /// 引擎选择抽屉（两档）
-  Future<void> _pickEngine() => showSelectBottomSheet<String>(
-    context,
-    title: '同步引擎',
-    items: const [
-      SelectItem(value: 'webdav', label: 'WebDAV'),
-      SelectItem(value: 's3', label: 'S3 兼容存储'),
-    ],
-    current: _engine,
-    onSelect: (v) {
-      if (mounted) setState(() => _engine = v);
-    },
-  );
-
-  /// 定时同步间隔抽屉（开关关闭时行不可点）
-  Future<void> _pickInterval() => showSelectBottomSheet<int>(
-    context,
-    title: '定时同步间隔',
-    items: [
-      for (final e in _intervalChoices.entries)
-        SelectItem(value: e.key, label: e.value),
-    ],
-    current: _intervalMin,
-    onSelect: (v) {
-      if (mounted) setState(() => _intervalMin = v);
-    },
-  );
-
-  /// 表单选择行：只读展示当前值 + 尾箭头，点行唤起底部抽屉
-  /// （选择类交互统一底部抽屉，AGENTS.md 移动端约定）。
-  ///
-  /// 2026-11-02 起与 `OrbitTextField`（MiuixTextField filled）同形：灰底
-  /// 16 圆角胶囊 + 小号浮动标签在上 + 值在下。此前用 `InputDecorator` 模拟
-  /// Material 输入框，输入框换 miuix 后这一行会单独留在旧观感里。
-  /// [onTap] 为 null 即禁用态（值文字降为次要色）。
-  Widget _selectRow({
-    required AppColorSet colors,
-    required String label,
-    required String value,
-    required VoidCallback? onTap,
-    double fontSize = 15,
-  }) {
-    // 与 MiuixTextFieldDefaults.cornerRadius 同档
-    const radius = BorderRadius.all(Radius.circular(16));
-    return Material(
-      color: colors.surfaceSecondary,
-      borderRadius: radius,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: radius,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 56),
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppDimens.space16,
-            vertical: AppDimens.space8,
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // miuix 浮动标签档：填充态标签缩到 10
-                    Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 10,
-                        height: 1.4,
-                        color: colors.secondaryText,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      value,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: fontSize,
-                        height: 1.4,
-                        color: onTap == null
-                            ? colors.secondaryText
-                            : colors.bodyText,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                OrbitIcons.chevronRight,
-                size: AppDimens.iconSizeSm + 2,
-                color: colors.secondaryText,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  /// 间隔下拉项（非档位配置补一项「当前」，保证尾随值与弹层对勾都在线）
+  List<SelectItem<int>> get _intervalItems => [
+    if (!_intervalChoices.containsKey(_intervalMin))
+      SelectItem(value: _intervalMin, label: _intervalLabel(_intervalMin)),
+    for (final e in _intervalChoices.entries)
+      SelectItem(value: e.key, label: e.value),
+  ];
 
   Widget _connectionForm(AppColorSet colors) {
     final isS3 = _engine == 's3';
     final endpointEmpty = _endpointController.text.trim().isEmpty;
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      // stretch：两个下拉偏好行拿到整卡宽，展开时按压灰底才能撑满
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // 引擎选择（同桌面下拉，两档）——选择类交互走底部抽屉
-        _selectRow(
-          colors: colors,
-          label: '引擎',
-          value: _engineLabel(_engine),
-          onTap: _pickEngine,
+        _cardHeader(colors),
+        const SizedBox(height: AppDimens.space12),
+        // 引擎选择：整行自带 16 水平内边距，展开时按压灰底横贯整卡
+        OrbitDropdownPreference<String>(
+          title: '引擎',
+          items: _engineItems,
+          current: _engine,
+          onSelect: (v) => setState(() => _engine = v),
         ),
         const SizedBox(height: AppDimens.space12),
+        _formFields([
         OrbitTextField(
           controller: _endpointController,
           keyboardType: TextInputType.url,
@@ -445,27 +361,25 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
           controller: _basePathController,
           label: '远端路径',
         ),
+        ]),
         const SizedBox(height: AppDimens.space12),
-        // 定时同步：开关 + 间隔（移动端无调度器，仅存档；桌面端生效）
-        Row(
-          children: [
-            OrbitSwitch(
-              value: _autoEnabled,
-              onChanged: (v) => setState(() => _autoEnabled = v),
-            ),
-            const SizedBox(width: AppDimens.space8),
-            Expanded(
-              // 开关关闭时间隔不可点（onTap null = 禁用态）
-              child: _selectRow(
-                colors: colors,
-                label: '定时同步',
-                value: _intervalLabel(_intervalMin),
-                fontSize: 14,
-                onTap: _autoEnabled ? _pickInterval : null,
-              ),
-            ),
-          ],
+        // 定时同步：开关作为行首动作并入同一偏好行，按压灰底覆盖整行
+        OrbitDropdownPreference<int>(
+          title: '定时同步',
+          startAction: OrbitSwitch(
+            value: _autoEnabled,
+            onChanged: (v) => setState(() => _autoEnabled = v),
+          ),
+          items: _intervalItems,
+          current: _intervalMin,
+          enabled: _autoEnabled,
+          onSelect: (v) => setState(() => _intervalMin = v),
+          insideMargin: const EdgeInsets.symmetric(
+            horizontal: AppDimens.cardPadding,
+            vertical: AppDimens.space8,
+          ),
         ),
+        _formFields([
         if (_autoEnabled)
           Padding(
             padding: const EdgeInsets.only(top: AppDimens.space4),
@@ -542,9 +456,49 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
             ),
           ],
         ),
+        ]),
       ],
     );
   }
+
+  /// 表单字段组：卡片零水平内边距时补回 16，与卡头/下拉行文字保持同线。
+  /// 下拉偏好行必须留在本组之外，展开时的按压灰底才能横贯整卡。
+  Widget _formFields(List<Widget> children) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: AppDimens.cardPadding),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: children,
+    ),
+  );
+
+  /// 卡头（原 `SectionCard` 头行口径）：卡片零水平内边距，本行自带 16。
+  Widget _cardHeader(AppColorSet colors) => Padding(
+    padding: const EdgeInsets.fromLTRB(
+      AppDimens.cardPadding,
+      AppDimens.cardPadding,
+      AppDimens.cardPadding,
+      0,
+    ),
+    child: Row(
+      children: [
+        const Text(
+          '云同步连接',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: OrbitAccents.todoAccent,
+          ),
+        ),
+        if (_config != null) ...[
+          const SizedBox(width: AppDimens.space8),
+          Text(
+            '已配置 · ${_engineLabel(_engine)}',
+            style: TextStyle(fontSize: 12, color: colors.secondaryText),
+          ),
+        ],
+      ],
+    ),
+  );
 
   Widget _switchRow({
     required AppColorSet colors,

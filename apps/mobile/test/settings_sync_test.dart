@@ -117,4 +117,32 @@ void main() {
     // 此处验证按钮存在与正常 toast 链路；key_mismatch 分流为纯 Dart 分支逻辑）
     expect(find.text('立即同步'), findsOneWidget);
   });
+
+  testWidgets('保留时间：外观同款下拉偏好行选 90 天后落库', (tester) async {
+    final bridge = MockOrbitBridge();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
+        child: orbitTestAppRouter(routerConfig: buildRouter()),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+
+    // 回收站卡在首屏下方：滚到行内当前值再点开下拉
+    await tester.scrollUntilVisible(
+      find.text('30 天'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('30 天'));
+    await tester.pumpAndSettle();
+    expect(selectedDropdownPreferenceLabels(tester), ['30 天']);
+
+    await tester.tap(find.text('90 天').last);
+    await tester.pumpAndSettle();
+    expect(find.text('90 天'), findsOneWidget);
+    expect((await bridge.trashMeta()).retentionDays, 90);
+    await drainToastTimers(tester);
+  });
 }
