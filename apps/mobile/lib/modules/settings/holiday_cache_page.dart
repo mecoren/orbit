@@ -13,10 +13,10 @@ import '../../shared/widgets/shadcn/orbit_empty_state.dart';
 import '../../shared/widgets/shadcn/orbit_month_calendar.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
-import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../shared/widgets/shadcn/orbit_switch.dart';
+import '../../shared/widgets/shadcn/orbit_wheel_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_button.dart';
 import '../../shared/widgets/shadcn/orbit_progress_bar.dart';
 import '../../shared/widgets/shadcn/orbit_divider.dart';
@@ -32,7 +32,8 @@ import '../todo/providers/todo_providers.dart';
 /// 写入口共三处，全部显式联网（自动更新总开关关闭后仅剩这三处）：
 /// 1. 「立即更新」——强制拉取自动更新范围内的年份（今年 / 12 月的明年），
 ///    与日历页手动更新同源 `holidayUpdate`；
-/// 2. 「按年份范围获取」——2013 ~ 明年任意区间并发补写历史年份，
+/// 2. 「按年份范围获取」——2013 ~ 明年任意区间（双列滚轮选起止，
+///    默认今年 → 明年，与桌面设置页同口径）并发补写历史年份，
 ///    进度与取消由弹层承载（core 侧分片并发 + 连续失败熔断）；
 /// 3. 年份分组标题的「更新该年」——单年整年替换。
 class HolidayCachePage extends ConsumerStatefulWidget {
@@ -115,34 +116,25 @@ class _HolidayCachePageState extends ConsumerState<HolidayCachePage> {
     }
   }
 
-  /// 选年份范围（先起始后结束；两次单选抽屉，零新原语）
+  /// 选年份范围：单个双列滚轮弹层（起始 / 结束互相钳制）
+  ///
+  /// 默认区间与桌面设置页同口径（今年 → 明年）：多数场景是「补齐今年 + 明年」，
+  /// 用户只需拖动要改的那一列。此前是两次长列表浮层（15 个年份逐项滚动），
+  /// 当前值离首项很远时得先滑很久才看见自己，2026-11-05 换成滚轮。
   Future<void> _pickRange() async {
     if (_rangeBusy) return;
     final maxYear = _fetchYearMax;
-    final years = [for (var y = _fetchYearMin; y <= maxYear; y++) y];
-    int? start;
-    await showSelectBottomSheet<int>(
+    final nowYear = DateTime.now().year.clamp(_fetchYearMin, maxYear).toInt();
+    final range = await showOrbitYearRangeWheelSheet(
       context,
-      title: '起始年份',
-      items: [for (final y in years) SelectItem(value: y, label: '$y 年')],
-      current: maxYear,
-      onSelect: (v) => start = v,
+      title: '选择年份范围',
+      start: nowYear,
+      end: maxYear,
+      min: _fetchYearMin,
+      max: maxYear,
     );
-    if (start == null || !mounted) return;
-    final from = start!;
-    int? end;
-    await showSelectBottomSheet<int>(
-      context,
-      title: '结束年份',
-      items: [
-        for (final y in years)
-          if (y >= from) SelectItem(value: y, label: '$y 年'),
-      ],
-      current: maxYear,
-      onSelect: (v) => end = v,
-    );
-    if (end == null || !mounted) return;
-    await _runRange(from, end!);
+    if (range == null || !mounted) return;
+    await _runRange(range.start, range.end);
   }
 
   /// 执行范围补写：进度弹层透明承载 core 广播，终态由本方法收口关闭

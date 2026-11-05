@@ -5,6 +5,7 @@ import 'package:orbit/data/api/dto.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/settings/test_data_page.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_filter_chip.dart';
 
 import 'support/orbit_test_app.dart';
 
@@ -110,5 +111,28 @@ void main() {
     expect(find.text('清理结果'), findsOneWidget);
     expect(find.text('生成结果'), findsNothing);
     await drainToastTimers(tester);
+  });
+
+  testWidgets('规模档位：三档等分整行，选中档走实心档', (tester) async {
+    await tester.pumpWidget(_wrap(MockOrbitBridge()));
+    await tester.pumpAndSettle();
+
+    final chips =
+        tester.widgetList<OrbitFilterChip>(find.byType(OrbitFilterChip));
+    expect(chips.length, 3);
+    expect(
+      chips.every((c) => c.solid && c.expand),
+      isTrue,
+      reason: '本页三档是主操作单选行，走实心档 + 撑满',
+    );
+
+    double widthOf(int i) =>
+        tester.getSize(find.byType(OrbitFilterChip).at(i)).width;
+    expect((widthOf(0) - widthOf(2)).abs(), lessThanOrEqualTo(0.5),
+        reason: '三档应等分整行（右侧不留空白）');
+
+    // 默认 1,200 档选中
+    expect(chips.elementAt(1).selected, isTrue);
+    expect(chips.elementAt(0).selected, isFalse);
   });
 }

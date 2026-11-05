@@ -4,6 +4,7 @@ import 'package:flutter_miuix/miuix.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimens.dart';
 import '../../../core/theme/app_shapes.dart';
+import '../../../core/theme/miuix_theme.dart';
 import '../../../core/theme/orbit_accents.dart';
 
 /// 筛选标签（原语层：flutter_miuix squircle 表面承载）
@@ -30,6 +31,8 @@ class OrbitFilterChip extends StatelessWidget {
     required this.onTap,
     this.dotColor,
     this.compact = false,
+    this.solid = false,
+    this.expand = false,
   });
 
   final String label;
@@ -44,14 +47,31 @@ class OrbitFilterChip extends StatelessWidget {
   /// 紧凑档（垂直 6 内边距，用于冲突页这类密集筛选行）
   final bool compact;
 
+  /// 选中实心档（强调色底 + 反白字）。
+  ///
+  /// 默认档（false）是筛选语言：16% 强调色底 + 描边，选中一眼可辨但不抢视线，
+  /// 适合任务列表的状态/优先级筛选行。**档位本身是主操作**、且只有两三档互相
+  /// 排他的单选行（如测试数据的生成规模）传 true，选中态才够醒目。
+  final bool solid;
+
+  /// 撑满可用宽度并让内容居中（配合外层 `Row` + `Expanded` 做等分按钮行，
+  /// 热区随整行拉开；单独使用时等价于贴满父约束宽度）
+  final bool expand;
+
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
     final enabled = onTap != null;
     final accent = OrbitAccents.themeAccent;
+    final selectedSolid = selected && solid;
+    // 实心档的反白字取 miuix `onPrimary`（与 OrbitButton 主色按钮同源，
+    // 亮/暗两套色板都给强调色底配了可读的前景色）
+    final onAccent = buildMiuixColors(Theme.of(context).brightness).onPrimary;
     final chip = MiuixSurface(
       cornerRadius: AppShapes.radiusSmall,
-      color: selected
+      color: selectedSolid
+          ? accent
+          : selected
           ? accent.withValues(alpha: 0.16)
           : Colors.transparent,
       border: Border.all(
@@ -65,7 +85,9 @@ class OrbitFilterChip extends StatelessWidget {
           vertical: compact ? AppDimens.space6 : AppDimens.space8,
         ),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
+          mainAxisAlignment:
+              expand ? MainAxisAlignment.center : MainAxisAlignment.start,
           children: [
             if (dotColor != null) ...[
               Container(
@@ -84,16 +106,22 @@ class OrbitFilterChip extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 13,
-                color: selected ? accent : colors.bodyText,
+                color: selectedSolid
+                    ? onAccent
+                    : selected
+                    ? accent
+                    : colors.bodyText,
               ),
             ),
           ],
         ),
       ),
     );
+    final sized =
+        expand ? SizedBox(width: double.infinity, child: chip) : chip;
     if (!enabled) {
-      return Opacity(opacity: 0.45, child: chip);
+      return Opacity(opacity: 0.45, child: sized);
     }
-    return chip;
+    return sized;
   }
 }

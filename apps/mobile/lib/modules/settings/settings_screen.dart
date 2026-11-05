@@ -29,9 +29,10 @@ import '../../shared/widgets/shadcn/orbit_dropdown_preference.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_switch.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
+import '../../shared/widgets/shadcn/orbit_wheel_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_button.dart';
 import '../../shared/widgets/shadcn/orbit_progress_bar.dart';
-import '../../shared/widgets/shadcn/orbit_filter_chip.dart';
+import '../../shared/widgets/shadcn/orbit_choice_grid.dart';
 import '../shell/db_invalidation.dart';
 import '../todo/logic/task_logic.dart' show formatDateTime;
 import '../todo/providers/todo_providers.dart';
@@ -712,13 +713,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   /// 选每日摘要时刻（0–23 时 / 0–59 分；本机偏好不同步）
+  ///
+  /// 2026-11-05：Material `showTimePicker` 的钟面弹窗（系统直角白卡 +
+  /// Cancel/OK 英文按钮，与项目弹层口径完全不搭）换成滚轮原语——
+  /// 时:分双列 + 浮起圆角卡片 + 中文尾栏。
   Future<void> _pickDigestTime() async {
     final bridge = ref.read(orbitBridgeProvider);
     final prefs = ref.read(digestPrefsProvider).value ?? DigestPrefs.fallback;
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay(hour: prefs.hour, minute: prefs.minute),
-      helpText: '每日摘要提醒时刻',
+    final picked = await showOrbitTimeWheelSheet(
+      context,
+      title: '每日摘要提醒时刻',
+      hour: prefs.hour,
+      minute: prefs.minute,
     );
     if (picked == null) return;
     try {
@@ -1428,32 +1434,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         '从其他应用迁入任务：支持 Orbit 导出格式、Todoist 与'
                         ' TickTick 模板，以及 ICS 日历文件（只收 VTODO 待办）。'
                         '导入前先预览；项目不存在会自动创建。',
+                        // 13px + 1.55 行高：与测试数据页说明同口径，多行中文不糊
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: 13,
+                          height: 1.55,
                           color: colors.secondaryText,
                         ),
                       ),
-                      const SizedBox(height: AppDimens.space12),
-                      // 预设档位选择
-                      Wrap(
-                        spacing: AppDimens.space8,
-                        runSpacing: AppDimens.space8,
-                        children: [
+                      const SizedBox(height: AppDimens.space16),
+                      // 预设档位：2×2 等分网格，选中走实心档（档位即本次导入的
+                      // 主操作；4 档平铺一行会被 ellipsis 截短，故两列折行）
+                      OrbitChoiceGrid<String>(
+                        items: [
                           for (final entry in _importPresets.entries)
-                            OrbitFilterChip(
+                            SelectItem<String>(
+                              value: entry.key,
                               label: entry.value,
-                              selected: _importPreset == entry.key,
-                              onTap: _importing != null
-                                  ? null
-                                  : () => setState(() {
-                                      _importPreset = entry.key;
-                                      _importPreview = null;
-                                      _importResult = null;
-                                    }),
                             ),
                         ],
+                        current: _importPreset,
+                        perRow: 2,
+                        enabled: _importing == null,
+                        onSelect: (v) => setState(() {
+                          _importPreset = v;
+                          _importPreview = null;
+                          _importResult = null;
+                        }),
                       ),
-                      const SizedBox(height: AppDimens.space12),
+                      const SizedBox(height: AppDimens.space16),
                       Row(
                         children: [
                           Expanded(

@@ -11,7 +11,7 @@ import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../shared/widgets/shadcn/orbit_button.dart';
-import '../../shared/widgets/shadcn/orbit_filter_chip.dart';
+import '../../shared/widgets/shadcn/orbit_choice_grid.dart';
 
 /// 三档规模：首屏联调 / 常规翻页与看板 / 统计与滚动压力（与桌面同档）
 const _scales = [300, 1200, 5000];
@@ -96,24 +96,30 @@ class _TestDataPageState extends ConsumerState<TestDataPage> {
                 '一键写入覆盖各读通道的示例项目 / 标签 / 任务 / 子任务 / 提醒 / '
                 '评论 / 关联。子任务等按固定比例派生；日期档覆盖已完成、逾期、'
                 '今天到期、未来 30 天与无日期。',
-                style: TextStyle(fontSize: 12, color: colors.secondaryText),
+                // 13px + 1.55 行高：多行中文说明在小字号默认行距下会糊成一片
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 1.55,
+                  color: colors.secondaryText,
+                ),
               ),
-              const SizedBox(height: AppDimens.space12),
-              Wrap(
-                spacing: AppDimens.space8,
-                runSpacing: AppDimens.space8,
-                children: [
+              const SizedBox(height: AppDimens.space16),
+              // 三档等分整行：热区随行宽拉开、排布整齐，右侧不留半截空白；
+              // 档位即本页主操作，选中走实心强调色档
+              OrbitChoiceGrid<int>(
+                items: [
                   for (final n in _scales)
-                    OrbitFilterChip(
+                    SelectItem<int>(
+                      value: n,
                       label: '${_formatCount(n)} 条任务',
-                      selected: _tasks == n,
-                      onTap: _busy == null
-                          ? () => setState(() => _tasks = n)
-                          : null,
                     ),
                 ],
+                current: _tasks,
+                perRow: 3,
+                enabled: _busy == null,
+                onSelect: (v) => setState(() => _tasks = v),
               ),
-              const SizedBox(height: AppDimens.space12),
+              const SizedBox(height: AppDimens.space16),
               Row(
                 children: [
                   Expanded(
@@ -132,11 +138,15 @@ class _TestDataPageState extends ConsumerState<TestDataPage> {
                   ),
                 ],
               ),
-              const SizedBox(height: AppDimens.space8),
+              const SizedBox(height: AppDimens.space12),
               Text(
                 '生成与清除都需要连续确认两次（第 1 步说明范围，第 2 步再次确认），'
                 '每步确认钮有 3 秒冷静期；示例数据可随时整批清除，与手工数据互不影响。',
-                style: TextStyle(fontSize: 11, color: colors.secondaryText),
+                style: TextStyle(
+                  fontSize: 12,
+                  height: 1.5,
+                  color: colors.secondaryText,
+                ),
               ),
             ],
           ),
@@ -166,11 +176,15 @@ class _TestDataPageState extends ConsumerState<TestDataPage> {
             ),
           ),
         ],
-        const SizedBox(height: AppDimens.cardGap),
+        const SizedBox(height: AppDimens.space16),
         Text(
           '示例数据的标题带「【示例】」前缀、uuid 以 dev-seed- 开头，便于与手工'
           '数据区分；生产构建不显示本页，桥层在 release 下也会拒绝执行。',
-          style: TextStyle(fontSize: 11, color: colors.secondaryText),
+          style: TextStyle(
+            fontSize: 12,
+            height: 1.5,
+            color: colors.secondaryText,
+          ),
         ),
       ];
 

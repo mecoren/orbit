@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_miuix/miuix.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/lunar/chinese_almanac.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimens.dart';
 import '../../../core/theme/app_shapes.dart';
-import 'orbit_floating_sheet_card.dart';
 import '../../../core/theme/icon_map.dart';
 import '../../../core/theme/orbit_accents.dart';
 import '../../../data/api/dto.dart';
@@ -16,6 +14,7 @@ import 'orbit_month_calendar.dart';
 import 'orbit_card.dart';
 import 'orbit_sheet_scaffold.dart';
 import 'orbit_sheets.dart';
+import 'orbit_wheel_sheet.dart';
 
 /// 日期选择器初始视图
 enum OrbitDatePickerMode { day, month, year }
@@ -148,29 +147,22 @@ class _DatePickerSheetState extends ConsumerState<_DatePickerSheet> {
 
   /// 时分滚轮弹层（二级面板）。
   ///
-  /// 主面板已改为 Material 路由承载（见 [OrbitDatePicker.pick]），二级面板同走
-  /// `showModalBottomSheet`：遮罩/动画/形状口径一致，选中值经 `Navigator.pop` 回传。
+  /// 承载/骨架/滚轮样式统一走 `orbit_wheel_sheet.dart` 的单列入口
+  /// （2026-11-05 起从本文件私有实现收编为共享原语）：选中值经 `Navigator.pop` 回传。
   Future<void> _pickTimeWheel({
     required String title,
     required int itemCount,
     required int current,
     required ValueChanged<int> onPicked,
   }) async {
-    final result = await showModalBottomSheet<int>(
-      context: context,
-      useRootNavigator: true,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      shape: bottomSheetTopShape,
-      sheetAnimationStyle: bottomSheetMotion,
-      builder: (sheetContext) => OrbitFloatingSheetCard(
-        child: _TimeWheelSheet(
-          title: title,
-          itemCount: itemCount,
-          initialItem: current,
-          onConfirm: (value) => Navigator.of(sheetContext).pop(value),
-        ),
-      ),
+    final result = await showOrbitNumberWheelSheet(
+      context,
+      title: title,
+      value: current,
+      min: 0,
+      max: itemCount - 1,
+      // 两位数补零（小时 0~23 / 分钟 0~59）
+      label: (v) => v.toString().padLeft(2, '0'),
     );
     if (result != null) onPicked(result);
   }
@@ -512,106 +504,3 @@ class _TimeDropdownField extends StatelessWidget {
   }
 }
 
-/// 滚轮选择弹层：`MiuixNumberPicker` 滚动选值，确认回传选中项
-///
-/// **2026-11-01 换承载**：`CupertinoPicker`（ListWheel + 选中带 overlay）换成
-/// miuix `MiuixNumberPicker`——同为正中选中/上下渐隐缩放的垂直滚轮，改用
-/// HyperOS 口径：每项 44 高、5 项视窗、逐项触感反馈、`SpringSimulation` 吸附，
-/// 选中项取 `titleText`、非选中 `secondaryText` 渐变插值（不再叠强调色底带）。
-/// 边界语义与 Cupertino 一致（无环绕，末项钳住）；确认仍从尾栏回传。
-///
-/// 承载与形状同主面板（Material `showModalBottomSheet` + `bottomSheetTopShape`）。
-class _TimeWheelSheet extends StatefulWidget {
-  const _TimeWheelSheet({
-    required this.title,
-    required this.itemCount,
-    required this.initialItem,
-    required this.onConfirm,
-  });
-
-  final String title;
-
-  /// 可选值数量（小时 24 / 分钟 60），值 = index
-  final int itemCount;
-
-  /// 初始选中项（对应当前时/分值）
-  final int initialItem;
-
-  final ValueChanged<int> onConfirm;
-
-  @override
-  State<_TimeWheelSheet> createState() => _TimeWheelSheetState();
-}
-
-class _TimeWheelSheetState extends State<_TimeWheelSheet> {
-  late int _selected = widget.initialItem;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = AppColors.ofContext(context);
-    // 表面色与顶部圆角由承载提供（同主面板口径）
-    return Material(
-      type: MaterialType.transparency,
-      child: SizedBox(
-        width: double.infinity,
-        child: SafeArea(
-          top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppDimens.space20,
-                  AppDimens.space16,
-                  AppDimens.space12,
-                  0,
-                ),
-                child: Row(
-                  children: [
-                    Text(
-                      widget.title,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: colors.titleText,
-                      ),
-                    ),
-                    const Spacer(),
-                    OrbitButton.text(
-                      onPressed: () => widget.onConfirm(_selected),
-                      compact: true,
-                      child: const Text('确认'),
-                    ),
-                  ],
-                ),
-              ),
-              MiuixNumberPicker(
-                value: _selected,
-                min: 0,
-                max: widget.itemCount - 1,
-                itemHeight: 44,
-                // 5 项视窗（与旧 CupertinoPicker 的 216 高近似）
-                visibleItemCount: 5,
-                // 两位数补零（小时 0~23 / 分钟 0~59）
-                label: (v) => v.toString().padLeft(2, '0'),
-                textStyle: const TextStyle(fontSize: 17),
-                colors: MiuixNumberPickerColors(
-                  selectedTextColor: colors.titleText,
-                  unselectedTextColor: colors.secondaryText,
-                  disabledSelectedTextColor: colors.secondaryText,
-                  disabledUnselectedTextColor: colors.secondaryText,
-                ),
-                onValueChanged: (v) => setState(() => _selected = v),
-              ),
-              // 占位色块避免弹层底部贴边突兀
-              SizedBox(
-                height: AppDimens.space8,
-                child: ColoredBox(color: colors.popup),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}

@@ -11,6 +11,7 @@ import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/settings/holiday_cache_page.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_switch.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_wheel_sheet.dart';
 import 'support/orbit_test_app.dart';
 
 Widget _wrap(MockOrbitBridge bridge) => ProviderScope(
@@ -158,26 +159,36 @@ void main() {
     await drainToastTimers(tester);
   });
 
-  testWidgets('按年份范围获取：两级年份抽屉 → 进度弹层 → 终态汇总 toast',
+  testWidgets('按年份范围获取：双列滚轮弹层选范围 → 进度弹层 → 终态汇总 toast',
       (tester) async {
     final bridge = MockOrbitBridge();
     await tester.pumpWidget(_wrap(bridge));
     await _settle(tester);
 
     await tester.tap(find.text('按年份范围获取'));
-    // 2026-11-03 起单选取浮层口径：不画标题行，等浮层本身出现
-    await _pumpUntil(tester, selectPopup());
-    expect(selectPopup(), findsOneWidget);
+    await _pumpUntil(tester, find.text('选择年份范围'));
+    expect(find.text('选择年份范围'), findsOneWidget);
+    expect(find.text('起始年份'), findsOneWidget);
+    expect(find.text('结束年份'), findsOneWidget);
 
-    // 浮层列表 2013..明年 升序，首两项必在视口内（无需滚动）
-    await tester.tap(find.text('2013 年'));
-    await _pumpUntil(tester, selectPopup());
-    expect(selectPopup(), findsOneWidget);
+    // 默认区间与桌面设置页同口径（今年 → 明年）；两列滚轮互相钳制：
+    // 起始列上界 = 当前结束年、结束列下界 = 当前起始年
+    final thisYear = DateTime.now().year;
+    final startWheel = tester.widget<OrbitWheelColumn>(
+      find.byKey(const ValueKey('orbit-year-range-start-wheel')),
+    );
+    final endWheel = tester.widget<OrbitWheelColumn>(
+      find.byKey(const ValueKey('orbit-year-range-end-wheel')),
+    );
+    expect(startWheel.value, thisYear);
+    expect(endWheel.value, thisYear + 1);
+    expect(startWheel.max, endWheel.value);
+    expect(endWheel.min, startWheel.value);
 
     // 调大 mock 延迟让进度弹层的存在窗口可观察（默认 120ms 会被
     // pumpAndSettle 的内部帧整段吃掉，弹层开合快到任何帧间断言都赶不上）
     bridge.latency = const Duration(milliseconds: 300);
-    await tester.tap(find.text('2014 年'));
+    await tester.tap(find.text('确认'));
     // 进度弹层（不可遮罩关闭，带取消）
     await _pumpUntil(tester, find.text('正在补写节假日'));
     expect(find.text('取消'), findsOneWidget);
@@ -186,8 +197,9 @@ void main() {
     await _advance(tester, 4000);
     await tester.idle();
     await _pumpUntilGone(tester, find.text('正在补写节假日'));
-    // 2013/2014 均不在 Mock 预置表 → 全部「无数据」
-    expect(find.text('补写完成：成功 0 年 · 无数据 2 年'), findsOneWidget);
+    // Mock 预置表只有 2026 年：命中即成功 1 年，另一年无数据
+    final ok = (thisYear == 2026 ? 1 : 0) + (thisYear + 1 == 2026 ? 1 : 0);
+    expect(find.text('补写完成：成功 $ok 年 · 无数据 ${2 - ok} 年'), findsOneWidget);
     await drainToastTimers(tester);
   });
 
@@ -197,15 +209,14 @@ void main() {
     await tester.pumpWidget(_wrap(bridge));
     await _settle(tester);
 
-    // 2014 模拟拉取失败；2013 不在预置表 → 无数据
-    bridge.store.holidayFailedYears.add(2014);
+    // 今年模拟拉取失败；明年视 Mock 预置表（2026）有无数据
+    final thisYear = DateTime.now().year;
+    bridge.store.holidayFailedYears.add(thisYear);
 
     await tester.tap(find.text('按年份范围获取'));
-    await _pumpUntil(tester, selectPopup());
-    await tester.tap(find.text('2013 年'));
-    await _pumpUntil(tester, selectPopup());
+    await _pumpUntil(tester, find.text('选择年份范围'));
     bridge.latency = const Duration(milliseconds: 300);
-    await tester.tap(find.text('2014 年'));
+    await tester.tap(find.text('确认'));
     await _pumpUntil(tester, find.text('正在补写节假日'));
     expect(find.text('取消'), findsOneWidget);
 
@@ -213,9 +224,12 @@ void main() {
     await tester.idle();
     await _pumpUntilGone(tester, find.text('正在补写节假日'));
     // 部分成功按事实上报：warning 级 toast 三计数 + 失败年份副文案
-    expect(find.text('补写完成：成功 0 年 · 失败 1 年 · 无数据 1 年'), findsOneWidget);
+    final otherOk = thisYear + 1 == 2026;
+    final parts = ['成功 ${otherOk ? 1 : 0} 年', '失败 1 年'];
+    if (!otherOk) parts.add('无数据 1 年');
+    expect(find.text('补写完成：${parts.join(' · ')}'), findsOneWidget);
     // 失败年份来自逐年进度事件（终态 done 只带计数）
-    expect(find.text('失败年份：2014（沿用原缓存）'), findsOneWidget);
+    expect(find.text('失败年份：$thisYear（沿用原缓存）'), findsOneWidget);
     await drainToastTimers(tester);
   });
 }
