@@ -68,7 +68,8 @@ void main() {
     await _settle(tester);
 
     expect(find.text('本页峰值 RSS'), findsOneWidget);
-    expect(find.textContaining('采样场景：'), findsOneWidget);
+    expect(find.text('采样场景'), findsOneWidget);
+    expect(find.text('未标注'), findsOneWidget);
     expect(find.text('采样'), findsOneWidget);
   });
 
@@ -87,16 +88,22 @@ void main() {
     expect(find.text('—'), findsNothing, reason: '采样后峰值应有真实读数');
   });
 
-  testWidgets('诊断页：场景抽屉可选并回显', (tester) async {
+  testWidgets('诊断页：采样场景走下拉偏好行，选中后行内回显', (tester) async {
     final bridge = MockOrbitBridge();
     await tester.pumpWidget(_wrap(bridge));
     await _settle(tester);
 
-    await tester.tap(find.textContaining('采样场景：'));
+    // 点行就地展开七个基线档位，当前档打勾
+    await tester.tap(find.text('未标注'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('备份往返').last);
+    expect(dropdownPreferencePopupRows(), findsNWidgets(7));
+    expect(selectedDropdownPreferenceLabels(tester), ['未标注']);
+
+    // 弹层条目文字不是 Text，按浮层行位置点第 2 档（冷启动，视口内可见）
+    await tester.tapAt(tester.getCenter(dropdownPreferencePopupRows().at(1)));
     await tester.pumpAndSettle();
 
-    expect(find.text('采样场景：备份往返'), findsOneWidget);
+    expect(find.text('冷启动'), findsOneWidget);
+    expect(find.text('未标注'), findsNothing);
   });
 }

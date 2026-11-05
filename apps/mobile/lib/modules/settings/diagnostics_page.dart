@@ -5,14 +5,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
-import '../../core/theme/app_shapes.dart';
 import '../../core/theme/icon_map.dart';
+import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
+import '../../shared/widgets/shadcn/orbit_card.dart';
+import '../../shared/widgets/shadcn/orbit_dropdown_preference.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
-import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_button.dart';
 import '../../shared/widgets/shadcn/orbit_icon_button.dart';
 
@@ -24,6 +25,8 @@ import '../../shared/widgets/shadcn/orbit_icon_button.dart';
 /// - 两类读数分开摆：**本地存储**（库体积/行数/附件缓存，Rust 侧量）与
 ///   **运行时**（进程 RSS，Dart 侧量 `ProcessInfo.currentRss`）——混在一起会让人
 ///   误判口径；
+/// - 采样场景走设置页同款下拉偏好行（行内当前档 + 上下双箭头 + 就地展开玻璃
+///   菜单），「采样」动作收在卡头；
 /// - 整页 ListView 滚动（AGENTS 移动端约定：不要 Column+Expanded 固定高度）。
 class DiagnosticsPage extends ConsumerStatefulWidget {
   const DiagnosticsPage({super.key});
@@ -77,33 +80,20 @@ class _DiagnosticsPageState extends ConsumerState<DiagnosticsPage> {
     if (peak == null || rss > peak) _peakRssBytes = rss;
   }
 
+  /// 采样场景档位（六个基线场景之一，便于与 mobile-baselines.json 对照）
+  static const List<String> _scenarios = [
+    '未标注',
+    '冷启动',
+    '1 万行列表滚动',
+    '月历切换',
+    '时间轴',
+    '备份往返',
+    '全局搜索',
+  ];
+
   /// 手动采样一次（M5：诊断页提供「当前/峰值」采样入口）
   Future<void> _sampleNow() async {
     setState(() => _recordPeak());
-  }
-
-  /// 选择本次采样对应的场景（六个基线场景之一，便于与 mobile-baselines.json 对照）
-  Future<void> _pickScenario() async {
-    const scenarios = [
-      '未标注',
-      '冷启动',
-      '1 万行列表滚动',
-      '月历切换',
-      '时间轴',
-      '备份往返',
-      '全局搜索',
-    ];
-    await showSelectBottomSheet<String>(
-      context,
-      title: '采样场景',
-      current: _scenario,
-      items: [
-        for (final s in scenarios) SelectItem(value: s, label: s),
-      ],
-      onSelect: (v) async {
-        setState(() => _scenario = v);
-      },
-    );
   }
 
   @override
@@ -182,65 +172,94 @@ class _DiagnosticsPageState extends ConsumerState<DiagnosticsPage> {
                   ),
                 ),
                 const SizedBox(height: AppDimens.cardGap),
-                SectionCard(
-                  title: '运行时',
+                OrbitCard(
+                  // 水平内边距归零：采样场景下拉行的按压灰底要横贯整卡
+                  // （与通知历史/同步配置页档位行同口径），其余内容补回 16。
+                  padding: EdgeInsets.zero,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _reading(
-                        colors,
-                        '进程 RSS',
-                        formatBytes(ProcessInfo.currentRss),
-                        hint: '含原生库与实际驻留',
-                      ),
-                      const SizedBox(height: AppDimens.space8),
-                      _reading(
-                        colors,
-                        '本页峰值 RSS',
-                        _peakRssBytes == null
-                            ? '—'
-                            : formatBytes(_peakRssBytes!),
-                        hint: '自进入本页以来的最大观测值（非进程历史峰值）',
-                      ),
-                      const SizedBox(height: AppDimens.space8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: InkWell(
-                              onTap: _pickScenario,
-                              borderRadius: AppShapes.small,
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    vertical: AppDimens.space8),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        '采样场景：$_scenario',
-                                        style: TextStyle(
-                                            fontSize: 13,
-                                            color: colors.bodyText),
-                                      ),
-                                    ),
-                                    Icon(OrbitIcons.chevronRight,
-                                        size: AppDimens.iconSizeSm,
-                                        color: colors.secondaryText),
-                                  ],
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(
+                          AppDimens.cardPadding,
+                          AppDimens.cardPadding,
+                          AppDimens.cardPadding,
+                          0,
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '运行时',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: OrbitAccents.todoAccent,
                                 ),
                               ),
                             ),
-                          ),
-                          OrbitButton.text(
-                            onPressed: _sampleNow,
-                            child: const Text('采样'),
-                          ),
-                        ],
+                            // 采样：手动采一次当前 RSS（会话峰值），动作收进卡头
+                            OrbitButton.text(
+                              compact: true,
+                              onPressed: _sampleNow,
+                              child: const Text('采样'),
+                            ),
+                          ],
+                        ),
                       ),
-                      Text(
-                        '只读快照，点右上「刷新」重新采集（Rust 侧会重新查询数据库）。'
-                        '采样不上报、不持久化，仅用于与本机 mobile-baselines.json 对照。',
-                        style:
-                            TextStyle(fontSize: 11, color: colors.secondaryText),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(
+                          AppDimens.cardPadding,
+                          AppDimens.space8,
+                          AppDimens.cardPadding,
+                          0,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _reading(
+                              colors,
+                              '进程 RSS',
+                              formatBytes(ProcessInfo.currentRss),
+                              hint: '含原生库与实际驻留',
+                            ),
+                            const SizedBox(height: AppDimens.space8),
+                            _reading(
+                              colors,
+                              '本页峰值 RSS',
+                              _peakRssBytes == null
+                                  ? '—'
+                                  : formatBytes(_peakRssBytes!),
+                              hint: '自进入本页以来的最大观测值（非进程历史峰值）',
+                            ),
+                          ],
+                        ),
+                      ),
+                      // 采样场景：行内当前档 + 上下双箭头，点行就地展开玻璃菜单
+                      OrbitDropdownPreference<String>(
+                        title: '采样场景',
+                        current: _scenario,
+                        items: [
+                          for (final s in _scenarios)
+                            SelectItem<String>(value: s, label: s),
+                        ],
+                        onSelect: (v) => setState(() => _scenario = v),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(
+                          AppDimens.cardPadding,
+                          0,
+                          AppDimens.cardPadding,
+                          AppDimens.cardPadding,
+                        ),
+                        child: Text(
+                          '只读快照，点右上「刷新」重新采集（Rust 侧会重新查询数据库）。'
+                          '采样不上报、不持久化，仅用于与本机 mobile-baselines.json 对照。',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: colors.secondaryText,
+                          ),
+                        ),
                       ),
                     ],
                   ),

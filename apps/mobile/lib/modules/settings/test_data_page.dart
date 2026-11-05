@@ -4,13 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
-import '../../core/theme/icon_map.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
-import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../shared/widgets/shadcn/orbit_button.dart';
 import '../../shared/widgets/shadcn/orbit_filter_chip.dart';
@@ -119,26 +117,17 @@ class _TestDataPageState extends ConsumerState<TestDataPage> {
               Row(
                 children: [
                   Expanded(
-                    child: OrbitButton.icon(variant: OrbitButtonVariant.primary, 
+                    child: OrbitButton.primary(
                       onPressed: _busy == null ? _seed : null,
-                      icon: _busy == 'seed'
-                          ? _spinner()
-                          : const Icon(OrbitIcons.add,
-                              size: AppDimens.iconSizeSm),
-                      label: const Text('一键生成'),
+                      child: const Text('一键生成'),
                     ),
                   ),
                   const SizedBox(width: AppDimens.space8),
                   Expanded(
-                    child: OrbitButton.icon(
-                      variant: OrbitButtonVariant.outline,
+                    child: OrbitButton.outline(
                       destructive: true,
                       onPressed: _busy == null ? _clear : null,
-                      icon: _busy == 'clear'
-                          ? _spinner()
-                          : const Icon(OrbitIcons.delete,
-                              size: AppDimens.iconSizeSm),
-                      label: const Text('清除示例'),
+                      child: const Text('清除示例'),
                     ),
                   ),
                 ],
@@ -350,8 +339,6 @@ class _TestDataPageState extends ConsumerState<TestDataPage> {
       if (mounted) setState(() => _busy = null);
     }
   }
-
-  Widget _spinner() => const OrbitSpinner(size: AppDimens.iconSizeSm);
 
   /// 桥层异常文案（去掉 Dart 的 `Exception: ` 前缀，与设置页其他错误提示同口径）
   String _errorText(Object e) {

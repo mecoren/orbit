@@ -4,15 +4,16 @@ import 'package:intl/intl.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
+import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../services/local_prefs.dart';
 import '../../shared/widgets/shadcn/orbit_card.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_dropdown_preference.dart';
 import '../../shared/widgets/shadcn/orbit_empty_state.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
-import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../shared/widgets/shadcn/orbit_button.dart';
@@ -20,7 +21,8 @@ import '../../core/theme/icon_map.dart';
 
 /// 通知历史页 /settings/notifications
 ///
-/// 类型过滤（全部/到期/推迟/完成/跳过）+ 分页（50 步进，上限 200）+
+/// 类型过滤（全部/到期/推迟/完成/跳过，下拉偏好行口径：行内当前值 +
+/// 上下双箭头 + 就地展开玻璃菜单）+ 分页（50 步进，上限 200）+
 /// 清空（二次确认）+ 提醒总开关（LocalPrefs `reminder_enabled`，
 /// 默认开；关后到期事件仅写历史不弹窗，见 BootGate 接线）。
 class NotificationHistoryPage extends ConsumerStatefulWidget {
@@ -84,24 +86,6 @@ class _NotificationHistoryPageState
     }
   }
 
-  Future<void> _pickKind() async {
-    await showSelectBottomSheet<String?>(
-      context,
-      title: '类型过滤',
-      current: _kind,
-      items: [
-        for (final k in _kinds) SelectItem(value: k, label: kindLabel(k)),
-      ],
-      onSelect: (v) {
-        setState(() {
-          _kind = v;
-          _limit = 50;
-        });
-        _load();
-      },
-    );
-  }
-
   Future<void> _clear() async {
     final confirmed = await showConfirmBottomSheet(
       context,
@@ -156,101 +140,159 @@ class _NotificationHistoryPageState
                 ),
               ),
               const SizedBox(height: AppDimens.cardGap),
-              SectionCard(
-                title: '历史记录',
+              OrbitCard(
+                // 水平内边距归零：类型下拉行展开时的按压灰底要横贯整卡
+                // （设置页档位行同口径），头行与列表各自补回 16。
+                padding: EdgeInsets.zero,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OrbitButton.icon(variant: OrbitButtonVariant.outline, 
-                            onPressed: _pickKind,
-                            icon: const Icon(OrbitIcons.filter, size: 18),
-                            label: Text('类型：${kindLabel(_kind)}'),
-                          ),
-                        ),
-                        const SizedBox(width: AppDimens.space8),
-                        Expanded(
-                          child: OrbitButton.icon(variant: OrbitButtonVariant.outline, 
-                            onPressed: _clear,
-                            icon: const Icon(OrbitIcons.delete, size: 18),
-                            label: const Text('清空'),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppDimens.space8),
-              if (_loading)
-                const Center(child: OrbitSpinner(size: AppDimens.iconSizeLg))
-              else if (rows.isEmpty)
-                const EmptyState(
-                  icon: OrbitIcons.notificationOff,
-                  message: '暂无通知历史',
-                )
-              else ...[
-                for (final r in rows)
-                  Padding(
-                    padding:
-                        const EdgeInsets.only(bottom: AppDimens.space8),
-                    child: OrbitCard(
-                      fillColor: colors.surfaceSecondary,
-                      padding: const EdgeInsets.all(AppDimens.space12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppDimens.cardPadding,
+                        AppDimens.cardPadding,
+                        AppDimens.cardPadding,
+                        0,
+                      ),
+                      child: Row(
                         children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: colors.surface,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                kindLabel(r.kind),
-                                style: const TextStyle(fontSize: 11),
+                          Expanded(
+                            child: Text(
+                              '历史记录',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: OrbitAccents.todoAccent,
                               ),
                             ),
-                            const SizedBox(width: AppDimens.space8),
-                            Expanded(
-                              child: Text(
-                                r.taskTitle,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 14),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          fmt.format(
-                            DateTime.fromMillisecondsSinceEpoch(r.createdAt),
                           ),
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: colors.secondaryText,
+                          // 清空：破坏性动作收进卡头；0 条时禁用（桌面端同口径）
+                          OrbitButton.text(
+                            compact: true,
+                            destructive: true,
+                            onPressed: rows.isEmpty ? null : _clear,
+                            child: const Text('清空'),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                ),
-                if (_limit < 200)
-                  Center(
-                    child: OrbitButton.text(
-                      onPressed: () {
-                        setState(() => _limit = (_limit + 50).clamp(50, 200));
+                    // 类型过滤：行内当前值 + 上下双箭头，点行就地展开玻璃菜单
+                    // （与设置页「外观 / 优先级」各档位行同一原语）
+                    OrbitDropdownPreference<String?>(
+                      title: '类型',
+                      current: _kind,
+                      items: [
+                        for (final k in _kinds)
+                          SelectItem<String?>(value: k, label: kindLabel(k)),
+                      ],
+                      onSelect: (v) {
+                        setState(() {
+                          _kind = v;
+                          _limit = 50;
+                        });
                         _load();
                       },
-                      child: const Text('加载更多'),
                     ),
-                  ),
-              ],
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppDimens.cardPadding,
+                        0,
+                        AppDimens.cardPadding,
+                        AppDimens.cardPadding,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (_loading)
+                            const Center(
+                              child: OrbitSpinner(size: AppDimens.iconSizeLg),
+                            )
+                          else if (rows.isEmpty)
+                            const EmptyState(
+                              icon: OrbitIcons.notificationOff,
+                              message: '暂无通知历史',
+                            )
+                          else ...[
+                            for (final r in rows)
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  bottom: AppDimens.space8,
+                                ),
+                                child: OrbitCard(
+                                  fillColor: colors.surfaceSecondary,
+                                  padding: const EdgeInsets.all(
+                                    AppDimens.space12,
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets
+                                                .symmetric(
+                                              horizontal: 8,
+                                              vertical: 2,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: colors.surface,
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                            child: Text(
+                                              kindLabel(r.kind),
+                                              style: const TextStyle(
+                                                fontSize: 11,
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(
+                                            width: AppDimens.space8,
+                                          ),
+                                          Expanded(
+                                            child: Text(
+                                              r.taskTitle,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        fmt.format(
+                                          DateTime.fromMillisecondsSinceEpoch(
+                                            r.createdAt,
+                                          ),
+                                        ),
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: colors.secondaryText,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            if (_limit < 200)
+                              Center(
+                                child: OrbitButton.text(
+                                  onPressed: () {
+                                    setState(() =>
+                                        _limit = (_limit + 50).clamp(50, 200));
+                                    _load();
+                                  },
+                                  child: const Text('加载更多'),
+                                ),
+                              ),
+                          ],
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
