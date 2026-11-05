@@ -1,7 +1,8 @@
 // 共享弹层族（orbit_sheets.dart）承载口径：
 // - 确认 / 更多操作：Material `showModalBottomSheet` + `bottomSheetTopShape`；
 // - 单选：2026-11-05 起与「今天」页头 ⋮ 菜单同一套口径（MiuixGlassPopupItem
-//   行 + 圆角 24 玻璃卡 + 贴触发行下方弹出），不再走底部抽屉。
+//   行 + 圆角 24 玻璃卡 + 贴触发行下方弹出），承载换成库内
+//   `MiuixGlassDropdownPopup`，不再走底部抽屉、也不再手写测量/落位/形变。
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_miuix/miuix.dart';
@@ -10,6 +11,8 @@ import 'package:orbit/core/theme/app_colors.dart';
 import 'package:orbit/core/theme/app_dimens.dart';
 import 'package:orbit/core/theme/app_shapes.dart';
 import 'package:orbit/core/theme/orbit_accents.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_dropdown_panel.dart'
+    show orbitPanelMaxWidth, orbitPanelMinWidth;
 import 'package:orbit/shared/widgets/shadcn/orbit_sheet_scaffold.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_sheets.dart';
 import 'support/orbit_test_app.dart';
@@ -72,9 +75,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // 行渲染走玻璃菜单条目（MiuixGlassPopupItem），底部抽屉已退场
+    // 行渲染走玻璃菜单条目（MiuixGlassPopupItem），承载是库内 dropdown 弹层
     expect(selectPopup(), findsOneWidget);
-    expect(find.byType(MiuixListPopupColumn), findsOneWidget);
+    expect(find.byType(MiuixGlassDropdownPopup), findsOneWidget);
     expect(find.byType(MiuixGlassPopupItem), findsNWidgets(2));
     expect(find.byType(BottomSheet), findsNothing, reason: '不再从底部升起抽屉');
     expect(find.text('视图模式'), findsNothing, reason: '下拉面板没有标题行');
@@ -106,22 +109,12 @@ void main() {
 
     // 2026-11-05 起卡面直接用 ⋮ 菜单同款 `MiuixGlassPanel`：测试裸页没有
     // 壳层 OrbitGlassScope → 库内无快照分支填实色（白卡），不再自绘实时
-    // 模糊（那档会把白卡糊成灰白半透明，与菜单观感不一致）
-    expect(
-      find.ancestor(
-        of: find.byKey(orbitSelectPopupKey),
-        matching: find.byType(MiuixGlassPanel),
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.ancestor(
-        of: find.byKey(orbitSelectPopupKey),
-        matching: find.byType(BackdropFilter),
-      ),
-      findsNothing,
-      reason: '无采样器走库内实色填充，不再叠实时模糊',
-    );
+    // 模糊（那档会把白卡糊成灰白半透明，与菜单观感不一致）。
+    // 承载换到库内 dropdown 后，panel 与条目列在 `GlassPopupLayout` 里是
+    // **兄弟**（content 不再是 panel 的子孙），故按数量断言。
+    expect(find.byType(MiuixGlassPanel), findsOneWidget);
+    expect(find.byType(BackdropFilter), findsNothing,
+        reason: '无采样器走库内实色填充，不再叠实时模糊');
   });
 
   testWidgets('单选浮层：路由内容必须包 Material（黄线下划线回归）',
@@ -172,8 +165,16 @@ void main() {
       moreOrLessEquals(anchor.right, epsilon: 1),
       reason: '右沿对齐触发行',
     );
-    expect(popup.width, greaterThanOrEqualTo(200), reason: 'miuix 弹层最小宽');
-    expect(popup.width, lessThanOrEqualTo(288), reason: 'miuix 弹层最大宽');
+    expect(
+      popup.width,
+      greaterThanOrEqualTo(orbitPanelMinWidth),
+      reason: '全站弹出菜单统一最小宽',
+    );
+    expect(
+      popup.width,
+      lessThanOrEqualTo(orbitPanelMaxWidth),
+      reason: '全站弹出菜单统一最大宽（条目文案最长也就「排序方式」这一档）',
+    );
     expect(popup.height, lessThan(screen.height * 0.5), reason: '短内容自适应收缩');
     expect(
       tester.getRect(find.text('S3 兼容存储')).bottom,

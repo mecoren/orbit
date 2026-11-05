@@ -370,9 +370,12 @@ void main() {
     await tester.pumpAndSettle();
     // 单选不再走底部抽屉：选项在锚定浮层（自带滚动）里，位置随锚点变——
     // 拖浮层自己的滚动器把尾部的自定义档滚出来；拖表单的 ListView 在浮层
-    // 翻到上方时会拖空（锚点新鲜与否决定落位，单跑/连跑曾一半红）
+    // 翻到上方时会拖空（锚点新鲜与否决定落位，单跑/连跑曾一半红）。
+    // 承载换成库内 dropdown 后，纵向滚动器在条目列的**祖先**上
+    // （`GlassPopupPresenter` 用 SingleChildScrollView 包内容），取最近的
+    // 那一个（.first = 离 key 最近）。
     final popupScroll = find
-        .descendant(
+        .ancestor(
           of: find.byKey(orbitSelectPopupKey),
           matching: find.byType(Scrollable),
         )

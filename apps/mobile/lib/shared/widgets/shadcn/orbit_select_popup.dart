@@ -1,48 +1,54 @@
 /// 单选浮层（锚定选择菜单，2026-11-05 统一到「今天」页头菜单口径）
 ///
-/// **视觉与交互与任务列表页头 ⋮ 菜单（`OrbitGlassMenu`）同源**：
-/// - 位置：贴着**触发行的下方**弹出，右沿对齐触发行右沿；下方放不下翻到
-///   上方，左右/上下钳在安全区内（不遮住当前值）；
+/// **承载与动效全部交给 flutter_miuix 的 OS4 dropdown 弹层**
+/// （`MiuixGlassDropdownPopup`：`OverlayPortal` 挂根 Overlay + dropdown motion）：
+/// - 位置：贴着**触发行的下沿**弹出，右沿对齐触发行右沿；下方放不下翻到
+///   上方，左右/上下钳在安全区与 viewPadding 内（库内 `miuixGlassPopupFrame`）；
 /// - 行：`MiuixGlassPopupItem`（玻璃菜单条目同款：最小行高 44、24 图标位、
 ///   未选中**正文色**、选中**强调色文字 + 右端对勾**、可带副说明）；
-/// - 卡面：OS4 玻璃（[OrbitGlassSurface]：有采样器走 shader 玻璃、
-///   无采样器退实时模糊），圆角 24（与玻璃菜单卡面同档），选项多时可滚
-///   （限高 0.6 屏）；
-/// - 形变：库内 dropdown motion 同口径——卡面矩形从**触发行矩形**插值到落位
-///   矩形（内容等比缩放并贴左上角裁切，锚点比卡面宽时只「揭开」不缩小），
-///   260ms easeOutCubic，前 35% 顺带淡入；不压暗下层（OS4 菜单同款）。
+/// - 卡面：`MiuixGlassPanel`（无采样器时库内退实色白卡），圆角 24、
+///   `puredThinGlass` + blur 32（与 ⋮ 菜单同档），选项多时限高 0.6 屏可滚；
+/// - 进场：库内 dropdown motion（卡面从触发行右上角 0.69×0.2 的小块揭到整张，
+///   圆角 4→24，内容等比缩放裁切）。
 ///
-/// **锚点三级回退**：显式 [anchor] / 调用方 context 是行尺度取自身矩形 /
-/// 最近一次指针按下位置（[OrbitPointerAnchor]，`main()` 首帧前安装）。
+/// 本文件只保留：数据项（[SelectItem]）、入口函数、锚点三级回退
+/// （显式 [anchor] / 调用方 context 是行尺度取自身矩形 / 最近一次指针按下位置）
+/// 与行首构件（[orbitSelectItemLeading]，下拉偏好行共用）。测量、落位、
+/// 翻转与形变不再手写——那套逻辑与库内逐项同构，手写版已于 2026-11-05 删除。
+///
+/// **关闭立即生效**（不播逆形变）：49 处存量调用点都是
+/// `await showSelectBottomSheet(...)` 后立即写库/导航，等收起动画播完再回调会
+/// 改变既有交互时序；点选与取消都直接 pop 路由，与 2026-11-03 起的旧实现
+/// 逐帧一致。
 ///
 /// 49 处存量调用点仍走兼容名 `showSelectBottomSheet`，零改动。
 library;
-
-import 'dart:math' as math;
-import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_miuix/miuix.dart';
 
 import '../../../core/theme/app_dimens.dart';
-import 'orbit_dropdown_panel.dart' show orbitPanelMaxWidth;
+import '../../../core/theme/app_motion.dart';
+import 'orbit_dropdown_panel.dart' show orbitPanelMaxWidth, orbitPanelMinWidth;
 import 'orbit_glass_surface.dart';
 
-/// 弹层卡片圆角 —— 对齐 OS4 玻璃菜单卡面口径
+/// 弹层根节点 key（测试定位用；挂在条目列根上）
 ///
-/// 取库内 `MiuixGlassPopupDefaults.cornerRadius`（24），与任务列表页头 ⋮
-/// 菜单（`OrbitGlassMenu`）同一档；下拉不会显成抽屉（抽屉口径是 28）。
-const double orbitSelectPopupRadius = 24;
-
-/// 弹层根节点 key（测试定位用；旧 `BottomSheet` 定位已失效）
+/// 承载是库内 dropdown 后，这里的矩形在进场落定后 = 卡面矩形
+/// （`GlassPopupLayout` 以内容尺寸布局、按帧缩放绘制），`getRect` 语义不变；
+/// 但 `MiuixGlassPanel` 与内容在库内是**兄弟**（同在 `GlassPopupLayout` 里），
+/// 不再是内容的祖先。
 const Key orbitSelectPopupKey = ValueKey('orbit-select-popup');
 
-/// 弹层与锚点/屏幕边缘的最小间距
+/// 弹层与触发行之间的呼吸位（并进锚点矩形，见 `_anchorBounds`）
 const double _gap = 8;
 
-/// 弹层距屏幕左右/底部的最小留白
+/// 弹层距屏幕右/上边的最小留白（仅无锚点兜底形态用）
 const double _edge = 12;
+
+/// 无锚点时距状态栏的下移量（页头高度档，与 ⋮ 菜单落位同惯例）
+const double _noAnchorTopInset = 56;
 
 /// 单选弹层数据项（行首图标 / 12×12 色点 + 文案，二选一）
 /// - [icon] + [iconColor]：行首语义图标（快捷视图切换等与清单页图标同源的场景）；
@@ -66,6 +72,30 @@ class SelectItem<T> {
   final Color? iconColor;
 }
 
+/// 行首构件：语义图标优先，其次 12px 色点（两处选择弹层共用）
+///
+/// 库内行首是 24×24 图标位，直接传 12px 色点会被拉伸成整格，故色点用
+/// 居中盒承载；图标尺寸取设计 token，与清单页快捷行同档。
+Widget? orbitSelectItemLeading<T>(SelectItem<T> item) {
+  if (item.icon != null) {
+    return Icon(
+      item.icon,
+      size: AppDimens.iconSizeMd,
+      color: item.iconColor,
+    );
+  }
+  if (item.colorDot != null) {
+    return Center(
+      child: Container(
+        width: AppDimens.colorDotSize,
+        height: AppDimens.colorDotSize,
+        decoration: BoxDecoration(color: item.colorDot, shape: BoxShape.circle),
+      ),
+    );
+  }
+  return null;
+}
+
 /// 打开锚定在触发行下方的单选浮层；点选即回调并关闭，点外部/返回键取消。
 ///
 /// [title] 仅作无障碍语义（miuix 下拉面板没有标题行，当前值由对勾表达）。
@@ -83,30 +113,32 @@ Future<void> showOrbitSelectPopup<T>(
   final resolvedAnchor = anchor ??
       (useContextAnchor ? _anchorFromContext(context) : null) ??
       OrbitPointerAnchor.recentRect;
-  // 玻璃采样器在**调用方** context 上取：弹层挂在 Navigator 路由上，位于
-  // 壳层 OrbitGlassScope 之外（与 showMoreActionsSheet 同一套路）。push 出来
-  // 的页面（设置子页等）连调用方也取不到 → null，卡面自动走实时模糊路径
+  // 玻璃采样器在**调用方** context 上取：弹层挂在根 Overlay 上，位于
+  // 壳层 OrbitGlassScope 之外（与 `OrbitDropdownPreference` 同一套路）。
+  // push 出来的页面（设置子页等）连调用方也取不到 → null，卡面自动走
+  // 库内实色填充，观感同「今天」菜单。
   final backdrop = OrbitGlassScope.maybeOf(context);
   return showGeneralDialog<void>(
     context: context,
     barrierDismissible: true,
     barrierLabel: '关闭选择',
-    // OS4 菜单不压暗下层（参考图里页面照常可见），只留一条透明拦截层
-    // 接「点外部关闭」；压暗会把玻璃采样到的背景再蒙一层灰
+    // OS4 菜单不压暗下层（参考图里页面照常可见）。透明 barrier 只负责
+    // 无障碍语义；真正的「点外部关闭」由库内弹层自带的拦截层处理，
+    // 它挂在根 Overlay 顶部，比这条路由的 barrier 更先命中。
     barrierColor: Colors.transparent,
-    // 形变靠下面 body 自己的「锚点矩形 → 卡面矩形」插值驱动：
-    // 路由只提供同一条 animation（进出场同 260ms），不再叠淡入缩放
-    transitionDuration: const Duration(milliseconds: 260),
-    pageBuilder: (dialogContext, _, _) => _OrbitSelectPopupBody<T>(
+    // 进场全由库内 dropdown motion 承担，路由只提供一张透明页面；但**不能**
+    // 设 zero——路由退场期间那几百毫秒是「点选后页面重建」唯一的帧窗口，
+    // 归零会让重建落在最后一帧（调用方在 `onSelect` 里拉取的异步数据没有
+    // 机会结算，测试的 mock 延迟 timer 会挂到用例结束）。与旧手搓版 260ms
+    // 同档，取 slow。
+    transitionDuration: AppMotion.slow,
+    pageBuilder: (_, _, _) => _OrbitSelectPopupBody<T>(
       title: title,
       items: items,
       current: current,
       anchor: resolvedAnchor,
       backdrop: backdrop,
-      onPick: (value) {
-        Navigator.of(dialogContext).pop();
-        onSelect(value);
-      },
+      onPick: onSelect,
     ),
   );
 }
@@ -135,7 +167,7 @@ Rect? _anchorFromContext(BuildContext context) {
 ///
 /// 安装必须在 `main()` 首帧前完成：懒安装会漏掉「触发本次弹层」的那次按下
 /// （2026-11-03 外观页第一次打开落到屏幕底部的根因）。超过 800ms 视为过期，
-/// 回退到底部居中，免得用过时坐标定位。
+/// 回退到右上角形态，免得用过时坐标定位。
 class OrbitPointerAnchor {
   OrbitPointerAnchor._();
 
@@ -184,8 +216,10 @@ class _OrbitSelectPopupBody<T> extends StatefulWidget {
   final T? current;
   final Rect? anchor;
 
-  /// OS4 玻璃背景采样器（调用方从壳层 scope 取；null = 实时模糊路径）
+  /// OS4 玻璃背景采样器（调用方从壳层 scope 取；null = 库内实色填充）
   final MiuixLayerBackdrop? backdrop;
+
+  /// 点选：关路由并交回选中值（取消只关路由，不回调）
   final ValueChanged<T> onPick;
 
   @override
@@ -194,11 +228,30 @@ class _OrbitSelectPopupBody<T> extends StatefulWidget {
 }
 
 class _OrbitSelectPopupBodyState<T> extends State<_OrbitSelectPopupBody<T>> {
-  /// 卡面实测尺寸：首帧在离屏位布局一次取尺寸，拿到后才跑形变
-  /// （形变终点就是「卡面矩形」，不知道尺寸无从插值）
-  Size? _cardSize;
+  /// 已关路由（库内拦截层可能重复回调，防二次 pop 误伤下层页面）
+  bool _closed = false;
 
-  final GlobalKey _probeKey = GlobalKey();
+  /// 关掉承载路由
+  ///
+  /// 库内 presenter 弹出时给本路由挂了一条 `LocalHistoryEntry`（返回键用），
+  /// 而 `LocalHistoryRoute.didPop` 会先消费它并返回 **false**——直接 pop 一次
+  /// 只会吃掉那条 entry，路由留在栈上（弹层关不掉，调用方的 `await` 也永不
+  /// 完成）。故先按 [willHandlePopInternally] 判断：有内部 history 就多 pop
+  /// 一次。**不能**用 `removeRoute` 抄近路：它会跳过退场动画，而退场那几百
+  /// 毫秒是「点选后页面重建」唯一的帧窗口（调用方在回调里拉取的异步数据要
+  /// 靠它结算）。
+  void _closeRoute() {
+    if (!mounted) return;
+    final navigator = Navigator.of(context);
+    final route = ModalRoute.of(context);
+    if (route != null && route.willHandlePopInternally) {
+      // 第一次只消费库内挂的 LocalHistoryEntry（弹层本身的 onDismissRequest
+      // 会因 _closed 已置位而空转）
+      navigator.pop();
+    }
+    if (!mounted) return;
+    navigator.pop();
+  }
 
   /// 卡面材质（与 ⋮ 菜单同档：puredThinGlass + blurRadius 32；按亮暗各
   /// 缓存一份，值相等是库内纹理缓存的性能要件）
@@ -211,254 +264,66 @@ class _OrbitSelectPopupBodyState<T> extends State<_OrbitSelectPopupBody<T>> {
   static MiuixGlassMaterial _popupMaterial(bool isDark) =>
       isDark ? _materialDark : _materialLight;
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _measureCard());
+  void _dismiss() {
+    if (_closed) return;
+    _closed = true;
+    _closeRoute();
   }
 
-  void _measureCard() {
-    if (!mounted || _cardSize != null) return;
-    final box = _probeKey.currentContext?.findRenderObject();
-    if (box is! RenderBox || !box.hasSize) return;
-    setState(() => _cardSize = box.size);
+  void _pick(T value) {
+    if (_closed) return;
+    _closed = true;
+    _closeRoute();
+    widget.onPick(value);
   }
 
-  /// 卡面测量约束：宽度与全站弹出菜单同档（上限 [orbitPanelMaxWidth]），
-  /// 高度限 0.6 屏
+  /// 锚点矩形（库内 dropdown 口径：`y = 锚点 top`、右沿对齐锚点右沿，
+  /// 故把 [gap] 并进「行下沿零高度矩形」，与 `OrbitDropdownPreference` 同款）
   ///
-  /// 宽度上限必须卡在这里——正式渲染的 `Positioned.fromRect` 用的是本次
-  /// 离屏测量的尺寸；`MiuixListPopupColumn` 内部按父约束把宽度 clamp 在
-  /// 200–288，给 240 的上界后自然收到 200–240。
-  BoxConstraints _cardConstraints(Size screen) => BoxConstraints.loose(
-        Size(
-          math.min(screen.width - _edge * 2, orbitPanelMaxWidth),
-          screen.height * 0.6,
-        ),
-      );
+  /// 无锚点（指针按下已超过 800ms 的程序化调用）走右上角形态，与页头 ⋮
+  /// 菜单同一落位惯例。
+  Rect _anchorBounds(Size screen) {
+    final rect = widget.anchor;
+    if (rect != null) {
+      return Rect.fromLTWH(rect.left, rect.bottom + _gap, rect.width, 0);
+    }
+    final top = MediaQuery.viewPaddingOf(context).top;
+    return Rect.fromLTWH(screen.width - _edge, top + _noAnchorTopInset, 0, 0);
+  }
 
   @override
   Widget build(BuildContext context) {
     final screen = MediaQuery.sizeOf(context);
-    final viewPadding = MediaQuery.viewPaddingOf(context);
-    final radius = BorderRadius.circular(orbitSelectPopupRadius);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    // 行与「今天」页头 ⋮ 菜单同款（MiuixGlassPopupItem）：44 最小行高、
-    // 24 图标位、选中转强调色并右端打勾
-    final rows = <Widget>[
-      for (var i = 0; i < widget.items.length; i++)
-        MiuixGlassPopupItem(
-          text: widget.items[i].label,
-          summary: widget.items[i].hint,
-          icon: _leading(widget.items[i]),
-          selected: widget.items[i].value == widget.current,
-          onPressed: () => widget.onPick(widget.items[i].value),
-        ),
-    ];
-
-    // 卡片内容（材质之外的纯内容）：形变期它按等比缩放贴面板左上角裁切，
-    // 玻璃面板本身由外层按动画矩形逐帧铺满（见下）
-    final content = Material(
-      // showGeneralDialog 不像 showDialog / 底部抽屉那样自带 Material：
-      // 缺了这层，DefaultTextStyle 落到 MaterialApp 的警告样式，
-      // 选项文字下面会画出一条黄线（2026-11-04 外观页截图暴露）。
-      // 透明底不上色，卡面由玻璃面承担；这层同时负责圆角裁切
-      // （选项滚动时不出卡），key 挂这供测试取卡片矩形。
-      key: orbitSelectPopupKey,
-      color: Colors.transparent,
-      borderRadius: radius,
-      clipBehavior: Clip.antiAlias,
-      child: ConstrainedBox(
-        // 选项多时可滚（不把弹层顶出屏幕）
-        constraints: BoxConstraints(maxHeight: screen.height * 0.6),
-        // 上下 8 呼吸位对齐玻璃菜单的 contentPadding（条目行自身没有首末
-        // 额外内边距，不加会贴到卡面圆角上）
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: MiuixListPopupColumn(children: rows),
-        ),
+    return MiuixGlassDropdownPopup(
+      show: true,
+      anchorBounds: _anchorBounds(screen),
+      backdrop: widget.backdrop,
+      // 宽度与全站弹出菜单同档（180–240）；高度限 0.6 屏，选项多时可滚
+      sizing: MiuixGlassPopupSizing(
+        minWidth: orbitPanelMinWidth,
+        maxWidth: orbitPanelMaxWidth,
+        maxHeight: screen.height * 0.6,
       ),
-    );
-
-    final size = _cardSize;
-    if (size == null) {
-      // 首帧：离屏布局一次取尺寸（Offstage 只排版不上屏），下一帧开始形变
-      return Stack(
-        children: [
-          Positioned(
-            left: 0,
-            top: 0,
-            child: Offstage(
-              child: ConstrainedBox(
-                constraints: _cardConstraints(screen),
-                child: KeyedSubtree(key: _probeKey, child: content),
+      visuals: MiuixGlassPopupVisuals(material: _popupMaterial(isDark)),
+      onDismissRequest: _dismiss,
+      child: Semantics(
+        label: widget.title,
+        child: Column(
+          key: orbitSelectPopupKey,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final item in widget.items)
+              MiuixGlassPopupItem(
+                text: item.label,
+                summary: item.hint,
+                icon: orbitSelectItemLeading(item),
+                selected: item.value == widget.current,
+                onPressed: () => _pick(item.value),
               ),
-            ),
-          ),
-        ],
-      );
-    }
-
-    final placement = _placePopup(
-      screen: screen,
-      child: size,
-      anchor: widget.anchor,
-      viewPadding: viewPadding,
-    );
-    final settled = placement.position & size;
-    // 库内 dropdown motion（`miuixGlassPopupFrame`）：面板从落位右上角
-    // 一小块（0.69 宽 × 0.2 高，圆角 4）弹到整块（圆角 24），中心同步归位；
-    // 内容按 `rect.width / 卡面宽` 等比缩放、贴左上角裁切，所以早期只「揭开」
-    // 正在长出来的那块，不会把整张卡缩成一点
-    final ratio = size.height / size.width;
-    final startWidth = size.width * 0.69;
-    final startHeight = startWidth * 0.2;
-    final startCenter = placement.alignTop
-        ? Offset(settled.right - startWidth / 2, settled.top + startHeight / 2)
-        : Offset(settled.right - startWidth / 2, settled.bottom - startHeight / 2);
-    final animation = ModalRoute.of(context)?.animation;
-    return Semantics(
-      label: widget.title,
-      child: AnimatedBuilder(
-        animation: animation ?? const AlwaysStoppedAnimation<double>(1),
-        builder: (context, _) {
-          final raw = (animation?.value ?? 1.0).clamp(0.0, 1.0);
-          final t = Curves.easeOutCubic.transform(raw);
-          final width =
-              ui.lerpDouble(startWidth, size.width, t)!.clamp(1.0, 1e5);
-          final height = math.max(
-            1.0,
-            width * ui.lerpDouble(0.2, ratio, t)!,
-          );
-          final center =
-              Offset.lerp(startCenter, settled.center, t)!;
-          final rect =
-              Rect.fromCenter(center: center, width: width, height: height);
-          final animatedRadius =
-              ui.lerpDouble(4, orbitSelectPopupRadius, t)!;
-          // 内容等比缩放：早期矩形没卡面宽时只揭开一部分，绝不把文字拉小
-          final scale = math.min(1.0, rect.width / math.max(size.width, 1));
-          // 淡入只占前 35%，形变本身承担「从行尾弹开」的观感
-          final opacity = (t / 0.35).clamp(0.0, 1.0);
-          return Stack(
-            children: [
-              Positioned.fromRect(
-                rect: rect,
-                // 卡面与「今天」页头 ⋮ 菜单同一枚 [MiuixGlassPanel]（同材质档、
-                // 同阴影）：有采样器走 puredThinGlass 玻璃，没有快照（抽屉内
-                // 与 push 出来的设置子页都取不到 OrbitGlassScope）时库内退
-                // **实色填充**——正是 ⋮ 菜单在页面里的白卡观感。
-                // 不要换回自绘实时模糊（`OrbitGlassSurface`）：那档叠在抽屉
-                // 白底上会糊成灰白半透明，2026-11-05 模板页截图「不像菜单」
-                // 的根因。
-                child: MiuixGlassPanel(
-                  backdrop: widget.backdrop,
-                  material: _popupMaterial(isDark),
-                  shadow: MiuixGlassShadows.floating,
-                  // 描边与菜单 presenter 同口径（v.stroke ?? forTheme）
-                  stroke: MiuixGlassStrokes.forTheme(isDark),
-                  shape: MiuixGlassShape(cornerRadius: animatedRadius),
-                  child: OverflowBox(
-                    alignment: Alignment.topLeft,
-                    minWidth: size.width,
-                    maxWidth: size.width,
-                    minHeight: size.height,
-                    maxHeight: size.height,
-                    child: Opacity(
-                      opacity: opacity,
-                      child: Transform.scale(
-                        scale: scale,
-                        alignment: Alignment.topLeft,
-                        child: SizedBox(
-                          width: size.width,
-                          height: size.height,
-                          child: content,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
+          ],
+        ),
       ),
     );
   }
-
-  /// 行首图标位：语义图标优先，其次 12px 色点（与抽屉版信息位一致）
-  ///
-  /// 库内图标位是 24×24 盒，直接传 12px 色点会被拉伸成整格，
-  /// 故统一用居中盒承载，保住色点/图标的原始尺寸。
-  Widget? _leading(SelectItem<T> item) {
-    if (item.icon != null) {
-      return SizedBox.square(
-        dimension: 24,
-        child: Center(
-          child: Icon(
-            item.icon,
-            size: AppDimens.iconSizeMd,
-            color: item.iconColor,
-          ),
-        ),
-      );
-    }
-    if (item.colorDot != null) {
-      return SizedBox.square(
-        dimension: 24,
-        child: Center(
-          child: Container(
-            width: AppDimens.colorDotSize,
-            height: AppDimens.colorDotSize,
-            decoration:
-                BoxDecoration(color: item.colorDot, shape: BoxShape.circle),
-          ),
-        ),
-      );
-    }
-    return null;
-  }
-}
-
-/// 卡面最终落位：锚点下方优先、放不下翻上方；无锚点则底部居中。
-///
-/// 纯函数：形变动效要拿「落位矩形」当插值终点，不能再藏在 layout delegate 里
-/// （delegate 只在排版期存在，动画取不到）。
-({Offset position, bool alignTop}) _placePopup({
-  required Size screen,
-  required Size child,
-  required Rect? anchor,
-  required EdgeInsets viewPadding,
-}) {
-  final minX = _edge;
-  final maxX = math.max(minX, screen.width - child.width - _edge);
-  final minY = _edge + viewPadding.top;
-  final maxY =
-      math.max(minY, screen.height - child.height - _edge - viewPadding.bottom);
-  final anchorRect = anchor;
-  if (anchorRect == null) {
-    return (
-      position: Offset(
-        ((screen.width - child.width) / 2).clamp(minX, maxX),
-        maxY,
-      ),
-      alignTop: true,
-    );
-  }
-  final bottomLimit = screen.height - _edge - viewPadding.bottom;
-  var y = anchorRect.bottom + _gap;
-  var alignTop = true;
-  if (y + child.height > bottomLimit) {
-    // 下方空间不足 → 翻到锚点上方（形变起点也换到底边）
-    y = anchorRect.top - _gap - child.height;
-    alignTop = false;
-  }
-  // 右沿对齐触发行（miuix end 口径）；1px 指针锚点用点击 x，向左下展开
-  final x = (anchorRect.width < 32 ? anchorRect.center.dx : anchorRect.right) -
-      child.width;
-  return (
-    position: Offset(x.clamp(minX, maxX), y.clamp(minY, maxY)),
-    alignTop: alignTop,
-  );
 }

@@ -144,26 +144,6 @@ class _OrbitDropdownPreferenceState<T>
     widget.onSelect(value);
   }
 
-  /// 弹层条目行首：语义图标优先，其次 12px 色点（库内图标位固定 24×24 盒）
-  Widget? _leading(SelectItem<T> item) {
-    if (item.icon != null) {
-      return Icon(item.icon, size: 20, color: item.iconColor);
-    }
-    if (item.colorDot != null) {
-      return Center(
-        child: Container(
-          width: AppDimens.colorDotSize,
-          height: AppDimens.colorDotSize,
-          decoration: BoxDecoration(
-            color: item.colorDot,
-            shape: BoxShape.circle,
-          ),
-        ),
-      );
-    }
-    return null;
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = MiuixTheme.of(context);
@@ -234,7 +214,7 @@ class _OrbitDropdownPreferenceState<T>
                   MiuixGlassPopupItem(
                     text: item.label,
                     summary: item.hint,
-                    icon: _leading(item),
+                    icon: orbitSelectItemLeading(item),
                     selected: item.value == widget.current,
                     onPressed: () => _pick(item.value),
                   ),
