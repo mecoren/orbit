@@ -17,6 +17,20 @@
 
 ## [Unreleased]
 
+### 优化：移动端新增待办五档菜单统一为锚定玻璃菜单原语（2026-11-05）
+
+新增 `shared/widgets/shadcn/orbit_menu_popup.dart`（`showOrbitMenuPopup` / `OrbitMenuSession` / `OrbitMenuPopupBody`）：把「底栏「更多」同款形变弹层」与「页头 ⋮ 菜单的玻璃卡 + `MiuixGlassPopupItem` 行」拼成一枚锚定选择菜单，作为 `showOrbitSelectPopup`（路由承载）之外第二个统一入口——**Overlay 直挂、不新建路由**，因此不抢输入框焦点、键盘全程不落，适配底部快速添加面板这类「边选边打字」的场景。
+
+- **承载（完全复刻底栏「更多」）**：传触发按钮的 `MiuixGlassPopupAnchor` + `anchorContent` 时走 `MiuixGlassTransformPopup`——卡片从按钮轮廓连续形变长出（按钮内容由副本按按钮矩形承担），与底栏「更多」逐帧同款；只要矩形 `anchor` 时退 `MiuixGlassDropdownPopup`（下拉揭幕），并自动判定上下方向：向上时锚点取触发钮**上沿 - 8**，卡底停在按钮上方 8px（**展开不遮住触发钮**）。
+- **回收动画与生命周期**：关闭统一切 `show=false` 播放同款逆形变，`onDismissFinished` 后才移除根 Overlay 条目并完成 `session.closed`；点选回调不等动画、仍立即回填。重复关闭幂等；面板路由开始退出或 State 销毁时改走 `session.dispose()` 立即清理，避免在已卸载锚点上续播或残留幽灵菜单。「选择日期…」等下级面板等待 `session.closed` 后再打开，避免退场焦点归还把键盘拽回背景输入框。
+- **卡面/行**：材质与页头菜单/底栏「更多」同档（`puredThinGlass` + blur 32，静态缓存实例命中库内纹理缓存），行仍是 `OrbitDropdownPanelView`（44 最小行高、24 图标位、语义色文案、选中强调色 + 右端对勾、组间 0.5 分隔线），`scrollable: false` + 库内滚动承担滚动；宽度走库内菜单档 200–288（与底栏「更多」一致），标签长文案可传 `maxWidth: 300`。
+- **能力**：单选即关、`closeOnTap: false` 多选常驻连选（行点击后组件内部重取 `groupsBuilder`，勾选态就地刷新）、分组、标题行 + 行内动作、就地展开二级项；新增待办五个菜单带「标题 + 编辑」标题行（编辑 = 快捷操作设置），与底栏「更多」面板版式一致。
+- **焦点**：库内弹层的 `FocusScope(autofocus)` 会先抢焦点，组件在测量落定后再等两帧把焦点还给调用方传入的 `FocusNode`（幂等，只做一次）；快速添加面板因此从「日期档打开时键盘下沉、关闭后恢复」变为全程不掉键盘。
+- **新增待办接入**：日期（保留今天 / 明天 / 下周 / 选择日期… / 清除日期与下级月历）、优先级六档、标签多选、项目单选、更多菜单五处全部改走新原语，工具栏按钮各包一枚 `MiuixGlassAnchor`（形变起点）；删除 `_openAnchoredCard` / `OverlayEntry` / `Completer` 样板，返回键改由 `_menuSession` + `PopScope` 拦截，面板路由开始退出或 dispose 时立即撤下菜单并释放锚点防泄漏。图片管理仍走底部 `showMoreActionsSheet`（本次不动）。
+- **存量单选浮层（49 处）**：`showOrbitSelectPopup` 调用点与路由外壳零改动，内部改与 `showOrbitMenuPopup` 共用同一枚 `OrbitMenuPopupBody`（卡面/行/落位/动效单点），宽度仍 180–240、返回键仍走路由 `LocalHistoryEntry`。
+- **清理**：手搓锚点卡片 `OrbitFloatCard` / `orbitFloatCardLayout` / `OrbitOverlayCard` / `orbitFloatCardWidth` / `orbitPanelWidthFactor` 已无调用点，全部删除；`orbit_dropdown_panel.dart` 只剩 `OrbitPanelItem` + `OrbitDropdownPanelView`（+ 两者共用的 `orbitSelectPopupKey`）。
+- **验证**：`flutter analyze` 0 issue；`flutter test` **1169 绿**（新增 `test/orbit_menu_popup_test.dart` 10 例：承载/行、贴锚下方、空间不足翻上、点选关闭、多选常驻、点外关闭、无锚点兜底、形变关闭播回收动画并恢复锚点、首帧前关闭直接清理、回收动画中强制销毁；`quick_add_sheet_test` 的卡片断言改按 `orbitSelectPopupKey` 定位，并新增「菜单矩形不与工具栏按钮相交」「菜单点选立即回填并播放回收动画」「菜单展开时关闭面板不残留根浮层」「选择日期… 下级面板不被回收动画抢回键盘」用例，焦点用例改为「打开/点选期间焦点始终在输入框」）。
+
 ### 修复：移动端回收站页头补左上返回键——回退到进站前的页签（2026-11-05）
 
 回收站通常经底栏「更多」面板 / 侧栏「功能入口」/ 设置页进入，本身不在底栏；而它作为 `StatefulShellRoute` 分支根页坐在自己导航栈的栈底，`Navigator.maybePop` 无处可退——页头左上角此前是空的，「回到刚才那一页」没有出口。新增壳层「上一页」记忆 `OrbitShellBack`：`HomeShell` 在分支切换时记下上一次停靠的模块（`didUpdateWidget`），经 InheritedWidget 下发给分支根页；返回键走 `StatefulNavigationShell.goBranch` 切回目标分支，该分支原有栈（含子列表/筛选态）一并恢复。**只有不在底栏的模块才出返回键**（在底栏时回退由页签承担，与日历等页签根同口径），冷启动直接落在该页且无历史时也不渲染。**验证**：`flutter analyze` 0 issue；`flutter test` 1154 绿 / 1 红——红的是 `desktop_parity_align_test` 的「保存筛选器」一例（并发会话正在重构筛选器页，与本次无关）；`home_shell_test` 新增「清单 → 更多 → 回收站 → 返回落在清单（而非启用序第一个今天）」用例。

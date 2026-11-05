@@ -23,10 +23,9 @@
 /// 的版式、选中态口径一律不动。
 library;
 
-import 'dart:async';
-
 import 'package:flutter/material.dart';
-import 'package:flutter_miuix/miuix.dart' show MiuixLayerBackdrop;
+import 'package:flutter_miuix/miuix.dart'
+    show MiuixGlassAnchor, MiuixGlassPopupAnchor, MiuixLayerBackdrop;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
@@ -41,10 +40,9 @@ import '../../data/providers/bridge_provider.dart';
 import '../../shared/utils/hex_color.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_date_picker.dart';
-import '../../shared/widgets/shadcn/orbit_dropdown_panel.dart';
 import '../../shared/widgets/shadcn/orbit_glass_surface.dart';
+import '../../shared/widgets/shadcn/orbit_menu_popup.dart';
 import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
-import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../shared/widgets/shadcn/orbit_icon_button.dart';
@@ -172,8 +170,17 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
   /// 下沉，弹层关闭后凭它把焦点还回去（见 [_withKeyboard]），可边选边打字。
   final _titleFocus = FocusNode();
 
-  /// 「更多」钮定位键：下拉面板锚在它上方弹出，用该键取全局矩形
-  final _moreKey = GlobalKey();
+  /// 工具栏按钮尺寸（形变锚点与落位微调用同一数值）
+  static const double _toolbarButtonSize = 42;
+
+  /// 工具栏档位按钮的形变锚点（每个档位一个；菜单从按钮轮廓连续长出来，
+  /// 与底栏「更多」同款）
+  final _menuAnchors = <QuickActionId, MiuixGlassPopupAnchor>{
+    for (final id in QuickActionId.values) id: MiuixGlassPopupAnchor(),
+  };
+
+  /// 「更多」钮的形变锚点
+  final _moreAnchor = MiuixGlassPopupAnchor();
 
   int _priority = 0;
   int? _dueDate;
@@ -191,6 +198,13 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
 
   @override
   void dispose() {
+    // 菜单挂在根 Overlay 上，不随本面板路由一起销毁：锚点即将释放，必须
+    // 立即移除 entry，不能继续在已卸载的按钮上播回收动画。
+    _menuSession?.dispose();
+    for (final anchor in _menuAnchors.values) {
+      anchor.dispose();
+    }
+    _moreAnchor.dispose();
     _titleController.dispose();
     _titleFocus.dispose();
     super.dispose();
@@ -291,16 +305,16 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
 
   // ── 档位动作 ──
 
-  Future<void> _onAction(QuickActionId id, [Rect? anchor]) async {
+  Future<void> _onAction(QuickActionId id) async {
     switch (id) {
       case QuickActionId.due:
-        await _pickDue();
+        _pickDue();
       case QuickActionId.priority:
-        await _pickPriority(anchor);
+        _pickPriority();
       case QuickActionId.label:
-        await _pickLabels(anchor);
+        await _pickLabels();
       case QuickActionId.project:
-        await _pickProject(anchor);
+        _pickProject();
       case QuickActionId.image:
         await _pickImage();
       case QuickActionId.template:
@@ -308,13 +322,6 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
       case QuickActionId.fullscreen:
         await _openFullForm();
     }
-  }
-
-  /// 触发钮全局矩形（快捷卡片锚点；取不到回落右上形态）
-  Rect? _anchorOf(BuildContext ctx) {
-    final box = ctx.findRenderObject() as RenderBox?;
-    if (box == null || !box.hasSize) return null;
-    return box.localToGlobal(Offset.zero) & box.size;
   }
 
   /// 工具栏弹层关闭后把焦点还给输入框（输入法重新升起）。
@@ -328,83 +335,88 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
 
   /// 包一层键盘保持：打开底部抽屉前记住输入框是否有焦点，关闭后恢复。
   /// 模板/全屏/设置会关掉本面板（导航离开），不包这层。
-  /// 锚点小卡片走 [_openAnchoredCard]（Overlay 直挂，根本不抢焦点）。
+  /// 锚定菜单走 [showOrbitMenuPopup]（Overlay 直挂，根本不抢焦点）。
   Future<void> _withKeyboard(Future<void> Function() open) async {
     final hadFocus = _titleFocus.hasFocus;
     await open();
     _restoreKeyboard(hadFocus);
   }
 
-  /// 直挂 Overlay 的锚点卡片（关闭即 complete；返回键拦截见 build 的 PopScope）
-  OverlayEntry? _cardEntry;
-  Completer<void>? _cardDone;
+  /// 当前锚定菜单会话（Overlay 直挂；返回键拦截见 build 的 PopScope）
+  OrbitMenuSession? _menuSession;
 
-  bool get _cardOpen => _cardEntry != null;
+  bool get _menuOpen => _menuSession?.isOpen ?? false;
 
-  /// 关闭锚点卡片（幂等；卡外点按/返回键/选中关闭都走这里）
-  void _closeCard() {
-    _cardEntry?.remove();
-    _cardEntry = null;
-    final done = _cardDone;
-    _cardDone = null;
-    if (done != null && !done.isCompleted) done.complete();
-    if (mounted) setState(() {});
+  /// 关闭当前菜单（幂等；点卡外/返回键/点选都由组件内部走同一条 close）
+  void _closeMenu() {
+    _menuSession?.close();
   }
 
-  /// 锚点卡片 Overlay 直挂：不走路由、不抢输入框焦点，输入法全程保持升起
-  /// （点按钮键盘不再下沉，可边选边打字）。定位/动效与路由版同源
-  /// （[orbitFloatCardLayout] + [OrbitOverlayCard]），卡外点按关闭。
-  Future<void> _openAnchoredCard({
-    required Rect? anchor,
-    required Widget child,
-    double? width,
-  }) {
-    _closeCard();
-    if (!mounted) return Future.value();
-    final layout = orbitFloatCardLayout(
-      context,
-      anchor: anchor,
-      above: true,
-      width: width,
-    );
-    final done = _cardDone = Completer<void>();
-    _cardEntry = OverlayEntry(
-      builder: (_) => Stack(
-        children: [
-          Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onTap: _closeCard,
-            ),
-          ),
-          Align(
-            alignment: layout.align,
-            child: Padding(
-              padding: layout.padding,
-              child: OrbitOverlayCard(
-                scaleAlignment: layout.scale,
-                // 采样器用面板打开时从 `OrbitGlassScope` 取到的实例：
-                // Overlay 直挂的卡片同样在 scope 之外，内部自取拿不到
-                child: OrbitFloatCard(
-                  width: width,
-                  backdrop: widget.backdrop,
-                  child: child,
-                ),
-              ),
-            ),
-          ),
-        ],
+  /// 形变期按钮副本（库内会隐藏按钮本体，副本按按钮矩形缩放显示）
+  Widget _menuAnchorContent(QuickActionId id) {
+    final colors = AppColors.ofContext(context);
+    final active =
+        _actionValue(id) != null ||
+        (id == QuickActionId.priority && _priority > 0);
+    return Center(
+      child: Icon(
+        quickActionIcon(id),
+        size: AppDimens.iconSizeMd,
+        color: _actionTone(id, colors, active),
       ),
     );
-    Overlay.of(context).insert(_cardEntry!);
-    setState(() {});
-    return done.future;
   }
 
-  /// 截止日期档：快捷抽屉（今天/明天/下周/选择日期…+ 已设时清除），与桌面
+  /// 打开锚定菜单（[showOrbitMenuPopup] 统一承载与动效，与底栏「更多」同款：
+  /// 卡片从按钮轮廓连续形变长出、玻璃卡面、44 行高语义色行；Overlay 直挂不
+  /// 新建路由，输入法全程保持升起，可边选边打字）。
+  ///
+  /// [groupsBuilder] 在每次重建时取值（多选连选靠它翻勾），闭包里读调用方
+  /// 当下的选中集合；宽度走库内菜单档（200–288），标签这类长文案菜单传
+  /// `maxWidth: 300`。`gap` 把卡片底边抬到按钮上方，不压住触发钮。
+  ///
+  /// 同一锚点重开的前提是旧菜单已收走：库内退场结束会把按钮本体恢复，若
+  /// 在退场窗口内同锚点开新菜单会出现双本体。当前库内拦截层吞掉该窗口的
+  /// 点击，用户不可达；不要把拦截层改成透传。
+  OrbitMenuSession _openMenu({
+    required MiuixGlassPopupAnchor anchor,
+    required Widget anchorContent,
+    required String title,
+    required List<List<OrbitPanelItem>> Function() groupsBuilder,
+    bool closeOnTap = true,
+    double? maxWidth,
+    Key? contentKey,
+  }) {
+    _menuSession?.close();
+    final session = showOrbitMenuPopup(
+      context,
+      transformAnchor: anchor,
+      anchorContent: anchorContent,
+      gap: -(_toolbarButtonSize + AppDimens.space8),
+      groupsBuilder: groupsBuilder,
+      // 标题行 + 行内「编辑」：与底栏「更多」面板同版式（编辑 = 快捷操作设置）
+      title: title,
+      actionLabel: '编辑',
+      onAction: _openSettings,
+      closeOnTap: closeOnTap,
+      maxWidth: maxWidth,
+      contentKey: contentKey,
+      backdrop: widget.backdrop,
+      restoreFocus: _titleFocus,
+    );
+    _menuSession = session;
+    session.closed.whenComplete(() {
+      if (!mounted || _menuSession != session) return;
+      setState(() => _menuSession = null);
+    });
+    setState(() {});
+    return session;
+  }
+
+  /// 截止日期档：快捷菜单（今天/明天/下周/选择日期…+ 已设时清除），与桌面
   /// QuickDateMenu 和表单今天/明天/下周快捷同口径（下周＝下周一 00:00）；
-  /// 选中态只落工具栏图标。
-  Future<void> _pickDue() async {
+  /// 选中态只落行尾对勾。
+  void _pickDue() {
     final today = _midnightOf(0);
     final tomorrow = _midnightOf(1);
     final nextWeek = nextMondayMidnightMs();
@@ -416,36 +428,50 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
     } else if (_dueDate == nextWeek) {
       current = 'nextweek';
     }
-    // 自定义日期会再开下级日期面板：把焦点记忆传进去，由下级关闭时恢复
-    //（本级恢复时下级还在上面，[_restoreKeyboard] 会主动让路）
+    // 自定义日期会再开下级日期面板（底部抽屉）：把焦点记忆传进去，由下级
+    // 关闭时恢复（本级菜单 Overlay 直挂，不抢焦点）
     final hadFocus = _titleFocus.hasFocus;
-    await showSelectBottomSheet<String>(
-      context,
-      title: '截止日期',
-      items: [
-        const SelectItem(value: 'today', label: '今天'),
-        const SelectItem(value: 'tomorrow', label: '明天'),
-        const SelectItem(value: 'nextweek', label: '下周'),
-        const SelectItem(value: 'custom', label: '选择日期…'),
-        if (_dueDate != null) const SelectItem(value: 'clear', label: '清除日期'),
-      ],
-      current: current,
-      onSelect: (v) async {
-        switch (v) {
-          case 'today':
-            if (mounted) setState(() => _dueDate = today);
-          case 'tomorrow':
-            if (mounted) setState(() => _dueDate = tomorrow);
-          case 'nextweek':
-            if (mounted) setState(() => _dueDate = nextWeek);
-          case 'clear':
-            if (mounted) setState(() => _dueDate = null);
-          case 'custom':
-            await _pickCustomDue(hadFocus);
-        }
-      },
+    late final OrbitMenuSession session;
+
+    void apply(String value) {
+      switch (value) {
+        case 'today':
+          if (mounted) setState(() => _dueDate = today);
+        case 'tomorrow':
+          if (mounted) setState(() => _dueDate = tomorrow);
+        case 'nextweek':
+          if (mounted) setState(() => _dueDate = nextWeek);
+        case 'clear':
+          if (mounted) setState(() => _dueDate = null);
+        case 'custom':
+          // 先等本级菜单回收完成再开下级日期面板：库内退场结束会把焦点
+          // 归还给输入框，若同帧 push 下级路由，键盘会被拽回背景面板。
+          session.closed.then((_) {
+            if (mounted) _pickCustomDue(hadFocus);
+          });
+      }
+    }
+
+    OrbitPanelItem item(String value, String label) => OrbitPanelItem(
+      label: label,
+      checked: current == value,
+      onTap: () => apply(value),
     );
-    _restoreKeyboard(hadFocus);
+
+    session = _openMenu(
+      anchor: _menuAnchors[QuickActionId.due]!,
+      anchorContent: _menuAnchorContent(QuickActionId.due),
+      title: '日期',
+      groupsBuilder: () => [
+        [
+          item('today', '今天'),
+          item('tomorrow', '明天'),
+          item('nextweek', '下周'),
+          item('custom', '选择日期…'),
+          if (_dueDate != null) item('clear', '清除日期'),
+        ],
+      ],
+    );
   }
 
   /// 本地时区自然日零点毫秒（今天 + [offsetDays] 天，与表单同口径）
@@ -474,33 +500,32 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
     _restoreKeyboard(hadFocus);
   }
 
-  /// 优先级档：锚在触发钮上方的单选卡片（六档带档色，点选即回填并关闭）
-  Future<void> _pickPriority([Rect? anchor]) async {
-    await _openAnchoredCard(
-      anchor: anchor,
-      child: OrbitDropdownPanelView(
-        groups: [
-          [
-            for (var i = 0; i <= 5; i++)
-              OrbitPanelItem(
-                icon: OrbitIcons.flag,
-                label: priorityLabel(i),
-                color: hexToColor(priorityColorHex(i)),
-                checked: i == _priority,
-                onTap: () {
-                  if (mounted) setState(() => _priority = i);
-                },
-              ),
-          ],
+  /// 优先级档：锚定单选菜单（六档带档色，点选即回填并关闭）
+  void _pickPriority() {
+    _openMenu(
+      anchor: _menuAnchors[QuickActionId.priority]!,
+      anchorContent: _menuAnchorContent(QuickActionId.priority),
+      title: '优先级',
+      groupsBuilder: () => [
+        [
+          for (var i = 0; i <= 5; i++)
+            OrbitPanelItem(
+              icon: OrbitIcons.flag,
+              label: priorityLabel(i),
+              color: hexToColor(priorityColorHex(i)),
+              checked: i == _priority,
+              onTap: () {
+                if (mounted) setState(() => _priority = i);
+              },
+            ),
         ],
-        onClose: _closeCard,
-      ),
+      ],
     );
   }
 
-  /// 标签档：锚在触发钮上方的多选卡片——点行即选中/取消并实时回填面板，
-  /// 卡片常驻可连选，点卡外关闭（不要确认/取消尾栏）
-  Future<void> _pickLabels([Rect? anchor]) async {
+  /// 标签档：锚定多选菜单——点行即选中/取消并实时回填面板，
+  /// 菜单常驻可连选，点卡外关闭（不要确认/取消尾栏）
+  Future<void> _pickLabels() async {
     var all = ref.read(todoLabelsProvider).value ?? const <TodoLabel>[];
     if (all.isEmpty) {
       // provider 首读尚未落定（future 刚创建）：等一拍再判空，
@@ -517,98 +542,84 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
     }
     if (!mounted) return;
     final picked = Set<int>.of(_labels.map((l) => l.id));
-    await _openAnchoredCard(
-      anchor: anchor,
-      // 标签行（色点 + 标题 + 选中打勾）：240 宽放不下长标题，加宽到 300
-      // （壳内按屏宽 - 32 钳制，不贴边）
-      width: 300,
-      child: StatefulBuilder(
-        builder: (cardContext, setCardState) {
-          /// 点行即算选中：卡片内翻勾 + 面板实时回填（卡片不关，可连选）
-          void toggle(TodoLabel label) {
-            setCardState(() {
-              picked.contains(label.id)
-                  ? picked.remove(label.id)
-                  : picked.add(label.id);
-            });
-            if (mounted) {
-              setState(
-                () => _labels = [
-                  for (final l in all)
-                    if (picked.contains(l.id)) l,
-                ],
-              );
-            }
-          }
-
-          // 行口径与「今天」页头 ⋮ 菜单同源（OrbitDropdownPanelView →
-          // MiuixGlassPopupItem）：色点在 24 图标位、选中右端打勾；
-          // 多选要连选，面板常驻不关（closeOnTap: false）
-          return OrbitDropdownPanelView(
-            key: const ValueKey('quick-add-label-card-list'),
-            closeOnTap: false,
-            onClose: _closeCard,
-            groups: [
-              [
-                for (final label in all)
-                  OrbitPanelItem(
-                    leading: Container(
-                      width: AppDimens.colorDotSize,
-                      height: AppDimens.colorDotSize,
-                      decoration: BoxDecoration(
-                        color: hexToColor(
-                          label.hexColor,
-                          fallback: OrbitAccents.todoAccent,
-                        ),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    label: label.title,
-                    checked: picked.contains(label.id),
-                    onTap: () => toggle(label),
+    _openMenu(
+      anchor: _menuAnchors[QuickActionId.label]!,
+      anchorContent: _menuAnchorContent(QuickActionId.label),
+      title: '标签',
+      // 标签行（色点 + 标题 + 选中打勾）：默认 288 宽放不下长标题，加宽到 300
+      // （库内按屏宽 - 24 钳制，不贴边）
+      maxWidth: 300,
+      // 多选要连选，菜单常驻不关（closeOnTap: false，行点击后组件重取勾选态）
+      closeOnTap: false,
+      contentKey: const ValueKey('quick-add-label-card-list'),
+      groupsBuilder: () => [
+        [
+          for (final label in all)
+            OrbitPanelItem(
+              leading: Container(
+                width: AppDimens.colorDotSize,
+                height: AppDimens.colorDotSize,
+                decoration: BoxDecoration(
+                  color: hexToColor(
+                    label.hexColor,
+                    fallback: OrbitAccents.todoAccent,
                   ),
-              ],
-            ],
-          );
-        },
-      ),
+                  shape: BoxShape.circle,
+                ),
+              ),
+              label: label.title,
+              checked: picked.contains(label.id),
+              onTap: () {
+                picked.contains(label.id)
+                    ? picked.remove(label.id)
+                    : picked.add(label.id);
+                if (!mounted) return;
+                setState(
+                  () => _labels = [
+                    for (final l in all)
+                      if (picked.contains(l.id)) l,
+                  ],
+                );
+              },
+            ),
+        ],
+      ],
     );
   }
 
-  /// 项目档：锚在触发钮上方的单选卡片（未分组 + 项目列表带项目色，点选即回填）
-  Future<void> _pickProject([Rect? anchor]) async {
+  /// 项目档：锚定单选菜单（未分组 + 项目列表带项目色，点选即回填）
+  void _pickProject() {
     final projects =
         ref.read(todoProjectsProvider).value ?? const <TodoProject>[];
-    await _openAnchoredCard(
-      anchor: anchor,
-      child: OrbitDropdownPanelView(
-        groups: [
-          [
+    _openMenu(
+      anchor: _menuAnchors[QuickActionId.project]!,
+      anchorContent: _menuAnchorContent(QuickActionId.project),
+      title: '项目',
+      groupsBuilder: () => [
+        [
+          OrbitPanelItem(
+            icon: OrbitIcons.list,
+            label: '未分组',
+            checked: _projectId == null,
+            onTap: () {
+              if (mounted) setState(() => _projectId = null);
+            },
+          ),
+          for (final project in projects)
             OrbitPanelItem(
               icon: OrbitIcons.list,
-              label: '未分组',
-              checked: _projectId == null,
+              label: project.title,
+              color: hexToColor(
+                project.hexColor,
+                fallback: OrbitAccents.todoAccent,
+              ),
+              checked: _projectId == project.id,
               onTap: () {
-                if (mounted) setState(() => _projectId = null);
+                if (mounted) setState(() => _projectId = project.id);
               },
             ),
-            for (final project in projects)
-              OrbitPanelItem(
-                icon: OrbitIcons.list,
-                label: project.title,
-                color: hexToColor(
-                  project.hexColor,
-                  fallback: OrbitAccents.todoAccent,
-                ),
-                checked: _projectId == project.id,
-                onTap: () {
-                  if (mounted) setState(() => _projectId = project.id);
-                },
-              ),
-          ],
         ],
-        onClose: _closeCard,
-      ),
+      ],
     );
   }
 
@@ -714,37 +725,38 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
     context.push('/settings/quick-actions');
   }
 
-  /// 「更多」菜单：锚在按钮上方的下拉面板（竞品同款浮层卡片），未启用档 +
-  /// 固定「设置」入口分两组；点选后菜单自关，回调内再处理面板。
-  /// Overlay 直挂（不抢键盘）；导航离开类入口（设置）照旧先关面板。
-  Future<void> _openMoreMenu(List<QuickActionId> hidden) async {
-    final box = _moreKey.currentContext?.findRenderObject() as RenderBox?;
-    final anchor = box == null || !box.hasSize
-        ? null
-        : box.localToGlobal(Offset.zero) & box.size;
-    await _openAnchoredCard(
-      anchor: anchor,
-      child: OrbitDropdownPanelView(
-        groups: [
-          if (hidden.isNotEmpty)
-            [
-              for (final id in hidden)
-                OrbitPanelItem(
-                  icon: quickActionIcon(id),
-                  label: id.label,
-                  onTap: () => _onAction(id),
-                ),
-            ],
-          [
-            OrbitPanelItem(
-              icon: OrbitIcons.settings,
-              label: '设置',
-              onTap: _openSettings,
-            ),
-          ],
-        ],
-        onClose: _closeCard,
+  /// 「更多」菜单：未启用档 + 固定「设置」入口分两组；点选后菜单自关，
+  /// 回调内再处理面板。Overlay 直挂（不抢键盘，与底栏「更多」同款形变）；
+  /// 导航离开类入口（设置）照旧先关面板。
+  void _openMoreMenu(List<QuickActionId> hidden) {
+    _openMenu(
+      anchor: _moreAnchor,
+      anchorContent: Center(
+        child: Icon(
+          OrbitIcons.moreVertical,
+          size: AppDimens.iconSizeMd,
+          color: AppColors.ofContext(context).iconText,
+        ),
       ),
+      title: '更多',
+      groupsBuilder: () => [
+        if (hidden.isNotEmpty)
+          [
+            for (final id in hidden)
+              OrbitPanelItem(
+                icon: quickActionIcon(id),
+                label: id.label,
+                onTap: () => _onAction(id),
+              ),
+          ],
+        [
+          OrbitPanelItem(
+            icon: OrbitIcons.settings,
+            label: '设置',
+            onTap: _openSettings,
+          ),
+        ],
+      ],
     );
   }
 
@@ -755,11 +767,17 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
     final colors = AppColors.ofContext(context);
     final (enabled, hidden) = QuickActions.read();
 
-    // 锚点卡片开着时返回键先关卡片（Overlay 不占路由，默认会直接关面板丢草稿）
+    // 菜单开着时返回键先关菜单（Overlay 不占路由，默认会直接关面板丢草稿）
     return PopScope(
-      canPop: !_cardOpen,
+      canPop: !_menuOpen,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _closeCard();
+        if (didPop) {
+          // 路由开始退场时 State 仍要活到过渡结束；立刻撤下根浮层，不能等
+          // dispose 才清，否则菜单会悬在已开始关闭的面板上方。
+          _menuSession?.dispose();
+        } else {
+          _closeMenu();
+        }
       },
       // 键盘避让落在玻璃**之外**（`OrbitGlassSheet` 已收口：玻璃只覆盖面板
       // 本体，键盘高度不进模糊纹理）
@@ -829,7 +847,8 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
   /// 工具档按钮：未选是 42px 图标钮；已选则展开为「图标 + 具体值」
   /// 文字胶囊（日期/项目名/标签/张数直接可见，不在输入框上方加行；
   /// 优先级只旗子变色、不展字）。
-  /// 点按锚点取按钮全局矩形，快捷卡片从该按钮上方弹出。
+  /// 按钮本体包进 `MiuixGlassAnchor`：菜单从该按钮轮廓连续形变长出
+  /// （与底栏「更多」同款），展开期按钮内容由 `anchorContent` 副本承担。
   Widget _toolbarButton(QuickActionId id) {
     final colors = AppColors.ofContext(context);
     final value = _actionValue(id);
@@ -837,62 +856,65 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
     final active =
         value != null || (id == QuickActionId.priority && _priority > 0);
     final tone = _actionTone(id, colors, active);
-    if (value == null) {
-      return Builder(
-        builder: (btnContext) => OrbitIconButton(
-          // 优先级无文字值但仍有已选态：tooltip 显示已选值
-          tooltip: active ? _actionTooltip(id) : id.label,
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints.tightFor(width: 42, height: 42),
-          onPressed: () => _onAction(id, _anchorOf(btnContext)),
-          icon: Icon(
-            quickActionIcon(id),
-            size: AppDimens.iconSizeMd,
-            color: tone,
-          ),
-        ),
-      );
-    }
-    return Builder(
-      builder: (btnContext) => Tooltip(
-        message: _actionTooltip(id),
-        child: InkWell(
-          borderRadius: AppShapes.small,
-          onTap: () => _onAction(id, _anchorOf(btnContext)),
-          child: Container(
-            height: 42,
-            padding: const EdgeInsets.symmetric(horizontal: AppDimens.space8),
-            decoration: BoxDecoration(
-              color: tone.withValues(alpha: 0.12),
-              borderRadius: AppShapes.small,
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  quickActionIcon(id),
-                  size: AppDimens.iconSizeMd,
-                  color: tone,
-                ),
-                const SizedBox(width: AppDimens.space6),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 120),
-                  child: Text(
-                    value,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: tone,
-                    ),
+    return MiuixGlassAnchor(
+      anchor: _menuAnchors[id]!,
+      child: value == null
+          ? OrbitIconButton(
+              // 优先级无文字值但仍有已选态：tooltip 显示已选值
+              tooltip: active ? _actionTooltip(id) : id.label,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints.tightFor(
+                width: _toolbarButtonSize,
+                height: _toolbarButtonSize,
+              ),
+              onPressed: () => _onAction(id),
+              icon: Icon(
+                quickActionIcon(id),
+                size: AppDimens.iconSizeMd,
+                color: tone,
+              ),
+            )
+          : Tooltip(
+              message: _actionTooltip(id),
+              child: InkWell(
+                borderRadius: AppShapes.small,
+                onTap: () => _onAction(id),
+                child: Container(
+                  height: _toolbarButtonSize,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppDimens.space8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: tone.withValues(alpha: 0.12),
+                    borderRadius: AppShapes.small,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        quickActionIcon(id),
+                        size: AppDimens.iconSizeMd,
+                        color: tone,
+                      ),
+                      const SizedBox(width: AppDimens.space6),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 120),
+                        child: Text(
+                          value,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: tone,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
-        ),
-      ),
     );
   }
 
@@ -963,19 +985,24 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
 
   Widget _moreButton() {
     final colors = AppColors.ofContext(context);
-    return OrbitIconButton(
-      key: _moreKey,
-      tooltip: '更多',
-      padding: EdgeInsets.zero,
-      constraints: const BoxConstraints.tightFor(width: 42, height: 42),
-      onPressed: () {
-        final (_, hidden) = QuickActions.read();
-        _openMoreMenu(hidden);
-      },
-      icon: Icon(
-        OrbitIcons.moreVertical,
-        size: AppDimens.iconSizeMd,
-        color: colors.iconText,
+    return MiuixGlassAnchor(
+      anchor: _moreAnchor,
+      child: OrbitIconButton(
+        tooltip: '更多',
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints.tightFor(
+          width: _toolbarButtonSize,
+          height: _toolbarButtonSize,
+        ),
+        onPressed: () {
+          final (_, hidden) = QuickActions.read();
+          _openMoreMenu(hidden);
+        },
+        icon: Icon(
+          OrbitIcons.moreVertical,
+          size: AppDimens.iconSizeMd,
+          color: colors.iconText,
+        ),
       ),
     );
   }

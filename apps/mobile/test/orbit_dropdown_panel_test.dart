@@ -6,6 +6,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/core/theme/app_colors.dart';
+import 'package:orbit/core/theme/app_shapes.dart';
 import 'package:orbit/core/theme/icon_map.dart';
 import 'package:orbit/core/theme/orbit_accents.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_dropdown_panel.dart';
@@ -58,17 +59,15 @@ void main() {
         ],
       ];
 
-  // 承载由调用方给（原 `showOrbitDropdownPanel` 函数式入口已删除：
-  // 零调用点，实际用法是 `OrbitDropdownPanelView` 直接嵌进快加面板的
-  // Overlay 卡片）。这里用同一枚 [OrbitFloatCard] + 透明 barrier 复刻路由版，
-  // 保证交互断言仍覆盖产品口径。
+  // 承载由调用方给（`OrbitDropdownPanelView` 只出行，卡面/动效由
+  // `orbit_menu_popup.dart` 的 `OrbitMenuPopupBody` 承担）。这里用最简
+  // Material + 定宽容器复刻菜单形态，只验行渲染与就地展开语义。
   Widget host() => orbitTestApp(
         home: Scaffold(
           body: Builder(
             builder: (context) => Center(
               child: TextButton(
                 onPressed: () {
-                  final layout = orbitFloatCardLayout(context);
                   showGeneralDialog<void>(
                     context: context,
                     barrierDismissible: true,
@@ -76,11 +75,17 @@ void main() {
                     barrierLabel: '关闭菜单',
                     transitionDuration: Duration.zero,
                     pageBuilder: (_, _, _) => Align(
-                      alignment: layout.align,
+                      alignment: Alignment.topRight,
                       child: Padding(
-                        padding: layout.padding,
-                        child: OrbitFloatCard(
-                          child: OrbitDropdownPanelView(groups: groups()),
+                        padding: const EdgeInsets.only(top: 56),
+                        child: Material(
+                          color: AppColors.light.popup,
+                          borderRadius: AppShapes.large,
+                          clipBehavior: Clip.antiAlias,
+                          child: SizedBox(
+                            width: orbitPanelMaxWidth,
+                            child: OrbitDropdownPanelView(groups: groups()),
+                          ),
                         ),
                       ),
                     ),

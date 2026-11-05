@@ -30,25 +30,19 @@ import 'package:flutter_miuix/miuix.dart';
 
 import '../../../core/theme/app_dimens.dart';
 import '../../../core/theme/app_motion.dart';
-import 'orbit_dropdown_panel.dart' show orbitPanelMaxWidth, orbitPanelMinWidth;
+import 'orbit_dropdown_panel.dart'
+    show
+        OrbitPanelItem,
+        orbitPanelMaxWidth,
+        orbitPanelMinWidth,
+        orbitSelectPopupKey;
 import 'orbit_glass_surface.dart';
+import 'orbit_menu_popup.dart' show OrbitMenuPopupBody;
 
-/// 弹层根节点 key（测试定位用；挂在条目列根上）
-///
-/// 承载是库内 dropdown 后，这里的矩形在进场落定后 = 卡面矩形
-/// （`GlassPopupLayout` 以内容尺寸布局、按帧缩放绘制），`getRect` 语义不变；
-/// 但 `MiuixGlassPanel` 与内容在库内是**兄弟**（同在 `GlassPopupLayout` 里），
-/// 不再是内容的祖先。
-const Key orbitSelectPopupKey = ValueKey('orbit-select-popup');
+/// 弹层根节点 key（测试定位用；定义与两个入口共用见 `orbit_dropdown_panel.dart`）
+export 'orbit_dropdown_panel.dart' show orbitSelectPopupKey;
 
-/// 弹层与触发行之间的呼吸位（并进锚点矩形，见 `_anchorBounds`）
-const double _gap = 8;
 
-/// 弹层距屏幕右/上边的最小留白（仅无锚点兜底形态用）
-const double _edge = 12;
-
-/// 无锚点时距状态栏的下移量（页头高度档，与 ⋮ 菜单落位同惯例）
-const double _noAnchorTopInset = 56;
 
 /// 单选弹层数据项（行首图标 / 12×12 色点 + 文案，二选一）
 /// - [icon] + [iconColor]：行首语义图标（快捷视图切换等与清单页图标同源的场景）；
@@ -132,7 +126,7 @@ Future<void> showOrbitSelectPopup<T>(
     // 机会结算，测试的 mock 延迟 timer 会挂到用例结束）。与旧手搓版 260ms
     // 同档，取 slow。
     transitionDuration: AppMotion.slow,
-    pageBuilder: (_, _, _) => _OrbitSelectPopupBody<T>(
+    pageBuilder: (_, _, _) => _OrbitSelectPopupRoute<T>(
       title: title,
       items: items,
       current: current,
@@ -200,8 +194,8 @@ class OrbitPointerAnchor {
   }
 }
 
-class _OrbitSelectPopupBody<T> extends StatefulWidget {
-  const _OrbitSelectPopupBody({
+class _OrbitSelectPopupRoute<T> extends StatefulWidget {
+  const _OrbitSelectPopupRoute({
     required this.title,
     required this.items,
     required this.current,
@@ -223,11 +217,12 @@ class _OrbitSelectPopupBody<T> extends StatefulWidget {
   final ValueChanged<T> onPick;
 
   @override
-  State<_OrbitSelectPopupBody<T>> createState() =>
-      _OrbitSelectPopupBodyState<T>();
+  State<_OrbitSelectPopupRoute<T>> createState() =>
+      _OrbitSelectPopupRouteState<T>();
 }
 
-class _OrbitSelectPopupBodyState<T> extends State<_OrbitSelectPopupBody<T>> {
+class _OrbitSelectPopupRouteState<T>
+    extends State<_OrbitSelectPopupRoute<T>> {
   /// 已关路由（库内拦截层可能重复回调，防二次 pop 误伤下层页面）
   bool _closed = false;
 
@@ -253,17 +248,6 @@ class _OrbitSelectPopupBodyState<T> extends State<_OrbitSelectPopupBody<T>> {
     navigator.pop();
   }
 
-  /// 卡面材质（与 ⋮ 菜单同档：puredThinGlass + blurRadius 32；按亮暗各
-  /// 缓存一份，值相等是库内纹理缓存的性能要件）
-  static final _materialLight = MiuixGlassMaterials.puredThinGlassLight
-      .copyWith(blurRadius: 32);
-  static final _materialDark = MiuixGlassMaterials.puredThinGlassDark.copyWith(
-    blurRadius: 32,
-  );
-
-  static MiuixGlassMaterial _popupMaterial(bool isDark) =>
-      isDark ? _materialDark : _materialLight;
-
   void _dismiss() {
     if (_closed) return;
     _closed = true;
@@ -277,52 +261,38 @@ class _OrbitSelectPopupBodyState<T> extends State<_OrbitSelectPopupBody<T>> {
     widget.onPick(value);
   }
 
-  /// 锚点矩形（库内 dropdown 口径：`y = 锚点 top`、右沿对齐锚点右沿，
-  /// 故把 [gap] 并进「行下沿零高度矩形」，与 `OrbitDropdownPreference` 同款）
-  ///
-  /// 无锚点（指针按下已超过 800ms 的程序化调用）走右上角形态，与页头 ⋮
-  /// 菜单同一落位惯例。
-  Rect _anchorBounds(Size screen) {
-    final rect = widget.anchor;
-    if (rect != null) {
-      return Rect.fromLTWH(rect.left, rect.bottom + _gap, rect.width, 0);
-    }
-    final top = MediaQuery.viewPaddingOf(context).top;
-    return Rect.fromLTWH(screen.width - _edge, top + _noAnchorTopInset, 0, 0);
-  }
-
   @override
   Widget build(BuildContext context) {
-    final screen = MediaQuery.sizeOf(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return MiuixGlassDropdownPopup(
-      show: true,
-      anchorBounds: _anchorBounds(screen),
-      backdrop: widget.backdrop,
-      // 宽度与全站弹出菜单同档（180–240）；高度限 0.6 屏，选项多时可滚
-      sizing: MiuixGlassPopupSizing(
+    // 卡面/行/方向判定/形变动效与 `showOrbitMenuPopup` 共用同一内容件；
+    // 本路由只负责「返回键 + 退出时多 pop 一次」的路由语义。
+    return Semantics(
+      label: widget.title,
+      child: OrbitMenuPopupBody(
+        anchor: widget.anchor,
+        contentKey: orbitSelectPopupKey,
+        // 存量 49 处保持既有 180–240 宽度档（新增待办才用底栏「更多」的
+        // 库内默认 200–288）
         minWidth: orbitPanelMinWidth,
         maxWidth: orbitPanelMaxWidth,
-        maxHeight: screen.height * 0.6,
-      ),
-      visuals: MiuixGlassPopupVisuals(material: _popupMaterial(isDark)),
-      onDismissRequest: _dismiss,
-      child: Semantics(
-        label: widget.title,
-        child: Column(
-          key: orbitSelectPopupKey,
-          mainAxisSize: MainAxisSize.min,
-          children: [
+        backdrop: widget.backdrop,
+        onDismiss: _dismiss,
+        // 单选项的关闭由 `_pick` 自己 pop 路由（先消费 LocalHistoryEntry）；
+        // 这里不能让面板再关一次，否则 `_closed` 提前置位会吞掉选中回调。
+        itemDismiss: () {},
+        groupsBuilder: () => [
+          [
             for (final item in widget.items)
-              MiuixGlassPopupItem(
-                text: item.label,
-                summary: item.hint,
-                icon: orbitSelectItemLeading(item),
-                selected: item.value == widget.current,
-                onPressed: () => _pick(item.value),
+              OrbitPanelItem(
+                icon: item.icon,
+                iconColor: item.iconColor,
+                leading: orbitSelectItemLeading(item),
+                label: item.label,
+                trailingLabel: item.hint,
+                checked: item.value == widget.current,
+                onTap: () => _pick(item.value),
               ),
           ],
-        ),
+        ],
       ),
     );
   }

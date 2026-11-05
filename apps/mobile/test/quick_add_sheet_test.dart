@@ -18,15 +18,14 @@ import 'package:orbit/modules/todo/logic/task_logic.dart'
 import 'package:orbit/modules/todo/quick_add_sheet.dart' show showQuickAddSheet;
 import 'package:orbit/modules/todo/sub_list_screen.dart';
 import 'package:orbit/shared/utils/hex_color.dart';
-import 'package:orbit/shared/widgets/shadcn/orbit_dropdown_panel.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_icon_button.dart';
 import 'package:orbit/services/local_prefs.dart';
 import 'support/orbit_test_app.dart';
 
 Widget _wrap(Widget child, MockOrbitBridge bridge) => ProviderScope(
-      overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
-      child: orbitTestApp(home: child),
-    );
+  overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
+  child: orbitTestApp(home: child),
+);
 
 /// 推进假时钟越过 MockOrbitBridge 的 120ms 人为延迟，再收敛帧
 Future<void> _settle(WidgetTester tester) async {
@@ -75,10 +74,7 @@ void main() {
     });
 
     test('脏数据忽略、重复名去重、缺档补进「更多」', () async {
-      await LocalPrefs.setString(
-        QuickActions.key,
-        'due,due,不存在,|project',
-      );
+      await LocalPrefs.setString(QuickActions.key, 'due,due,不存在,|project');
       final (enabled, hidden) = QuickActions.read();
       expect(enabled, [QuickActionId.due]);
       // project 在启用段缺失 → 作为「缺档」补进更多；hidden 原值保留在前
@@ -155,26 +151,20 @@ void main() {
 
   group('段内重排（双卡片各持一段，只调顺序不换段）', () {
     test('启用段内下移', () {
-      expect(
-        reorderWithinSection(QuickActions.defaultEnabled, 0, 2),
-        [
-          QuickActionId.priority,
-          QuickActionId.label,
-          QuickActionId.due,
-          QuickActionId.project,
-        ],
-      );
+      expect(reorderWithinSection(QuickActions.defaultEnabled, 0, 2), [
+        QuickActionId.priority,
+        QuickActionId.label,
+        QuickActionId.due,
+        QuickActionId.project,
+      ]);
     });
 
     test('更多段内上移', () {
-      expect(
-        reorderWithinSection(QuickActions.defaultHidden, 2, 0),
-        [
-          QuickActionId.fullscreen,
-          QuickActionId.image,
-          QuickActionId.template,
-        ],
-      );
+      expect(reorderWithinSection(QuickActions.defaultHidden, 2, 0), [
+        QuickActionId.fullscreen,
+        QuickActionId.image,
+        QuickActionId.template,
+      ]);
     });
 
     test('越界旧位原样返回', () {
@@ -220,8 +210,9 @@ void main() {
       await tester.tap(find.byIcon(OrbitIcons.send));
       await _settle(tester);
 
-      final created = bridge.store.tasks.values
-          .firstWhere((t) => t['title'] == '买牛奶');
+      final created = bridge.store.tasks.values.firstWhere(
+        (t) => t['title'] == '买牛奶',
+      );
       expect(created['due_date'], isNotNull);
     });
 
@@ -230,11 +221,12 @@ void main() {
 
       await tester.tap(find.byTooltip('优先级'));
       await tester.pumpAndSettle();
-      // 锚点卡片形态：除面板自身外不再有第二个 BottomSheet
+      // 锚定菜单形态：除面板自身外不再有第二个 BottomSheet
       expect(find.byType(BottomSheet), findsOneWidget);
-      // 卡片完整落屏内（左置按钮右对齐曾把 240 宽卡片推出左屏，只剩窄条）
-      final cardRect = tester.getRect(find.byType(OrbitFloatCard));
-      final screenSize = tester.view.physicalSize / tester.view.devicePixelRatio;
+      // 菜单完整落屏内（左置按钮右对齐曾把 240 宽卡片推出左屏，只剩窄条）
+      final cardRect = tester.getRect(selectPopup());
+      final screenSize =
+          tester.view.physicalSize / tester.view.devicePixelRatio;
       expect(cardRect.left, greaterThanOrEqualTo(0));
       expect(cardRect.right, lessThanOrEqualTo(screenSize.width));
       await tester.tap(find.text('高'));
@@ -249,8 +241,10 @@ void main() {
           matching: find.byType(OrbitIconButton),
         ),
       );
-      expect((button.icon as Icon).color,
-          hexToColor(priorityColorHex(3), fallback: Colors.black));
+      expect(
+        (button.icon as Icon).color,
+        hexToColor(priorityColorHex(3), fallback: Colors.black),
+      );
     });
 
     testWidgets('标签档：锚点多选卡片点行即选中，无确认尾栏', (tester) async {
@@ -266,9 +260,9 @@ void main() {
       await _settle(tester);
       // 卡片内列表（mock 种子：紧急/阅读），无确认/取消尾栏
       Finder cardText(String label) => find.descendant(
-            of: find.byKey(const ValueKey('quick-add-label-card-list')),
-            matching: find.text(label),
-          );
+        of: find.byKey(const ValueKey('quick-add-label-card-list')),
+        matching: find.text(label),
+      );
       expect(cardText('紧急'), findsOneWidget);
       expect(cardText('阅读'), findsOneWidget);
       expect(find.text('确定'), findsNothing);
@@ -301,15 +295,21 @@ void main() {
       await tester.pumpAndSettle();
       // 快捷日期浮层内的行：背景列表页另有一处「明天」文本，
       // 故点选限定在 miuix 选择浮层内
-      Finder sheetRow(String label) => find.descendant(
-            of: selectPopup(),
-            matching: find.text(label),
-          );
+      Finder sheetRow(String label) =>
+          find.descendant(of: selectPopup(), matching: find.text(label));
       expect(sheetRow('今天'), findsOneWidget);
       expect(sheetRow('明天'), findsOneWidget);
       expect(sheetRow('选择日期…'), findsOneWidget);
       // 未设时无清除入口
       expect(find.text('清除日期'), findsNothing);
+      // 展开不遮住触发钮（工具栏最左的日历按钮）
+      expect(
+        tester
+            .getRect(selectPopup())
+            .overlaps(tester.getRect(find.byTooltip('日期'))),
+        isFalse,
+        reason: '上翻时卡底应停在按钮上方',
+      );
 
       await tester.tap(sheetRow('明天'));
       await tester.pumpAndSettle();
@@ -335,10 +335,8 @@ void main() {
 
       await tester.tap(find.byTooltip('日期'));
       await tester.pumpAndSettle();
-      Finder sheetRow(String label) => find.descendant(
-            of: selectPopup(),
-            matching: find.text(label),
-          );
+      Finder sheetRow(String label) =>
+          find.descendant(of: selectPopup(), matching: find.text(label));
       await tester.tap(sheetRow('下周'));
       await tester.pumpAndSettle();
 
@@ -355,28 +353,58 @@ void main() {
       await tester.tap(find.byTooltip('更多'));
       await tester.pumpAndSettle();
 
+      // 标题行 + 行内「编辑」与底栏「更多」面板同版式
+      expect(find.text('更多'), findsOneWidget);
+      expect(find.text('编辑'), findsOneWidget);
       expect(find.text('图片'), findsOneWidget);
       expect(find.text('模板'), findsOneWidget);
       expect(find.text('全屏'), findsOneWidget);
       expect(find.text('设置'), findsOneWidget);
     });
 
+    testWidgets('菜单点选立即回填并播放回收动画', (tester) async {
+      await _openPanel(tester);
+      await tester.tap(find.byTooltip('优先级'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('高'));
+      await tester.pump();
+      expect(find.byTooltip('优先级：P3 高'), findsOneWidget);
+      expect(selectPopup(), findsOneWidget);
+
+      await tester.pumpAndSettle();
+      expect(selectPopup(), findsNothing);
+    });
+
+    testWidgets('菜单展开时关闭面板不残留根浮层', (tester) async {
+      await _openPanel(tester);
+      await tester.tap(find.byTooltip('更多'));
+      await tester.pumpAndSettle();
+      expect(selectPopup(), findsOneWidget);
+
+      Navigator.of(tester.element(find.byType(BottomSheet))).pop();
+      await tester.pump();
+      expect(selectPopup(), findsNothing);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('initialDueDate 预填截止落图标态、无 chips 行（日历长按口径）', (tester) async {
-      final due = dateToMidnightMs(
-        DateTime.now().add(const Duration(days: 3)),
-      );
-      await tester.pumpWidget(_wrap(
-        Scaffold(
-          body: Builder(
-            builder: (context) => TextButton(
-              onPressed: () =>
-                  showQuickAddSheet(context, initialDueDate: due),
-              child: const Text('开面板'),
+      final due = dateToMidnightMs(DateTime.now().add(const Duration(days: 3)));
+      await tester.pumpWidget(
+        _wrap(
+          Scaffold(
+            body: Builder(
+              builder: (context) => TextButton(
+                onPressed: () =>
+                    showQuickAddSheet(context, initialDueDate: due),
+                child: const Text('开面板'),
+              ),
             ),
           ),
+          MockOrbitBridge(),
         ),
-        MockOrbitBridge(),
-      ));
+      );
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('开面板'));
@@ -392,7 +420,9 @@ void main() {
 
   group('编辑操作设置页', () {
     testWidgets('预览与两段列表：默认四档在工具栏、三档在更多', (tester) async {
-      await tester.pumpWidget(_wrap(const QuickActionsPage(), MockOrbitBridge()));
+      await tester.pumpWidget(
+        _wrap(const QuickActionsPage(), MockOrbitBridge()),
+      );
       await tester.pumpAndSettle();
 
       expect(find.text('编辑操作'), findsWidgets);
@@ -410,7 +440,9 @@ void main() {
     });
 
     testWidgets('减号把档位收回「更多」并立即反映到预览', (tester) async {
-      await tester.pumpWidget(_wrap(const QuickActionsPage(), MockOrbitBridge()));
+      await tester.pumpWidget(
+        _wrap(const QuickActionsPage(), MockOrbitBridge()),
+      );
       await tester.pumpAndSettle();
 
       // 「标签」行（默认在工具栏段）的减号
@@ -419,7 +451,10 @@ void main() {
         matching: find.byType(Row),
       );
       await tester.tap(
-        find.descendant(of: row.first, matching: find.byIcon(OrbitIcons.remove)),
+        find.descendant(
+          of: row.first,
+          matching: find.byIcon(OrbitIcons.remove),
+        ),
       );
       await tester.pumpAndSettle();
 
@@ -440,7 +475,9 @@ void main() {
     });
 
     testWidgets('左滑把工具栏档位收进「更多」', (tester) async {
-      await tester.pumpWidget(_wrap(const QuickActionsPage(), MockOrbitBridge()));
+      await tester.pumpWidget(
+        _wrap(const QuickActionsPage(), MockOrbitBridge()),
+      );
       await tester.pumpAndSettle();
 
       await tester.drag(find.text('标签'), const Offset(-400, 0));
@@ -452,7 +489,9 @@ void main() {
     });
 
     testWidgets('右滑把「更多」档位提到工具栏', (tester) async {
-      await tester.pumpWidget(_wrap(const QuickActionsPage(), MockOrbitBridge()));
+      await tester.pumpWidget(
+        _wrap(const QuickActionsPage(), MockOrbitBridge()),
+      );
       await tester.pumpAndSettle();
 
       // 落位前行外无入场过渡（初建不播）
@@ -481,19 +520,22 @@ void main() {
     });
 
     testWidgets('横滑过程中预览图标跟手让位，松手回弹跟回', (tester) async {
-      await tester.pumpWidget(_wrap(const QuickActionsPage(), MockOrbitBridge()));
+      await tester.pumpWidget(
+        _wrap(const QuickActionsPage(), MockOrbitBridge()),
+      );
       await tester.pumpAndSettle();
 
       AnimatedPositioned previewMore() => tester.widget<AnimatedPositioned>(
-            find.byKey(const ValueKey('preview-more')),
-          );
+        find.byKey(const ValueKey('preview-more')),
+      );
       final before = previewMore().left!;
 
       // 按住「标签」行向左拖 120px（未过阈值不松手）：「...」应同步左移让位
       // （本行在首屏内，直接按住；勿 ensureVisible——滚动会把顶部预览滑出
       // sliver 缓存区，finder 即不可见）
-      final gesture =
-          await tester.startGesture(tester.getCenter(find.text('标签')));
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text('标签')),
+      );
       // 分两次 move：第一次越过 touch slop 启动拖拽，第二次产生有效位移
       //（与真手指连续滑动一致；单次 move 只够启动 recognizer）
       await gesture.moveBy(const Offset(-60, 0));
@@ -522,11 +564,14 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      await tester.pumpWidget(_wrap(const QuickActionsPage(), MockOrbitBridge()));
+      await tester.pumpWidget(
+        _wrap(const QuickActionsPage(), MockOrbitBridge()),
+      );
       await tester.pumpAndSettle();
 
-      final gesture =
-          await tester.startGesture(tester.getCenter(find.text('图片')));
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text('图片')),
+      );
       await gesture.moveBy(const Offset(60, 0));
       await tester.pump();
       await gesture.moveBy(const Offset(60, 0));
@@ -540,7 +585,9 @@ void main() {
     });
 
     testWidgets('纵拖排序时预览实时重排，落位提交', (tester) async {
-      await tester.pumpWidget(_wrap(const QuickActionsPage(), MockOrbitBridge()));
+      await tester.pumpWidget(
+        _wrap(const QuickActionsPage(), MockOrbitBridge()),
+      );
       await tester.pumpAndSettle();
 
       AnimatedPositioned previewIcon(QuickActionId id) =>
@@ -570,16 +617,16 @@ void main() {
     });
 
     Finder previewIconOf(QuickActionId id) => find.byWidgetPredicate(
-          (w) => w is AnimatedPositioned && w.key == ValueKey(id),
-        );
+      (w) => w is AnimatedPositioned && w.key == ValueKey(id),
+    );
 
     Finder handleOf(String label) => find.descendant(
-          of: find.ancestor(
-            of: find.text(label),
-            matching: find.byType(Dismissible),
-          ),
-          matching: find.byIcon(OrbitIcons.drag),
-        );
+      of: find.ancestor(
+        of: find.text(label),
+        matching: find.byType(Dismissible),
+      ),
+      matching: find.byIcon(OrbitIcons.drag),
+    );
 
     testWidgets('更多直拖到工具栏：预览实时插入，落位提交', (tester) async {
       // 拉高测试面：整页无需滚动（拖拽中滚动会干扰悬停定位）
@@ -588,13 +635,16 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      await tester.pumpWidget(_wrap(const QuickActionsPage(), MockOrbitBridge()));
+      await tester.pumpWidget(
+        _wrap(const QuickActionsPage(), MockOrbitBridge()),
+      );
       await tester.pumpAndSettle();
       expect(previewIconOf(QuickActionId.image), findsNothing);
 
       // 按住「图片」手柄向上拖：分段 move，拖进工具栏段即停
-      final gesture =
-          await tester.startGesture(tester.getCenter(handleOf('图片')));
+      final gesture = await tester.startGesture(
+        tester.getCenter(handleOf('图片')),
+      );
       for (var i = 0; i < 8; i++) {
         await gesture.moveBy(const Offset(0, -50));
         await tester.pump();
@@ -624,13 +674,16 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      await tester.pumpWidget(_wrap(const QuickActionsPage(), MockOrbitBridge()));
+      await tester.pumpWidget(
+        _wrap(const QuickActionsPage(), MockOrbitBridge()),
+      );
       await tester.pumpAndSettle();
       expect(previewIconOf(QuickActionId.label), findsOneWidget);
 
       // 按住「标签」手柄向下拖：拖进「更多」段即停
-      final gesture =
-          await tester.startGesture(tester.getCenter(handleOf('标签')));
+      final gesture = await tester.startGesture(
+        tester.getCenter(handleOf('标签')),
+      );
       for (var i = 0; i < 8; i++) {
         await gesture.moveBy(const Offset(0, 50));
         await tester.pump();
@@ -654,33 +707,35 @@ void main() {
     // 点位落在抽屉/遮罩上不再点透到 FAB，面板功能不受影响。
     testWidgets('快加面板走根路由：壳 FAB 点不透，面板可正常关闭', (tester) async {
       var fabTaps = 0;
-      await tester.pumpWidget(_wrap(
-        Scaffold(
-          floatingActionButton: FloatingActionButton(
-            key: const ValueKey('shell-fab'),
-            onPressed: () => fabTaps++,
-            child: const Icon(Icons.add),
-          ),
-          bottomNavigationBar: BottomNavigationBar(
-            items: const [
-              BottomNavigationBarItem(icon: Icon(Icons.home), label: 'a'),
-              BottomNavigationBarItem(icon: Icon(Icons.list), label: 'b'),
-            ],
-          ),
-          // 壳 body 内再挂分支 Navigator（与 HomeShell 页签栈同构）
-          body: Navigator(
-            onGenerateRoute: (_) => MaterialPageRoute(
-              builder: (context) => Center(
-                child: TextButton(
-                  onPressed: () => showQuickAddSheet(context),
-                  child: const Text('开面板'),
+      await tester.pumpWidget(
+        _wrap(
+          Scaffold(
+            floatingActionButton: FloatingActionButton(
+              key: const ValueKey('shell-fab'),
+              onPressed: () => fabTaps++,
+              child: const Icon(Icons.add),
+            ),
+            bottomNavigationBar: BottomNavigationBar(
+              items: const [
+                BottomNavigationBarItem(icon: Icon(Icons.home), label: 'a'),
+                BottomNavigationBarItem(icon: Icon(Icons.list), label: 'b'),
+              ],
+            ),
+            // 壳 body 内再挂分支 Navigator（与 HomeShell 页签栈同构）
+            body: Navigator(
+              onGenerateRoute: (_) => MaterialPageRoute(
+                builder: (context) => Center(
+                  child: TextButton(
+                    onPressed: () => showQuickAddSheet(context),
+                    child: const Text('开面板'),
+                  ),
                 ),
               ),
             ),
           ),
+          MockOrbitBridge(),
         ),
-        MockOrbitBridge(),
-      ));
+      );
       await _settle(tester);
 
       await tester.tap(find.text('开面板'));
@@ -709,9 +764,7 @@ void main() {
     // 输入框、输入法没沉过；底部大抽屉（截止日期）打开时下沉、关闭后恢复。
     bool inputFocused(WidgetTester tester) {
       // TextField 自建 Focus 在子树内：经 EditableTextState 取 focusNode
-      final state = tester.state<EditableTextState>(
-        find.byType(EditableText),
-      );
+      final state = tester.state<EditableTextState>(find.byType(EditableText));
       return state.widget.focusNode.hasFocus;
     }
 
@@ -722,15 +775,15 @@ void main() {
 
       await tester.tap(find.byTooltip('优先级'));
       await tester.pumpAndSettle();
-      // 卡片弹出，但焦点一直在输入框、输入法没沉过
-      expect(find.byType(OrbitFloatCard), findsOneWidget);
+      // 菜单弹出，但焦点一直在输入框、输入法没沉过
+      expect(selectPopup(), findsOneWidget);
       expect(inputFocused(tester), isTrue);
       expect(tester.testTextInput.isVisible, isTrue);
 
       // 点卡外关闭 → 焦点还在
       await tester.tapAt(const Offset(10, 100));
       await tester.pumpAndSettle();
-      expect(find.byType(OrbitFloatCard), findsNothing);
+      expect(selectPopup(), findsNothing);
       expect(inputFocused(tester), isTrue);
       expect(tester.testTextInput.isVisible, isTrue);
     });
@@ -751,19 +804,36 @@ void main() {
       expect(inputFocused(tester), isTrue);
     });
 
-    testWidgets('截止日期抽屉点选后焦点回到输入框', (tester) async {
+    testWidgets('截止日期菜单打开与点选期间焦点都在输入框', (tester) async {
       await _openPanel(tester);
       expect(inputFocused(tester), isTrue);
 
       await tester.tap(find.byTooltip('日期'));
       await tester.pumpAndSettle();
-      expect(inputFocused(tester), isFalse);
+      // 日期档与其余档位同走 Overlay 直挂菜单：打开时焦点不丢、键盘不沉
+      expect(selectPopup(), findsOneWidget);
+      expect(inputFocused(tester), isTrue);
+      expect(tester.testTextInput.isVisible, isTrue);
 
       await tester.tap(find.text('今天'));
       await tester.pumpAndSettle();
       expect(inputFocused(tester), isTrue);
     });
+
+    testWidgets('选择日期…：下级面板打开后不被回收动画抢回键盘', (tester) async {
+      await _openPanel(tester);
+      expect(inputFocused(tester), isTrue);
+
+      await tester.tap(find.byTooltip('日期'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('选择日期…'));
+      await _settle(tester);
+
+      // 下级日期面板在前景；回收动画结束时的库内焦点归还不得把键盘
+      // 拽回背景快速添加面板的输入框。
+      expect(find.text('确认'), findsOneWidget);
+      expect(inputFocused(tester), isFalse);
+      expect(tester.testTextInput.isVisible, isFalse);
+    });
   });
 }
-
-

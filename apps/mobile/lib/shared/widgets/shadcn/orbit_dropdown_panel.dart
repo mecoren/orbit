@@ -1,10 +1,7 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimens.dart';
-import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_shapes.dart';
 import 'package:flutter_miuix/miuix.dart';
 
@@ -21,10 +18,9 @@ const double orbitPanelMaxWidth = 240;
 /// 默认的 200 撑宽——180 是这套菜单在本项目里的统一下限。
 const double orbitPanelMinWidth = 180;
 
-/// 窄屏下的面板宽度占屏比（配合 [orbitPanelMaxWidth] 取小）
-///
-/// 参考竞品面板约占屏宽六成；再窄「已启用 N 项」这类行尾文案会被挤到省略号。
-const double orbitPanelWidthFactor = 0.62;
+/// 锚定菜单内容节点 key（两个入口共用：Overlay 直挂的 `showOrbitMenuPopup`
+/// 与保留路由外壳的 `showOrbitSelectPopup`；测试据此定位弹层卡片）
+const Key orbitSelectPopupKey = ValueKey('orbit-select-popup');
 
 /// 菜单条目（锚定面板 / 页头玻璃菜单 / 底部动作菜单共用的数据项）
 class OrbitPanelItem {
@@ -72,190 +68,8 @@ class OrbitPanelItem {
   final String? trailingLabel;
 }
 
-/// 浮层卡片宽度：显式宽度同样受屏宽 - 32 钳制，保证不贴边
-double orbitFloatCardWidth(BuildContext context, [double? width]) {
-  final screen = MediaQuery.of(context).size;
-  return math.min(
-    width ??
-        math.min(
-          orbitPanelMaxWidth,
-          math.min(screen.width * orbitPanelWidthFactor,
-              screen.width - AppDimens.space32),
-        ),
-    screen.width - AppDimens.space32,
-  );
-}
-/// 浮层卡片壳（下拉面板与快加快捷卡片共用同一视觉：OS4 玻璃面 + 浮层阴影
-/// + large 圆角；内容区限高 0.7 屏，滚动与尾栏由内容自理）。
-///
-/// **OS4 玻璃（2026-11-03 补齐采样器）**：卡片一直是 `miuixGlassSurface` 的
-/// 菜单档表面，但此前没接 [backdrop]，库内拿不到快照就退回**实色填充**——
-/// 于是页头 ⋮ 是玻璃菜单（`OrbitGlassMenu`）、而所有锚定卡片是白色实色卡片，
-/// 两套观感并存。现在采样器由调用方透传（卡片挂在路由/Overlay 上，取不到
-/// 壳层 `OrbitGlassScope`），与形变菜单同一档材质。
-class OrbitFloatCard extends StatelessWidget {
-  const OrbitFloatCard({
-    super.key,
-    required this.child,
-    this.width,
-    this.backdrop,
-  });
-
-  /// 卡片内容（面板则传可滚条目列，多选卡传列表 + 尾栏）
-  final Widget child;
-
-  /// 卡片宽度；null = 与下拉面板同宽（[orbitPanelMaxWidth] 上限）；
-  /// 显式宽度同样受屏宽 - 32 钳制，保证不贴边
-  final double? width;
-
-  /// OS4 玻璃背景采样器（调用方传壳层的 `MiuixLayerBackdrop`）
-  ///
-  /// 卡片经 `showGeneralDialog` / `OverlayEntry` 挂在 Navigator / Overlay 上，
-  /// 位于 `OrbitGlassScope` 之外，**不能在卡片内部自取**；null 时库内退实色
-  /// （无壳或测试裸页）。
-  final MiuixLayerBackdrop? backdrop;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = AppColors.ofContext(context);
-    final screen = MediaQuery.of(context).size;
-    // 宽度走统入口（含小屏钳制），与锚点定位用同一数值
-    final w = orbitFloatCardWidth(context, width);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    // OS4 玻璃浮层：材质档与 `OrbitGlassMenu` 同源（`puredThinGlass` +
-    // blurRadius 32，`shading: false` 不做仿生折射）——库默认 `popupViewGlass`
-    // 的 60 档在进场动画期（origin/size 逐帧变、纹理缓存逐帧失效）会每帧
-    // 重算 sigma≈27 的离屏模糊，真机掉帧明显。
-    final surface = miuixGlassSurface(
-      backdrop: backdrop,
-      material: MiuixGlassMaterials.puredThinGlass(isDark).copyWith(
-        blurRadius: 32,
-      ),
-      shadow: MiuixGlassShadows.floating,
-      alpha: 1,
-    );
-    return Padding(
-      // 外留白既作面板与屏幕边的间距，也给投影留出空间（否则被裁剪）
-      padding: const EdgeInsets.all(AppDimens.space8),
-      child: SizedBox(
-        width: w,
-        // 条目多时卡片可滚：整屏高度上限内不出屏
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: screen.height * 0.7),
-          child: surface(
-            context,
-            RoundedRectangleBorder(borderRadius: AppShapes.large),
-            // 表面与「按下水波纹」都由这层 Material 承担（圆角裁切）；
-            // 描边不再手绘 1px `outline`——玻璃 shader 自带高光描边，
-            // 再叠一圈灰线会让玻璃面看起来像实色卡片
-            Material(
-              color: colors.popup.withValues(alpha: 0.0),
-              borderRadius: AppShapes.large,
-              clipBehavior: Clip.antiAlias,
-              child: child,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 锚点浮层卡片定位（三件套：对齐 + 内边距 + 缩放锚点）
-typedef OrbitFloatCardLayout = ({
-  Alignment align,
-  EdgeInsets padding,
-  Alignment scale,
-});
-
-/// 锚点形态的定位计算（快加面板的路由版与 Overlay 直挂版共用同一数值，
-/// 卡片与锚点不错位）
-OrbitFloatCardLayout orbitFloatCardLayout(
-  BuildContext context, {
-  Rect? anchor,
-  bool above = true,
-  double? topInset,
-  double? width,
-}) {
-  final screen = MediaQuery.of(context).size;
-  if (anchor != null && above) {
-    // 右沿对齐锚右沿，但钳在屏内：左置按钮的卡片不能滑出左屏
-    // （240 宽卡片锚在左首图标时右对齐会出屏，曾致“窄条”假象）
-    final w = orbitFloatCardWidth(context, width);
-    final right = (screen.width - anchor.right)
-        .clamp(0.0, math.max(0.0, screen.width - w - AppDimens.space8))
-        .toDouble();
-    return (
-      align: Alignment.bottomRight,
-      padding: EdgeInsets.only(
-        bottom: math.max(0, screen.height - anchor.top) + AppDimens.space8,
-        right: right,
-      ),
-      scale: Alignment.bottomRight,
-    );
-  }
-  return (
-    align: Alignment.topRight,
-    padding: EdgeInsets.only(
-      top: topInset ??
-          MediaQuery.of(context).padding.top + AppDimens.titleBarHeight,
-      right: 0,
-    ),
-    scale: Alignment.topRight,
-  );
-}
-
-/// Overlay 直挂的锚点卡片进场动效件（与快加面板的路由版同源：
-/// 淡入 + 自锚点同侧轻微放大；Overlay 没有转场器，自带一次控制器）。
-class OrbitOverlayCard extends StatefulWidget {
-  const OrbitOverlayCard({
-    super.key,
-    required this.child,
-    required this.scaleAlignment,
-  });
-
-  /// 卡片内容（通常是 [OrbitFloatCard]）
-  final Widget child;
-
-  /// 缩放锚点（[orbitFloatCardLayout] 的 scale，与路由版同值）
-  final Alignment scaleAlignment;
-
-  @override
-  State<OrbitOverlayCard> createState() => _OrbitOverlayCardState();
-}
-
-class _OrbitOverlayCardState extends State<OrbitOverlayCard>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: AppMotion.fast,
-  )..forward();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final curved = CurvedAnimation(
-      parent: _controller,
-      curve: AppMotion.decelerate,
-    );
-    return FadeTransition(
-      opacity: curved,
-      child: ScaleTransition(
-        scale: Tween<double>(begin: 0.96, end: 1).animate(curved),
-        alignment: widget.scaleAlignment,
-        child: widget.child,
-      ),
-    );
-  }
-}
-
-/// 下拉面板内容视图（公开件：直挂版包在 [OrbitFloatCard] 里，Overlay 直挂版
-/// 由调用方包卡并传 [onClose] 接管关闭动作）。
+/// 下拉面板内容视图（公开件：只出行，不含卡壳——卡面/动效由
+/// `orbit_menu_popup.dart` 的 `OrbitMenuPopupBody` 统一承担）。
 class OrbitDropdownPanelView extends StatefulWidget {
   const OrbitDropdownPanelView({
     super.key,
