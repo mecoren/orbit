@@ -222,10 +222,10 @@ final appRouter = GoRouter(
           routes: [
             GoRoute(
               path: '/todo/trash',
-              pageBuilder: (context, state) => tabRoot(
-                const TrashScreen(showBack: false),
-                key: state.pageKey,
-              ),
+              // 页头返回键由壳层「上一页」记忆驱动（OrbitShellBack）：
+              // 回退到进站前的模块页签，不是页签根语义的空返回
+              pageBuilder: (context, state) =>
+                  tabRoot(const TrashScreen(), key: state.pageKey),
             ),
           ],
         ),

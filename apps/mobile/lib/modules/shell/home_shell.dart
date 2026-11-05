@@ -21,6 +21,7 @@ import '../todo/providers/task_window_provider.dart';
 import '../todo/quick_add_sheet.dart' show showQuickAddSheet;
 import '../todo/sidebar_screen.dart';
 import 'nav_modules.dart';
+import 'orbit_shell_back.dart';
 
 /// 主导航壳（OS4 玻璃底栏 + 右下悬浮新建钮 + 「更多」面板）
 ///
@@ -70,11 +71,29 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   /// 「更多」菜单开合（`MiuixGlassTransformPopup.show` 驱动进出场动画）
   bool _moreOpen = false;
 
+  /// 当前停靠的模块分支下标
+  late int _branchIndex;
+
+  /// 上一次停靠的模块分支下标（分支根页返回键的回退目标，见 [OrbitShellBack]）
+  int? _previousBranchIndex;
+
   @override
   void initState() {
     super.initState();
+    _branchIndex = widget.navigationShell.currentIndex;
     // 预热 OS4 shader：首帧就绪可避免"第一下看到实色带、再变玻璃"的跳变
     MiuixGlassRendering.load();
+  }
+
+  @override
+  void didUpdateWidget(covariant HomeShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 分支切换（底栏页签 / 「更多」面板 / 跨模块 go）都经路由重建本壳：
+    // 在这里记下上一次停靠的模块，供分支根页的页头返回键回退
+    final index = widget.navigationShell.currentIndex;
+    if (index == _branchIndex) return;
+    _previousBranchIndex = _branchIndex;
+    _branchIndex = index;
   }
 
   @override
@@ -86,6 +105,17 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
   /// 关闭「更多」菜单（点条目/点外部/返回手势都走这里）
   void _closeMoreMenu() => setState(() => _moreOpen = false);
+
+  /// 分支根页返回键的目标分支：上一个停靠模块 → 启用序第一个非当前模块
+  /// （冷启动直接落在本模块时无历史可回）；都没有则 null（不渲染返回键）
+  int? _backTargetBranch(NavModulesState nav, OrbitNavModule current) {
+    final previous = _previousBranchIndex;
+    if (previous != null && previous != current.branchIndex) return previous;
+    for (final module in nav.enabled) {
+      if (module != current) return module.branchIndex;
+    }
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -119,21 +149,29 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         OrbitBreakpoints.isExpanded(context) &&
         currentModule != OrbitNavModule.sidebar;
 
+    // 分支根页返回键的目标：只给**不在底栏**的模块配回退（在底栏时页签本身
+    // 就是出口，与日历等页签根语义一致，见 [OrbitShellBack]）
+    final backTarget =
+        currentTabPos < 0 ? _backTargetBranch(nav, currentModule) : null;
+
     // 页面内容统一包进捕获树：底栏/页头消费同一 backdrop 的玻璃材质
     final content = MiuixLayerBackdropCapture(
       backdrop: _backdrop,
-      child: showEmbeddedSidebar
-          ? Row(
-              children: [
-                const SizedBox(
-                  width: OrbitBreakpoints.sidebarWidth,
-                  child: SidebarScreen(embedded: true),
-                ),
-                const OrbitVerticalDivider(width: 1),
-                Expanded(child: widget.navigationShell),
-              ],
-            )
-          : widget.navigationShell,
+      child: OrbitShellBack(
+        targetBranchIndex: backTarget,
+        child: showEmbeddedSidebar
+            ? Row(
+                children: [
+                  const SizedBox(
+                    width: OrbitBreakpoints.sidebarWidth,
+                    child: SidebarScreen(embedded: true),
+                  ),
+                  const OrbitVerticalDivider(width: 1),
+                  Expanded(child: widget.navigationShell),
+                ],
+              )
+            : widget.navigationShell,
+      ),
     );
 
     final colors = AppColors.ofContext(context);

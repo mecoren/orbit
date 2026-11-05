@@ -13,6 +13,7 @@ import 'package:orbit/modules/todo/calendar_screen.dart';
 import 'package:orbit/modules/todo/logic/task_logic.dart';
 import 'package:orbit/modules/todo/matrix_screen.dart';
 import 'package:orbit/modules/todo/sidebar_screen.dart';
+import 'package:orbit/modules/todo/trash_screen.dart';
 import 'package:orbit/services/local_prefs.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_bottom_nav.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_dropdown_panel.dart';
@@ -177,6 +178,36 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('总任务'), findsOneWidget);
     expect(find.byType(OrbitBottomNav), findsOneWidget);
+  });
+
+  testWidgets('回收站返回键：回退到进站前的页签（清单，而非启用序第一个）', (tester) async {
+    await _pump(tester, _seededBridge());
+
+    // 先进「清单」，再从「更多」面板进回收站——回收站不在底栏，页签栏此时
+    // 给不出回退出口，页头左上返回键是唯一出口（OrbitShellBack）
+    await tester.tap(_navIcon(OrbitIcons.list));
+    await tester.pumpAndSettle();
+    expect(find.byType(SidebarScreen), findsOneWidget);
+
+    await tester.tap(_navIcon(OrbitIcons.more));
+    await tester.pumpAndSettle();
+    // 清单页签常驻树内（IndexedStack 不 offstage）：按面板范围取条目，
+    // 避免命中侧栏「功能入口」里的同名回收站行
+    await tester.tap(
+      find.descendant(
+        of: find.byType(OrbitDropdownPanelView),
+        matching: find.text('回收站'),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+    expect(find.byType(TrashScreen), findsOneWidget);
+
+    await tester.tap(find.byTooltip('返回'));
+    await tester.pumpAndSettle();
+    // 回到进站前的「清单」——不是启用序第一个「今天」（壳层历史生效）
+    expect(find.byType(SidebarScreen), findsOneWidget);
+    expect(find.text('循迹'), findsOneWidget);
   });
 
   testWidgets('「更多」面板「编辑」：进功能模块配置页，两段列表齐出', (tester) async {
