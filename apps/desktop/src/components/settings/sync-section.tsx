@@ -935,27 +935,37 @@ function SyncRunCard() {
 
 /* ============================ 3b. 同步历史卡（P1-17） ============================ */
 
-/** sync_type → 展示名（口径见 core cloud_sync_api::incremental_history） */
+/**
+ * sync_type → 展示名（口径见 core cloud_sync_api::incremental_history）
+ *
+ * **真值源 = 移动端 `_SyncHistoryCard._typeLabels`**，两端逐字一致（2026-11-05
+ * 收口）。此前桌面叫「即时推送 / 启动同步」，是按**触发场景**命名，而同一个
+ * `sync_type` 恰恰有多种触发源——`push_only` 既可能是「修改后立即同步」也可能
+ * 是排障页手动点，`pull_only` 既可能是进入应用时也可能手动点。按场景取名会让
+ * 历史里同一种记录在不同设备/路径下读出不同含义；移动端按**行为**取名
+ * （仅推送 / 先拉后推）没有这个歧义，故以移动端为准。
+ */
 const SYNC_TYPE_LABELS: Record<string, string> = {
   incremental: "完整同步",
-  push_only: "即时推送",
-  pull_only: "启动同步",
+  push_only: "仅推送",
+  pull_only: "先拉后推",
 };
 
 /**
- * 同步历史筛选档（对齐移动端 `_SyncHistoryCard._scopes` 四档）
+ * 同步历史筛选档（与移动端 `_SyncHistoryCard._scopes` 四档逐字一致）
  *
  * 键即 core `incremental_history(scope)` 的入参真值：`all` 不加类型谓词，
- * 其余三档按 `sync_type` 过滤。`pull_only` 的展示名与上方 `SYNC_TYPE_LABELS`
- * 保持同一口径（「启动同步」），避免同一类记录在筛选条与行内标签上叫两个名。
+ * 其余三档按 `sync_type` 过滤。档位文案直接取 [SYNC_TYPE_LABELS] 的单点口径，
+ * 避免同一类记录在筛选条与行内标签上叫两个名。
  */
 type SyncHistoryScope = "all" | "incremental" | "push_only" | "pull_only";
 
 const SYNC_SCOPE_LABELS: Record<SyncHistoryScope, string> = {
   all: "全部",
-  incremental: "完整同步",
-  push_only: "即时推送",
-  pull_only: "启动同步",
+  // 三档逐字复用行内标签口径（单点真值，改一处两端筛选条与列表同步跟上）
+  incremental: SYNC_TYPE_LABELS.incremental,
+  push_only: SYNC_TYPE_LABELS.push_only,
+  pull_only: SYNC_TYPE_LABELS.pull_only,
 };
 
 function SyncHistoryCard() {
@@ -1012,7 +1022,13 @@ function SyncHistoryCard() {
           同步历史
           {entries !== null && (
             <span className="ml-2 text-xs text-muted-foreground">
-              最近 {entries.length} 次{scope === "all" ? "增量同步" : SYNC_SCOPE_LABELS[scope]}
+              {/* 与移动端副标题「近 N 次」逐字一致：此前写「最近 N 次增量同步」，
+                  而筛选条里另有一档就叫「完整同步」——「增量同步」在 core
+                  `incremental_history` 里是含 `incremental` 的上位概念，并排出现
+                  会被读成对立的两类。档位本身已在筛选条与行内标签说明类型，
+                  副标题只报条数即可 */}
+              近 {entries.length} 次
+              {scope !== "all" && SYNC_SCOPE_LABELS[scope]}
             </span>
           )}
         </p>
@@ -1022,7 +1038,7 @@ function SyncHistoryCard() {
       </button>
       {open && (
         <div className="border-t p-3">
-          {/* 类型筛选（对齐移动端四档）：历史里混着完整同步/仅推送/先拉后推，
+          {/* 类型筛选（与移动端四档逐字一致）：历史里混着完整同步/仅推送/先拉后推，
               排障时常要先看「只看失败的仅推送」这一类 */}
           <div className="mb-2 flex flex-wrap gap-1">
             {(Object.keys(SYNC_SCOPE_LABELS) as SyncHistoryScope[]).map((key) => (
