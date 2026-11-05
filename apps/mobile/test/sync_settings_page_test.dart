@@ -9,6 +9,7 @@
 // 3. 首次设置走共享密码抽屉（`showPasswordSheet`）：点「设置密码」入口拉起
 //    抽屉，字段是抽屉内 OrbitTextField；页内仅剩解锁态一个「同步密码」输入框。
 import 'package:flutter/material.dart';
+import 'package:flutter_miuix/miuix.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -158,37 +159,44 @@ void main() {
     );
   });
 
-  // 同步历史筛选行走原语 `OrbitFilterChip`（默认 16% 底档），不是导入卡那种
-  // 实心档位网格：筛选是辅助动作，实心会抢走下方历史列表的注意力。
+  // 同步历史筛选走连体分段控件（`OrbitSegmentedFilter`，库内
+  // `MiuixTabRowWithContour` 承载），不是四个独立 `OrbitFilterChip`——
+  // 四档同属一个轨道才读得出「一个筛选器的四个档位」。
   //
   // 注意 `find.text` 会同时命中筛选档与历史行内的类型标签（mock 造态里
-  // incremental 行的标题就是「完整同步」），故断言与点击一律按 chip 谓词定位。
-  testWidgets('同步历史：四档筛选走 OrbitFilterChip 非实心档，切档重新拉取', (tester) async {
+  // incremental 行的标题就是「完整同步」），故断言与点击一律按下标/语义定位。
+  testWidgets('同步历史：四档走连体分段控件，切档重新拉取', (tester) async {
     await tester.pumpWidget(_wrap(MockOrbitBridge()));
     await _flush(tester);
 
-    Finder chip(String label) => find.byWidgetPredicate(
-          (w) => w is OrbitFilterChip && w.label == label,
-        );
+    final seg = find.byType(MiuixTabRowWithContour);
+    // 历史卡在首屏下方（ListView 懒建），先滚入树再断言
+    await _scrollTo(tester, seg);
+    expect(seg, findsOneWidget, reason: '四档必须共用一个轨道，不是四个独立胶囊');
+    expect(find.byType(OrbitFilterChip), findsNothing);
 
-    await _scrollTo(tester, chip('完整同步'));
-    final chips = tester.widgetList<OrbitFilterChip>(
-      find.byType(OrbitFilterChip),
-    );
-    expect(chips.length, 4);
-    expect(
-      chips.every((c) => !c.solid && !c.expand),
-      isTrue,
-      reason: '筛选档必须走 16% 强调色底档（实心档是档位主操作专用）',
-    );
-    expect(chips.first.label, '全部');
-    expect(chips.first.selected, isTrue, reason: '缺省档为全部');
+    final row = tester.widget<MiuixTabRowWithContour>(seg);
+    expect(row.tabs, ['全部', '完整同步', '仅推送', '先拉后推']);
+    expect(row.selectedTabIndex, 0, reason: '缺省档为全部');
 
-    // mock 造态：incremental 成功 1 行 + push_only 失败 1 行
-    await _tapAt(tester, chip('仅推送'));
+    // 切到第 3 档（仅推送）：分段控件按档位中心点命中，直接算第 3 档矩形中心
+    final rect = tester.getRect(seg);
+    const pad = MiuixTabRowDefaults.contourPadding;
+    const spacing = MiuixTabRowDefaults.contourItemSpacing;
+    final tabWidth = (rect.width - pad * 2 - spacing * 3) / 4;
+    await tester.tapAt(Offset(
+      rect.left + pad + 2 * (tabWidth + spacing) + tabWidth / 2,
+      rect.center.dy,
+    ));
     await _flush(tester);
+
+    expect(
+      tester.widget<MiuixTabRowWithContour>(seg).selectedTabIndex,
+      2,
+      reason: '点第 3 档后选中块必须跟随',
+    );
+    // mock 造态里 push_only 只有 1 行
     expect(find.text('近 1 次'), findsOneWidget);
-    expect(tester.widget<OrbitFilterChip>(chip('仅推送')).selected, isTrue);
   });
 
   testWidgets('保存：endpoint 必填（空则禁用）→ 填写后成功落库', (tester) async {

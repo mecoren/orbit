@@ -15,8 +15,8 @@ import '../../shared/utils/sync_status_text.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart'
     show bottomSheetMotion, bottomSheetTopShape;
 import '../../shared/widgets/shadcn/orbit_checkbox.dart';
-import '../../shared/widgets/shadcn/orbit_filter_chip.dart';
 import '../../shared/widgets/shadcn/orbit_floating_sheet_card.dart';
+import '../../shared/widgets/shadcn/orbit_segmented_filter.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_password_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_card.dart';
@@ -1077,9 +1077,22 @@ class _SyncHistoryCardState extends ConsumerState<_SyncHistoryCard> {
     'pull_only': '先拉后推',
   };
 
+  /// 筛选档键序列（与 [_scopes] 同源，只固定下标 ↔ 键的映射顺序）
+  static const _scopeKeys = <String>[
+    'all',
+    'incremental',
+    'push_only',
+    'pull_only',
+  ];
+
   String _scope = 'all';
   List<SyncHistoryRow> _rows = const [];
   bool _loading = true;
+
+  int get _scopeIndex {
+    final i = _scopeKeys.indexOf(_scope);
+    return i < 0 ? 0 : i;
+  }
 
   @override
   void initState() {
@@ -1136,18 +1149,16 @@ class _SyncHistoryCardState extends ConsumerState<_SyncHistoryCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 类型筛选：走原语 `OrbitFilterChip`（默认 16% 强调色底档）而非
-          // `OrbitChoiceGrid` 的实心档——筛选是辅助动作，实心会抢走下方列表
-          // 的注意力；`Wrap` 让大字号档下四档折行而不是横向溢出（旧手搓
-          // `Row` + 固定间距在 320dp 视口里无 ellipsis 兜底）。
-          Wrap(
-            spacing: AppDimens.space8,
-            runSpacing: AppDimens.space8,
-            children: [
-              for (final e in _scopes.entries) _chip(e.key, e.value),
-            ],
+          // 类型筛选：连体分段控件（库内 `MiuixTabRowWithContour` 承载，
+          // 见 `orbit_segmented_filter.dart`）——四档同属一个轨道，读起来是
+          // 「一个筛选器的四个档位」而不是四个各自描边的独立胶囊；宽度不够
+          // 时库内自动横向滚动，大字号档不再折行挤压。
+          OrbitSegmentedFilter(
+            tabs: [for (final e in _scopes.entries) e.value],
+            selectedIndex: _scopeIndex,
+            onSelect: (i) => _switchScope(_scopeKeys[i]),
           ),
-          const SizedBox(height: AppDimens.space8),
+          const SizedBox(height: AppDimens.space12),
           if (_loading)
             Padding(
               padding: const EdgeInsets.all(AppDimens.space16),
@@ -1173,19 +1184,6 @@ class _SyncHistoryCardState extends ConsumerState<_SyncHistoryCard> {
             for (final r in _rows) _row(colors, r),
         ],
       ),
-    );
-  }
-
-  /// 类型筛选档（原语层 squircle 表面，选中走 16% 强调色底档）
-  ///
-  /// `compact: true` 保住旧手搓版的垂直 6 内边距——换原语是收口表面材质，
-  /// 不该顺带把筛选行拔高 4px（默认档 space8 是任务列表筛选的档位）。
-  Widget _chip(String key, String label) {
-    return OrbitFilterChip(
-      label: label,
-      selected: _scope == key,
-      compact: true,
-      onTap: () => _switchScope(key),
     );
   }
 
