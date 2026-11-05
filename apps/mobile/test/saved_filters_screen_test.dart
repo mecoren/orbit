@@ -8,6 +8,7 @@ import 'package:flutter_miuix/miuix.dart';
 
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
+import 'package:orbit/core/theme/icon_map.dart';
 import 'package:orbit/modules/todo/saved_filters_screen.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_dropdown_preference.dart';
 
@@ -125,6 +126,21 @@ void main() {
       find.byType(MiuixDropdownArrowEndAction).evaluate().length,
       10,
       reason: '日期有值行应以 X 顶替双箭头',
+    );
+
+    // 几何契约（2026-11-05 反馈「选择后的图标位置和其他没对齐」）：
+    // X 与双箭头的**中心 x 必须重合**。双箭头是库内 10×16 绘制件、X 是 18
+    // 图标，若各自随 `endActions` 右对齐，中心会差 4~9px（实测曾 664 vs 683
+    // 两组）。回归判据：X 中心 == 任一箭头中心。
+    final arrowCenterX = tester
+        .getRect(find.byType(MiuixDropdownArrowEndAction).first)
+        .center
+        .dx;
+    final xCenterX = tester.getRect(find.byIcon(OrbitIcons.close)).center.dx;
+    expect(
+      (xCenterX - arrowCenterX).abs(),
+      lessThan(0.5),
+      reason: 'X 中心 $xCenterX 应与箭头中心 $arrowCenterX 重合',
     );
   });
 }

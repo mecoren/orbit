@@ -852,24 +852,60 @@ class _FilterConditionRow extends StatelessWidget {
             ),
           ),
         ),
-        // 有值 → X 顶替箭头位；无值 → 上下双箭头
-        if (onClear != null)
-          OrbitIconButton(
-            visualDensity: VisualDensity.compact,
-            constraints: const BoxConstraints(
-              minWidth: AppDimens.touchTarget,
-              minHeight: AppDimens.touchTarget,
+        // 行尾动作槽：X 与上下双箭头**右沿对齐**（不是居中）。
+        //
+        // 双箭头是库内 `Size(10, 16)` 的绘制件，X 图标是 22。两者若各自居中，
+        // 中心差 6；若给 X 加 48 宽槽居中，中心差反而扩大到 19、并与
+        // `OrbitDropdownPreference`（状态/优先级/三态三行）的箭头拉开
+        // （2026-11-05 实测 664 vs 683 两组）。故统一**按右沿对齐**：
+        // 视觉锚点落在行右沿，与全站其它偏好行同一条竖线。
+        //
+        // X 的热区仍是 48（a11y 口径）：用 10 宽的可视槽 + 48 热区叠加，
+        // 图标在 10 槽内居中 → 中心落在右沿内 5px，与箭头一致。
+        SizedBox(
+          width: AppDimens.touchTarget,
+          child: Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: SizedBox(
+              width: 10,
+              height: AppDimens.touchTarget,
+              child: onClear != null
+                  ? GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: onClear,
+                      // 热区扩到 48 宽（向左溢出，不影响右沿对齐）。图标在
+                      // 48 盒内居中 → **中心与箭头严格重合**（2026-11-05 实测
+                      // X 中心 683 = 箭头中心 683）。不要再加 `translate` 左移：
+                      // 那会把中心拉到 677、与箭头差 6，反而回到「没对齐」。
+                      // 22 图标在 10 槽内会向右溢出 6px 属预期（行内 padding
+                      // 之外仍有余量，不会被裁）。
+                      child: Semantics(
+                        button: true,
+                        label: '清除',
+                        child: OverflowBox(
+                          alignment: AlignmentDirectional.center,
+                          minWidth: AppDimens.touchTarget,
+                          maxWidth: AppDimens.touchTarget,
+                          child: Center(
+                            child: Icon(
+                              OrbitIcons.close,
+                              // 18 档（比箭头的 10×16 略宽）：中心仍与箭头
+                              // 重合在 683，右沿只溢出 2px，不会压出内容区
+                              size: AppDimens.iconSizeSm,
+                              color: actionColor,
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                  : Center(
+                      child: MiuixDropdownArrowEndAction(
+                        actionColor: actionColor,
+                      ),
+                    ),
             ),
-            tooltip: '清除',
-            icon: Icon(
-              OrbitIcons.close,
-              size: AppDimens.iconSizeMd,
-              color: theme.colors.onSurfaceVariantActions,
-            ),
-            onPressed: onClear,
-          )
-        else
-          MiuixDropdownArrowEndAction(actionColor: actionColor),
+          ),
+        ),
       ],
       role: MiuixBasicComponentRole.dropdownList,
       onClick: onTap,
