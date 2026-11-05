@@ -307,6 +307,9 @@ void main() {
     expect(find.text('全部状态'), findsNothing);
 
     // 项目行：按名称多选（不再要求用户输入数据库 id）
+    //
+    // 2026-11-05 行样式统一为下拉偏好行（标题「项目」在左 + 尾随当前值在右，
+    // 不再是「项目：不限」单段文案），断言改为「标题行 + 尾随值」两段
     final sheetScroll = find
         .descendant(
           of: find.byType(BottomSheet),
@@ -314,33 +317,34 @@ void main() {
         )
         .first;
     await tester.dragUntilVisible(
-      find.text('项目：不限'),
+      find.text('项目'),
       sheetScroll,
       const Offset(0, -150),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('项目：不限'));
+    await tester.tap(find.text('项目'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('工作'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('确定'));
     await tester.pumpAndSettle();
-    expect(find.text('项目：工作'), findsOneWidget);
+    // 行尾随值已换成选中项目名（「不限」不再出现在该行）
+    expect(find.text('工作'), findsWidgets);
 
     // 标签行：同样按名称多选（种子标签「紧急」）
     await tester.dragUntilVisible(
-      find.text('标签：不限'),
+      find.text('标签'),
       sheetScroll,
       const Offset(0, -120),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('标签：不限'));
+    await tester.tap(find.text('标签'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('紧急'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('确定'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('标签：紧急'), findsOneWidget);
+    expect(find.text('紧急'), findsWidgets);
 
     await tester.enterText(find.byType(TextField).first, '进行中工作视图');
     await tester.tap(find.text('创建'));

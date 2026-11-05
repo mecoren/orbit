@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_miuix/miuix.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_colors.dart';
@@ -17,7 +18,6 @@ import '../../shared/widgets/shadcn/orbit_empty_state.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_date_picker.dart';
-import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
@@ -303,88 +303,53 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
                 onPick: (v) => setSheet(() => doneFrom = v),
               ),
               // 项目 / 标签：按名称多选（对齐桌面 chips 选择器；原裸 id 文本框
-              // 要求用户自己查数据库 id，移动端不可用）
-              SizedBox(
-                height: AppDimens.touchTarget,
-                child: InkWell(
-                  onTap: () async {
-                    final picked = await _pickFilterIds(
-                      ctx,
-                      title: '筛选项目',
-                      items: [
-                        for (final p in projects)
-                          (id: p.id, title: p.title, hexColor: p.hexColor),
-                      ],
-                      selected: projectIds,
-                    );
-                    if (picked == null) return;
-                    setSheet(() {
-                      projectIds
-                        ..clear()
-                        ..addAll(picked);
-                    });
-                  },
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          '项目：${idsSummary(projectIds, [for (final p in projects) (id: p.id, title: p.title)])}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 15,
-                            color: colors.bodyText,
-                          ),
-                        ),
-                      ),
-                      Icon(
-                        OrbitIcons.chevronRight,
-                        color: colors.secondaryText,
-                      ),
+              // 要求用户自己查数据库 id，移动端不可用）。行样式与上方状态 /
+              // 优先级下拉偏好行同款（标题 + 尾随当前值 + 上下双箭头）
+              _FilterMultiRow(
+                label: '项目',
+                summary: idsSummary(projectIds, [
+                  for (final p in projects) (id: p.id, title: p.title),
+                ]),
+                onTap: () async {
+                  final picked = await _pickFilterIds(
+                    ctx,
+                    title: '筛选项目',
+                    items: [
+                      for (final p in projects)
+                        (id: p.id, title: p.title, hexColor: p.hexColor),
                     ],
-                  ),
-                ),
+                    selected: projectIds,
+                  );
+                  if (picked == null) return;
+                  setSheet(() {
+                    projectIds
+                      ..clear()
+                      ..addAll(picked);
+                  });
+                },
               ),
-              SizedBox(
-                height: AppDimens.touchTarget,
-                child: InkWell(
-                  onTap: () async {
-                    final picked = await _pickFilterIds(
-                      ctx,
-                      title: '筛选标签',
-                      items: [
-                        for (final l in labels)
-                          (id: l.id, title: l.title, hexColor: l.hexColor),
-                      ],
-                      selected: labelIds,
-                    );
-                    if (picked == null) return;
-                    setSheet(() {
-                      labelIds
-                        ..clear()
-                        ..addAll(picked);
-                    });
-                  },
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          '标签：${idsSummary(labelIds, [for (final l in labels) (id: l.id, title: l.title)])}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 15,
-                            color: colors.bodyText,
-                          ),
-                        ),
-                      ),
-                      Icon(
-                        OrbitIcons.chevronRight,
-                        color: colors.secondaryText,
-                      ),
+              _FilterMultiRow(
+                label: '标签',
+                summary: idsSummary(labelIds, [
+                  for (final l in labels) (id: l.id, title: l.title),
+                ]),
+                onTap: () async {
+                  final picked = await _pickFilterIds(
+                    ctx,
+                    title: '筛选标签',
+                    items: [
+                      for (final l in labels)
+                        (id: l.id, title: l.title, hexColor: l.hexColor),
                     ],
-                  ),
-                ),
+                    selected: labelIds,
+                  );
+                  if (picked == null) return;
+                  setSheet(() {
+                    labelIds
+                      ..clear()
+                      ..addAll(picked);
+                  });
+                },
               ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
@@ -398,23 +363,47 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
                 value: favorite,
                 onChanged: (v) => setSheet(() => favorite = v),
               ),
-              _FilterTriRow(
-                label: '提醒',
-                value: hasReminder,
-                colors: colors,
-                onPick: (v) => setSheet(() => hasReminder = v),
+              // 三态筛选（不限 / 仅有 / 仅无）走设置页同款下拉偏好行：
+              // 行内常驻当前档 + 上下双箭头，点行就地展开玻璃菜单——与上方
+              // 状态 / 优先级同款，不再用「值 + 右箭头」的旧行样式
+              OrbitDropdownPreference<bool?>(
+                title: '提醒',
+                items: const [
+                  SelectItem(value: null, label: '不限'),
+                  SelectItem(value: true, label: '仅有'),
+                  SelectItem(value: false, label: '仅无'),
+                ],
+                current: hasReminder,
+                insideMargin: const EdgeInsets.symmetric(
+                  vertical: AppDimens.space8,
+                ),
+                onSelect: (v) => setSheet(() => hasReminder = v),
               ),
-              _FilterTriRow(
-                label: '附件',
-                value: hasAttachment,
-                colors: colors,
-                onPick: (v) => setSheet(() => hasAttachment = v),
+              OrbitDropdownPreference<bool?>(
+                title: '附件',
+                items: const [
+                  SelectItem(value: null, label: '不限'),
+                  SelectItem(value: true, label: '仅有'),
+                  SelectItem(value: false, label: '仅无'),
+                ],
+                current: hasAttachment,
+                insideMargin: const EdgeInsets.symmetric(
+                  vertical: AppDimens.space8,
+                ),
+                onSelect: (v) => setSheet(() => hasAttachment = v),
               ),
-              _FilterTriRow(
-                label: '未完成子任务',
-                value: hasOpenSubtask,
-                colors: colors,
-                onPick: (v) => setSheet(() => hasOpenSubtask = v),
+              OrbitDropdownPreference<bool?>(
+                title: '未完成子任务',
+                items: const [
+                  SelectItem(value: null, label: '不限'),
+                  SelectItem(value: true, label: '仅有'),
+                  SelectItem(value: false, label: '仅无'),
+                ],
+                current: hasOpenSubtask,
+                insideMargin: const EdgeInsets.symmetric(
+                  vertical: AppDimens.space8,
+                ),
+                onSelect: (v) => setSheet(() => hasOpenSubtask = v),
               ),
             ],
           ),
@@ -823,50 +812,55 @@ class _FilterDateRow extends StatelessWidget {
   }
 }
 
-/// 筛选器构建器存在三态行（#71：不限 / 仅有 / 仅无，走底部单选抽屉）。
-class _FilterTriRow extends StatelessWidget {
-  const _FilterTriRow({
+/// 筛选器多选行（项目 / 标签）：**行样式**与设置页下拉偏好行同款（标题在左、
+/// 尾随当前值、行尾上下双箭头），但点击打开的是多选抽屉而不是单选玻璃菜单。
+///
+/// 为什么不直接用 `OrbitDropdownPreference`：那个原语的语义是「从一组值里挑
+/// 一个」，而项目/标签是**勾选多个再确认**（`_pickFilterIds` 返回集合）。硬套
+/// 单选原语会把它变成单选，功能倒退。这里只复用行**外观**（`MiuixBasicComponent`
+/// + `MiuixDropdownArrowEndAction`），交互仍归多选抽屉。
+class _FilterMultiRow extends StatelessWidget {
+  const _FilterMultiRow({
     required this.label,
-    required this.value,
-    required this.colors,
-    required this.onPick,
+    required this.summary,
+    required this.onTap,
   });
 
+  /// 行标题（项目 / 标签）
   final String label;
-  final bool? value;
-  final AppColorSet colors;
-  final ValueChanged<bool?> onPick;
 
-  static const _names = {null: '不限', true: '仅有', false: '仅无'};
+  /// 尾随当前值文案（「不限」或已选名称；由调用方的 `idsSummary` 产出）
+  final String summary;
+
+  /// 打开多选抽屉
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: AppDimens.touchTarget,
-      child: InkWell(
-        onTap: () => showSelectBottomSheet<bool?>(
-          context,
-          title: label,
-          current: value,
-          items: const [
-            SelectItem(value: null, label: '不限'),
-            SelectItem(value: true, label: '仅有'),
-            SelectItem(value: false, label: '仅无'),
-          ],
-          onSelect: onPick,
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                '$label：${_names[value]}',
-                style: TextStyle(fontSize: 15, color: colors.bodyText),
-              ),
+    final theme = MiuixTheme.of(context);
+    final actionColor = theme.colors.onSurfaceVariantActions;
+    return MiuixBasicComponent(
+      title: label,
+      insideMargin: const EdgeInsets.symmetric(vertical: AppDimens.space8),
+      endActions: [
+        Flexible(
+          flex: 1,
+          fit: FlexFit.loose,
+          child: Padding(
+            padding: const EdgeInsetsDirectional.only(end: AppDimens.space8),
+            child: MiuixText(
+              summary,
+              fontSize: theme.textStyles.body2.fontSize,
+              color: actionColor,
+              textAlign: TextAlign.end,
+              overflow: TextOverflow.ellipsis,
             ),
-            Icon(OrbitIcons.chevronRight, color: colors.secondaryText),
-          ],
+          ),
         ),
-      ),
+        MiuixDropdownArrowEndAction(actionColor: actionColor),
+      ],
+      role: MiuixBasicComponentRole.dropdownList,
+      onClick: onTap,
     );
   }
 }
