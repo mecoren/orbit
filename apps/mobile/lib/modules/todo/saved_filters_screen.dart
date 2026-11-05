@@ -166,7 +166,6 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
     TodoSavedFilter? existing,
     Map<String, dynamic>? initialConditions,
   }) async {
-    final colors = AppColors.ofContext(context);
     final nameCtl = TextEditingController(text: existing?.name ?? '');
     Map<String, dynamic> init = {};
     try {
@@ -281,31 +280,27 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
               _FilterDateRow(
                 label: '截止≥',
                 value: dueFrom,
-                colors: colors,
                 onPick: (v) => setSheet(() => dueFrom = v),
               ),
               _FilterDateRow(
                 label: '截止＜',
                 value: dueUntil,
-                colors: colors,
                 onPick: (v) => setSheet(() => dueUntil = v),
               ),
               _FilterDateRow(
                 label: '创建≥',
                 value: createdFrom,
-                colors: colors,
                 onPick: (v) => setSheet(() => createdFrom = v),
               ),
               _FilterDateRow(
                 label: '完成≥',
                 value: doneFrom,
-                colors: colors,
                 onPick: (v) => setSheet(() => doneFrom = v),
               ),
               // 项目 / 标签：按名称多选（对齐桌面 chips 选择器；原裸 id 文本框
               // 要求用户自己查数据库 id，移动端不可用）。行样式与上方状态 /
               // 优先级下拉偏好行同款（标题 + 尾随当前值 + 上下双箭头）
-              _FilterMultiRow(
+              _FilterConditionRow(
                 label: '项目',
                 summary: idsSummary(projectIds, [
                   for (final p in projects) (id: p.id, title: p.title),
@@ -328,7 +323,7 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
                   });
                 },
               ),
-              _FilterMultiRow(
+              _FilterConditionRow(
                 label: '标签',
                 summary: idsSummary(labelIds, [
                   for (final l in labels) (id: l.id, title: l.title),
@@ -744,18 +739,19 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
   }
 }
 
-/// 筛选器构建器日期行（#71：绝对日期维度输入；点行弹日期面板，叉号清除）。
+/// 筛选器构建器日期行（#71：绝对日期维度输入；点行弹日期面板，有值时行尾 X 清除）。
+///
+/// 行样式与项目/标签/状态/优先级同款（`_FilterConditionRow`）：标题在左、
+/// 尾随日期在右、无值时上下双箭头；有值时 X **顶替**箭头位置（不并排）。
 class _FilterDateRow extends StatelessWidget {
   const _FilterDateRow({
     required this.label,
     required this.value,
-    required this.colors,
     required this.onPick,
   });
 
   final String label;
   final int? value;
-  final AppColorSet colors;
   final ValueChanged<int?> onPick;
 
   @override
@@ -765,75 +761,56 @@ class _FilterDateRow extends StatelessWidget {
         : OrbitDatePicker.formatDate(
             DateTime.fromMillisecondsSinceEpoch(value!),
           );
-    return SizedBox(
-      height: AppDimens.touchTarget,
-      child: Row(
-        children: [
-          Expanded(
-            child: InkWell(
-              onTap: () async {
-                final picked = await OrbitDatePicker.pick(
-                  context,
-                  initialDate: value == null
-                      ? null
-                      : DateTime.fromMillisecondsSinceEpoch(value!),
-                );
-                if (picked == null || !context.mounted) return;
-                final day = DateTime(picked.year, picked.month, picked.day);
-                onPick(day.millisecondsSinceEpoch);
-              },
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      '$label：$text',
-                      style: TextStyle(fontSize: 15, color: colors.bodyText),
-                    ),
-                  ),
-                  Icon(OrbitIcons.chevronRight, color: colors.secondaryText),
-                ],
-              ),
-            ),
-          ),
-          if (value != null)
-            OrbitIconButton(
-              visualDensity: VisualDensity.compact,
-              tooltip: '清除',
-              icon: Icon(
-                OrbitIcons.close,
-                size: AppDimens.iconSizeSm,
-                color: colors.secondaryText,
-              ),
-              onPressed: () => onPick(null),
-            ),
-        ],
-      ),
+    return _FilterConditionRow(
+      label: label,
+      summary: text,
+      onTap: () async {
+        final picked = await OrbitDatePicker.pick(
+          context,
+          initialDate: value == null
+              ? null
+              : DateTime.fromMillisecondsSinceEpoch(value!),
+        );
+        if (picked == null || !context.mounted) return;
+        final day = DateTime(picked.year, picked.month, picked.day);
+        onPick(day.millisecondsSinceEpoch);
+      },
+      onClear: value == null ? null : () => onPick(null),
     );
   }
 }
 
-/// 筛选器多选行（项目 / 标签）：**行样式**与设置页下拉偏好行同款（标题在左、
-/// 尾随当前值、行尾上下双箭头），但点击打开的是多选抽屉而不是单选玻璃菜单。
+/// 筛选器条件行（项目 / 标签 / 日期四行共用）：**行样式**与设置页下拉偏好行
+/// 同款（标题在左、尾随当前值、行尾上下双箭头），但点开后的交互各归各的——
+/// 项目/标签打开多选抽屉，日期打开日期面板。
 ///
 /// 为什么不直接用 `OrbitDropdownPreference`：那个原语的语义是「从一组值里挑
-/// 一个」，而项目/标签是**勾选多个再确认**（`_pickFilterIds` 返回集合）。硬套
-/// 单选原语会把它变成单选，功能倒退。这里只复用行**外观**（`MiuixBasicComponent`
-/// + `MiuixDropdownArrowEndAction`），交互仍归多选抽屉。
-class _FilterMultiRow extends StatelessWidget {
-  const _FilterMultiRow({
+/// 一个」并自带玻璃菜单，而这里是多选集合 / 日期面板，硬套会退化成单选或丢掉
+/// 日期面板。这里只复用行**外观**（`MiuixBasicComponent` + 行尾动作），交互
+/// 由调用方的 `onTap` 决定。
+///
+/// **行尾动作规则（2026-11-05）**：无值 → 上下双箭头（可点开选择）；有值且可
+/// 清除（[onClear] 非空）→ **只显示 X，覆盖箭头位置**（不并排、不占两格）。
+/// 用户改完立刻能在原位清空，不必再瞄一个额外的叉号。
+class _FilterConditionRow extends StatelessWidget {
+  const _FilterConditionRow({
     required this.label,
     required this.summary,
     required this.onTap,
+    this.onClear,
   });
 
-  /// 行标题（项目 / 标签）
+  /// 行标题（项目 / 标签 / 截止≥ …）
   final String label;
 
-  /// 尾随当前值文案（「不限」或已选名称；由调用方的 `idsSummary` 产出）
+  /// 尾随当前值文案（「不限」或已选名称 / 日期）
   final String summary;
 
-  /// 打开多选抽屉
+  /// 打开选择（多选抽屉 / 日期面板）
   final VoidCallback onTap;
+
+  /// 清除当前值（null = 无值或该维度不可清除，行尾显示箭头）
+  final VoidCallback? onClear;
 
   @override
   Widget build(BuildContext context) {
@@ -857,7 +834,24 @@ class _FilterMultiRow extends StatelessWidget {
             ),
           ),
         ),
-        MiuixDropdownArrowEndAction(actionColor: actionColor),
+        // 有值 → X 顶替箭头位；无值 → 上下双箭头
+        if (onClear != null)
+          OrbitIconButton(
+            visualDensity: VisualDensity.compact,
+            constraints: const BoxConstraints(
+              minWidth: AppDimens.touchTarget,
+              minHeight: AppDimens.touchTarget,
+            ),
+            tooltip: '清除',
+            icon: Icon(
+              OrbitIcons.close,
+              size: AppDimens.iconSizeMd,
+              color: theme.colors.onSurfaceVariantActions,
+            ),
+            onPressed: onClear,
+          )
+        else
+          MiuixDropdownArrowEndAction(actionColor: actionColor),
       ],
       role: MiuixBasicComponentRole.dropdownList,
       onClick: onTap,

@@ -48,8 +48,9 @@ void main() {
 
   /// 2026-11-05：项目 / 标签 / 提醒 / 附件 / 未完成子任务五行原先各自手搓
   /// 「值 + 右箭头」（项目/标签是多选 InkWell，另三行是底部三态抽屉），
-  /// 与上方状态/优先级不同档。现统一成同款行样式（双箭头 + 尾随值）。
-  testWidgets('五行统一为下拉偏好行样式（尾随值 + 上下双箭头）', (tester) async {
+  /// 与上方状态/优先级不同档。现统一成同款行样式（双箭头 + 尾随值）；
+  /// 日期四行（截止≥ / 截止＜ / 创建≥ / 完成≥）同样收进这套行。
+  testWidgets('全表单统一为下拉偏好行样式（尾随值 + 上下双箭头）', (tester) async {
     await tester.pumpWidget(_wrap(MockOrbitBridge()));
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
@@ -57,17 +58,28 @@ void main() {
     await tester.tap(find.text('新建筛选器').last);
     await tester.pumpAndSettle();
 
-    // 五行都在：标题 + 尾随「不限」
-    for (final label in ['项目', '标签', '提醒', '附件', '未完成子任务']) {
+    // 行标题都在（无值态）
+    for (final label in [
+      '状态',
+      '优先级',
+      '截止≥',
+      '截止＜',
+      '创建≥',
+      '完成≥',
+      '项目',
+      '标签',
+      '提醒',
+      '附件',
+      '未完成子任务',
+    ]) {
       expect(find.text(label), findsOneWidget, reason: '$label 行标题应在');
     }
-    expect(find.text('不限'), findsNWidgets(5), reason: '五行的尾随值都应是「不限」');
 
-    // 双箭头是这套行样式的判据：状态/优先级 2 行 + 新增 5 行 = 7
+    // 双箭头是这套行样式的判据：状态/优先级 2 + 日期 4 + 项目/标签 2 + 三态 3
     expect(
       find.byType(MiuixDropdownArrowEndAction),
-      findsNWidgets(7),
-      reason: '七行都应是下拉偏好行样式（上下双箭头），不得残留右箭头',
+      findsNWidgets(11),
+      reason: '十一行都应是下拉偏好行样式（上下双箭头），不得残留右箭头',
     );
 
     // 三态行就地展开玻璃菜单，当前档「不限」打勾。
@@ -82,5 +94,31 @@ void main() {
     await tester.pumpAndSettle();
     expect(dropdownPreferencePopupRows(), findsNWidgets(3));
     expect(selectedDropdownPreferenceLabels(tester), ['不限']);
+  });
+
+  /// 日期行有值时，行尾 X **顶替**上下双箭头（不并排、不占两格）——
+  /// 用户改完立刻能在原位清空。
+  testWidgets('日期有值：X 顶替箭头位置', (tester) async {
+    // 带初始条件 → 首帧后自动弹构建抽屉并预填（「保存为筛选器」预填链）
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [orbitBridgeProvider.overrideWithValue(MockOrbitBridge())],
+        child: orbitTestApp(
+          home: const SavedFiltersScreen(
+            initialConditions: {'due_from': 1762272000000},
+          ),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(MiuixBasicComponent), findsWidgets, reason: '抽屉已弹出');
+    // 有值那一行少了箭头（11 → 10），说明 X 顶替了它的位置
+    expect(
+      find.byType(MiuixDropdownArrowEndAction).evaluate().length,
+      10,
+      reason: '日期有值行应以 X 顶替双箭头',
+    );
   });
 }
