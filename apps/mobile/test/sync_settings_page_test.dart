@@ -18,6 +18,7 @@ import 'package:orbit/modules/settings/sync_settings_page.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_button.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_card.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_dropdown_preference.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_filter_chip.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_switch.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_text_field.dart';
 import 'support/orbit_test_app.dart';
@@ -155,6 +156,39 @@ void main() {
       findsOneWidget,
       reason: '总开关必须作为行首动作并入同一偏好行',
     );
+  });
+
+  // 同步历史筛选行走原语 `OrbitFilterChip`（默认 16% 底档），不是导入卡那种
+  // 实心档位网格：筛选是辅助动作，实心会抢走下方历史列表的注意力。
+  //
+  // 注意 `find.text` 会同时命中筛选档与历史行内的类型标签（mock 造态里
+  // incremental 行的标题就是「完整同步」），故断言与点击一律按 chip 谓词定位。
+  testWidgets('同步历史：四档筛选走 OrbitFilterChip 非实心档，切档重新拉取', (tester) async {
+    await tester.pumpWidget(_wrap(MockOrbitBridge()));
+    await _flush(tester);
+
+    Finder chip(String label) => find.byWidgetPredicate(
+          (w) => w is OrbitFilterChip && w.label == label,
+        );
+
+    await _scrollTo(tester, chip('完整同步'));
+    final chips = tester.widgetList<OrbitFilterChip>(
+      find.byType(OrbitFilterChip),
+    );
+    expect(chips.length, 4);
+    expect(
+      chips.every((c) => !c.solid && !c.expand),
+      isTrue,
+      reason: '筛选档必须走 16% 强调色底档（实心档是档位主操作专用）',
+    );
+    expect(chips.first.label, '全部');
+    expect(chips.first.selected, isTrue, reason: '缺省档为全部');
+
+    // mock 造态：incremental 成功 1 行 + push_only 失败 1 行
+    await _tapAt(tester, chip('仅推送'));
+    await _flush(tester);
+    expect(find.text('近 1 次'), findsOneWidget);
+    expect(tester.widget<OrbitFilterChip>(chip('仅推送')).selected, isTrue);
   });
 
   testWidgets('保存：endpoint 必填（空则禁用）→ 填写后成功落库', (tester) async {

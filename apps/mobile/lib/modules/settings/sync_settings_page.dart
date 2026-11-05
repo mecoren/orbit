@@ -8,7 +8,6 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
-import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
@@ -16,6 +15,7 @@ import '../../shared/utils/sync_status_text.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart'
     show bottomSheetMotion, bottomSheetTopShape;
 import '../../shared/widgets/shadcn/orbit_checkbox.dart';
+import '../../shared/widgets/shadcn/orbit_filter_chip.dart';
 import '../../shared/widgets/shadcn/orbit_floating_sheet_card.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_password_sheet.dart';
@@ -1136,12 +1136,15 @@ class _SyncHistoryCardState extends ConsumerState<_SyncHistoryCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          // 类型筛选：走原语 `OrbitFilterChip`（默认 16% 强调色底档）而非
+          // `OrbitChoiceGrid` 的实心档——筛选是辅助动作，实心会抢走下方列表
+          // 的注意力；`Wrap` 让大字号档下四档折行而不是横向溢出（旧手搓
+          // `Row` + 固定间距在 320dp 视口里无 ellipsis 兜底）。
+          Wrap(
+            spacing: AppDimens.space8,
+            runSpacing: AppDimens.space8,
             children: [
-              for (final e in _scopes.entries) ...[
-                _chip(e.key, e.value),
-                const SizedBox(width: AppDimens.space8),
-              ],
+              for (final e in _scopes.entries) _chip(e.key, e.value),
             ],
           ),
           const SizedBox(height: AppDimens.space8),
@@ -1173,33 +1176,16 @@ class _SyncHistoryCardState extends ConsumerState<_SyncHistoryCard> {
     );
   }
 
+  /// 类型筛选档（原语层 squircle 表面，选中走 16% 强调色底档）
+  ///
+  /// `compact: true` 保住旧手搓版的垂直 6 内边距——换原语是收口表面材质，
+  /// 不该顺带把筛选行拔高 4px（默认档 space8 是任务列表筛选的档位）。
   Widget _chip(String key, String label) {
-    final colors = AppColors.ofContext(context);
-    final selected = _scope == key;
-    return GestureDetector(
+    return OrbitFilterChip(
+      label: label,
+      selected: _scope == key,
+      compact: true,
       onTap: () => _switchScope(key),
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppDimens.space12,
-          vertical: AppDimens.space6,
-        ),
-        decoration: BoxDecoration(
-          color: selected
-              ? OrbitAccents.themeAccent.withValues(alpha: 0.16)
-              : Colors.transparent,
-          borderRadius: AppShapes.small,
-          border: Border.all(
-            color: selected ? OrbitAccents.themeAccent : colors.divider,
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            color: selected ? OrbitAccents.themeAccent : colors.bodyText,
-          ),
-        ),
-      ),
     );
   }
 
