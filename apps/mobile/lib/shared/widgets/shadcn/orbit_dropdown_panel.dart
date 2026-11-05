@@ -6,7 +6,6 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimens.dart';
 import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_shapes.dart';
-import '../../../core/theme/icon_map.dart';
 import 'package:flutter_miuix/miuix.dart';
 
 /// 面板宽度上限（px）
@@ -15,6 +14,12 @@ import 'package:flutter_miuix/miuix.dart';
 /// 这一档，再宽只会把右侧留出一片空白（2026-09-23 反馈「太宽了」后由 300 收到本值，
 /// 430 宽的机型上也一样收——定宽上限比按比例算更能保证观感一致）。
 const double orbitPanelMaxWidth = 240;
+
+/// 弹出菜单的最小宽度（库内 `MiuixGlassPopupSizing.minWidth` 口径）
+///
+/// 条目只有两三个字（「跟随系统」「浅色」）时不该缩成一小片，也不该被库内
+/// 默认的 200 撑宽——180 是这套菜单在本项目里的统一下限。
+const double orbitPanelMinWidth = 180;
 
 /// 窄屏下的面板宽度占屏比（配合 [orbitPanelMaxWidth] 取小）
 ///
@@ -366,9 +371,16 @@ class OrbitDropdownPanelView extends StatefulWidget {
     this.onAction,
     this.onClose,
     this.scrollable = true,
+    this.closeOnTap = true,
   });
 
   final List<List<OrbitPanelItem>> groups;
+
+  /// 点叶子条目后是否关面板
+  ///
+  /// 单选/动作菜单为 true（默认）；多选卡片（如快速添加的标签连选）传
+  /// false——点行只翻转勾选、面板常驻，由点卡外收起。
+  final bool closeOnTap;
 
   final String? title;
   final String? actionLabel;
@@ -416,7 +428,7 @@ class OrbitDropdownPanelViewState extends State<OrbitDropdownPanelView> {
           _expanded = expanded == null ? (groupIndex, itemIndex) : null);
       return;
     }
-    _close();
+    if (widget.closeOnTap) _close();
     item.onTap?.call();
   }
 
@@ -490,13 +502,14 @@ class OrbitDropdownPanelViewState extends State<OrbitDropdownPanelView> {
         if (widget.title != null || widget.actionLabel != null) _headerRow(),
         for (var g = 0; g < widget.groups.length; g++) ...[
           if (g > 0)
+            // 组间分隔对齐玻璃菜单口径（0.5 厚、左右各 20 缩进、上下 4）
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: AppDimens.space4),
+              padding: const EdgeInsets.symmetric(vertical: 4),
               child: Divider(
                 height: 1,
-                thickness: 1,
-                indent: AppDimens.space12,
-                endIndent: AppDimens.space12,
+                thickness: 0.5,
+                indent: 20,
+                endIndent: 20,
                 color: colors.divider,
               ),
             ),
@@ -511,127 +524,52 @@ class OrbitDropdownPanelViewState extends State<OrbitDropdownPanelView> {
     );
     // 壳由入口统一包（[showOrbitFloatCard] / OS4 形变弹层），此处只出条目列，
     // 避免双层边框；形变弹层外层已带纵向滚动，[scrollable] 为 false 时不再套
-    const padding = EdgeInsets.symmetric(vertical: AppDimens.space6);
+    // 上下 8 呼吸位对齐玻璃菜单的 contentPadding
+    const padding = EdgeInsets.symmetric(vertical: 8);
     return widget.scrollable
         ? SingleChildScrollView(padding: padding, child: column)
         : Padding(padding: padding, child: column);
   }
 
   /// 顶层条目行：有子项展开时**其余**条目置灰（图标与文案同时降级）
+  ///
+  /// 行口径与「今天」页头 ⋮ 菜单同款（[MiuixGlassPopupItem]）：44 最小行高、
+  /// 24 图标位、选中转强调色并右端打勾、子项箭头随展开转向。
   Widget _topRow(int groupIndex, int itemIndex, OrbitPanelItem item) {
     final colors = AppColors.ofContext(context);
     final isExpanded = _isExpanded(groupIndex, itemIndex);
     final dimmed = _expanded != null && !isExpanded;
-    final tint = dimmed
-        ? colors.deactivatedText
-        : (item.color ?? colors.bodyText);
-
-    return InkWell(
-      onTap: () => _tapTop(groupIndex, itemIndex, item),
-      child: SizedBox(
-        height: AppDimens.touchTarget,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppDimens.space12),
-          child: Row(
-            children: [
-              // 行首：自定义 leading（色点）> 语义图标 > 无（纯文字条目，
-              // 文案直接贴左边距，选择浮层里主题/字号这类档位即此形态）
-              if (item.leading != null) ...[
-                SizedBox(
-                  width: AppDimens.iconSizeMd,
-                  height: AppDimens.iconSizeMd,
-                  child: Center(child: item.leading!),
-                ),
-                const SizedBox(width: AppDimens.space12),
-              ] else if (item.icon != null) ...[
-                Icon(
+    // 行首：自定义 leading（色点）> 语义图标 > 无（纯文字条目）
+    final Widget? leading = item.leading != null
+        ? Center(child: item.leading!)
+        : (item.icon != null
+              ? Icon(
                   item.icon,
-                  size: AppDimens.iconSizeMd,
+                  size: MiuixGlassPopupDefaults.itemIconSize,
                   color: dimmed
                       ? colors.deactivatedText
                       : (item.iconColor ?? item.color ?? colors.iconText),
-                ),
-                const SizedBox(width: AppDimens.space12),
-              ],
-              Expanded(
-                child: Text(
-                  item.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 15, color: tint),
-                ),
-              ),
-              // 开关类条目：行尾对勾表达「已开」
-              if (item.checked && item.children.isEmpty) ...[
-                const SizedBox(width: AppDimens.space8),
-                Icon(
-                  OrbitIcons.check,
-                  size: AppDimens.iconSizeSm,
-                  color: dimmed ? colors.deactivatedText : colors.accent,
-                ),
-              ],
-              if (item.trailingLabel != null) ...[
-                const SizedBox(width: AppDimens.space8),
-                Text(
-                  item.trailingLabel!,
-                  style: TextStyle(fontSize: 13, color: colors.secondaryText),
-                ),
-              ],
-              if (item.children.isNotEmpty) ...[
-                const SizedBox(width: AppDimens.space4),
-                Icon(
-                  isExpanded ? OrbitIcons.expandMore : OrbitIcons.chevronRight,
-                  size: AppDimens.iconSizeSm,
-                  color: dimmed ? colors.deactivatedText : colors.iconText,
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
+                )
+              : null);
+    return MiuixGlassPopupItem(
+      text: item.label,
+      icon: leading,
+      summary: item.trailingLabel,
+      // 开关类条目：行尾对勾表达「已开」（菜单同款：选中态染强调色）
+      selected: item.checked && item.children.isEmpty,
+      showArrow: item.children.isNotEmpty,
+      arrowRotation: isExpanded ? -90 : 0,
+      contentColor: dimmed ? colors.deactivatedText : item.color,
+      onPressed: () => _tapTop(groupIndex, itemIndex, item),
     );
   }
 
-  /// 子项行：缩进到文案列（12 + 图标列 22 + 12），选中项在图标列打勾
-  Widget _childRow(OrbitPanelItem child) {
-    final colors = AppColors.ofContext(context);
-    return InkWell(
-      onTap: () => _tapChild(child),
-      child: SizedBox(
-        height: AppDimens.touchTarget,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppDimens.space12),
-          child: Row(
-            children: [
-              SizedBox(
-                width: AppDimens.iconSizeMd,
-                child: child.checked
-                    ? Icon(
-                        OrbitIcons.check,
-                        size: AppDimens.iconSizeSm,
-                        color: colors.accent,
-                      )
-                    : null,
-              ),
-              const SizedBox(width: AppDimens.space12),
-              Expanded(
-                child: Text(
-                  child.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: child.color ?? colors.bodyText,
-                    fontWeight:
-                        child.checked ? FontWeight.w600 : FontWeight.w400,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  /// 子项行：与一级同款玻璃条目（选中打勾在行尾，与菜单二级一致）
+  Widget _childRow(OrbitPanelItem child) => MiuixGlassPopupItem(
+    text: child.label,
+    selected: child.checked,
+    contentColor: child.color,
+    onPressed: () => _tapChild(child),
+  );
 }
 

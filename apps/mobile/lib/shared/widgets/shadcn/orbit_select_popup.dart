@@ -1,12 +1,12 @@
-/// 单选浮层（miuix 下拉偏好 Overlay 口径，2026-11-03）
+/// 单选浮层（锚定选择菜单，2026-11-05 统一到「今天」页头菜单口径）
 ///
-/// **视觉与交互对齐**：flutter_miuix 的 `DropdownPreference (Overlay)`——
+/// **视觉与交互与任务列表页头 ⋮ 菜单（`OrbitGlassMenu`）同源**：
 /// - 位置：贴着**触发行的下方**弹出，右沿对齐触发行右沿；下方放不下翻到
 ///   上方，左右/上下钳在安全区内（不遮住当前值）；
-/// - 行：`MiuixDropdownImpl`（与库内下拉同款：未选中**正文色**、选中
-///   **强调色文字 + 右端对勾**、首末行内边距由库给）；
+/// - 行：`MiuixGlassPopupItem`（玻璃菜单条目同款：最小行高 44、24 图标位、
+///   未选中**正文色**、选中**强调色文字 + 右端对勾**、可带副说明）；
 /// - 卡面：OS4 玻璃（[OrbitGlassSurface]：有采样器走 shader 玻璃、
-///   无采样器退实时模糊），圆角 16（库内列表浮层口径），选项多时可滚
+///   无采样器退实时模糊），圆角 24（与玻璃菜单卡面同档），选项多时可滚
 ///   （限高 0.6 屏）；
 /// - 形变：库内 dropdown motion 同口径——卡面矩形从**触发行矩形**插值到落位
 ///   矩形（内容等比缩放并贴左上角裁切，锚点比卡面宽时只「揭开」不缩小），
@@ -25,16 +25,15 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_miuix/miuix.dart';
 
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimens.dart';
-import '../../../core/theme/app_elevation.dart';
+import 'orbit_dropdown_panel.dart' show orbitPanelMaxWidth;
 import 'orbit_glass_surface.dart';
 
-/// 弹层卡片圆角 —— 对齐 miuix 下拉弹层（Overlay）口径
+/// 弹层卡片圆角 —— 对齐 OS4 玻璃菜单卡面口径
 ///
-/// 取库内 `MiuixListPopupDefaults.cornerRadius`（16）：下拉浮层比对话框/抽屉
-/// 更「薄」，24 会显得像抽屉。
-const double orbitSelectPopupRadius = 16;
+/// 取库内 `MiuixGlassPopupDefaults.cornerRadius`（24），与任务列表页头 ⋮
+/// 菜单（`OrbitGlassMenu`）同一档；下拉不会显成抽屉（抽屉口径是 28）。
+const double orbitSelectPopupRadius = 24;
 
 /// 弹层根节点 key（测试定位用；旧 `BottomSheet` 定位已失效）
 const Key orbitSelectPopupKey = ValueKey('orbit-select-popup');
@@ -201,6 +200,17 @@ class _OrbitSelectPopupBodyState<T> extends State<_OrbitSelectPopupBody<T>> {
 
   final GlobalKey _probeKey = GlobalKey();
 
+  /// 卡面材质（与 ⋮ 菜单同档：puredThinGlass + blurRadius 32；按亮暗各
+  /// 缓存一份，值相等是库内纹理缓存的性能要件）
+  static final _materialLight = MiuixGlassMaterials.puredThinGlassLight
+      .copyWith(blurRadius: 32);
+  static final _materialDark = MiuixGlassMaterials.puredThinGlassDark.copyWith(
+    blurRadius: 32,
+  );
+
+  static MiuixGlassMaterial _popupMaterial(bool isDark) =>
+      isDark ? _materialDark : _materialLight;
+
   @override
   void initState() {
     super.initState();
@@ -214,41 +224,36 @@ class _OrbitSelectPopupBodyState<T> extends State<_OrbitSelectPopupBody<T>> {
     setState(() => _cardSize = box.size);
   }
 
+  /// 卡面测量约束：宽度与全站弹出菜单同档（上限 [orbitPanelMaxWidth]），
+  /// 高度限 0.6 屏
+  ///
+  /// 宽度上限必须卡在这里——正式渲染的 `Positioned.fromRect` 用的是本次
+  /// 离屏测量的尺寸；`MiuixListPopupColumn` 内部按父约束把宽度 clamp 在
+  /// 200–288，给 240 的上界后自然收到 200–240。
   BoxConstraints _cardConstraints(Size screen) => BoxConstraints.loose(
-        Size(screen.width - _edge * 2, screen.height * 0.6),
+        Size(
+          math.min(screen.width - _edge * 2, orbitPanelMaxWidth),
+          screen.height * 0.6,
+        ),
       );
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.ofContext(context);
     final screen = MediaQuery.sizeOf(context);
     final viewPadding = MediaQuery.viewPaddingOf(context);
     final radius = BorderRadius.circular(orbitSelectPopupRadius);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // 行配色直接吃库内下拉默认值（未选中正文色、选中强调色 + 强调色对勾），
-    // 只把行底改透明——卡面由下面的玻璃面承担
-    final dropdownColors = MiuixDropdownDefaults.dropdownColors(
-      context,
-      containerColor: Colors.transparent,
-      selectedContainerColor: Colors.transparent,
-    );
-
+    // 行与「今天」页头 ⋮ 菜单同款（MiuixGlassPopupItem）：44 最小行高、
+    // 24 图标位、选中转强调色并右端打勾
     final rows = <Widget>[
       for (var i = 0; i < widget.items.length; i++)
-        MiuixDropdownImpl(
-          item: MiuixDropdownItem(
-            text: widget.items[i].label,
-            selected: widget.items[i].value == widget.current,
-            icon: _leading(widget.items[i], colors),
-            summary: widget.items[i].hint,
-          ),
-          optionSize: widget.items.length,
-          isSelected: widget.items[i].value == widget.current,
-          index: i,
-          isFirst: i == 0,
-          isLast: i == widget.items.length - 1,
-          dropdownColors: dropdownColors,
-          onSelectedIndexChange: (_) => widget.onPick(widget.items[i].value),
+        MiuixGlassPopupItem(
+          text: widget.items[i].label,
+          summary: widget.items[i].hint,
+          icon: _leading(widget.items[i]),
+          selected: widget.items[i].value == widget.current,
+          onPressed: () => widget.onPick(widget.items[i].value),
         ),
     ];
 
@@ -267,7 +272,12 @@ class _OrbitSelectPopupBodyState<T> extends State<_OrbitSelectPopupBody<T>> {
       child: ConstrainedBox(
         // 选项多时可滚（不把弹层顶出屏幕）
         constraints: BoxConstraints(maxHeight: screen.height * 0.6),
-        child: MiuixListPopupColumn(children: rows),
+        // 上下 8 呼吸位对齐玻璃菜单的 contentPadding（条目行自身没有首末
+        // 额外内边距，不加会贴到卡面圆角上）
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: MiuixListPopupColumn(children: rows),
+        ),
       ),
     );
 
@@ -298,7 +308,7 @@ class _OrbitSelectPopupBodyState<T> extends State<_OrbitSelectPopupBody<T>> {
     );
     final settled = placement.position & size;
     // 库内 dropdown motion（`miuixGlassPopupFrame`）：面板从落位右上角
-    // 一小块（0.69 宽 × 0.2 高，圆角 4）弹到整块（圆角 16），中心同步归位；
+    // 一小块（0.69 宽 × 0.2 高，圆角 4）弹到整块（圆角 24），中心同步归位；
     // 内容按 `rect.width / 卡面宽` 等比缩放、贴左上角裁切，所以早期只「揭开」
     // 正在长出来的那块，不会把整张卡缩成一点
     final ratio = size.height / size.width;
@@ -331,65 +341,39 @@ class _OrbitSelectPopupBodyState<T> extends State<_OrbitSelectPopupBody<T>> {
           final scale = math.min(1.0, rect.width / math.max(size.width, 1));
           // 淡入只占前 35%，形变本身承担「从行尾弹开」的观感
           final opacity = (t / 0.35).clamp(0.0, 1.0);
-          final shape = BorderRadius.circular(animatedRadius);
           return Stack(
             children: [
               Positioned.fromRect(
                 rect: rect,
-                child: DecoratedBox(
-                  // 实时模糊路径没有玻璃面板自带的投影，这里补一层
-                  // （OS4 采样路径由面板自带，不叠）。投影画在玻璃**之下**：
-                  // `BackdropFilter` 只糊自身边界内的背景，卡外那圈投影不受
-                  // 影响；卡内那点内溢正好被玻璃盖住。
-                  decoration: BoxDecoration(
-                    borderRadius: shape,
-                    boxShadow: widget.backdrop == null
-                        ? AppElevation.e4(Theme.of(context).brightness)
-                        : null,
-                  ),
-                  child: DecoratedBox(
-                    // 描边必须画在玻璃**之上**（foreground）。画在下面会被
-                    // `BackdropFilter` 连同背景一起高斯糊掉，再被半透明表面色
-                    // 洗一遍——2026-11-04 截图里弹层「没有边、糊成一块脏斑」
-                    // 的根因。色值吃 `outline` 而非 `popup`（surfaceElevated）：
-                    // 浅色下两者都是白，白描边落在白卡上等于没画。
-                    position: DecorationPosition.foreground,
-                    decoration: BoxDecoration(
-                      borderRadius: shape,
-                      border: widget.backdrop == null
-                          ? Border.all(color: colors.outline, width: 0.8)
-                          : null,
-                    ),
-                    // 卡面走 [OrbitGlassSurface]，**不要**直接用
-                    // `miuixGlassSurface`：后者拿不到采样快照时不回退，库内
-                    // 直接填成实色白卡——设置页这类 push 出来的路由挂在 Overlay
-                    // 上、与 HomeShell 平级，取不到 `OrbitGlassScope`
-                    // （2026-11-04「怎么没变玻璃」的根因）。
-                    // 实时路径按 ⋮ 菜单的 puredThinGlass 档调参（sigma 14
-                    // 同档、表面白度压低、描边由外层补），别用库默认 0.72 白
-                    // ——那档在浅色页面上会糊成一块实色卡。
-                    child: OrbitGlassSurface(
-                      backdrop: widget.backdrop,
-                      borderRadius: shape,
-                      realtimeSigma: 16,
-                      realtimeSurfaceOpacity: 0.5,
-                      child: OverflowBox(
+                // 卡面与「今天」页头 ⋮ 菜单同一枚 [MiuixGlassPanel]（同材质档、
+                // 同阴影）：有采样器走 puredThinGlass 玻璃，没有快照（抽屉内
+                // 与 push 出来的设置子页都取不到 OrbitGlassScope）时库内退
+                // **实色填充**——正是 ⋮ 菜单在页面里的白卡观感。
+                // 不要换回自绘实时模糊（`OrbitGlassSurface`）：那档叠在抽屉
+                // 白底上会糊成灰白半透明，2026-11-05 模板页截图「不像菜单」
+                // 的根因。
+                child: MiuixGlassPanel(
+                  backdrop: widget.backdrop,
+                  material: _popupMaterial(isDark),
+                  shadow: MiuixGlassShadows.floating,
+                  // 描边与菜单 presenter 同口径（v.stroke ?? forTheme）
+                  stroke: MiuixGlassStrokes.forTheme(isDark),
+                  shape: MiuixGlassShape(cornerRadius: animatedRadius),
+                  child: OverflowBox(
+                    alignment: Alignment.topLeft,
+                    minWidth: size.width,
+                    maxWidth: size.width,
+                    minHeight: size.height,
+                    maxHeight: size.height,
+                    child: Opacity(
+                      opacity: opacity,
+                      child: Transform.scale(
+                        scale: scale,
                         alignment: Alignment.topLeft,
-                        minWidth: size.width,
-                        maxWidth: size.width,
-                        minHeight: size.height,
-                        maxHeight: size.height,
-                        child: Opacity(
-                          opacity: opacity,
-                          child: Transform.scale(
-                            scale: scale,
-                            alignment: Alignment.topLeft,
-                            child: SizedBox(
-                              width: size.width,
-                              height: size.height,
-                              child: content,
-                            ),
-                          ),
+                        child: SizedBox(
+                          width: size.width,
+                          height: size.height,
+                          child: content,
                         ),
                       ),
                     ),
@@ -405,24 +389,24 @@ class _OrbitSelectPopupBodyState<T> extends State<_OrbitSelectPopupBody<T>> {
 
   /// 行首图标位：语义图标优先，其次 12px 色点（与抽屉版信息位一致）
   ///
-  /// 库内图标位是 26×26 约束盒，直接传 12px 色点会被拉伸成 26px，
+  /// 库内图标位是 24×24 盒，直接传 12px 色点会被拉伸成整格，
   /// 故统一用居中盒承载，保住色点/图标的原始尺寸。
-  Widget? _leading(SelectItem<T> item, AppColorSet colors) {
+  Widget? _leading(SelectItem<T> item) {
     if (item.icon != null) {
       return SizedBox.square(
-        dimension: 26,
+        dimension: 24,
         child: Center(
           child: Icon(
             item.icon,
             size: AppDimens.iconSizeMd,
-            color: item.iconColor ?? colors.iconText,
+            color: item.iconColor,
           ),
         ),
       );
     }
     if (item.colorDot != null) {
       return SizedBox.square(
-        dimension: 26,
+        dimension: 24,
         child: Center(
           child: Container(
             width: AppDimens.colorDotSize,

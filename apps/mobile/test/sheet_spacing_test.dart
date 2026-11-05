@@ -11,6 +11,7 @@ import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/settings/label_manager_page.dart';
 import 'package:orbit/modules/settings/template_manager_page.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_color_swatches.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_dropdown_preference.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_floating_sheet_card.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_password_sheet.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_sheet_scaffold.dart';
@@ -36,18 +37,41 @@ bool _isSpacingScale(double h) =>
     h == AppDimens.space24;
 
 /// 页面显式写出的字段间距。按钮行的横向 SizedBox 的 height 为 null、miuix
-/// 输入框内部的 0/22 留白不属于页面节奏，一并排除。
-List<double> _sheetGaps(WidgetTester tester) => tester
-    .widgetList<SizedBox>(
-      find.descendant(
+/// 输入框内部的 0/22 留白不属于页面节奏，一并排除；下拉偏好原语
+/// （`OrbitDropdownPreference`）内部的呼吸位也由原语自持，不算页面节奏。
+List<double> _sheetGaps(WidgetTester tester) {
+  final gaps = <double>[];
+  for (final element in find
+      .descendant(
         of: find.byType(BottomSheet),
         matching: find.byType(SizedBox),
-      ),
-    )
-    .map((box) => box.height)
-    .whereType<double>()
-    .where(_isSpacingScale)
-    .toList();
+      )
+      .evaluate()) {
+    final widget = element.widget;
+    if (widget is! SizedBox) continue;
+    final height = widget.height;
+    if (height == null || !_isSpacingScale(height)) continue;
+    if (_insideDropdownPreference(element)) continue;
+    gaps.add(height);
+  }
+  return gaps;
+}
+
+/// 元素是否落在 [OrbitDropdownPreference] 子树内（原语自持的箭头/呼吸位盒）
+///
+/// 不用 `findAncestorWidgetOfExactType`：它按 `runtimeType` 精确比对，
+/// 泛型实参不同（`<int?>` vs `<Object?>`）匹配不上；这里用协变 `is` 判断。
+bool _insideDropdownPreference(Element element) {
+  var inside = false;
+  element.visitAncestorElements((ancestor) {
+    if (ancestor.widget is OrbitDropdownPreference<Object?>) {
+      inside = true;
+      return false;
+    }
+    return true;
+  });
+  return inside;
+}
 
 void _expectUnifiedGaps(WidgetTester tester) {
   final gaps = _sheetGaps(tester);

@@ -55,6 +55,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimens.dart';
 import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_shapes.dart';
+import 'package:flutter_miuix/miuix.dart';
 import 'orbit_glass_surface.dart';
 import 'orbit_select_popup.dart';
 import 'orbit_sheet_scaffold.dart';
@@ -374,7 +375,6 @@ class _ActionsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.ofContext(context);
     // 无尾栏（点选即关）；选项行数量有限，内容区按需滚动
     return OrbitSheetScaffold(
       title: title,
@@ -384,38 +384,14 @@ class _ActionsSheet extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // 行口径与「今天」页头 ⋮ 菜单同源（MiuixGlassPopupItem：44 行高、
+          // 24 图标位、破坏性红走 contentColor）；卡面仍按底部抽屉规则
           for (final action in actions)
-            InkWell(
-              onTap: () => onPick(action),
-              child: SizedBox(
-                height: AppDimens.touchTarget,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppDimens.space16,
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        action.icon,
-                        size: AppDimens.iconSizeMd,
-                        color: action.color ?? colors.iconText,
-                      ),
-                      const SizedBox(width: AppDimens.space12),
-                      Expanded(
-                        child: Text(
-                          action.label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 15,
-                            color: action.color ?? colors.bodyText,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+            MiuixGlassPopupItem(
+              text: action.label,
+              icon: Icon(action.icon, color: action.color),
+              contentColor: action.color,
+              onPressed: () => onPick(action),
             ),
           const SizedBox(height: AppDimens.space8),
         ],

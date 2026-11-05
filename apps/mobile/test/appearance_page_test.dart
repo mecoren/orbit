@@ -1,5 +1,5 @@
-// 外观页回归（2026-11-04 行组件改为库内 MiuixWindowDropdownPreference、
-// 页面结构对齐 flutter_miuix「菜单选择 Menus」示例后）：
+// 外观页回归（2026-11-05 行组件改为 OrbitDropdownPreference、弹层与「今天」
+// 页头 ⋮ 菜单同一套玻璃菜单口径后）：
 // 1) 选中判据必须用原始档位键（system/light/dark 等）换算下标，不能用中文
 //    文案匹配（Appearance.themeValue 等返回档位键，与 label 永不相等）；
 // 2) 四行尾随位是「当前档 + 上下双箭头」：库内偏好行从选中项 text 回显，

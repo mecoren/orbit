@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/core/theme/app_colors.dart';
 import 'package:orbit/core/theme/icon_map.dart';
+import 'package:orbit/core/theme/orbit_accents.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_dropdown_panel.dart';
 
 import 'support/orbit_test_app.dart';
@@ -121,9 +122,10 @@ void main() {
     // 其余顶层条目置灰（「此刻只在挑子项」）
     expect(labelColor(tester, '筛选'), colors.deactivatedText);
     expect(labelColor(tester, '编辑项目'), colors.deactivatedText);
-    // 展开项本身与其子项保持正常层级
-    expect(labelColor(tester, '视图'), colors.bodyText);
-    expect(labelColor(tester, '列表视图'), colors.bodyText);
+    // 展开项本身与其子项保持正常层级（不吃置灰色）；选中子项与 ⋮ 菜单
+    // 同款转强调色并在行尾打勾
+    expect(labelColor(tester, '视图'), isNot(colors.deactivatedText));
+    expect(labelColor(tester, '列表视图'), OrbitAccents.themeAccent);
   });
 
   testWidgets('点子项：执行回调并关闭面板', (tester) async {

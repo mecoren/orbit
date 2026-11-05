@@ -9,9 +9,9 @@ import '../../modules/todo/logic/task_logic.dart' show labelPaletteHexes;
 import '../../services/appearance.dart';
 import '../../shared/utils/hex_color.dart';
 import '../../shared/widgets/shadcn/orbit_color_picker.dart';
+import '../../shared/widgets/shadcn/orbit_dropdown_preference.dart';
 import '../../shared/widgets/shadcn/orbit_glass_surface.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
-import '../../shared/widgets/shadcn/orbit_select_popup.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 
 /// 外观设置页 /settings/appearance
@@ -21,15 +21,13 @@ import '../../shared/widgets/shadcn/orbit_toast.dart';
 /// - 分组标题走库内 [MiuixSmallTitle]（卡外小标题，28×8 内边距）；
 /// - 卡体 = `Padding(h:12)` + [MiuixCard]（insideMargin 归零，行自带内边距），
 ///   行间 [MiuixHorizontalDivider] 左缩进 56（示例 [IndentDivider] 同款）；
-/// - 行走库内 [MiuixWindowDropdownPreference]，insideMargin 16×14 与示例
-///   `_itemMargin` 同值，标题 + 摘要 → 尾随当前值 + 上下双箭头，点行就地
-///   展开库内下拉弹层，当前档转主题色并打勾。
+/// - 行走 [OrbitDropdownPreference]，insideMargin 16×14 与示例 `_itemMargin`
+///   同值，标题 + 摘要 → 尾随当前值 + 上下双箭头，点行就地展开弹层。
 ///
-/// **为什么是 Window 变体而非 Overlay 变体**：Overlay 变体的弹层注册到
-/// `MiuixPopupScope`/`MiuixPopupHost`，本壳（与示例 app 不同）没有装配该
-/// 宿主，弹层会落进进程级 fallback 注册表而无人渲染；Window 变体直接挂根
-/// Overlay（`OverlayEntry`），自带点外部/返回键收起，观感与 Overlay 变体
-/// 逐像素一致（示例里两者本就同款，仅挂载层不同）。
+/// **弹层口径（2026-11-05 起）**：不再直用库内 `MiuixWindowDropdownPreference`
+/// （白卡 + `MiuixDropdownImpl` 行），统一走 [OrbitDropdownPreference] 的
+/// 玻璃菜单承载——与任务列表页头 ⋮ 菜单同一套 24 圆角玻璃卡 +
+/// `MiuixGlassPopupItem` 行（44 行高、24 图标位、选中强调色打勾）。
 ///
 /// 主题三态（跟随系统/浅色/深色）+ 字号三档（小/标准/大）+ 字重三档
 /// （常规/适中/加粗）+ 强调色（10 色预设 + 自定义取色）全走 LocalPrefs
@@ -76,12 +74,6 @@ class _AppearancePageState extends State<AppearancePage> {
     super.dispose();
   }
 
-  /// 档位键 → items 下标；脏数据（不在档位表里）回 0
-  static int _indexOf(List<(String, String)> options, String value) {
-    final index = options.indexWhere((o) => o.$1 == value);
-    return index < 0 ? 0 : index;
-  }
-
   Future<void> _pickTheme(String value) async {
     await Appearance.setTheme(value);
     _afterWrite('主题已切换');
@@ -118,31 +110,6 @@ class _AppearancePageState extends State<AppearancePage> {
     if (!mounted) return;
     setState(() {});
     WaitToast.success(message);
-  }
-
-  /// 强调色弹层项的前置图标位：语义图标优先，其次 12px 色点
-  /// （库内图标格最小 26 见方并自带 12 尾距，这里只给内容）
-  Widget? _accentLeading(SelectItem<String> item) {
-    if (item.icon != null) {
-      return Icon(item.icon, size: 20, color: item.iconColor);
-    }
-    if (item.colorDot != null) {
-      return SizedBox(
-        width: 24,
-        height: 24,
-        child: Center(
-          child: Container(
-            width: AppDimens.colorDotSize,
-            height: AppDimens.colorDotSize,
-            decoration: BoxDecoration(
-              color: item.colorDot,
-              shape: BoxShape.circle,
-            ),
-          ),
-        ),
-      );
-    }
-    return null;
   }
 
   @override
@@ -192,67 +159,50 @@ class _AppearancePageState extends State<AppearancePage> {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        MiuixWindowDropdownPreference(
+                        OrbitDropdownPreference<String>(
                           title: '主题模式',
                           summary: '亮暗随系统或手动指定',
                           items: [
-                            for (final o in _themeOptions) o.$2,
+                            for (final o in _themeOptions)
+                              SelectItem(value: o.$1, label: o.$2),
                           ],
-                          selectedIndex: _indexOf(
-                            _themeOptions,
-                            Appearance.themeValue(),
-                          ),
+                          current: Appearance.themeValue(),
+                          onSelect: _pickTheme,
                           insideMargin: _itemMargin,
-                          onSelectedIndexChange: (i) =>
-                              _pickTheme(_themeOptions[i].$1),
                         ),
                         const _IndentDivider(),
-                        MiuixWindowDropdownPreference(
+                        OrbitDropdownPreference<String>(
                           title: '字号',
                           summary: '全文文本缩放档位',
                           items: [
-                            for (final o in _fontSizeOptions) o.$2,
+                            for (final o in _fontSizeOptions)
+                              SelectItem(value: o.$1, label: o.$2),
                           ],
-                          selectedIndex: _indexOf(
-                            _fontSizeOptions,
-                            Appearance.fontSizeValue(),
-                          ),
+                          current: Appearance.fontSizeValue(),
+                          onSelect: _pickFontSize,
                           insideMargin: _itemMargin,
-                          onSelectedIndexChange: (i) =>
-                              _pickFontSize(_fontSizeOptions[i].$1),
                         ),
                         const _IndentDivider(),
-                        MiuixWindowDropdownPreference(
+                        OrbitDropdownPreference<String>(
                           title: '字重',
                           summary: '标题与正文的笔画粗细',
                           items: [
-                            for (final o in _fontWeightOptions) o.$2,
+                            for (final o in _fontWeightOptions)
+                              SelectItem(value: o.$1, label: o.$2),
                           ],
-                          selectedIndex: _indexOf(
-                            _fontWeightOptions,
-                            Appearance.fontWeightValue(),
-                          ),
+                          current: Appearance.fontWeightValue(),
+                          onSelect: _pickFontWeight,
                           insideMargin: _itemMargin,
-                          onSelectedIndexChange: (i) =>
-                              _pickFontWeight(_fontWeightOptions[i].$1),
                         ),
                         const _IndentDivider(),
                         // 桌面早已有 10 色板 + 自定义，移动此前只能用默认蓝；
-                        // 逐项带色点/图标走 entry 构造（选中态与点击逐项挂）
-                        MiuixWindowDropdownPreference.entry(
+                        // 逐项带色点/图标（行首信息位由原语按 SelectItem 渲染）
+                        OrbitDropdownPreference<String>(
                           title: '强调色',
                           summary: 'Fab、载入指示与链接',
-                          entry: MiuixDropdownEntry(
-                            items: [
-                              for (final item in accentItems)
-                                MiuixDropdownItem(
-                                  text: item.label,
-                                  icon: _accentLeading(item),
-                                  selected: item.value == accentHex,
-                                  onClick: () => _pickAccent(item.value),
-                                ),
-                            ],
-                          ),
+                          items: accentItems,
+                          current: accentHex,
+                          onSelect: _pickAccent,
                           insideMargin: _itemMargin,
                         ),
                       ],

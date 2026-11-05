@@ -80,21 +80,24 @@ Finder selectPopup() => find.byKey(orbitSelectPopupKey);
 /// `MiuixGlassDropdownPopup` 的内容节点）
 Finder dropdownPopup() => find.byKey(orbitDropdownPopupKey);
 
-/// 库内下拉偏好行（`MiuixWindowDropdownPreference`，2026-11-04 外观页起用）
-/// 展开后的弹层选项行 finder
+/// 下拉偏好行（[OrbitDropdownPreference]）展开后的弹层选项行 finder
 ///
-/// Window 变体的弹层直接挂根 Overlay，页面内无其它同型行，全局找
-/// `MiuixDropdownImpl` 即可（弹层收起后条目随 OverlayEntry 移除）。
-Finder dropdownPreferencePopupRows() => find.byType(MiuixDropdownImpl);
+/// 2026-11-05 起弹层与「今天」页头 ⋮ 菜单同一套承载：条目是
+/// `MiuixGlassPopupItem`，挂在 [orbitDropdownPopupKey] 内容节点里（弹层
+/// 收起后节点随 OverlayPortal 移除）。
+Finder dropdownPreferencePopupRows() => find.descendant(
+  of: dropdownPopup(),
+  matching: find.byType(MiuixGlassPopupItem),
+);
 
 /// 下拉偏好弹层里打勾的条目文案
 ///
-/// 行是库内 `MiuixDropdownImpl`，选中态在 `isSelected` 上（勾本身是
-/// CustomPaint，直接按 icon 数断言拿不到），故读行数据。
+/// 行是 `MiuixGlassPopupItem`，选中态在 `selected` 上（勾本身是图标，
+/// 直接按 icon 数断言拿不到），故读行数据。
 Iterable<String> selectedDropdownPreferenceLabels(WidgetTester tester) => tester
-    .widgetList<MiuixDropdownImpl>(dropdownPreferencePopupRows())
-    .where((row) => row.isSelected)
-    .map((row) => row.item.text);
+    .widgetList<MiuixGlassPopupItem>(dropdownPreferencePopupRows())
+    .where((row) => row.selected)
+    .map((row) => row.text);
 
 /// 下拉面板里打勾的条目文案
 ///
@@ -112,18 +115,18 @@ Iterable<String> selectedDropdownLabels(WidgetTester tester) => tester
 
 /// 单选浮层里打勾的条目文案
 ///
-/// 行是 miuix 的 `MiuixDropdownImpl`，选中态在 `isSelected` 上（勾本身是
-/// CustomPaint，直接按 icon 数断言拿不到），故读行数据。限定在浮层内找，
-/// 避免页面其它下拉/菜单的同型行混入。
-Iterable<String> selectedPopupLabels(WidgetTester tester) {
-  final rows = tester.widgetList<MiuixDropdownImpl>(
-    find.descendant(
-      of: selectPopup(),
-      matching: find.byType(MiuixDropdownImpl),
-    ),
-  );
-  return rows.where((row) => row.isSelected).map((row) => row.item.text);
-}
+/// 行是 miuix 的 `MiuixGlassPopupItem`（与 ⋮ 菜单同款），选中态在
+/// `selected` 上（勾本身是图标，直接按 icon 数断言拿不到），故读行数据。
+/// 限定在浮层内找，避免页面其它下拉/菜单的同型行混入。
+Iterable<String> selectedPopupLabels(WidgetTester tester) => tester
+    .widgetList<MiuixGlassPopupItem>(
+      find.descendant(
+        of: selectPopup(),
+        matching: find.byType(MiuixGlassPopupItem),
+      ),
+    )
+    .where((row) => row.selected)
+    .map((row) => row.text);
 
 /// 收尾：推掉 toast 的停留计时器与残留动画，并清空全局队列。
 ///

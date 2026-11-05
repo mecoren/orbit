@@ -40,7 +40,6 @@ import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/utils/hex_color.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart';
-import '../../shared/widgets/shadcn/orbit_checkbox.dart';
 import '../../shared/widgets/shadcn/orbit_date_picker.dart';
 import '../../shared/widgets/shadcn/orbit_dropdown_panel.dart';
 import '../../shared/widgets/shadcn/orbit_glass_surface.dart';
@@ -520,13 +519,11 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
     final picked = Set<int>.of(_labels.map((l) => l.id));
     await _openAnchoredCard(
       anchor: anchor,
-      // 标签行（复选框 + 色点 + 标题）：240 宽放不下长标题，加宽到 300
+      // 标签行（色点 + 标题 + 选中打勾）：240 宽放不下长标题，加宽到 300
       // （壳内按屏宽 - 32 钳制，不贴边）
       width: 300,
       child: StatefulBuilder(
         builder: (cardContext, setCardState) {
-          final colors = AppColors.ofContext(cardContext);
-
           /// 点行即算选中：卡片内翻勾 + 面板实时回填（卡片不关，可连选）
           void toggle(TodoLabel label) {
             setCardState(() {
@@ -544,71 +541,33 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
             }
           }
 
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // 无标题头：与其他快捷卡片同形，只出条目列
-              Flexible(
-                // shrinkWrap + Flexible：条目少时卡片贴合内容（不留大片空白），
-                // 条目多时在卡片限高内滚动
-                child: ListView.builder(
-                  key: const ValueKey('quick-add-label-card-list'),
-                  shrinkWrap: true,
-                  padding: const EdgeInsets.symmetric(
-                    vertical: AppDimens.space8,
-                  ),
-                  itemCount: all.length,
-                  itemBuilder: (context, index) {
-                    final label = all[index];
-                    final checked = picked.contains(label.id);
-                    return InkWell(
-                      onTap: () => toggle(label),
-                      child: SizedBox(
-                        height: AppDimens.touchTarget,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppDimens.space16,
-                          ),
-                          child: Row(
-                            children: [
-                              OrbitCheckbox(
-                                checked: checked,
-                                onToggle: () => toggle(label),
-                                size: AppDimens.subtaskCheckboxSize,
-                              ),
-                              const SizedBox(width: AppDimens.space12),
-                              Container(
-                                width: AppDimens.colorDotSize,
-                                height: AppDimens.colorDotSize,
-                                decoration: BoxDecoration(
-                                  color: hexToColor(
-                                    label.hexColor,
-                                    fallback: OrbitAccents.todoAccent,
-                                  ),
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: AppDimens.space8),
-                              Expanded(
-                                child: Text(
-                                  label.title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    color: colors.bodyText,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
+          // 行口径与「今天」页头 ⋮ 菜单同源（OrbitDropdownPanelView →
+          // MiuixGlassPopupItem）：色点在 24 图标位、选中右端打勾；
+          // 多选要连选，面板常驻不关（closeOnTap: false）
+          return OrbitDropdownPanelView(
+            key: const ValueKey('quick-add-label-card-list'),
+            closeOnTap: false,
+            onClose: _closeCard,
+            groups: [
+              [
+                for (final label in all)
+                  OrbitPanelItem(
+                    leading: Container(
+                      width: AppDimens.colorDotSize,
+                      height: AppDimens.colorDotSize,
+                      decoration: BoxDecoration(
+                        color: hexToColor(
+                          label.hexColor,
+                          fallback: OrbitAccents.todoAccent,
                         ),
+                        shape: BoxShape.circle,
                       ),
-                    );
-                  },
-                ),
-              ),
+                    ),
+                    label: label.title,
+                    checked: picked.contains(label.id),
+                    onTap: () => toggle(label),
+                  ),
+              ],
             ],
           );
         },

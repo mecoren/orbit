@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_miuix/miuix.dart';
 
 import '../../../core/theme/app_colors.dart';
-import 'orbit_dropdown_panel.dart' show OrbitPanelItem;
+import 'orbit_dropdown_panel.dart'
+    show OrbitPanelItem, orbitPanelMaxWidth, orbitPanelMinWidth;
 import 'orbit_icon_button.dart';
 
 /// OS4 玻璃「按钮 → 菜单」形变弹层（页头右上角 ⋮ 的载体；2026-11-02）
@@ -189,6 +190,11 @@ class _OrbitGlassMenuState extends State<OrbitGlassMenu> {
           simplified: true,
           stacked: secondary != null,
           backdrop: widget.backdrop,
+          // 宽度与全站弹出菜单同档（180–240），库内默认 200–288 偏宽
+          sizing: const MiuixGlassPopupSizing(
+            minWidth: orbitPanelMinWidth,
+            maxWidth: orbitPanelMaxWidth,
+          ),
           visuals: visuals,
           onDismissRequest: _close,
           child: Column(
@@ -209,6 +215,10 @@ class _OrbitGlassMenuState extends State<OrbitGlassMenu> {
             anchorBounds: _secondaryBounds,
             materialAnchor: _anchor,
             backdrop: widget.backdrop,
+            sizing: const MiuixGlassPopupSizing(
+              minWidth: orbitPanelMinWidth,
+              maxWidth: orbitPanelMaxWidth,
+            ),
             visuals: visuals,
             onDismissRequest: () => setState(() => _secondary = null),
             child: secondary == null

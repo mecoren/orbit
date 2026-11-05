@@ -9,7 +9,6 @@
 // 3. 首次设置走共享密码抽屉（`showPasswordSheet`）：点「设置密码」入口拉起
 //    抽屉，字段是抽屉内 OrbitTextField；页内仅剩解锁态一个「同步密码」输入框。
 import 'package:flutter/material.dart';
-import 'package:flutter_miuix/miuix.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -18,6 +17,7 @@ import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/settings/sync_settings_page.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_button.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_card.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_dropdown_preference.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_switch.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_text_field.dart';
 import 'support/orbit_test_app.dart';
@@ -133,7 +133,7 @@ void main() {
     await _flush(tester);
 
     Finder row(String title) => find.byWidgetPredicate(
-          (w) => w is MiuixWindowDropdownPreference && w.title == title,
+          (w) => w is OrbitDropdownPreference<Object?> && w.title == title,
         );
     final cardWidth = tester.getRect(find.byType(OrbitCard).first).width;
     expect(tester.getRect(row('引擎')).width,
@@ -148,7 +148,7 @@ void main() {
     expect(
       find.byWidgetPredicate(
         (w) =>
-            w is MiuixWindowDropdownPreference &&
+            w is OrbitDropdownPreference<Object?> &&
             w.title == '定时同步' &&
             w.startAction != null,
       ),

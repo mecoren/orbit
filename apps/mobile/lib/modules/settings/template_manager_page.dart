@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../core/theme/app_shapes.dart';
-import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
@@ -15,8 +14,8 @@ import '../../shared/widgets/controller_disposer.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart'
     show bottomSheetMotion, bottomSheetTopShape;
+import '../../shared/widgets/shadcn/orbit_dropdown_preference.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
-import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../shared/widgets/shadcn/orbit_button.dart';
@@ -172,39 +171,38 @@ class _TemplateManagerPageState extends ConsumerState<TemplateManagerPage> {
                     helperText: '套用时预填；留空则不预填',
                   ),
                   const SizedBox(height: AppDimens.space12),
-                  _selectRow(
-                    label: '优先级',
-                    value: priority == null ? '不预填' : priorityLabel(priority!),
-                    onTap: () => showSelectBottomSheet<int>(
-                      sheetContext,
-                      title: '优先级',
-                      current: priority,
-                      items: [
-                        for (var p = 0; p <= 5; p++)
-                          SelectItem(value: p, label: priorityLabel(p)),
-                      ],
-                      onSelect: (v) => setSheetState(() => priority = v),
+                  // 档位行与设置页同一套下拉偏好（行内当前值 + 上下双箭头 +
+                  // 就地展开玻璃菜单）：右箭头（跳转语义）换成上下箭头，
+                  // 点行弹层而不是整行「跳去另一页」的观感
+                  OrbitDropdownPreference<int?>(
+                    title: '优先级',
+                    items: [
+                      const SelectItem<int?>(value: null, label: '不预填'),
+                      for (var p = 0; p <= 5; p++)
+                        SelectItem<int?>(value: p, label: priorityLabel(p)),
+                    ],
+                    current: priority,
+                    onSelect: (v) => setSheetState(() => priority = v),
+                    insideMargin: const EdgeInsets.symmetric(
+                      vertical: AppDimens.space8,
                     ),
                   ),
                   const SizedBox(height: AppDimens.space12),
-                  _selectRow(
-                    label: '截止偏移',
-                    value: offsetDays == null ? '不预填' : '$offsetDays 天后',
-                    onTap: () async {
-                      await showSelectBottomSheet<int>(
-                        sheetContext,
-                        title: '截止偏移（套用当天起算）',
-                        current: offsetDays,
-                        items: [
-                          for (final d in const [0, 1, 3, 7, 14, 30])
-                            SelectItem(
-                              value: d,
-                              label: d == 0 ? '今天' : '$d 天后',
-                            ),
-                        ],
-                        onSelect: (v) => setSheetState(() => offsetDays = v),
-                      );
-                    },
+                  OrbitDropdownPreference<int?>(
+                    title: '截止偏移',
+                    items: [
+                      const SelectItem<int?>(value: null, label: '不预填'),
+                      for (final d in const [0, 1, 3, 7, 14, 30])
+                        SelectItem<int?>(
+                          value: d,
+                          label: d == 0 ? '今天' : '$d 天后',
+                        ),
+                    ],
+                    current: offsetDays,
+                    onSelect: (v) => setSheetState(() => offsetDays = v),
+                    insideMargin: const EdgeInsets.symmetric(
+                      vertical: AppDimens.space8,
+                    ),
                   ),
                   const SizedBox(height: AppDimens.space12),
                   OrbitTextField(
@@ -277,35 +275,6 @@ class _TemplateManagerPageState extends ConsumerState<TemplateManagerPage> {
     };
   }
 
-  Widget _selectRow({
-    required String label,
-    required String value,
-    required VoidCallback onTap,
-  }) {
-    final colors = AppColors.ofContext(context);
-    return InkWell(
-      borderRadius: AppShapes.medium,
-      onTap: onTap,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: AppDimens.touchTarget),
-        child: Row(
-          children: [
-            Text(label, style: TextStyle(fontSize: 14, color: colors.bodyText)),
-            const Spacer(),
-            Text(
-              value,
-              style: TextStyle(fontSize: 14, color: OrbitAccents.themeAccent),
-            ),
-            Icon(
-              OrbitIcons.chevronRight,
-              size: AppDimens.iconSizeMd,
-              color: colors.secondaryText,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {

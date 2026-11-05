@@ -1,7 +1,7 @@
 // 共享弹层族（orbit_sheets.dart）承载口径：
 // - 确认 / 更多操作：Material `showModalBottomSheet` + `bottomSheetTopShape`；
-// - 单选：2026-11-03 起按 flutter_miuix 的 DropdownPreference(Overlay) 口径
-//   （MiuixDropdownImpl 行 + 贴触发行下方弹出），不再走底部抽屉。
+// - 单选：2026-11-05 起与「今天」页头 ⋮ 菜单同一套口径（MiuixGlassPopupItem
+//   行 + 圆角 24 玻璃卡 + 贴触发行下方弹出），不再走底部抽屉。
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_miuix/miuix.dart';
@@ -72,10 +72,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // 行渲染走 flutter_miuix 下拉弹层（MiuixDropdownImpl），底部抽屉已退场
+    // 行渲染走玻璃菜单条目（MiuixGlassPopupItem），底部抽屉已退场
     expect(selectPopup(), findsOneWidget);
     expect(find.byType(MiuixListPopupColumn), findsOneWidget);
-    expect(find.byType(MiuixDropdownImpl), findsNWidgets(2));
+    expect(find.byType(MiuixGlassPopupItem), findsNWidgets(2));
     expect(find.byType(BottomSheet), findsNothing, reason: '不再从底部升起抽屉');
     expect(find.text('视图模式'), findsNothing, reason: '下拉面板没有标题行');
 
@@ -92,7 +92,7 @@ void main() {
     );
   });
 
-  testWidgets('单选浮层：卡面是玻璃（无采样器走实时模糊，不是实色白卡）',
+  testWidgets('单选浮层：卡面与「今天」菜单同一枚玻璃面板（无采样器退实色白卡）',
       (tester) async {
     final ctx = await pumpHost(tester);
     showSelectBottomSheet<String>(
@@ -104,15 +104,23 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // 测试裸页没有壳层 OrbitGlassScope：卡面必须退到实时 BackdropFilter
-    // 模糊路径（2026-11-04「怎么没变玻璃」——直接用 miuixGlassSurface 时
-    // 无快照会被库内填成实色白卡）
+    // 2026-11-05 起卡面直接用 ⋮ 菜单同款 `MiuixGlassPanel`：测试裸页没有
+    // 壳层 OrbitGlassScope → 库内无快照分支填实色（白卡），不再自绘实时
+    // 模糊（那档会把白卡糊成灰白半透明，与菜单观感不一致）
+    expect(
+      find.ancestor(
+        of: find.byKey(orbitSelectPopupKey),
+        matching: find.byType(MiuixGlassPanel),
+      ),
+      findsOneWidget,
+    );
     expect(
       find.ancestor(
         of: find.byKey(orbitSelectPopupKey),
         matching: find.byType(BackdropFilter),
       ),
-      findsOneWidget,
+      findsNothing,
+      reason: '无采样器走库内实色填充，不再叠实时模糊',
     );
   });
 

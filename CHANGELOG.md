@@ -17,6 +17,20 @@
 
 ## [Unreleased]
 
+### 优化：移动端全部弹出选择/菜单统一「今天」页头玻璃菜单样式（2026-11-05）
+
+任务列表页头 ⋮ 菜单（`OrbitGlassMenu`）的玻璃菜单口径下沉为全项目弹出选择的唯一口径，四类组件同源：
+
+- **设置项下拉**（云同步「引擎 / 定时同步」、设置「保留时间」、外观页四行）：`OrbitDropdownPreference` 不再转发库内 `MiuixWindowDropdownPreference`（白卡小圆角 + `MiuixDropdownImpl` 行），改为自持 `MiuixGlassDropdownPopup` + `MiuixGlassPopupItem`（24 圆角玻璃卡、44 最小行高、24 图标位、选中转强调色并打勾）；行本身仍是 `MiuixBasicComponent`（标题/摘要/行首开关/尾随当前值 + 双箭头、按压灰底横贯整卡）。`OrbitDropdownTile` 收敛为它的兼容别名，`orbitDropdownPopupKey` 与既有 import 路径不变。
+- **外观页**四处直用的库内 window 变体改为 `OrbitDropdownPreference`（主题 / 字号 / 字重 / 强调色）；强调色的色点与语义图标位由原语按 `SelectItem` 渲染，页面侧删掉 `_accentLeading` / `_indexOf`。
+- **通用单选浮层** `showOrbitSelectPopup`（约 15 页 / 49 处调用点零改动）：卡面圆角 16 → 24，条目行从 `MiuixDropdownImpl` 换成 `MiuixGlassPopupItem`，卡面上下补 8 呼吸位对齐玻璃菜单的 `contentPadding`。**卡面改为与确认弹层 / ⋮ 菜单同一枚 `MiuixGlassPanel`**（同 `puredThinGlass` + blur 32 材质档、同 `floating` 阴影）：有采样器走玻璃，没有快照（`showModalBottomSheet` 抽屉内、push 出来的设置子页都取不到 `OrbitGlassScope`）时库内退实色填充——正是 ⋮ 菜单的白卡观感；不再自绘实时模糊（那档叠在抽屉白底上会糊成灰白半透明，2026-11-05 模板页「优先级 / 截止偏移」截图反馈的根因）。
+- **底栏「更多」面板** `OrbitDropdownPanelView`：条目行换 `MiuixGlassPopupItem`（行高 48→44、图标 22→24、勾 / 箭头取库内 24 / 16），组间分隔线对齐 0.5 厚 + 左右 20 缩进，上下内边距 6→8；就地展开与「其余条目置灰」语义不变。新增 `closeOnTap`（多选卡片常驻不关卡）。
+- **更多操作菜单** `showMoreActionsSheet`：条目行同样换 `MiuixGlassPopupItem`（44 行高 / 24 图标位 / 破坏性红走 `contentColor`），卡面仍按底部弹层规则（`OrbitGlassSheet` + 28 圆角）。
+- **快速添加的标签多选卡**：手搓的 `ListView` + `OrbitCheckbox` 行换成 `OrbitDropdownPanelView`（色点在 24 图标位、选中右端打勾、`closeOnTap: false` 连选），与优先级 / 项目 / 更多三张快捷卡同一套行渲染。
+- **任务模板表单的「优先级 / 截止偏移」两行**：原来手搓「蓝色当前值 + 右箭头（跳转语义）」再调 `showSelectBottomSheet`，改为 `OrbitDropdownPreference<int?>`——行内当前值 + 上下双箭头、点行就地展开玻璃菜单，「不预填」作为显式选项常驻在列表首项（可回选），与外观页 / 云同步的设置项下拉完全同款。
+- **弹出菜单宽度统一收窄**：库内 `MiuixGlassPopupSizing` 默认 200–288 在窄屏上会盖掉大半行文字（外观页「主题模式」菜单一行占掉 2/3 屏宽）。全站统一为 `orbitPanelMinWidth`(180) – `orbitPanelMaxWidth`(240)：`OrbitGlassMenu` 一级/二级、`OrbitDropdownPreference` 都显式传 `sizing`，`showOrbitSelectPopup` 的离屏测量约束也卡到 240（`MiuixListPopupColumn` 内宽随父约束收到 200–240），底栏「更多」/ 快加的 `OrbitFloatCard` 本就用同一上限。
+- **验证**：`flutter analyze` 0 issue；`flutter test` **1148 绿**（测试助手 `dropdownPreferencePopupRows` / `selectedPopupLabels` 改按 `MiuixGlassPopupItem.selected` 判勾，面板展开项断言改为「不吃置灰色 + 选中转强调色」，单选框卡面断言改为「有 `MiuixGlassPanel`、无 `BackdropFilter`」）。
+
 ### 优化：移动端首页页头切换 HyperOS 4 折叠栏形态（2026-11-04）
 
 清单首屏（「循迹」）页头按 flutter_miuix `MiuixGlassTopAppBar` 的 HyperOS 4 观感重排：标题与日期副标（`M月D日 周X`）两行**居中**，左端云同步图标与右端设置钮各套 **44dp 圆形玻璃底**（`MiuixGlassPanel` + `puredThinGlass` + small 描边，与 OS4 顶栏按钮同档）。实现为 `OrbitPageHeader` 新增的逐页开关 `os4` / `subtitle`（其余 27 页保留左对齐单行标题——它们的标题槽是月份导航、计数徽标等自定义内容，居中化会改版式）；行高 / 状态栏避让 / 进度线三条几何口径不变，各页内容区让位无需调整。**验证**：`flutter analyze` 0 issue；`flutter test` 1135 绿（页头用例补 OS4 形态几何断言：标题/副标落屏幕中轴、leading/actions 各一枚玻璃圆片、占高不变）。
