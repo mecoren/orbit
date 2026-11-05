@@ -193,6 +193,10 @@ class _HomeShellState extends ConsumerState<HomeShell> {
             floatingActionButton: Builder(
               builder: (fabContext) => OrbitFab(
                 accentColor: OrbitAccents.themeAccent,
+                // 与悬浮底栏同源的 OS4 玻璃钮（2026-11-05）：FAB 是 Scaffold
+                // 的兄弟层、在捕获树之外，可直接消费壳层同一 backdrop
+                glass: true,
+                backdrop: OrbitGlassScope.maybeOf(fabContext),
                 // 新建落点跟随当前列表（无页面语境时面板内自选）
                 onPressed: () {
                   final target = QuickAddContext.current;
