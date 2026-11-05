@@ -36,6 +36,14 @@ void main() {
     // 承载与全项目底部弹层同形：浮起圆角卡片（不是 Material 钟面对话框）
     expect(find.byType(OrbitFloatingSheetCard), findsOneWidget);
 
+    // 整屉按内容收缩（handle 12 + 标题 48 + 滚轮 220 + 尾栏 86 ≈ 366）。
+    // 回归点：`:` 分隔若用 `Center` 包会撑满 Row 的交叉轴上限，导致整屉被抬到
+    // maxHeightFactor（600 视口 → 526），滚轮被居中、上下各留一大片空白
+    expect(
+      tester.getSize(find.byType(OrbitFloatingSheetCard)).height,
+      lessThan(420),
+    );
+
     final hourWheel = tester.widget<OrbitWheelColumn>(
       find.byKey(const ValueKey('orbit-time-wheel-hour')),
     );

@@ -263,13 +263,17 @@ class _HourMinuteWheelSheetState extends State<_HourMinuteWheelSheet> {
               onChanged: (v) => setState(() => _hour = v),
             ),
           ),
+          // 分隔符**不能**用 `Center` 包：Row 的交叉轴约束是松的（上限 = 抽屉
+          // 剩余空间），`Center` 无 heightFactor 时会一路撑到上限，反过来把整行
+          // 抬成「屏高 85%」——滚轮被居中、上下各留一大片空白（2026-11-05 每日
+          // 摘要时刻弹层实测）。文字自身高度即可，垂直居中交给 Row 的
+          // crossAxisAlignment。
           SizedBox(
             width: AppDimens.space32,
-            child: Center(
-              child: Text(
-                ':',
-                style: TextStyle(fontSize: 17, color: colors.secondaryText),
-              ),
+            child: Text(
+              ':',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 17, color: colors.secondaryText),
             ),
           ),
           Expanded(
@@ -383,10 +387,14 @@ class _YearRangeWheelSheetState extends State<_YearRangeWheelSheet> {
                   onChanged: (v) => setState(() => _start = v),
                 ),
               ),
+              // 同 `_HourMinuteWheelSheet` 的 `:`：分隔符不挂 `Center`，否则
+              // 会把滚轮行撑到抽屉剩余高度上限（整屉变高、滚轮悬在正中）
               SizedBox(
                 width: AppDimens.space32,
-                child: Center(
-                  child: Text('至', style: captionStyle),
+                child: Text(
+                  '至',
+                  textAlign: TextAlign.center,
+                  style: captionStyle,
                 ),
               ),
               Expanded(
