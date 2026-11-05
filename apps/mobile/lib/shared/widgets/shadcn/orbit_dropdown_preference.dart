@@ -1,19 +1,34 @@
 /// 下拉偏好行（原语层：设置项「行内当前值 + 就地展开玻璃菜单」，2026-11-05）
 ///
-/// **弹层走全站统一锚定原语 [showOrbitSelectMenu]**：
-/// - 承载：[OrbitMenuPopupBody]（与快速添加、页头 ⋮ 菜单同源），Overlay
-///   直挂；点开从本行下方揭开，关闭播逆形变、结束后才移除条目；
-/// - 卡面/行：`puredThinGlass` + blur 32、24 圆角 `MiuixGlassPanel`，
-///   `MiuixGlassPopupItem` 行（44 最小行高、24 图标位、选中打勾）；
+/// **弹层承载 = 与「今天」页头 ⋮ 菜单完全同款的 OS4 形变**
+/// （`MiuixGlassTransformPopup`，2026-11-05 收口）：
+/// - 承载：[showOrbitMenuPopup] 的 `transformAnchor` + `anchorContent` 路径，
+///   与底栏「更多」、快速添加五处同源——卡片从**本行轮廓**连续形变长出，
+///   关闭同样播逆形变、退场完成才移除条目；
+/// - 玻璃：形变承载 `inherited = true`，材质继承锚点表面（`MiuixGlassAnchor`
+///   发布的 surface），不再走 `widget.backdrop` 的「无快照退实色」分支——
+///   这正是 2026-11-05 云同步「引擎」弹层看着是实色白卡、退场又「模糊着
+///   闪没」的根因（旧 dropdown 承载退场叠 `(1-fade)*30` 高斯模糊且材质
+///   只认 backdrop）；
+/// - 卡面/行：24 圆角玻璃卡 + `MiuixGlassPopupItem` 行（44 最小行高、24
+///   图标位、选中打勾），与页头菜单同档；
 /// - 返回键：本行根部 `PopScope` 在展开时先关菜单，不退出当前页面。
+///
+/// **为什么不用 `MiuixGlassDropdownPopup`**：dropdown 是「贴行下沿揭开」的
+/// 另一套开场（`arcStartWidth .69 / .2` 小块揭幕 + 退场整卡高斯模糊），与
+/// 页头菜单的形变节奏不同；设置项与页头菜单要求同款观感，故统一到
+/// transform 承载。**注意**：形变期本行内容由 [anchorContent] 副本承担，
+/// 锚点控件自身被隐藏（`contentHidden`），尾随当前值也会一并淡出，属形变
+/// 承载的既定行为。
 ///
 /// **行本身仍是 [MiuixBasicComponent]**：标题（+可选摘要）在左、可选行首动作
 /// （如总开关）、尾随当前值 + 上下双箭头，点行就地展开弹层——当前档必须在
-/// 行内常驻可见，故用本行矩形作锚点而不是 `MiuixGlassAnchor`（形变会隐藏
-/// 锚点控件内容）。
+/// 行内常驻可见；触发件包进 `MiuixGlassAnchor` 供形变采样，形变期行内容被
+/// 隐藏、由 [anchorContentBuilder] 副本承担（副本尾随值随父级换档更新）。
 ///
 /// 与 [showOrbitSelectPopup] 的分工：后者是「任意触发控件 + 浮层」的通用
-/// 选择器，本行是设置项里的下拉偏好。选中判据取 [SelectItem.value] 原始值
+/// 选择器（保留 `showGeneralDialog` 路由外壳），本行是设置项里的下拉偏好。
+/// 选中判据取 [SelectItem.value] 原始值
 /// 而非文案；当前值不在 [items] 里时由调用方补一项（外观页强调色的「当前色」
 /// 同款），否则库内无选中项 → 尾随值与弹层对勾双双落空。
 library;
@@ -22,8 +37,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_miuix/miuix.dart';
 
 import '../../../core/theme/app_dimens.dart';
-import 'orbit_dropdown_panel.dart' show orbitPanelMaxWidth, orbitPanelMinWidth;
-import 'orbit_menu_popup.dart' show OrbitMenuSession;
+import 'orbit_dropdown_panel.dart'
+    show OrbitPanelItem, orbitPanelMaxWidth, orbitPanelMinWidth;
+import 'orbit_glass_surface.dart' show OrbitGlassScope;
+import 'orbit_menu_popup.dart' show OrbitMenuSession, showOrbitMenuPopup;
 import 'orbit_select_popup.dart';
 
 export 'orbit_select_popup.dart' show SelectItem;
@@ -83,34 +100,66 @@ class OrbitDropdownPreference<T> extends StatefulWidget {
 
 class _OrbitDropdownPreferenceState<T>
     extends State<OrbitDropdownPreference<T>> {
-  /// 本行矩形采样点（点开瞬间的全局描点）
-  final GlobalKey _rowKey = GlobalKey();
+  /// 形变承载的触发件锚点（卡片从本行轮廓长出的起点）
+  ///
+  /// 与 `OrbitGlassMenu` 同口径：调用方创建并 `dispose`，不能把同一 anchor
+  /// 绑到两个控件。本行只有一个弹层，故整行共用一个。
+  final MiuixGlassPopupAnchor _anchor = MiuixGlassPopupAnchor();
 
-  /// 共享锚定菜单会话（Overlay 直挂，与快速添加/单选浮层同一内容件）
+  /// 共享锚定菜单会话（Overlay 直挂，与快速添加/页头菜单同一内容件）
   OrbitMenuSession? _menuSession;
+
+  /// 点选后的乐观显示值（父级尚未回写前先顶上）
+  ///
+  /// 调用方的 `onSelect` 通常是 `await 写库 → invalidate` 的异步路径，回弹
+  /// 动画（约 200ms）往往在父级换档前就播完了——期间副本读 `widget.current`
+  /// 只能是旧值（2026-11-05「保留时间」真机实测：toast 已是 30 天，回弹仍写
+  /// 「永久」）。点选瞬间先记下目标值，`widget.current` 跟上后清除。
+  /// 用 [T?] + 标志位而非哨兵值，避免与合法档位值（如 0 = 永久）混淆。
+  T? _pendingValue;
+  bool _hasPending = false;
 
   bool get _open => _menuSession?.isOpen ?? false;
 
   @override
+  void didUpdateWidget(OrbitDropdownPreference<T> oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 父级已换档（异步写库完成）：乐观值功成身退
+    if (_hasPending && widget.current != oldWidget.current) {
+      _hasPending = false;
+      _pendingValue = null;
+    }
+  }
+
+  @override
   void dispose() {
     _menuSession?.dispose();
+    _anchor.dispose();
     super.dispose();
   }
 
   bool get _effectiveEnabled => widget.enabled && widget.items.isNotEmpty;
 
-  Rect? get _rowRect {
-    final box = _rowKey.currentContext?.findRenderObject();
-    if (box is! RenderBox || !box.hasSize) return null;
-    return box.localToGlobal(Offset.zero) & box.size;
-  }
+  /// 行内应显示的当前值：乐观值优先（回弹期即已显示新档）
+  T? get _displayCurrent => _hasPending ? _pendingValue : widget.current;
 
   /// 尾随当前值文案；当前值不在选项里（脏数据）时留空
   String? get _valueLabel {
     for (final item in widget.items) {
-      if (item.value == widget.current) return item.label;
+      if (item.value == _displayCurrent) return item.label;
     }
     return null;
+  }
+
+  /// 点选一档：先乐观换值（回弹期就显示新档），再交给调用方写库
+  void _pick(T value) {
+    if (value != _displayCurrent) {
+      setState(() {
+        _pendingValue = value;
+        _hasPending = true;
+      });
+    }
+    widget.onSelect(value);
   }
 
   void _toggle() {
@@ -118,18 +167,43 @@ class _OrbitDropdownPreferenceState<T>
       _menuSession?.close();
       return;
     }
-    final rect = _rowRect;
-    if (rect == null) return;
     _menuSession?.dispose();
-    final session = showOrbitSelectMenu<T>(
+    final session = showOrbitMenuPopup(
       context,
-      anchor: rect,
-      items: widget.items,
-      current: widget.current,
-      onSelect: widget.onSelect,
+      // 形变承载：卡片从本行轮廓连续长出，退场播逆形变（与「今天」页头
+      // ⋮ 菜单、底栏「更多」完全同款）。不传矩形 anchor——那条路径会退
+      // dropdown 承载，正是要替换掉的旧观感。
+      transformAnchor: _anchor,
+      // 副本走 builder（而非一次性 Widget）：父级换档后 setState 会让弹层
+      // 重建并按新值重取副本——一次性 Widget 会停在打开瞬间的旧值
+      // （2026-11-05「保留时间」实测：toast 已显示 30 天，回弹仍写「永久」）
+      anchorContentBuilder: _anchorContent,
+      groupsBuilder: () => [
+        [
+          for (final item in widget.items)
+            OrbitPanelItem(
+              icon: item.icon,
+              iconColor: item.iconColor,
+              leading: orbitSelectItemLeading(item),
+              label: item.label,
+              trailingLabel: item.hint,
+              checked: item.value == _displayCurrent,
+              onTap: () => _pick(item.value),
+            ),
+        ],
+      ],
       minWidth: orbitPanelMinWidth,
       maxWidth: orbitPanelMaxWidth,
       contentKey: orbitDropdownPopupKey,
+      // **不传 simplified**：本行是**整行宽**的触发件（≈320dp），传 true 会
+      // 在展开期同时隐藏行内容与副本，只剩一块**行宽的空白玻璃条**从行位置
+      // 收缩到右侧菜单卡——观感就是「先到中间再到右边」+ 不流畅（2026-11-05
+      // 实测）。默认 false 让副本参与：起点恰为本行矩形（scale=1），随后随
+      // 卡片缩小、模糊淡出，读起来是「行内容长成菜单」。「今天 ▾」页头传 true
+      // 是因为它的触发件只有标题那么窄，不存在这块空白条。
+      // 玻璃采样器：形变承载会继承锚点表面，这里仍传一份兜底（无锚点表面
+      // 发布时用；壳层/根级页都能取到）
+      backdrop: OrbitGlassScope.maybeOf(context),
     );
     _menuSession = session;
     session.closed.whenComplete(() {
@@ -139,14 +213,25 @@ class _OrbitDropdownPreferenceState<T>
     setState(() {});
   }
 
-  Widget _buildRow() {
+  /// 形变期触发件副本：按本行矩形缩放显示
+  ///
+  /// 形变承载会把锚点控件内容隐藏（`contentHidden`），由这份副本承接
+  /// 「行 → 卡片」的连续形变。
+  ///
+  /// **必须复用同一个 [MiuixBasicComponent]，不要手搓 `Row` + `Expanded`**：
+  /// 库内行是自定义测量布局（`_BasicComponentRow`）——标题吃满剩余宽度、
+  /// 尾随值按固有宽度（硬上限 60%）收在尾部、两段固定 8px 间距。手搓 Row
+  /// 的弹性分配规则不同，形变期文字会先跳到中间再滑到右边（2026-11-05 实测
+  /// 的「动画不够流畅、先到中间再到右边」）。同一组件同一版式，几何天然一致。
+  Widget _anchorContent() => _buildRow(interactive: false);
+
+  Widget _buildRow({bool interactive = true}) {
     final theme = MiuixTheme.of(context);
     final actionColor = _effectiveEnabled
         ? theme.colors.onSurfaceVariantActions
         : theme.colors.disabledOnSurface;
     final value = _valueLabel;
     return MiuixBasicComponent(
-      key: _rowKey,
       title: widget.title,
       summary: widget.summary,
       startAction: widget.startAction,
@@ -170,8 +255,9 @@ class _OrbitDropdownPreferenceState<T>
         MiuixDropdownArrowEndAction(actionColor: actionColor),
       ],
       role: MiuixBasicComponentRole.dropdownList,
-      holdDownState: _open,
-      onClick: _effectiveEnabled ? _toggle : null,
+      // 副本不参与交互：形变期由 IgnorePointer 包裹，这里也不给点击/按压态
+      holdDownState: interactive && _open,
+      onClick: interactive && _effectiveEnabled ? _toggle : null,
       enabled: _effectiveEnabled,
     );
   }
@@ -190,7 +276,11 @@ class _OrbitDropdownPreferenceState<T>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [_buildRow()],
+        children: [
+          // 触发件包进 MiuixGlassAnchor：形变承载据此采样本行矩形并隐藏
+          // 行内容（副本由 _anchorContent 承担）
+          MiuixGlassAnchor(anchor: _anchor, child: _buildRow()),
+        ],
       ),
     );
   }

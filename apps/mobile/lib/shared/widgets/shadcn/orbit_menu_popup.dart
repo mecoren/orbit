@@ -109,6 +109,7 @@ OrbitMenuSession showOrbitMenuPopup(
   Rect? anchor,
   MiuixGlassPopupAnchor? transformAnchor,
   Widget? anchorContent,
+  Widget Function()? anchorContentBuilder,
   double gap = 0,
   required List<List<OrbitPanelItem>> Function() groupsBuilder,
   double? minWidth,
@@ -120,6 +121,7 @@ OrbitMenuSession showOrbitMenuPopup(
   Key? contentKey,
   MiuixLayerBackdrop? backdrop,
   FocusNode? restoreFocus,
+  bool simplified = false,
 }) {
   final overlay = Overlay.of(context, rootOverlay: true);
   final done = Completer<void>();
@@ -152,6 +154,7 @@ OrbitMenuSession showOrbitMenuPopup(
       anchor: anchor,
       transformAnchor: transformAnchor,
       anchorContent: anchorContent,
+      anchorContentBuilder: anchorContentBuilder,
       gap: gap,
       groupsBuilder: groupsBuilder,
       minWidth: minWidth,
@@ -163,6 +166,7 @@ OrbitMenuSession showOrbitMenuPopup(
       contentKey: contentKey,
       backdrop: backdrop,
       restoreFocus: restoreFocus,
+      simplified: simplified,
       onDismiss: () => session.close(),
       onDismissFinished: remove,
     ),
@@ -189,6 +193,7 @@ class OrbitMenuPopupBody extends StatefulWidget {
     this.anchor,
     this.transformAnchor,
     this.anchorContent,
+    this.anchorContentBuilder,
     this.gap = 0,
     required this.groupsBuilder,
     required this.onDismiss,
@@ -203,6 +208,7 @@ class OrbitMenuPopupBody extends StatefulWidget {
     this.backdrop,
     this.restoreFocus,
     this.itemDismiss,
+    this.simplified = false,
   });
 
   /// dropdown 承载的触发矩形（[transformAnchor] 为空时使用）
@@ -212,8 +218,24 @@ class OrbitMenuPopupBody extends StatefulWidget {
   /// 非空时走与底栏「更多」同款的 `MiuixGlassTransformPopup`
   final MiuixGlassPopupAnchor? transformAnchor;
 
+  /// 形变期展开阶段是否省掉锚点副本
+  ///
+  /// 库内语义（`popup_presenter.dart`）：true 时展开期不叠 [anchorContent]
+  /// 副本、卡片直接从轮廓长出；false（默认）会叠一份副本并模糊渐隐。
+  /// 页头「今天 ▾」菜单用 true（`OrbitGlassMenu`），底栏「更多」/快速添加
+  /// 沿用默认 false——设置项下拉偏好行要求与页头同款，传 true。
+  final bool simplified;
+
   /// 形变期触发件副本（按钮内容被隐藏后由它按按钮矩形缩放显示）
   final Widget? anchorContent;
+
+  /// 副本的动态构造（优先于 [anchorContent]）
+  ///
+  /// 一次性 Widget 会在弹层打开瞬间固化；调用方若在弹层打开期间换值
+  /// （设置项选中新档），回弹期的副本就会停在旧值——2026-11-05 设置页
+  /// 「保留时间」实测：toast 已显示 30 天，回弹画面仍写「永久」。
+  /// 传本参数后，父级 `setState` 触发的重建会重新调用它，副本即随当下值更新。
+  final Widget Function()? anchorContentBuilder;
 
   /// 形变落位微调（负值把卡片底边抬到按钮上方）
   final double gap;
@@ -438,7 +460,12 @@ class OrbitMenuPopupBodyState extends State<OrbitMenuPopupBody> {
       return MiuixGlassTransformPopup(
         show: _show,
         anchor: transformAnchor,
-        anchorContent: widget.anchorContent ?? const SizedBox.shrink(),
+        // builder 优先：每次重建（含 refreshContent）都按调用方当下的值取副本
+        anchorContent:
+            widget.anchorContentBuilder?.call() ??
+            widget.anchorContent ??
+            const SizedBox.shrink(),
+        simplified: widget.simplified,
         backdrop: widget.backdrop,
         gap: widget.gap,
         sizing: _sizing(screen.height * _maxHeightFactor),
