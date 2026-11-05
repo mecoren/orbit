@@ -123,7 +123,7 @@ OrbitMenuSession showOrbitMenuPopup(
 }) {
   final overlay = Overlay.of(context, rootOverlay: true);
   final done = Completer<void>();
-  final bodyKey = GlobalKey<_OrbitMenuPopupBodyState>();
+  final bodyKey = GlobalKey<OrbitMenuPopupBodyState>();
   late final OverlayEntry entry;
   late final OrbitMenuSession session;
   var removed = false;
@@ -177,8 +177,8 @@ OrbitMenuSession showOrbitMenuPopup(
 /// 两种承载共用本件，只在「关闭」与「返回键」上各负其责：
 /// - [showOrbitMenuPopup]：`OverlayEntry` 直挂，关闭 = 先播回收、完成后移除
 ///   entry，返回键由调用方 `PopScope` 兜底；
-/// - `showOrbitSelectPopup`：保留 `showGeneralDialog` 路由外壳（49 处存量
-///   调用点零改动），仍按原时序消费 `LocalHistoryEntry` 后直接 pop 路由。
+/// - `showOrbitSelectPopup`：保留 `showGeneralDialog` 路由外壳（21 处存量
+///   调用点零改动），同样先播回收，结束后消费 `LocalHistoryEntry` 并 pop。
 ///
 /// 行点击的关闭语义：`closeOnTap` 为 true 时点行先 [onDismiss] 再执行
 /// `OrbitPanelItem.onTap`（与旧行为一致：调用方在回调里立即写库/导航）；
@@ -245,10 +245,10 @@ class OrbitMenuPopupBody extends StatefulWidget {
   final VoidCallback? itemDismiss;
 
   @override
-  State<OrbitMenuPopupBody> createState() => _OrbitMenuPopupBodyState();
+  State<OrbitMenuPopupBody> createState() => OrbitMenuPopupBodyState();
 }
 
-class _OrbitMenuPopupBodyState extends State<OrbitMenuPopupBody> {
+class OrbitMenuPopupBodyState extends State<OrbitMenuPopupBody> {
   bool _show = true;
   bool _closing = false;
 

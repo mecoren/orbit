@@ -95,6 +95,67 @@ void main() {
     );
   });
 
+  testWidgets('单选浮层：点选立即回调，先播回收动画再 pop 路由', (tester) async {
+    final ctx = await pumpHost(tester);
+    var picked = '';
+    showSelectBottomSheet<String>(
+      ctx,
+      title: '视图模式',
+      items: const [
+        SelectItem(value: 'list', label: '列表'),
+        SelectItem(value: 'grid', label: '网格'),
+      ],
+      current: 'list',
+      onSelect: (v) => picked = v,
+    );
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<MiuixGlassDropdownPopup>(
+        find.byType(MiuixGlassDropdownPopup),
+      ).show,
+      isTrue,
+    );
+
+    await tester.tap(find.text('网格'));
+    await tester.pump();
+    expect(picked, 'grid');
+    expect(
+      tester.widget<MiuixGlassDropdownPopup>(
+        find.byType(MiuixGlassDropdownPopup),
+      ).show,
+      isFalse,
+      reason: '点选后应先切 show=false 回收，不能只靠路由退场',
+    );
+    expect(selectPopup(), findsOneWidget);
+
+    await tester.pumpAndSettle();
+    expect(selectPopup(), findsNothing);
+  });
+
+  testWidgets('单选浮层：回调里导航时只收弹层，不误 pop 新页面', (tester) async {
+    final ctx = await pumpHost(tester);
+    showSelectBottomSheet<String>(
+      ctx,
+      title: '视图模式',
+      items: const [
+        SelectItem(value: 'list', label: '列表'),
+        SelectItem(value: 'grid', label: '网格'),
+      ],
+      current: 'list',
+      onSelect: (_) => Navigator.of(ctx).push(
+        MaterialPageRoute<void>(
+          builder: (_) => const Scaffold(body: Text('新页面')),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('网格'));
+    await tester.pumpAndSettle();
+    expect(find.text('新页面'), findsOneWidget);
+    expect(selectPopup(), findsNothing);
+  });
+
   testWidgets('单选浮层：卡面与「今天」菜单同一枚玻璃面板（无采样器退实色白卡）',
       (tester) async {
     final ctx = await pumpHost(tester);

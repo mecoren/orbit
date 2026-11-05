@@ -16,12 +16,13 @@
 /// 与行首构件（[orbitSelectItemLeading]，下拉偏好行共用）。测量、落位、
 /// 翻转与形变不再手写——那套逻辑与库内逐项同构，手写版已于 2026-11-05 删除。
 ///
-/// **关闭立即生效**（不播逆形变）：49 处存量调用点都是
-/// `await showSelectBottomSheet(...)` 后立即写库/导航，等收起动画播完再回调会
-/// 改变既有交互时序；点选与取消都直接 pop 路由，与 2026-11-03 起的旧实现
-/// 逐帧一致。
+/// **路由版同样播回收动画**：点选/取消先把面板 `show=false`，逆形变结束再
+/// pop 路由；`onSelect` 仍同步执行（调用方写库/导航不等待动画）。若回调里
+/// push 了新页，收尾只移除本条透明路由，不会误 pop 新页面。需要保持输入
+/// 焦点、不新建路由的底部表单/弹层改走 [showOrbitSelectMenu]（宿主须用
+/// `PopScope` 兜底返回键）。
 ///
-/// 49 处存量调用点仍走兼容名 `showSelectBottomSheet`，零改动。
+/// 存量调用点仍走兼容名 `showSelectBottomSheet`，零改动。
 library;
 
 import 'package:flutter/gestures.dart';
@@ -37,12 +38,15 @@ import 'orbit_dropdown_panel.dart'
         orbitPanelMinWidth,
         orbitSelectPopupKey;
 import 'orbit_glass_surface.dart';
-import 'orbit_menu_popup.dart' show OrbitMenuPopupBody;
+import 'orbit_menu_popup.dart'
+    show
+        OrbitMenuPopupBody,
+        OrbitMenuPopupBodyState,
+        OrbitMenuSession,
+        showOrbitMenuPopup;
 
 /// 弹层根节点 key（测试定位用；定义与两个入口共用见 `orbit_dropdown_panel.dart`）
 export 'orbit_dropdown_panel.dart' show orbitSelectPopupKey;
-
-
 
 /// 单选弹层数据项（行首图标 / 12×12 色点 + 文案，二选一）
 /// - [icon] + [iconColor]：行首语义图标（快捷视图切换等与清单页图标同源的场景）；
@@ -72,11 +76,7 @@ class SelectItem<T> {
 /// 居中盒承载；图标尺寸取设计 token，与清单页快捷行同档。
 Widget? orbitSelectItemLeading<T>(SelectItem<T> item) {
   if (item.icon != null) {
-    return Icon(
-      item.icon,
-      size: AppDimens.iconSizeMd,
-      color: item.iconColor,
-    );
+    return Icon(item.icon, size: AppDimens.iconSizeMd, color: item.iconColor);
   }
   if (item.colorDot != null) {
     return Center(
@@ -104,7 +104,8 @@ Future<void> showOrbitSelectPopup<T>(
 }) {
   if (items.isEmpty) return Future<void>.value();
   OrbitPointerAnchor.install();
-  final resolvedAnchor = anchor ??
+  final resolvedAnchor =
+      anchor ??
       (useContextAnchor ? _anchorFromContext(context) : null) ??
       OrbitPointerAnchor.recentRect;
   // 玻璃采样器在**调用方** context 上取：弹层挂在根 Overlay 上，位于
@@ -134,6 +135,59 @@ Future<void> showOrbitSelectPopup<T>(
       backdrop: backdrop,
       onPick: onSelect,
     ),
+  );
+}
+
+/// 单选项的 Overlay 承载版：用于底部表单/弹层内需要全程保持输入焦点的场景。
+///
+/// 与 [showOrbitSelectPopup] 同一份 [SelectItem] 数据与行渲染，但改走
+/// [showOrbitMenuPopup]：不新建路由、不抢焦点，关闭播逆形变。调用方必须
+/// 用 `PopScope` 把返回键先归给菜单（Overlay 不消费路由返回）。
+///
+/// 返回值用于等待 `closed`；点选回调仍立即执行。锚点未显式给出时沿用
+/// 「调用方矩形 → 最近指针位置」的回退口径。
+OrbitMenuSession showOrbitSelectMenu<T>(
+  BuildContext context, {
+  String? title,
+  required List<SelectItem<T>> items,
+  T? current,
+  required ValueChanged<T> onSelect,
+  Rect? anchor,
+  bool useContextAnchor = true,
+  double? minWidth,
+  double? maxWidth,
+  Key? contentKey,
+  FocusNode? restoreFocus,
+}) {
+  assert(items.isNotEmpty, '选择菜单至少需要一个条目');
+  OrbitPointerAnchor.install();
+  final resolvedAnchor =
+      anchor ??
+      (useContextAnchor ? _anchorFromContext(context) : null) ??
+      OrbitPointerAnchor.recentRect;
+  return showOrbitMenuPopup(
+    context,
+    anchor: resolvedAnchor,
+    minWidth: minWidth,
+    maxWidth: maxWidth,
+    title: title,
+    contentKey: contentKey,
+    groupsBuilder: () => [
+      [
+        for (final item in items)
+          OrbitPanelItem(
+            icon: item.icon,
+            iconColor: item.iconColor,
+            leading: orbitSelectItemLeading(item),
+            label: item.label,
+            trailingLabel: item.hint,
+            checked: item.value == current,
+            onTap: () => onSelect(item.value),
+          ),
+      ],
+    ],
+    restoreFocus: restoreFocus ?? FocusManager.instance.primaryFocus,
+    backdrop: OrbitGlassScope.maybeOf(context),
   );
 }
 
@@ -221,8 +275,9 @@ class _OrbitSelectPopupRoute<T> extends StatefulWidget {
       _OrbitSelectPopupRouteState<T>();
 }
 
-class _OrbitSelectPopupRouteState<T>
-    extends State<_OrbitSelectPopupRoute<T>> {
+class _OrbitSelectPopupRouteState<T> extends State<_OrbitSelectPopupRoute<T>> {
+  final _bodyKey = GlobalKey<OrbitMenuPopupBodyState>();
+
   /// 已关路由（库内拦截层可能重复回调，防二次 pop 误伤下层页面）
   bool _closed = false;
 
@@ -232,14 +287,20 @@ class _OrbitSelectPopupRouteState<T>
   /// 而 `LocalHistoryRoute.didPop` 会先消费它并返回 **false**——直接 pop 一次
   /// 只会吃掉那条 entry，路由留在栈上（弹层关不掉，调用方的 `await` 也永不
   /// 完成）。故先按 [willHandlePopInternally] 判断：有内部 history 就多 pop
-  /// 一次。**不能**用 `removeRoute` 抄近路：它会跳过退场动画，而退场那几百
-  /// 毫秒是「点选后页面重建」唯一的帧窗口（调用方在回调里拉取的异步数据要
-  /// 靠它结算）。
+  /// 一次。正常路径也不走 `removeRoute` 抄近路：退场那几百毫秒是「点选后
+  /// 页面重建」唯一的帧窗口（调用方在回调里拉取的异步数据要靠它结算）。
   void _closeRoute() {
     if (!mounted) return;
     final navigator = Navigator.of(context);
     final route = ModalRoute.of(context);
-    if (route != null && route.willHandlePopInternally) {
+    if (route == null) return;
+    // 点选回调里若已 push 新页，当前栈顶不是弹层：直接摘掉这条透明路由，
+    // 绝不能 navigator.pop()（会误关刚打开的页面）。
+    if (!route.isCurrent) {
+      navigator.removeRoute(route);
+      return;
+    }
+    if (route.willHandlePopInternally) {
       // 第一次只消费库内挂的 LocalHistoryEntry（弹层本身的 onDismissRequest
       // 会因 _closed 已置位而空转）
       navigator.pop();
@@ -248,36 +309,52 @@ class _OrbitSelectPopupRouteState<T>
     navigator.pop();
   }
 
-  void _dismiss() {
+  /// 请求回收：先关面板播逆形变，结束回调里再 pop 路由
+  void _requestDismiss() {
     if (_closed) return;
     _closed = true;
-    _closeRoute();
+    final body = _bodyKey.currentState;
+    if (body == null) {
+      _closeRoute();
+      return;
+    }
+    body.dismiss();
   }
+
+  void _dismiss() => _requestDismiss();
 
   void _pick(T value) {
     if (_closed) return;
     _closed = true;
-    _closeRoute();
+    final body = _bodyKey.currentState;
+    if (body == null) {
+      _closeRoute();
+      widget.onPick(value);
+      return;
+    }
+    body.dismiss();
     widget.onPick(value);
   }
 
   @override
   Widget build(BuildContext context) {
-    // 卡面/行/方向判定/形变动效与 `showOrbitMenuPopup` 共用同一内容件；
-    // 本路由只负责「返回键 + 退出时多 pop 一次」的路由语义。
+    // 卡面/行/方向判定/回收动效与 `showOrbitMenuPopup` 共用同一内容件；
+    // 本路由只负责「返回键 + 退场完成后 pop」的路由语义。
     return Semantics(
       label: widget.title,
       child: OrbitMenuPopupBody(
+        key: _bodyKey,
         anchor: widget.anchor,
         contentKey: orbitSelectPopupKey,
-        // 存量 49 处保持既有 180–240 宽度档（新增待办才用底栏「更多」的
-        // 库内默认 200–288）
+        // 存量路由版 21 处保持既有 180–240 宽度档（新增待办才用底栏「更多」
+        // 的库内默认 200–288）
         minWidth: orbitPanelMinWidth,
         maxWidth: orbitPanelMaxWidth,
         backdrop: widget.backdrop,
         onDismiss: _dismiss,
-        // 单选项的关闭由 `_pick` 自己 pop 路由（先消费 LocalHistoryEntry）；
-        // 这里不能让面板再关一次，否则 `_closed` 提前置位会吞掉选中回调。
+        onDismissFinished: _closeRoute,
+        // 单选项的关闭由 `_pick` 自己请求回收；这里不能让面板再关一次，
+        // 否则 `_closed` 提前置位会吞掉选中回调。
         itemDismiss: () {},
         groupsBuilder: () => [
           [

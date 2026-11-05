@@ -230,7 +230,7 @@ class OrbitDropdownPanelViewState extends State<OrbitDropdownPanelView> {
         ],
       ],
     );
-    // 壳由调用方统一包（[OrbitFloatCard] / OS4 形变弹层），此处只出条目列，
+    // 壳由调用方统一包（OrbitMenuPopupBody / OrbitGlassMenu），此处只出条目列，
     // 避免双层边框；形变弹层外层已带纵向滚动，[scrollable] 为 false 时不再套
     // 上下 8 呼吸位对齐玻璃菜单的 contentPadding
     const padding = EdgeInsets.symmetric(vertical: 8);

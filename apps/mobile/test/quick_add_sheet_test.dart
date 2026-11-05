@@ -18,6 +18,8 @@ import 'package:orbit/modules/todo/logic/task_logic.dart'
 import 'package:orbit/modules/todo/quick_add_sheet.dart' show showQuickAddSheet;
 import 'package:orbit/modules/todo/sub_list_screen.dart';
 import 'package:orbit/shared/utils/hex_color.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_floating_sheet_card.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_glass_surface.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_icon_button.dart';
 import 'package:orbit/services/local_prefs.dart';
 import 'support/orbit_test_app.dart';
@@ -186,6 +188,15 @@ void main() {
       expect(find.byTooltip('更多'), findsOneWidget);
       // 未启用档不出现在工具栏
       expect(find.byTooltip('图片'), findsNothing);
+    });
+
+    testWidgets('卡面只有玻璃壳一层：骨架不叠实色浮起卡片', (tester) async {
+      await _openPanel(tester);
+
+      // 玻璃壳已自带 16 留白 + 28 圆角；骨架若再画一层 OrbitFloatingSheetCard
+      // 会内缩 16，左/右/下露出「玻璃边 + 实色卡」两层边缘（2026-11-05 截图）
+      expect(find.byType(OrbitFloatingSheetCard), findsNothing);
+      expect(find.byType(OrbitGlassSurface), findsOneWidget);
     });
 
     testWidgets('提交：标题落库并关闭面板', (tester) async {

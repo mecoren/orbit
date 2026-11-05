@@ -98,7 +98,18 @@ class _PrefsSheet extends StatefulWidget {
 class _PrefsSheetState extends State<_PrefsSheet> {
   late DayPlanPrefs _draft = widget.initial;
 
-  /// 单项选档（当前值描边 + 点选即回调）
+  /// 选档菜单（Overlay 直挂；返回键由 build 的 PopScope 兜底）
+  OrbitMenuSession? _menuSession;
+
+  bool get _menuOpen => _menuSession?.isOpen ?? false;
+
+  @override
+  void dispose() {
+    _menuSession?.dispose();
+    super.dispose();
+  }
+
+  /// 单项选档（Overlay 菜单；点选即回调，返回后等待回收动画结束）
   Future<void> _pick(
     String title,
     int current,
@@ -106,22 +117,40 @@ class _PrefsSheetState extends State<_PrefsSheet> {
     String Function(int) label,
     ValueChanged<int> onPicked,
   ) async {
-    await showSelectBottomSheet<int>(
+    _menuSession?.dispose();
+    final session = showOrbitSelectMenu<int>(
       context,
       title: title,
       current: current,
       items: [for (final o in options) SelectItem(value: o, label: label(o))],
       onSelect: (v) => setState(() => onPicked(v)),
     );
+    _menuSession = session;
+    session.closed.whenComplete(() {
+      if (!mounted || _menuSession != session) return;
+      setState(() => _menuSession = null);
+    });
+    setState(() {});
+    await session.closed;
   }
 
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
     final p = _draft;
-    // 与其余输入型弹层共用骨架：标题 / 内边距 / 按钮行不再自写
-    return OrbitSheetScaffold(
-      title: '排程作息',
+    // 与其余输入型弹层共用骨架：标题 / 内边距 / 按钮行不再自写；
+    // 菜单开着时返回键先归菜单（Overlay 不消费路由返回）
+    return PopScope(
+      canPop: !_menuOpen,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) {
+          _menuSession?.dispose();
+        } else {
+          _menuSession?.close();
+        }
+      },
+      child: OrbitSheetScaffold(
+        title: '排程作息',
       contentPadding: const EdgeInsets.fromLTRB(
         AppDimens.space16,
         0,
@@ -240,9 +269,10 @@ class _PrefsSheetState extends State<_PrefsSheet> {
           ),
         ],
       ),
-      actions: OrbitSheetActions(
-        confirmLabel: '保存作息',
-        onConfirm: () => Navigator.of(context).pop(_draft),
+        actions: OrbitSheetActions(
+          confirmLabel: '保存作息',
+          onConfirm: () => Navigator.of(context).pop(_draft),
+        ),
       ),
     );
   }

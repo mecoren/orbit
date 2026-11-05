@@ -787,6 +787,9 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
           showHandle: true,
           contentScrollable: false,
           maxHeightFactor: 0.7,
+          // 卡面由 OrbitGlassSheet 自绘：骨架若再画一层不透明浮起卡片，会在
+          // 玻璃内再缩进 16，左/右/下露出「玻璃边 + 实色卡」两层边缘
+          floatingCard: false,
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,

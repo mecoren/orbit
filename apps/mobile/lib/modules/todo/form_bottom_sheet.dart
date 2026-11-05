@@ -225,6 +225,7 @@ class _TodoFormSheet extends ConsumerStatefulWidget {
 
 class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
   final _titleController = TextEditingController();
+  final _titleFocus = FocusNode();
   final _descriptionController = TextEditingController();
 
   /// 自定义时长输入：由表单态持有，避免关闭动画期间被子抽屉提前 dispose
@@ -233,6 +234,11 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
   /// 新建标签输入（选择标签抽屉内就地创建，对齐桌面 TagsField）
   final _newLabelCtl = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+
+  /// 字段单选菜单（Overlay 直挂；返回键由 build 的 PopScope 兜底）
+  OrbitMenuSession? _menuSession;
+
+  bool get _menuOpen => _menuSession?.isOpen ?? false;
 
   int? _projectId;
   int _priority = 0;
@@ -383,7 +389,10 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
 
   @override
   void dispose() {
+    // 根浮层不随抽屉路由销毁，必须在控制器/State 释放前撤下
+    _menuSession?.dispose();
     _titleController.dispose();
+    _titleFocus.dispose();
     _descriptionController.dispose();
     _subtaskController.dispose();
     _durationCtl.dispose();
@@ -648,11 +657,36 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
     if (picked != null && mounted) onPicked(dateToMidnightMs(picked));
   }
 
+  /// 字段行单选菜单：Overlay 承载（不抢输入焦点），返回键由 PopScope 兜底。
+  OrbitMenuSession _openFieldMenu<T>({
+    required String title,
+    required List<SelectItem<T>> items,
+    T? current,
+    required ValueChanged<T> onSelect,
+  }) {
+    _menuSession?.dispose();
+    final session = showOrbitSelectMenu<T>(
+      context,
+      title: title,
+      items: items,
+      current: current,
+      onSelect: onSelect,
+      restoreFocus: _titleFocus,
+    );
+    _menuSession = session;
+    session.closed.whenComplete(() {
+      if (!mounted || _menuSession != session) return;
+      setState(() => _menuSession = null);
+    });
+    setState(() {});
+    return session;
+  }
+
   /// 提醒时间选择：先给相对档快捷（见 [reminderPresets]），
   /// 末项「自定义时间…」进日期+时分单面板；两路产物都是绝对毫秒时刻
   Future<void> _pickReminder() async {
-    await showSelectBottomSheet<String>(
-      context,
+    var custom = false;
+    final session = _openFieldMenu<String>(
       title: '提醒时间',
       items: [
         for (final p in reminderPresets(
@@ -665,12 +699,14 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
       ],
       onSelect: (v) {
         if (v == _reminderCustomKey) {
-          _pickCustomReminder();
+          custom = true;
         } else {
           setState(() => _remindAt = int.parse(v));
         }
       },
     );
+    await session.closed;
+    if (custom && mounted) await _pickCustomReminder();
   }
 
   /// 自定义提醒时刻：wait 面板 showTime 模式，日期+时分单面板一次选完
@@ -691,8 +727,8 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
   /// 预计时长行 → 常用档位单选抽屉 + 自定义分钟（对齐桌面数字输入）；
   /// 0 = 不设置清空
   Future<void> _pickDuration() async {
-    await showSelectBottomSheet<String>(
-      context,
+    var custom = false;
+    final session = _openFieldMenu<String>(
       title: '预计时长',
       items: const [
         SelectItem<String>(value: '15', label: '15 分钟'),
@@ -708,7 +744,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
       current: _durationMinutes?.toString(),
       onSelect: (v) {
         if (v == 'custom') {
-          _pickCustomDuration();
+          custom = true;
           return;
         }
         final n = int.tryParse(v) ?? 0;
@@ -716,6 +752,8 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
         setState(() => _durationMinutes = n == 0 ? null : n);
       },
     );
+    await session.closed;
+    if (custom && mounted) await _pickCustomDuration();
   }
 
   /// 自定义时长输入（1–10080 分钟；超出桌面同字段的合理跨度按无效处理）
@@ -762,11 +800,10 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
 
   // ── 字段行 → 底部选择抽屉（与详情页信息区同口径：行只显值，点行再选）──
 
-  /// 项目行 → 单选抽屉（未分组 + 项目列表带色点）
+  /// 项目行 → 单选菜单（未分组 + 项目列表带色点）
   Future<void> _pickProject() async {
     final projects = ref.read(todoProjectsProvider).value ?? [];
-    await showSelectBottomSheet<String>(
-      context,
+    final session = _openFieldMenu<String>(
       title: '项目',
       items: [
         const SelectItem<String>(value: '', label: '未分组'),
@@ -786,12 +823,12 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
         setState(() => _projectId = v.isEmpty ? null : int.parse(v));
       },
     );
+    await session.closed;
   }
 
-  /// 优先级行 → 六档单选抽屉（P0「无」浅灰点，与列表/日历同源）
+  /// 优先级行 → 六档单选菜单（P0「无」浅灰点，与列表/日历同源）
   Future<void> _pickPriority() async {
-    await showSelectBottomSheet<int>(
-      context,
+    final session = _openFieldMenu<int>(
       title: '优先级',
       items: [
         for (var i = 0; i <= 5; i++)
@@ -807,12 +844,12 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
         setState(() => _priority = v);
       },
     );
+    await session.closed;
   }
 
-  /// 状态行 → 三档单选抽屉（新建口径：只落 status，不补 done_at）
+  /// 状态行 → 三档单选菜单（新建口径：只落 status，不补 done_at）
   Future<void> _pickStatus() async {
-    await showSelectBottomSheet<String>(
-      context,
+    final session = _openFieldMenu<String>(
       title: '状态',
       items: [
         for (final s in const [
@@ -828,6 +865,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
         setState(() => _status = v);
       },
     );
+    await session.closed;
   }
 
   /// 重复行 → 重复规则抽屉（预设点选即回填，自定义面板「确定」一次提交）
@@ -896,11 +934,20 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
         : projects.where((p) => p.id == _projectId).firstOrNull;
     final isEdit = widget.editingTaskId != null;
 
-    // 键盘避让：底部 padding 跟随 viewInsets
-    return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-      ),
+    // 键盘避让：底部 padding 跟随 viewInsets；菜单开着时返回键先归菜单
+    return PopScope(
+      canPop: !_menuOpen,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) {
+          _menuSession?.dispose();
+        } else {
+          _menuSession?.close();
+        }
+      },
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
       child: Container(
         constraints: BoxConstraints(
           maxHeight: MediaQuery.of(context).size.height * 0.85,
@@ -973,8 +1020,9 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                           ),
                           children: [
                             // 1. 标题*（新建态实时 NLP 解析：明天/!3/#项目/@标签）
-                            OrbitTextField(
+                                               OrbitTextField(
                               controller: _titleController,
+                              focusNode: _titleFocus,
                               maxLength: 200,
                               label: '标题 *',
                               style: TextStyle(
@@ -1367,6 +1415,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                   ),
                 ),
         ),
+      ),
       ),
     );
   }

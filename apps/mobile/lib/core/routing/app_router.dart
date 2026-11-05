@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../theme/app_motion.dart';
 import 'router_keys.dart';
+import '../../shared/widgets/shadcn/orbit_glass_surface.dart';
 import '../../modules/settings/about_page.dart';
 import '../../modules/settings/appearance_page.dart';
 import '../../modules/settings/backup_page.dart';
@@ -65,27 +66,31 @@ import '../../modules/todo/logic/task_logic.dart';
 
 /// 入栈自右滑入（07 报告 §五-P1#12：方向随入栈/出栈，pop 时反向播放）。
 /// 页签栈与设置页共用；时长/曲线集中在此，后续调手感只改一处。
-CustomTransitionPage<void> pageSlideFromRight(Widget child, {LocalKey? key}) =>
-    CustomTransitionPage<void>(
-      key: key,
-      child: child,
-      transitionDuration: AppMotion.pageEnter,
-      reverseTransitionDuration: AppMotion.pageExit,
-      transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        final curved = CurvedAnimation(
-          parent: animation,
-          curve: AppMotion.pageInCubic,
-          reverseCurve: AppMotion.pageOutCubic,
-        );
-        return SlideTransition(
-          position: Tween(
-            begin: const Offset(1, 0),
-            end: Offset.zero,
-          ).animate(curved),
-          child: child,
-        );
-      },
+///
+/// [glassPage] 默认 true：根级推入页与 HomeShell 是兄弟，取不到壳层
+/// `OrbitGlassScope`，由 [OrbitGlassPage] 自建采样器，页内锚定弹层才有玻璃。
+/// 页签栈内的入栈页已在 HomeShell 捕获树里，显式传 false，避免嵌套采样。
+CustomTransitionPage<void> pageSlideFromRight(
+  Widget child, {
+  LocalKey? key,
+  bool glassPage = true,
+}) => CustomTransitionPage<void>(
+  key: key,
+  child: glassPage ? OrbitGlassPage(child: child) : child,
+  transitionDuration: AppMotion.pageEnter,
+  reverseTransitionDuration: AppMotion.pageExit,
+  transitionsBuilder: (context, animation, secondaryAnimation, child) {
+    final curved = CurvedAnimation(
+      parent: animation,
+      curve: AppMotion.pageInCubic,
+      reverseCurve: AppMotion.pageOutCubic,
     );
+    return SlideTransition(
+      position: Tween(begin: const Offset(1, 0), end: Offset.zero).animate(curved),
+      child: child,
+    );
+  },
+);
 
 /// 页签根页：无转场直切（go_router pageKey 复用，切换不重播动画）
 NoTransitionPage<void> tabRoot(Widget child, {LocalKey? key}) =>
@@ -132,6 +137,7 @@ final appRouter = GoRouter(
               pageBuilder: (context, state) => pageSlideFromRight(
                 SubListScreen(query: SubListScreen.parseQuery(state)),
                 key: state.pageKey,
+                glassPage: false,
               ),
             ),
             // 项目（清单）编辑整页：静态段在前，且不落在 /todo/:id 动态段里
@@ -142,6 +148,7 @@ final appRouter = GoRouter(
                   projectId: int.tryParse(state.pathParameters['id'] ?? ''),
                 ),
                 key: state.pageKey,
+                glassPage: false,
               ),
             ),
             GoRoute(
@@ -155,6 +162,7 @@ final appRouter = GoRouter(
                       : null,
                 ),
                 key: state.pageKey,
+                glassPage: false,
               ),
             ),
             // 回顾中心（F1 项目回顾节奏）：到期项目归集 + 逐项目三步向导
@@ -163,13 +171,17 @@ final appRouter = GoRouter(
               pageBuilder: (context, state) => pageSlideFromRight(
                 const ReviewCenterPage(),
                 key: state.pageKey,
+                glassPage: false,
               ),
             ),
             // 收件箱分诊（F2）：未分组任务逐条定归属的一次一卡流程页
             GoRoute(
               path: '/todo/triage',
-              pageBuilder: (context, state) =>
-                  pageSlideFromRight(const TriagePage(), key: state.pageKey),
+              pageBuilder: (context, state) => pageSlideFromRight(
+                const TriagePage(),
+                key: state.pageKey,
+                glassPage: false,
+              ),
             ),
           ],
         ),
@@ -285,8 +297,12 @@ final appRouter = GoRouter(
     ),
     GoRoute(
       path: '/settings/appearance',
-      pageBuilder: (context, state) =>
-          pageSlideFromRight(const AppearancePage(), key: state.pageKey),
+      pageBuilder: (context, state) => pageSlideFromRight(
+        const AppearancePage(),
+        key: state.pageKey,
+        // 页面自身已用 OrbitGlassPage 包了一层，避免嵌套采样
+        glassPage: false,
+      ),
     ),
     GoRoute(
       path: '/settings/notifications',

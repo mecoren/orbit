@@ -282,6 +282,45 @@ void main() {
     expect(find.text('今天 09:00'), findsNothing);
   });
 
+  testWidgets('提醒自定义：等菜单回收后再打开日期面板', (tester) async {
+    await _openForm(tester);
+    await _scrollTo(tester, find.text('提醒时间'));
+    await tester.tap(find.text('提醒时间'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('自定义时间…'));
+    await _settlePastMockLatency(tester);
+
+    expect(selectPopup(), findsNothing);
+    expect(find.text('确认'), findsOneWidget);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('字段菜单走 Overlay：保持标题焦点，返回键先关菜单', (tester) async {
+    await _openForm(tester);
+    await tester.enterText(find.byType(OrbitTextField).first, '保持焦点');
+    final titleNode = tester
+        .widget<EditableText>(find.byType(EditableText).first)
+        .focusNode;
+    expect(titleNode.hasFocus, isTrue);
+
+    // 用首屏可见的优先级行：标题仍在树内，才能验证焦点归还；滚到下方
+    // 字段时标题会被 ListView 卸载，不在本用例的断言范围。
+    await tester.tap(find.text('优先级'));
+    await tester.pumpAndSettle();
+
+    expect(selectPopup(), findsOneWidget);
+    expect(titleNode.hasFocus, isTrue);
+    expect(tester.testTextInput.isVisible, isTrue);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(selectPopup(), findsNothing);
+    expect(find.text('添加待办'), findsOneWidget);
+    expect(titleNode.hasFocus, isTrue);
+  });
+
   testWidgets('NLP 快速输入：标题 token 实时预览 chips + 保存应用剥离', (tester) async {
     final bridge = await _openForm(tester);
 

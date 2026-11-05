@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:orbit/core/routing/app_router.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_glass_surface.dart';
 import 'support/orbit_test_app.dart';
 
 void main() {
@@ -28,6 +29,12 @@ void main() {
     await tester.pumpAndSettle(); // 等滑入动画收敛
 
     expect(find.text('B 页'), findsOneWidget);
+    // 根级推入页默认自建玻璃采样器，页内锚定弹层才能走真玻璃
+    expect(find.byType(OrbitGlassPage), findsOneWidget);
+    expect(
+      OrbitGlassScope.maybeOf(tester.element(find.text('B 页'))),
+      isNotNull,
+    );
 
     context.pop();
     await tester.pumpAndSettle(); // 反向播放同样收敛无异常

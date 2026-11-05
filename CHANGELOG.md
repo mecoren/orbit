@@ -17,6 +17,27 @@
 
 ## [Unreleased]
 
+### 优化：全站锚定选择弹层统一玻璃卡与回收动画（2026-11-05）
+
+把「设置项下拉偏好」与「路由版通用单选浮层」全部收口到共享锚定原语，弹层样式、进场/回收动画和行渲染只保留一套实现。
+
+- **下拉偏好**：`OrbitDropdownPreference` 改调 `showOrbitSelectMenu`，删除手写弹层、材质缓存与条目列；保留行内当前值 + 双箭头 + 整行按压灰底。打开时由行矩形定位、关闭播逆形变；不采用形变模式，避免展开期间隐藏触发行；根部补 `PopScope`，返回键先关菜单。
+- **路由单选（21 处）**：`showOrbitSelectPopup` 点选/取消先把面板 `show=false`，逆形变结束才 pop 路由；`onSelect` 仍立即回调，调用方写库/导航不等待。回调里 push 新页时只移除弹层路由，不误 pop 新页面。
+- **共享组件**：`OrbitMenuPopupBody` 状态类型公开给路由承载调用 `dismiss()`；两种承载（Overlay / 路由）共用卡面、行、方向判定与回收动效。
+- **根级推入页**：`pageSlideFromRight` 默认包 `OrbitGlassPage` 自建采样器，确保通知历史等设置子页的弹层能拿到 `OrbitGlassScope`；页签栈内子页显式 `glassPage: false` 复用 HomeShell 采样，外观页自带页壳则跳过包裹，避免嵌套捕获。实机采样确认：白卡/白底区域上，底栏「更多」与下拉偏好的像素同为纯白，玻璃只有在彩色内容上方才可见磨砂。
+- **验证**：`flutter analyze` 0 issue；`flutter test` 全量 **1182 绿**（本批定向用例覆盖路由回收、点选导航保护、下拉偏好返回键/点选回收、玻璃快照、路由玻璃页壳断言；此前并发的详情页重构已随 `3275ea5` 合入并补齐断言）。
+
+### 优化：移动端底部表单选择菜单首批迁移到 Overlay 原语（2026-11-05）
+
+新增 `showOrbitSelectMenu<T>`（`orbit_select_popup.dart`）：`SelectItem` 数据直接映射到 `showOrbitMenuPopup`，保留「锚点 → 最近指针」回退与当前值打勾，返回 `OrbitMenuSession` 供调用方等待回收完成。
+
+- **首批 6 处**：表单的项目 / 优先级 / 状态 / 提醒时间 / 预计时长，以及排程作息的六项选档；普通页面仍保留 `showOrbitSelectPopup` 路由版，避免逐页重做返回键与 `await` 时序。
+- **焦点**：表单标题绑定显式 `FocusNode`，字段菜单落定后归还焦点，打开期间键盘不沉；仅在标题仍挂载时生效（滚出懒加载区域后自然不抢焦点）。
+- **返回键**：表单与排程作息根部补 `PopScope`，菜单打开时先关菜单；抽屉退场时 `dispose()` 立即撤下根浮层，不在失效锚点上续播。
+- **串联动作**：「自定义提醒 / 自定义时长」等待 `session.closed` 后再开下级面板，避免回收动画结束时的焦点归还抢走键盘。
+- **收尾**：删除 `OrbitFloatCard` 过期注释引用；路由版存量计数更新为 21 处。
+- **验证**：`flutter analyze` 0 issue；`flutter test` **1172 绿**（表单新增「字段菜单走 Overlay：保持标题焦点，返回键先关菜单」「提醒自定义：等菜单回收后再打开日期面板」，排程新增 `plan_prefs_sheet_test` 的返回键与点选回填用例）。
+
 ### 优化：移动端新增待办五档菜单统一为锚定玻璃菜单原语（2026-11-05）
 
 新增 `shared/widgets/shadcn/orbit_menu_popup.dart`（`showOrbitMenuPopup` / `OrbitMenuSession` / `OrbitMenuPopupBody`）：把「底栏「更多」同款形变弹层」与「页头 ⋮ 菜单的玻璃卡 + `MiuixGlassPopupItem` 行」拼成一枚锚定选择菜单，作为 `showOrbitSelectPopup`（路由承载）之外第二个统一入口——**Overlay 直挂、不新建路由**，因此不抢输入框焦点、键盘全程不落，适配底部快速添加面板这类「边选边打字」的场景。
@@ -27,7 +48,7 @@
 - **能力**：单选即关、`closeOnTap: false` 多选常驻连选（行点击后组件内部重取 `groupsBuilder`，勾选态就地刷新）、分组、标题行 + 行内动作、就地展开二级项；新增待办五个菜单带「标题 + 编辑」标题行（编辑 = 快捷操作设置），与底栏「更多」面板版式一致。
 - **焦点**：库内弹层的 `FocusScope(autofocus)` 会先抢焦点，组件在测量落定后再等两帧把焦点还给调用方传入的 `FocusNode`（幂等，只做一次）；快速添加面板因此从「日期档打开时键盘下沉、关闭后恢复」变为全程不掉键盘。
 - **新增待办接入**：日期（保留今天 / 明天 / 下周 / 选择日期… / 清除日期与下级月历）、优先级六档、标签多选、项目单选、更多菜单五处全部改走新原语，工具栏按钮各包一枚 `MiuixGlassAnchor`（形变起点）；删除 `_openAnchoredCard` / `OverlayEntry` / `Completer` 样板，返回键改由 `_menuSession` + `PopScope` 拦截，面板路由开始退出或 dispose 时立即撤下菜单并释放锚点防泄漏。图片管理仍走底部 `showMoreActionsSheet`（本次不动）。
-- **存量单选浮层（49 处）**：`showOrbitSelectPopup` 调用点与路由外壳零改动，内部改与 `showOrbitMenuPopup` 共用同一枚 `OrbitMenuPopupBody`（卡面/行/落位/动效单点），宽度仍 180–240、返回键仍走路由 `LocalHistoryEntry`。
+- **存量单选浮层（路由版）**：`showOrbitSelectPopup` 调用点与路由外壳零改动，内部改与 `showOrbitMenuPopup` 共用同一枚 `OrbitMenuPopupBody`（卡面/行/落位/动效单点），宽度仍 180–240、返回键仍走路由 `LocalHistoryEntry`。
 - **清理**：手搓锚点卡片 `OrbitFloatCard` / `orbitFloatCardLayout` / `OrbitOverlayCard` / `orbitFloatCardWidth` / `orbitPanelWidthFactor` 已无调用点，全部删除；`orbit_dropdown_panel.dart` 只剩 `OrbitPanelItem` + `OrbitDropdownPanelView`（+ 两者共用的 `orbitSelectPopupKey`）。
 - **验证**：`flutter analyze` 0 issue；`flutter test` **1169 绿**（新增 `test/orbit_menu_popup_test.dart` 10 例：承载/行、贴锚下方、空间不足翻上、点选关闭、多选常驻、点外关闭、无锚点兜底、形变关闭播回收动画并恢复锚点、首帧前关闭直接清理、回收动画中强制销毁；`quick_add_sheet_test` 的卡片断言改按 `orbitSelectPopupKey` 定位，并新增「菜单矩形不与工具栏按钮相交」「菜单点选立即回填并播放回收动画」「菜单展开时关闭面板不残留根浮层」「选择日期… 下级面板不被回收动画抢回键盘」用例，焦点用例改为「打开/点选期间焦点始终在输入框」）。
 
