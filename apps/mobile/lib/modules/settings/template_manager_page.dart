@@ -114,6 +114,18 @@ class _TemplateManagerPageState extends ConsumerState<TemplateManagerPage> {
     }
   }
 
+  /// 弹层普通字段：卡片零水平内边距时补回 16，与下拉偏好行标题同线
+  static Widget _field(Widget child) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: AppDimens.cardPadding),
+    child: child,
+  );
+
+  /// 下拉偏好行内边距：水平 16 让标题与字段同线，按压灰底仍横贯整卡
+  static const EdgeInsets _dropdownRowMargin = EdgeInsets.symmetric(
+    horizontal: AppDimens.cardPadding,
+    vertical: AppDimens.space8,
+  );
+
   /// 模板表单底部抽屉（新建/编辑共用）
   Future<({String name, Map<String, Object?> payload})?> _showTemplateForm({
     TodoTemplate? editing,
@@ -146,29 +158,29 @@ class _TemplateManagerPageState extends ConsumerState<TemplateManagerPage> {
             return OrbitSheetScaffold(
               title: editing == null ? '新建模板' : '编辑模板',
               contentScrollable: false,
-              // 内边距交给骨架，与密码 / 标签弹层同一参数；字段节奏统一 12
-              contentPadding: const EdgeInsets.fromLTRB(
-                AppDimens.space16,
-                0,
-                AppDimens.space16,
-                AppDimens.space16,
-              ),
+              // 卡片零水平内边距：下拉偏好行的按压灰底要横贯整卡（设置页
+              // 档位行同口径），普通字段由 [_field] 补回 16；字段节奏统一 12
+              contentPadding: const EdgeInsets.only(bottom: AppDimens.space16),
               content: ListView(
                 shrinkWrap: true,
                 padding: EdgeInsets.zero,
                 children: [
-                  OrbitTextField(
-                    key: const ValueKey('tpl-field-name'),
-                    controller: nameCtrl,
-                    label: '模板名称',
-                    helperText: '列表里显示的名字',
+                  _field(
+                    OrbitTextField(
+                      key: const ValueKey('tpl-field-name'),
+                      controller: nameCtrl,
+                      label: '模板名称',
+                      helperText: '列表里显示的名字',
+                    ),
                   ),
                   const SizedBox(height: AppDimens.space12),
-                  OrbitTextField(
-                    key: const ValueKey('tpl-field-title'),
-                    controller: titleCtrl,
-                    label: '任务标题',
-                    helperText: '套用时预填；留空则不预填',
+                  _field(
+                    OrbitTextField(
+                      key: const ValueKey('tpl-field-title'),
+                      controller: titleCtrl,
+                      label: '任务标题',
+                      helperText: '套用时预填；留空则不预填',
+                    ),
                   ),
                   const SizedBox(height: AppDimens.space12),
                   // 档位行与设置页同一套下拉偏好（行内当前值 + 上下双箭头 +
@@ -183,9 +195,7 @@ class _TemplateManagerPageState extends ConsumerState<TemplateManagerPage> {
                     ],
                     current: priority,
                     onSelect: (v) => setSheetState(() => priority = v),
-                    insideMargin: const EdgeInsets.symmetric(
-                      vertical: AppDimens.space8,
-                    ),
+                    insideMargin: _dropdownRowMargin,
                   ),
                   const SizedBox(height: AppDimens.space12),
                   OrbitDropdownPreference<int?>(
@@ -200,23 +210,25 @@ class _TemplateManagerPageState extends ConsumerState<TemplateManagerPage> {
                     ],
                     current: offsetDays,
                     onSelect: (v) => setSheetState(() => offsetDays = v),
-                    insideMargin: const EdgeInsets.symmetric(
-                      vertical: AppDimens.space8,
+                    insideMargin: _dropdownRowMargin,
+                  ),
+                  const SizedBox(height: AppDimens.space12),
+                  _field(
+                    OrbitTextField(
+                      key: const ValueKey('tpl-field-notes'),
+                      controller: notesCtrl,
+                      maxLines: 3,
+                      label: '备注（可选）',
                     ),
                   ),
                   const SizedBox(height: AppDimens.space12),
-                  OrbitTextField(
-                    key: const ValueKey('tpl-field-notes'),
-                    controller: notesCtrl,
-                    maxLines: 3,
-                    label: '备注（可选）',
-                  ),
-                  const SizedBox(height: AppDimens.space12),
-                  OrbitTextField(
-                    key: const ValueKey('tpl-field-subtasks'),
-                    controller: subtasksCtrl,
-                    maxLines: 4,
-                    label: '子任务（每行一条，可选）',
+                  _field(
+                    OrbitTextField(
+                      key: const ValueKey('tpl-field-subtasks'),
+                      controller: subtasksCtrl,
+                      maxLines: 4,
+                      label: '子任务（每行一条，可选）',
+                    ),
                   ),
                 ],
               ),
