@@ -567,7 +567,18 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
             controller: _scrollController,
             slivers: [
               SliverPadding(
-                padding: const EdgeInsets.all(AppDimens.space16),
+                // 页头是 Stack 顶层玻璃条（不是 AppBar）：列表必须自己让出
+                // 状态栏 + 页头行高，否则首行会滚到玻璃页头底下被糊住
+                // （2026-11-05 实测「第一笔添加的被头部挡住」）
+                padding: EdgeInsets.only(
+                  top:
+                      MediaQuery.of(context).padding.top +
+                      OrbitPageHeader.rowHeight +
+                      AppDimens.space16,
+                  left: AppDimens.space16,
+                  right: AppDimens.space16,
+                  bottom: AppDimens.space16,
+                ),
                 sliver: filters.when(
                   data: (list) {
                     if (list.isEmpty) {
@@ -720,20 +731,27 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
             top: 0,
             left: 0,
             right: 0,
-            child: OrbitPageHeader(title: '筛选器'),
+            // 新建入口放页头右上角（不再用本页 floatingActionButton）：
+            // 壳层已有全局 [OrbitFab] 常驻右下，本页再挂一个 FAB 会叠成两个
+            // 蓝钮（2026-11-05 截图实测）。上收到页头既避让全局钮，也让
+            // 「新建」这个页面级动作与页头同层
+            child: OrbitPageHeader(
+              title: '筛选器',
+              actions: [
+                OrbitIconButton(
+                  tooltip: '新建筛选器',
+                  icon: const Icon(OrbitIcons.add),
+                  onPressed: _create,
+                ),
+              ],
+            ),
           ),
         ],
       ),
       // 本页自带 Scaffold：壳层底栏是悬浮胶囊（内容 extendBody 铺到屏底），
-      // 用等高的空底栏把本页 body 与 FAB 一起顶到胶囊上沿——FAB 不会叠进
-      // 玻璃栏、列表末行也不会停在栏体后面。
+      // 用等高的空底栏把本页 body 顶到胶囊上沿——列表末行不会停在栏体后面。
       bottomNavigationBar: SizedBox(
         height: OrbitBottomNav.clearanceOf(context),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _create,
-        icon: const Icon(OrbitIcons.add),
-        label: const Text('新建筛选器'),
       ),
     );
   }

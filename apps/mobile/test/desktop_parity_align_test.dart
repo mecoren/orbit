@@ -292,7 +292,11 @@ void main() {
     await tester.pumpWidget(_wrap(const SavedFiltersScreen(), bridge));
     await _settle(tester);
 
-    await tester.tap(find.byType(FloatingActionButton));
+    // 新建入口已上收到页头右上角（本页不再挂 FAB——壳层全局 OrbitFab 常驻
+    // 右下，两个蓝钮会叠在一起）
+    await tester.tap(find.byTooltip('新建筛选器'));
+    // _openBuilder 内部 await projects/labels（mock 120ms），需推进虚拟时钟
+    await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
 
     // 状态：全部 → 进行中（下拉偏好行：尾随值常驻 + 就地玻璃菜单）

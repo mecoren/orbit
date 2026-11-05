@@ -24,7 +24,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('新建筛选器').last);
+    await tester.tap(find.byTooltip('新建筛选器'));
+    // _openBuilder 会 await projects/labels 两个 provider（mock 各 120ms），
+    // 必须推进虚拟时钟，否则 pumpAndSettle 卡在未完成的 Future 上
+    await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
 
     // 抽屉内两行偏好：行内常驻当前档
@@ -55,7 +58,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('新建筛选器').last);
+    await tester.tap(find.byTooltip('新建筛选器'));
+    // _openBuilder 会 await projects/labels 两个 provider（mock 各 120ms），
+    // 必须推进虚拟时钟，否则 pumpAndSettle 卡在未完成的 Future 上
+    await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
 
     // 行标题都在（无值态）
