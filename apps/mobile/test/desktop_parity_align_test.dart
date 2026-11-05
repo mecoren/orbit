@@ -20,6 +20,7 @@ import 'package:orbit/modules/settings/settings_screen.dart';
 import 'package:orbit/modules/todo/detail_screen.dart';
 import 'package:orbit/modules/todo/form_bottom_sheet.dart';
 import 'package:orbit/modules/todo/saved_filters_screen.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_dropdown_preference.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_info_row.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_select_popup.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_text_field.dart';
@@ -59,9 +60,14 @@ Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
   }
 }
 
-/// 信息区某行的值文本（限定在包含 [label] 的 InfoTile 内）
+/// 信息区某行的值文本：详情页走下拉偏好行、表单走 InfoTile，两者都限定在行内
 Finder _tileValue(String label, String value) => find.descendant(
-      of: find.ancestor(of: find.text(label), matching: find.byType(InfoTile)),
+      of: find.ancestor(
+        of: find.text(label),
+        matching: find.byWidgetPredicate(
+          (w) => w is InfoTile || w is OrbitDropdownPreference,
+        ),
+      ),
       matching: find.text(value),
     );
 

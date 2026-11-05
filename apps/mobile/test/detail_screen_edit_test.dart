@@ -9,6 +9,7 @@ import 'package:orbit/modules/todo/detail_screen.dart';
 import 'package:orbit/modules/todo/logic/task_logic.dart'
     show formatStampLabel, quickDateTimeOptions;
 import 'package:orbit/shared/widgets/shadcn/orbit_info_row.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_dropdown_preference.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_month_calendar.dart';
 import 'support/orbit_test_app.dart';
 import 'package:orbit/core/theme/icon_map.dart';
@@ -44,10 +45,15 @@ Future<void> _tapDay(WidgetTester tester, String day) async {
   );
 }
 
-/// 信息区某行的值文本：限定在包含[label]的 InfoTile 内，避免与页面
-/// 其余区块（提醒行时刻等）撞词
+/// 信息区某行的值文本：详情页改走下拉偏好行（行内常显当前值），表单仍用
+/// InfoTile；两者都限定在行内，避免与页面其余区块（提醒行时刻等）撞词
 Finder _tileValue(String label, String value) => find.descendant(
-      of: find.ancestor(of: find.text(label), matching: find.byType(InfoTile)),
+      of: find.ancestor(
+        of: find.text(label),
+        matching: find.byWidgetPredicate(
+          (w) => w is InfoTile || w is OrbitDropdownPreference,
+        ),
+      ),
       matching: find.text(value),
     );
 
@@ -121,6 +127,9 @@ void main() {
 
     await tester.tap(find.text('开始日期'));
     await tester.pumpAndSettle();
+    // 日期行改走下拉偏好行：先选「选择日期…」再进 wait 月历面板
+    await tester.tap(find.text('选择日期…'));
+    await tester.pumpAndSettle();
 
     // wait 面板：选当月 15 号 → 确认
     expect(find.text('确认'), findsOneWidget);
@@ -142,16 +151,16 @@ void main() {
     await tester.pumpWidget(_wrap(const DetailScreen(taskId: 5), bridge));
     await _settle(tester);
 
-    // 种子任务 5 已带「明天」零点截止：页面行值与抽屉选项都含「明天」文本，
-    // 所有断言限定在抽屉内（同批次二标签筛选用例的撞词规避）
+    // 下拉偏好行把「当前值」也列进菜单首项（行尾标「当前」），种子任务 5
+    // 的当前截止正是明天零点，故菜单里「明天」有两处：当前值 + 快捷档。
     await tester.tap(find.text('截止日期'));
     await tester.pumpAndSettle();
 
-    final sheet = selectPopup();
+    final sheet = dropdownPopup();
     expect(find.descendant(of: sheet, matching: find.text('一小时后')),
         findsOneWidget);
-    expect(
-        find.descendant(of: sheet, matching: find.text('明天')), findsOneWidget);
+    expect(find.descendant(of: sheet, matching: find.text('明天')),
+        findsNWidgets(2));
     expect(
         find.descendant(of: sheet, matching: find.text('下周')), findsOneWidget);
     expect(
@@ -159,7 +168,7 @@ void main() {
         findsOneWidget);
 
     await tester
-        .tap(find.descendant(of: sheet, matching: find.text('明天')));
+        .tap(find.descendant(of: sheet, matching: find.text('明天')).last);
     await _settle(tester);
 
     // 快捷档为绝对时刻（明早 09:00），不是归一化零点
@@ -183,7 +192,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(
       find.descendant(
-        of: selectPopup(),
+        of: dropdownPopup(),
         matching: find.text('选择日期和时间'),
       ),
     );

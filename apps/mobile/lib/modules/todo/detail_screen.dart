@@ -1,3 +1,10 @@
+// 任务详情页：十区块（标题/信息/描述/子任务/标签/提醒/关联/评论/附件/历史）。
+//
+// 交互口径（2026-11-05 重构）：信息区九行统一 `OrbitDropdownPreference`
+// 档位行——行内常显当前值、就地展开玻璃菜单、日期/重复/时长的二级面板由
+// 菜单项进入；预计时长/开始日期/截止日期/重复全部可编辑，进度与完成时间
+// 只读。页面内输入框（标题/子任务/评论）不再用 `onTapOutside` 当帧卸载，
+// 抽屉输入统一走 `OrbitSheetScaffold` 且键盘弹起后仍可滚动到输入框。
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
@@ -23,7 +30,6 @@ import '../../shared/widgets/shadcn/orbit_checkbox.dart';
 import '../../shared/widgets/shadcn/orbit_color_swatches.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_image_thumb.dart';
-import '../../shared/widgets/shadcn/orbit_info_row.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_skeleton.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart'
@@ -33,9 +39,11 @@ import '../../shared/widgets/shadcn/orbit_actions_sheet.dart'
         showMoreActionsSheet,
         OrbitPanelItem;
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
-import '../../shared/widgets/shadcn/orbit_floating_sheet_card.dart';
 import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
-import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_select_sheet.dart'
+    show showSelectBottomSheet;
+// 档位行：信息区统一「行内常显当前值 + 就地展开玻璃菜单」，与设置页同款
+import '../../shared/widgets/shadcn/orbit_dropdown_preference.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_date_picker.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
@@ -56,6 +64,17 @@ import '../../core/theme/icon_map.dart';
 
 /// 提醒选择列表里「自定义时间…」项的哨兵值（与表单同口径）
 const String _reminderCustomKey = 'custom';
+
+/// 预计时长常用档（与任务表单 `_pickDuration` 同口径；值 = 分钟数字符串）
+const List<({String value, String label})> _durationPresets = [
+  (value: '15', label: '15 分钟'),
+  (value: '30', label: '30 分钟'),
+  (value: '45', label: '45 分钟'),
+  (value: '60', label: '1 小时'),
+  (value: '90', label: '1.5 小时'),
+  (value: '120', label: '2 小时'),
+  (value: '180', label: '3 小时'),
+];
 
 /// 关联类型中文标签（只读展示；桌面 RELATION_TYPE_LABEL 同口径）。
 /// `related` 是 2026-10 前移动端旧写入值的兼容别名（新写入一律 relates_to）
@@ -510,12 +529,28 @@ class _TitleSectionState extends State<_TitleSection> {
     super.dispose();
   }
 
+  /// 进入编辑：从权威标题起稿，行内显示取消/保存两枚按钮。
+  /// 旧实现把 `onTapOutside` 直接接到提交，点到键盘/页面空白处会当帧卸载
+  /// 输入框，表现为「刚点进去就没了」；改由显式按钮与键盘「完成」收口。
+  void _startEditing() {
+    _controller.text = widget.detail.title;
+    setState(() => _editing = true);
+  }
+
+  void _cancel() {
+    _controller.text = widget.detail.title;
+    setState(() => _editing = false);
+  }
+
   /// 保存：trim 空 / 未变化仅退出编辑态不请求（docs/05 §4.3 标题区语义）
   Future<void> _commit() async {
     setState(() => _editing = false);
     final value = _controller.text.trim();
     if (!mounted) return;
-    if (value.isEmpty || value == widget.detail.title) return;
+    if (value.isEmpty || value == widget.detail.title) {
+      _controller.text = widget.detail.title;
+      return;
+    }
     await widget.onPatch({'title': value});
   }
 
@@ -527,35 +562,80 @@ class _TitleSectionState extends State<_TitleSection> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 28px 圆 checkbox（check 18，docs/05 §七）
           OrbitCheckbox(
             checked: task.isDone,
-            size: 28,
+            size: AppDimens.iconSizeXl,
             onToggle: () => widget.onToggleDone(task),
           ),
           const SizedBox(width: AppDimens.space12),
           Expanded(
             child: _editing
-                ? OrbitTextField(
-                    inline: true,
-                    controller: _controller,
-                    autofocus: true,
-                    style: TextStyle(fontSize: 24, color: colors.titleText),
-                    onSubmitted: (_) => _commit(),
-                    onTapOutside: _commit,
+                ? Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: OrbitTextField(
+                          inline: true,
+                          controller: _controller,
+                          autofocus: true,
+                          minLines: 1,
+                          maxLines: 2,
+                          textInputAction: TextInputAction.done,
+                          style: TextStyle(
+                            fontSize: 22,
+                            color: colors.titleText,
+                          ),
+                          onSubmitted: (_) => _commit(),
+                        ),
+                      ),
+                      OrbitIconButton(
+                        compact: true,
+                        tooltip: '取消编辑',
+                        onPressed: _cancel,
+                        icon: Icon(
+                          OrbitIcons.close,
+                          size: AppDimens.iconSizeSm,
+                          color: colors.secondaryText,
+                        ),
+                      ),
+                      OrbitIconButton(
+                        compact: true,
+                        tooltip: '保存标题',
+                        onPressed: _commit,
+                        icon: const Icon(
+                          OrbitIcons.check,
+                          size: AppDimens.iconSizeSm,
+                          color: OrbitAccents.todoAccent,
+                        ),
+                      ),
+                    ],
                   )
                 : GestureDetector(
-                    onTap: () => setState(() => _editing = true),
-                    child: AnimatedStrikethrough(
-                      text: task.title,
-                      done: task.isDone,
-                      thickness: 2,
-                      style: TextStyle(
-                        fontSize: 24,
-                        height: 1.2,
-                        color: colors.titleText,
-                      ),
-                      doneColor: colors.titleText,
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _startEditing,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: AnimatedStrikethrough(
+                            text: task.title,
+                            done: task.isDone,
+                            thickness: 2,
+                            maxLines: 2,
+                            style: TextStyle(
+                              fontSize: 22,
+                              height: 1.3,
+                              color: colors.titleText,
+                            ),
+                            doneColor: colors.titleText,
+                          ),
+                        ),
+                        // 常驻编辑入口：点整行任意处都能进，不必精准点字形
+                        Icon(
+                          OrbitIcons.edit,
+                          size: AppDimens.iconSizeSm,
+                          color: colors.secondaryText.withValues(alpha: 0.6),
+                        ),
+                      ],
                     ),
                   ),
           ),
@@ -581,214 +661,298 @@ class _InfoSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final projects = ref.watch(todoProjectsProvider).value ?? [];
-    final colors = AppColors.ofContext(context);
-    final project = detail.projectId == null
-        ? null
-        : projects.where((p) => p.id == detail.projectId).firstOrNull;
-    final projectTitle = project?.title ?? '未分组';
 
+    final dueLabel =
+        detail.dueDate != null ? formatDueShort(detail.dueDate!) : '无';
+    final startLabel =
+        detail.startDate != null ? formatDueShort(detail.startDate!) : '无';
+    final durationLabel =
+        formatDurationMinutes(detail.durationMinutes) ?? '无';
+    final progressLabel =
+        detail.percentDone > 0 ? '${detail.percentDone.round()}%' : '无';
+    final doneLabel =
+        detail.doneAt != null ? formatStampLabel(detail.doneAt!) : '无';
+    final repeatLabel = rep.repeatLabelExt(
+      detail.repeatMode,
+      detail.repeatAfter,
+      weekdays: detail.repeatWeekdays,
+      endType: detail.repeatEndType,
+      endParam: detail.repeatEndParam,
+      fromDone: detail.repeatFromDone,
+      monthMode: detail.repeatMonthMode,
+      nthWeek: detail.repeatNthWeek,
+    );
+
+    final quickOptions = quickDateTimeOptions();
+    final durationCurrent = detail.durationMinutes == null
+        ? '0'
+        : '${detail.durationMinutes}';
+    final durationItems = <SelectItem<String>>[
+      // 自定义分钟数也必须命中 items，否则行内当前值与弹层对勾双双落空
+      if (durationCurrent != '0' &&
+          !_durationPresets.any((p) => p.value == durationCurrent))
+        SelectItem(value: durationCurrent, label: durationLabel),
+      for (final p in _durationPresets)
+        SelectItem(value: p.value, label: p.label),
+      const SelectItem(value: 'custom', label: '自定义分钟数…'),
+      const SelectItem(value: '0', label: '不设置'),
+    ];
+
+    // 九行同款：左标题 + 右当前值 + 上下双箭头，点行就地展开玻璃菜单。
+    // 只读两行用 disabled 档位行承载（当前值常显、箭头转弱、不可展开）。
     return SectionCard(
       title: '信息',
+      edgeToEdgeContent: true,
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          InfoTile(
-            label: '优先级',
-            value: priorityLabel(detail.priority),
-            dotColorHex: priorityColorHex(detail.priority),
-            onClick: () => showSelectBottomSheet<int>(
-              context,
-              title: '优先级',
-              // 六档 P0–P5 全带色点（P0「无」浅灰 #D1D5DB，与列表/日历同源）
-              items: [
-                for (var i = 0; i <= 5; i++)
-                  SelectItem(
-                    value: i,
-                    label: priorityLabel(i),
-                    colorDot: hexToColor(priorityColorHex(i)),
+          OrbitDropdownPreference<int>(
+            title: '优先级',
+            items: [
+              for (var i = 0; i <= 5; i++)
+                SelectItem(
+                  value: i,
+                  label: priorityLabel(i),
+                  colorDot: hexToColor(priorityColorHex(i)),
+                ),
+            ],
+            current: detail.priority,
+            onSelect: (v) => onPatch({'priority': v}),
+          ),
+          OrbitDropdownPreference<String>(
+            title: '状态',
+            items: [
+              for (final s in const [
+                ('pending', '待办', '#6B7280'),
+                ('doing', '进行中', '#3B82F6'),
+                ('done', '已完成', '#22C55E'),
+              ])
+                SelectItem(
+                  value: s.$1,
+                  label: s.$2,
+                  colorDot: hexToColor(s.$3),
+                ),
+            ],
+            current: detail.status,
+            // done 走完成引擎（重复任务推进下一实例），其余走普通 patch
+            onSelect: (v) => onSetStatus(detail, v),
+          ),
+          OrbitDropdownPreference<String>(
+            title: '项目',
+            items: [
+              const SelectItem<String>(value: '', label: '未分组'),
+              for (final p in projects)
+                SelectItem(
+                  value: '${p.id}',
+                  label: p.title,
+                  colorDot: hexToColor(
+                    p.hexColor,
+                    fallback: OrbitAccents.todoAccent,
                   ),
-              ],
-              current: detail.priority,
-              onSelect: (v) => onPatch({'priority': v}),
-            ),
+                ),
+            ],
+            current: detail.projectId == null ? '' : '${detail.projectId}',
+            onSelect: (v) =>
+                onPatch({'project_id': v.isEmpty ? null : int.parse(v)}),
           ),
-          InfoTile(
-            label: '状态',
-            value: statusLabel(detail.status),
-            dotColorHex: statusColorHex(detail.status),
-            onClick: () => showSelectBottomSheet<String>(
-              context,
-              title: '状态',
-              items: [
-                for (final s in const [
-                  ('pending', '待办', '#6B7280'),
-                  ('doing', '进行中', '#3B82F6'),
-                  ('done', '已完成', '#22C55E'),
-                ])
-                  SelectItem(
-                    value: s.$1,
-                    label: s.$2,
-                    colorDot: hexToColor(s.$3),
-                  ),
-              ],
-              current: detail.status,
-              // done 走完成引擎（重复任务推进下一实例），其余走普通 patch
-              onSelect: (v) => onSetStatus(detail, v),
-            ),
+          OrbitDropdownPreference<String>(
+            title: '截止日期',
+            // 自定义入口紧跟当前值排在第二位：菜单在页面下半部会向上翻转
+            // 并限高，靠后的条目容易被裁到可滚区外（用户要点两次才够得着）
+            items: [
+              SelectItem(value: 'keep', label: dueLabel, hint: '当前'),
+              const SelectItem(
+                value: 'custom',
+                label: '选择日期和时间',
+                icon: OrbitIcons.calendarDays,
+              ),
+              for (final o in quickOptions)
+                SelectItem(
+                  value: o.key,
+                  label: o.label,
+                  hint: o.hint,
+                  icon: dueQuickIcon(o.key),
+                ),
+              if (detail.dueDate != null)
+                const SelectItem(
+                  value: 'clear',
+                  label: '清除日期',
+                  icon: OrbitIcons.close,
+                ),
+            ],
+            current: 'keep',
+            onSelect: (v) => _applyDueChoice(context, v, quickOptions),
           ),
-          InfoTile(
-            label: '项目',
-            value: projectTitle,
-            // #36：项目名按项目色着字（侧边栏圆点口径外的展示位）
-            valueColor: project != null
-                ? hexToColor(project.hexColor, fallback: colors.bodyText)
-                : null,
-            onClick: () => showSelectBottomSheet<String>(
-              context,
-              title: '项目',
-              items: [
-                const SelectItem<String>(value: '', label: '未分组'),
-                for (final p in projects)
-                  SelectItem(
-                    value: '${p.id}',
-                    label: p.title,
-                    colorDot: hexToColor(
-                      p.hexColor,
-                      fallback: OrbitAccents.todoAccent,
-                    ),
-                  ),
-              ],
-              current: detail.projectId == null ? '' : '${detail.projectId}',
-              onSelect: (v) =>
-                  onPatch({'project_id': v.isEmpty ? null : int.parse(v)}),
-            ),
+          OrbitDropdownPreference<String>(
+            title: '开始日期',
+            items: [
+              SelectItem(value: 'keep', label: startLabel, hint: '当前'),
+              const SelectItem(
+                value: 'pick',
+                label: '选择日期…',
+                icon: OrbitIcons.calendarDays,
+              ),
+              if (detail.startDate != null)
+                const SelectItem(
+                  value: 'clear',
+                  label: '清除日期',
+                  icon: OrbitIcons.close,
+                ),
+            ],
+            current: 'keep',
+            onSelect: (v) => _applyStartChoice(context, v),
           ),
-          InfoTile(
-            label: '截止日期',
-            value: detail.dueDate != null
-                ? formatDueShort(detail.dueDate!)
-                : '无',
-            onClick: () => _pickDueDate(context),
-            // 有值才可清除；patch {"due_date": null} 走三态清空语义
-            onClear: detail.dueDate == null
-                ? null
-                : () => onPatch(const {'due_date': null}),
+          OrbitDropdownPreference<String>(
+            title: '预计时长',
+            items: durationItems,
+            current: durationCurrent,
+            onSelect: (v) => _applyDurationChoice(context, v),
           ),
-          InfoTile(
-            label: '开始日期',
-            value: detail.startDate != null
-                ? formatDueShort(detail.startDate!)
-                : '无',
-            onClick: () => _pickDateField(
-              context,
-              current: detail.startDate,
-              key: 'start_date',
-            ),
-            onClear: detail.startDate == null
-                ? null
-                : () => onPatch(const {'start_date': null}),
+          OrbitDropdownPreference<String>(
+            title: '进度',
+            summary: '由子任务完成度自动计算',
+            items: [SelectItem(value: 'readonly', label: progressLabel)],
+            current: 'readonly',
+            onSelect: (_) {},
+            enabled: false,
           ),
-          // 预计时长（M9 阶段一，只读；编辑走任务表单）
-          InfoTile(
-            label: '预计时长',
-            value: formatDurationMinutes(detail.durationMinutes) ?? '无',
+          OrbitDropdownPreference<String>(
+            title: '完成时间',
+            items: [SelectItem(value: 'readonly', label: doneLabel)],
+            current: 'readonly',
+            onSelect: (_) {},
+            enabled: false,
           ),
-          // 进度（桌面详情行同款：percent_done > 0 才有值，只读）
-          InfoTile(
-            label: '进度',
-            value: detail.percentDone > 0
-                ? '${detail.percentDone.round()}%'
-                : '无',
-          ),
-          // 完成时间（done_at 仅完成任务有值；口语化口径同提醒行）
-          InfoTile(
-            label: '完成时间',
-            value: detail.doneAt != null
-                ? formatStampLabel(detail.doneAt!)
-                : '无',
-          ),
-          InfoTile(
-            label: '重复',
-            value: rep.repeatLabelExt(
-              detail.repeatMode,
-              detail.repeatAfter,
-              weekdays: detail.repeatWeekdays,
-              endType: detail.repeatEndType,
-              endParam: detail.repeatEndParam,
-              fromDone: detail.repeatFromDone,
-              monthMode: detail.repeatMonthMode,
-              nthWeek: detail.repeatNthWeek,
-            ),
-            onClick: () => _editRepeat(context),
+          OrbitDropdownPreference<String>(
+            title: '重复',
+            items: [
+              SelectItem(value: 'keep', label: repeatLabel, hint: '当前'),
+              for (final p in rep.repeatPresets)
+                SelectItem(value: '${p.mode}:${p.after}', label: p.label),
+              const SelectItem(value: 'custom', label: '自定义规则…'),
+            ],
+            current: 'keep',
+            onSelect: (v) => _applyRepeatChoice(context, v),
           ),
         ],
       ),
     );
   }
 
-  /// 截止日期行点击 → 快捷档抽屉 + 选择日期和时间（对齐桌面 DueDateEditor）：
-  /// 快捷档为绝对时刻直接落库；自定义含时刻，选中原样回填——不再归一化零点，
-  /// 避免把「明天 09:00」编辑成当天零点
-  Future<void> _pickDueDate(BuildContext context) async {
-    final options = quickDateTimeOptions();
-    await showSelectBottomSheet<String>(
-      context,
-      title: '设置截止时间',
-      current: null,
-      items: [
-        for (final o in options)
-          SelectItem(
-            value: o.key,
-            label: o.label,
-            hint: o.hint,
-            icon: dueQuickIcon(o.key),
-          ),
-        const SelectItem(
-          value: 'custom',
-          label: '选择日期和时间',
-          icon: OrbitIcons.calendarDays,
-        ),
-      ],
-      onSelect: (v) => _applyDueChoice(context, v, options),
-    );
-  }
-
-  /// 快捷档直接落库；自定义走 [OrbitDatePicker]（含时刻；初值取原截止时刻，
-  /// 重选日期时原时分随初值带上——桌面 DueDateEditor 保留 prevTime 同口径）
+  /// 截止日期档：快捷档为绝对时刻直接落库；自定义含时刻，选中原样回填
+  /// ——不再归一化零点，避免把「明天 09:00」编辑成当天零点
   Future<void> _applyDueChoice(
     BuildContext context,
     String choice,
     List<({String key, String label, String hint, int ms})> options,
   ) async {
-    if (choice == 'custom') {
-      final picked = await OrbitDatePicker.pick(
-        context,
-        initialDate: detail.dueDate != null
-            ? DateTime.fromMillisecondsSinceEpoch(detail.dueDate!)
-            : null,
-        showTime: true,
-      );
-      if (picked == null) return;
-      await onPatch({'due_date': picked.millisecondsSinceEpoch});
-      return;
+    if (choice == 'keep') return;
+    if (choice == 'clear') return onPatch(const {'due_date': null});
+    if (choice != 'custom') {
+      final option = options.firstWhere((o) => o.key == choice);
+      return onPatch({'due_date': option.ms});
     }
-    final option = options.firstWhere((o) => o.key == choice);
-    await onPatch({'due_date': option.ms});
+    final picked = await OrbitDatePicker.pick(
+      context,
+      initialDate: detail.dueDate != null
+          ? DateTime.fromMillisecondsSinceEpoch(detail.dueDate!)
+          : null,
+      showTime: true,
+    );
+    if (picked == null || !context.mounted) return;
+    await onPatch({'due_date': picked.millisecondsSinceEpoch});
   }
 
-  /// 开始日期行点击：与截止日期同一选择器，按 patch key 落库
-  Future<void> _pickDateField(
-    BuildContext context, {
-    required int? current,
-    required String key,
-  }) async {
+  /// 开始日期档：与任务表单同一日期选择器，落本地零点；清除走三态 null
+  Future<void> _applyStartChoice(BuildContext context, String choice) async {
+    if (choice == 'clear') return onPatch(const {'start_date': null});
+    if (choice != 'pick') return;
     final picked = await showTodoDatePicker(
       context,
-      initialDate: current != null
-          ? DateTime.fromMillisecondsSinceEpoch(current)
+      initialDate: detail.startDate != null
+          ? DateTime.fromMillisecondsSinceEpoch(detail.startDate!)
           : null,
     );
     if (picked == null || !context.mounted) return;
-    await onPatch({key: dateToMidnightMs(picked)});
+    await onPatch({'start_date': dateToMidnightMs(picked)});
+  }
+
+  /// 预计时长档：常用档直接落库，自定义进数字输入抽屉，不设置清 null
+  Future<void> _applyDurationChoice(BuildContext context, String choice) async {
+    if (choice == 'custom') return _pickCustomDuration(context);
+    if (choice == '0') return onPatch(const {'duration_minutes': null});
+    final minutes = int.tryParse(choice);
+    if (minutes == null || minutes <= 0) return;
+    await onPatch({'duration_minutes': minutes});
+  }
+
+  /// 自定义时长输入（1–10080 分钟；与任务表单同字段、同校验口径）
+  Future<void> _pickCustomDuration(BuildContext context) async {
+    final controller = TextEditingController(
+      text: detail.durationMinutes?.toString() ?? '',
+    );
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      shape: bottomSheetTopShape,
+      sheetAnimationStyle: bottomSheetMotion,
+      builder: (sheetCtx) => OrbitSheetScaffold(
+        title: '自定义时长',
+        contentPadding: const EdgeInsets.fromLTRB(
+          AppDimens.space16,
+          0,
+          AppDimens.space16,
+          AppDimens.space16,
+        ),
+        content: OrbitTextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          textInputAction: TextInputAction.done,
+          label: '分钟数（1–10080）',
+        ),
+        actions: OrbitSheetActions(
+          cancelLabel: '取消',
+          onCancel: () => Navigator.pop(sheetCtx),
+          confirmLabel: '确定',
+          onConfirm: () => Navigator.pop(sheetCtx, true),
+        ),
+      ),
+    );
+    final minutes = int.tryParse(controller.text.trim());
+    controller.dispose();
+    if (confirmed != true) return;
+    if (minutes == null || minutes <= 0 || minutes > 10080) {
+      WaitToast.destructive('请输入 1–10080 之间的分钟数');
+      return;
+    }
+    await onPatch({'duration_minutes': minutes});
+  }
+
+  /// 重复预设：整组 patch 清零扩展字段，避免从「每周二三四五六」切档后
+  /// 残留 weekdays/endType 等脏值（与重复编辑抽屉的预设语义一致）
+  Future<void> _applyRepeatPreset(int mode, int after) => onPatch({
+        'repeat_mode': mode,
+        'repeat_after': after,
+        'repeat_weekdays': 0,
+        'repeat_end_type': 0,
+        'repeat_end_param': 0,
+        'repeat_from_done': 0,
+        'repeat_month_mode': rep.RepeatMonthMode.day,
+        'repeat_nth_week': 0,
+      });
+
+  Future<void> _applyRepeatChoice(BuildContext context, String choice) async {
+    if (choice == 'keep') return;
+    if (choice == 'custom') return _editRepeat(context);
+    final parts = choice.split(':');
+    if (parts.length != 2) return;
+    final mode = int.tryParse(parts[0]);
+    final after = int.tryParse(parts[1]);
+    if (mode == null || after == null) return;
+    await _applyRepeatPreset(mode, after);
   }
 
   /// 重复行点击 → 共享重复编辑抽屉（预设点选即存即关；自定义面板「确定」
@@ -839,7 +1003,7 @@ class _DescriptionSectionState extends State<_DescriptionSection> {
     final colors = AppColors.ofContext(context);
     final description = widget.detail.description;
     // 展示态走 Markdown 渲染（与桌面详情抽屉同源口径：标题/粗体/斜体/
-    // 行内代码/链接/列表；原文编辑入口在「编辑」按钮的底部抽屉，不受影响）
+    // 行内代码/链接/列表；编辑入口 = 右上按钮 + 整块空态热区）
     return SectionCard(
       title: '描述',
       trailing: OrbitButton.text(
@@ -855,19 +1019,28 @@ class _DescriptionSectionState extends State<_DescriptionSection> {
                 accentColor: OrbitAccents.themeAccent,
               ),
             )
-          : Text(
-              '暂无描述',
-              style: TextStyle(
-                fontSize: 15,
-                height: 1.5,
-                color: colors.secondaryText.withValues(alpha: 0.5),
+          : GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => _openEditor(context),
+              child: SizedBox(
+                height: AppDimens.touchTarget,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '暂无描述，点击添加',
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: colors.secondaryText.withValues(alpha: 0.5),
+                    ),
+                  ),
+                ),
               ),
             ),
     );
   }
 
-  /// 编辑弹层改底部抽屉（原 AlertDialog maxLines:5 固定 5 行，长描述
-  /// 看不全且点遮罩即关丢草稿；抽屉 70% 高 + 误触 barrier 不关闭）
+  /// 描述编辑走浮起圆角卡片抽屉（70% 高上限），保存/取消显式收口。
+  /// `onApply` 返回 Future：保存必须等落库完成再关闭，避免「点了没存上」。
   void _openEditor(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
@@ -885,12 +1058,12 @@ class _DescriptionSectionState extends State<_DescriptionSection> {
   }
 }
 
-/// 描述编辑抽屉：多行输入自适应高度（70% 屏高上限）+ 保存/取消
+/// 描述编辑抽屉：有界多行输入（6–12 行，70% 屏高上限）+ 保存/取消
 class _DescriptionEditSheet extends StatefulWidget {
   const _DescriptionEditSheet({required this.initial, required this.onApply});
 
   final String initial;
-  final void Function(String text) onApply;
+  final Future<void> Function(String text) onApply;
 
   @override
   State<_DescriptionEditSheet> createState() => _DescriptionEditSheetState();
@@ -900,6 +1073,7 @@ class _DescriptionEditSheetState extends State<_DescriptionEditSheet> {
   late final TextEditingController _controller = TextEditingController(
     text: widget.initial,
   );
+  bool _saving = false;
 
   @override
   void dispose() {
@@ -907,21 +1081,25 @@ class _DescriptionEditSheetState extends State<_DescriptionEditSheet> {
     super.dispose();
   }
 
-  void _save() {
+  Future<void> _save() async {
+    if (_saving) return;
     final text = _controller.text.trim();
-    if (text == (widget.initial.trim())) {
-      Navigator.of(context).pop();
+    final navigator = Navigator.of(context);
+    if (text == widget.initial.trim()) {
+      navigator.pop();
       return;
     }
-    widget.onApply(text);
-    Navigator.of(context).pop();
+    setState(() => _saving = true);
+    await widget.onApply(text);
+    if (!mounted) return;
+    navigator.pop();
   }
 
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
-    // 输入区自管高度（maxLines: null 撑到高度上限后内部滚动），
-    // 取消·保存固定在骨架尾栏（口径见 orbit_sheet_scaffold.dart）
+    // 行数必须有界：`maxLines: null` 在骨架的 Flexible 内拿不到确定高度，
+    // 输入框会被压扁/溢出，表现为「打不了字」。与任务表单描述字段同口径。
     return OrbitSheetScaffold(
       title: '编辑描述',
       maxHeightFactor: 0.7,
@@ -934,18 +1112,22 @@ class _DescriptionEditSheetState extends State<_DescriptionEditSheet> {
       ),
       content: OrbitTextField(
         controller: _controller,
-        maxLines: null,
         minLines: 6,
+        maxLines: 12,
         maxLength: 5000,
         autofocus: true,
+        textInputAction: TextInputAction.newline,
         hintText: '请输入描述',
         style: TextStyle(fontSize: 15, color: colors.bodyText),
       ),
       actions: OrbitSheetActions(
         cancelLabel: '取消',
-        onCancel: () => Navigator.of(context).pop(),
+        onCancel: _saving ? null : () => Navigator.of(context).pop(),
         confirmLabel: '保存',
-        onConfirm: _save,
+        onConfirm: _saving ? null : _save,
+        confirmChild: _saving
+            ? const OrbitSpinner(size: AppDimens.iconSizeSm)
+            : null,
       ),
     );
   }
@@ -969,9 +1151,53 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
   /// M10：行内「加子级」——非 null 时为所挂父行的 uuid（顶层添加走 _adding）
   String? _addingUnderUuid;
   final _draftController = TextEditingController();
+  final _draftFocus = FocusNode();
+  final _draftFieldKey = GlobalKey();
+
+  @override
+  void initState() {
+    super.initState();
+    // 键盘弹出后把行内输入框滚进可视区：整页 ListView 不会自动跟随焦点，
+    // 底部「添加子任务」输入框此前常被键盘盖住，表现为「点不到/打不了字」
+    _draftFocus.addListener(_scrollDraftIntoView);
+  }
+
+  void _scrollDraftIntoView() {
+    if (!_draftFocus.hasFocus) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final fieldContext = _draftFieldKey.currentContext;
+      if (fieldContext == null || !fieldContext.mounted) return;
+      Scrollable.ensureVisible(
+        fieldContext,
+        duration: Duration.zero,
+        alignment: 0.4,
+      );
+    });
+  }
+
+  /// 两个入口互斥且共用一份草稿：旧实现两个状态可同时挂载两个 autofocus
+  /// 输入框争焦点、互相覆盖草稿，导致「输入了却提交了别的框」。
+  void _startAdding(String? parentUuid) {
+    _draftController.clear();
+    setState(() {
+      _adding = parentUuid == null;
+      _addingUnderUuid = parentUuid;
+    });
+  }
+
+  void _cancelAdding() {
+    _draftController.clear();
+    _draftFocus.unfocus();
+    setState(() {
+      _adding = false;
+      _addingUnderUuid = null;
+    });
+  }
 
   @override
   void dispose() {
+    _draftFocus.removeListener(_scrollDraftIntoView);
+    _draftFocus.dispose();
     _draftController.dispose();
     super.dispose();
   }
@@ -993,6 +1219,7 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
     final title = _draftController.text.trim();
     if (title.isEmpty) return;
     _draftController.clear();
+    _draftFocus.unfocus();
     final parentUuid = _addingUnderUuid;
     setState(() {
       _adding = false;
@@ -1131,9 +1358,8 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
                           size: AppDimens.iconSizeSm,
                           color: colors.secondaryText,
                         ),
-                        onPressed: () => setState(
-                          () => _addingUnderUuid =
-                              _addingUnderUuid == node.subtask.uuid
+                        onPressed: () => _startAdding(
+                          _addingUnderUuid == node.subtask.uuid
                               ? null
                               : node.subtask.uuid,
                         ),
@@ -1180,71 +1406,17 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
                   // M10：行内加子级输入框（缩进对齐子级层）
                   if (_addingUnderUuid == node.subtask.uuid)
                     Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: OrbitTextField(
-                              inline: true,
-                              controller: _draftController,
-                              autofocus: true,
-                              hintText: '子任务标题',
-                              style: TextStyle(
-                                fontSize: 15,
-                                color: colors.bodyText,
-                              ),
-                              // 行内补 8 的纵向内边距，保持 40 左右的触控高度
-                              insideMargin: const EdgeInsets.symmetric(
-                                vertical: AppDimens.space8,
-                              ),
-                              onSubmitted: (_) => _submitDraft(),
-                            ),
-                          ),
-                          OrbitIconButton(
-                            tooltip: '确定',
-                            icon: const Icon(
-                              OrbitIcons.check,
-                              size: AppDimens.iconSizeMd,
-                              color: OrbitAccents.todoAccent,
-                            ),
-                            onPressed: _submitDraft,
-                          ),
-                        ],
-                      ),
+                      padding: const EdgeInsets.only(top: AppDimens.space4),
+                      child: _draftInput(colors),
                     ),
                 ],
               ),
             ),
           _adding
-              ? Row(
-                  children: [
-                    Expanded(
-                      child: OrbitTextField(
-                        inline: true,
-                        controller: _draftController,
-                        autofocus: true,
-                        hintText: '子任务标题',
-                        style: TextStyle(fontSize: 15, color: colors.bodyText),
-                        insideMargin: const EdgeInsets.symmetric(
-                          vertical: AppDimens.space8,
-                        ),
-                        onSubmitted: (_) => _submitDraft(),
-                      ),
-                    ),
-                    OrbitIconButton(
-                      tooltip: '确定',
-                      icon: const Icon(
-                        OrbitIcons.check,
-                        size: AppDimens.iconSizeMd,
-                        color: OrbitAccents.todoAccent,
-                      ),
-                      onPressed: _submitDraft,
-                    ),
-                  ],
-                )
+              ? _draftInput(colors)
               : OrbitButton.icon(
                   variant: OrbitButtonVariant.text,
-                  onPressed: () => setState(() => _adding = true),
+                  onPressed: () => _startAdding(null),
                   icon: const Icon(
                     OrbitIcons.add,
                     size: AppDimens.iconSizeSm + 2,
@@ -1255,6 +1427,49 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
       ),
     );
   }
+
+  /// 行内草稿输入（两个入口互斥，共用同一焦点节点与 GlobalKey）。
+  /// 显式取消钮 + 键盘「完成」双收口，不再依赖点击外部隐式提交。
+  Widget _draftInput(AppColorSet colors) => Row(
+        children: [
+          Expanded(
+            child: OrbitTextField(
+              key: _draftFieldKey,
+              inline: true,
+              controller: _draftController,
+              focusNode: _draftFocus,
+              autofocus: true,
+              textInputAction: TextInputAction.done,
+              hintText: '子任务标题',
+              style: TextStyle(fontSize: 15, color: colors.bodyText),
+              insideMargin: const EdgeInsets.symmetric(
+                vertical: AppDimens.space8,
+              ),
+              onSubmitted: (_) => _submitDraft(),
+            ),
+          ),
+          OrbitIconButton(
+            compact: true,
+            tooltip: '取消添加',
+            icon: Icon(
+              OrbitIcons.close,
+              size: AppDimens.iconSizeSm,
+              color: colors.secondaryText,
+            ),
+            onPressed: _cancelAdding,
+          ),
+          OrbitIconButton(
+            compact: true,
+            tooltip: '确定',
+            icon: const Icon(
+              OrbitIcons.check,
+              size: AppDimens.iconSizeMd,
+              color: OrbitAccents.todoAccent,
+            ),
+            onPressed: _submitDraft,
+          ),
+        ],
+      );
 }
 
 // ── 五、标签（chip 展示 + "编辑"多选弹层，Phase 7）──
@@ -1422,21 +1637,21 @@ class _LabelEditSheetState extends ConsumerState<_LabelEditSheet> {
             .toSet() ??
         <int>{};
 
-    // 与其余输入型弹层共用骨架：手柄 / 标题 / 键盘避让 / 高度上限统一由
-    // OrbitSheetScaffold 承担，不再自写 SafeArea + Column + 手写色板。
+    // 新建标签输入与色板放进**可滚内容区**：键盘弹出时输入框不会被固定尾栏
+    // 挤出可视区（旧实现把整段表单塞进 actions，抽屉收缩后几乎点不到）。
+    // 尾栏只留「完成」，形状/间距仍由共享骨架统一。
     return OrbitSheetScaffold(
       title: '编辑标签',
       maxHeightFactor: 0.7,
-      contentScrollable: false,
       contentPadding: const EdgeInsets.fromLTRB(
         AppDimens.space16,
         0,
         AppDimens.space16,
         AppDimens.space16,
       ),
-      content: ListView(
-        shrinkWrap: true,
-        padding: EdgeInsets.zero,
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (labels.isEmpty)
             Padding(
@@ -1488,57 +1703,54 @@ class _LabelEditSheetState extends ConsumerState<_LabelEditSheet> {
                   ),
                 ),
               ),
+          const SizedBox(height: AppDimens.space12),
+          Text(
+            '新建标签',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: colors.secondaryText,
+            ),
+          ),
+          const SizedBox(height: AppDimens.space12),
+          Row(
+            children: [
+              Expanded(
+                child: OrbitTextField(
+                  inline: true,
+                  controller: _titleController,
+                  maxLength: 50,
+                  textInputAction: TextInputAction.done,
+                  hintText: '新建标签',
+                  style: TextStyle(fontSize: 15, color: colors.bodyText),
+                  insideMargin: const EdgeInsets.symmetric(
+                    vertical: AppDimens.space8,
+                  ),
+                  onSubmitted: (_) => _createLabel(),
+                ),
+              ),
+              OrbitIconButton(
+                tooltip: '新建标签',
+                icon: Icon(
+                  OrbitIcons.add,
+                  size: AppDimens.iconSizeLg,
+                  color: OrbitAccents.todoAccent,
+                ),
+                onPressed: _createLabel,
+              ),
+            ],
+          ),
+          const SizedBox(height: AppDimens.space12),
+          OrbitColorSwatches(
+            hexes: labelPaletteHexes,
+            selectedHex: _newColorHex,
+            onSelected: (hex) => setState(() => _newColorHex = hex),
+          ),
         ],
       ),
-      // 新建标签行固定在底部：输入标题 + 色板 → todoLabelCreate
-      actions: Container(
-        padding: const EdgeInsets.fromLTRB(
-          AppDimens.space16,
-          AppDimens.space12,
-          AppDimens.space16,
-          AppDimens.space16,
-        ),
-        decoration: BoxDecoration(
-          border: Border(top: BorderSide(color: colors.divider)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: OrbitTextField(
-                    inline: true,
-                    controller: _titleController,
-                    maxLength: 50,
-                    hintText: '新建标签',
-                    style: TextStyle(fontSize: 15, color: colors.bodyText),
-                    insideMargin: const EdgeInsets.symmetric(
-                      vertical: AppDimens.space8,
-                    ),
-                    onSubmitted: (_) => _createLabel(),
-                  ),
-                ),
-                OrbitIconButton(
-                  tooltip: '新建标签',
-                  icon: Icon(
-                    OrbitIcons.add,
-                    size: AppDimens.iconSizeLg,
-                    color: OrbitAccents.todoAccent,
-                  ),
-                  onPressed: _createLabel,
-                ),
-              ],
-            ),
-            const SizedBox(height: AppDimens.space12),
-            OrbitColorSwatches(
-              hexes: labelPaletteHexes,
-              selectedHex: _newColorHex,
-              onSelected: (hex) => setState(() => _newColorHex = hex),
-            ),
-          ],
-        ),
+      actions: OrbitSheetActions(
+        confirmLabel: '完成',
+        onConfirm: () => Navigator.of(context).pop(),
       ),
     );
   }
@@ -1956,12 +2168,10 @@ class _RelationsSectionState extends ConsumerState<_RelationsSection> {
   }
 
   /// 关联任务搜索增删：关键词走全局搜索，点选一行即建关联；
-  /// 候选排除自身与已关联（桌面同口径）
+  /// 候选排除自身与已关联（桌面同口径）。抽屉走共享骨架 + 独立 StatefulWidget，
+  /// 控制器/焦点有明确生命周期，键盘避让与滚动由 OrbitSheetScaffold 统一。
   Future<void> _pickAndAdd() async {
-    final queryCtl = TextEditingController();
     final linkedIds = {for (final r in widget.relations) r.otherTaskId};
-    List<TodoTask> hits = [];
-    bool searching = false;
     final targetId = await showModalBottomSheet<int>(
       context: context,
       useRootNavigator: true,
@@ -1969,107 +2179,9 @@ class _RelationsSectionState extends ConsumerState<_RelationsSection> {
       backgroundColor: Colors.transparent,
       shape: bottomSheetTopShape,
       sheetAnimationStyle: bottomSheetMotion,
-      builder: (sheetCtx) => OrbitFloatingSheetCard(
-        child: StatefulBuilder(
-          builder: (ctx, setSheet) => SafeArea(
-            top: false,
-            child: Padding(
-              padding: EdgeInsets.only(
-                left: AppDimens.space16,
-                right: AppDimens.space16,
-                top: AppDimens.space16,
-                bottom:
-                    MediaQuery.of(ctx).viewInsets.bottom + AppDimens.space16,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Text(
-                    '关联任务',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: AppDimens.space8),
-                  OrbitTextField(
-                    controller: queryCtl,
-                    autofocus: true,
-                    label: '搜索任务标题',
-                    helperText: '输入关键词后点搜索',
-                    onSubmitted: (_) async {
-                      setSheet(() => searching = true);
-                      try {
-                        final r = await ref
-                            .read(orbitBridgeProvider)
-                            .globalSearch(queryCtl.text.trim(), limit: 20);
-                        setSheet(() {
-                          hits = r.tasks
-                              .where(
-                                (t) =>
-                                    t.id != widget.taskId &&
-                                    !linkedIds.contains(t.id),
-                              )
-                              .toList();
-                          searching = false;
-                        });
-                      } catch (_) {
-                        setSheet(() => searching = false);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: AppDimens.space8),
-                  if (searching)
-                    const Center(
-                      child: OrbitSpinner(size: AppDimens.iconSizeLg),
-                    )
-                  else
-                    Flexible(
-                      child: ListView(
-                        shrinkWrap: true,
-                        children: [
-                          for (final t in hits.take(20))
-                            SizedBox(
-                              height: AppDimens.touchTarget,
-                              child: InkWell(
-                                onTap: () => Navigator.pop(sheetCtx, t.id),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        t.title,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(fontSize: 15),
-                                      ),
-                                    ),
-                                    Text(
-                                      '#${t.id}',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: AppColors.ofContext(
-                                          context,
-                                        ).secondaryText,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          if (hits.isEmpty)
-                            const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 12),
-                              child: Text(
-                                '输入关键词后回车搜索（排除本任务）',
-                                style: TextStyle(fontSize: 13),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ),
+      builder: (_) => _RelationSearchSheet(
+        taskId: widget.taskId,
+        linkedIds: linkedIds,
       ),
     );
     if (targetId == null) return;
@@ -2170,6 +2282,151 @@ class _RelationsSectionState extends ConsumerState<_RelationsSection> {
   }
 }
 
+/// 关联任务搜索抽屉：输入 → 搜索 → 点行返回对方任务 id。
+///
+/// 旧实现用 StatefulBuilder 手搓 SafeArea + 手写 viewInsets，控制器从不
+/// dispose，且结果塞进 Flexible(ListView) 与键盘避让叠加后输入框常被挤出
+/// 可视区。改由共享 [OrbitSheetScaffold] 承载，滚动/避让/形状统一。
+class _RelationSearchSheet extends ConsumerStatefulWidget {
+  const _RelationSearchSheet({
+    required this.taskId,
+    required this.linkedIds,
+  });
+
+  final int taskId;
+  final Set<int> linkedIds;
+
+  @override
+  ConsumerState<_RelationSearchSheet> createState() =>
+      _RelationSearchSheetState();
+}
+
+class _RelationSearchSheetState extends ConsumerState<_RelationSearchSheet> {
+  final _queryController = TextEditingController();
+  final _queryFocus = FocusNode();
+  List<TodoTask> _hits = [];
+  bool _searching = false;
+
+  @override
+  void dispose() {
+    _queryController.dispose();
+    _queryFocus.dispose();
+    super.dispose();
+  }
+
+  Future<void> _search() async {
+    final keyword = _queryController.text.trim();
+    if (keyword.isEmpty || _searching) return;
+    setState(() => _searching = true);
+    try {
+      final result = await ref
+          .read(orbitBridgeProvider)
+          .globalSearch(keyword, limit: 20);
+      if (!mounted) return;
+      setState(() {
+        _hits = result.tasks
+            .where(
+              (t) =>
+                  t.id != widget.taskId && !widget.linkedIds.contains(t.id),
+            )
+            .toList();
+        _searching = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _searching = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.ofContext(context);
+    return OrbitSheetScaffold(
+      title: '关联任务',
+      maxHeightFactor: 0.7,
+      contentPadding: const EdgeInsets.fromLTRB(
+        AppDimens.space16,
+        0,
+        AppDimens.space16,
+        AppDimens.space16,
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: OrbitTextField(
+                  controller: _queryController,
+                  focusNode: _queryFocus,
+                  autofocus: true,
+                  label: '搜索任务标题',
+                  textInputAction: TextInputAction.search,
+                  onSubmitted: (_) => _search(),
+                ),
+              ),
+              const SizedBox(width: AppDimens.space8),
+              OrbitIconButton(
+                tooltip: '搜索任务',
+                onPressed: _search,
+                icon: const Icon(
+                  OrbitIcons.search,
+                  size: AppDimens.iconSizeMd,
+                  color: OrbitAccents.todoAccent,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppDimens.space12),
+          if (_searching)
+            const Center(child: OrbitSpinner(size: AppDimens.iconSizeLg))
+          else if (_hits.isEmpty)
+            Text(
+              '输入关键词后点搜索（排除本任务与已关联）',
+              style: TextStyle(fontSize: 13, color: colors.secondaryText),
+            )
+          else
+            for (final t in _hits.take(20))
+              InkWell(
+                onTap: () => Navigator.of(context).pop(t.id),
+                child: SizedBox(
+                  height: AppDimens.touchTarget,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          t.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: colors.bodyText,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '#${t.id}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colors.secondaryText,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+        ],
+      ),
+      actions: OrbitSheetActions(
+        cancelLabel: '取消',
+        onCancel: () => Navigator.of(context).pop(),
+        confirmLabel: '搜索',
+        onConfirm: _search,
+      ),
+    );
+  }
+}
+
 // ── 八、评论（输入框 + 列表 + 删除确认）──
 
 class _CommentsSection extends ConsumerStatefulWidget {
@@ -2184,9 +2441,34 @@ class _CommentsSection extends ConsumerStatefulWidget {
 
 class _CommentsSectionState extends ConsumerState<_CommentsSection> {
   final _inputController = TextEditingController();
+  final _inputFocus = FocusNode();
+  final _inputFieldKey = GlobalKey();
+
+  @override
+  void initState() {
+    super.initState();
+    // 评论框在页面很下方：键盘弹起后整页 ListView 不会自动滚到焦点控件，
+    // 显式 ensureVisible 才能避免输入框被键盘盖住。
+    _inputFocus.addListener(_scrollInputIntoView);
+  }
+
+  void _scrollInputIntoView() {
+    if (!_inputFocus.hasFocus) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final fieldContext = _inputFieldKey.currentContext;
+      if (fieldContext == null || !fieldContext.mounted) return;
+      Scrollable.ensureVisible(
+        fieldContext,
+        duration: Duration.zero,
+        alignment: 0.4,
+      );
+    });
+  }
 
   @override
   void dispose() {
+    _inputFocus.removeListener(_scrollInputIntoView);
+    _inputFocus.dispose();
     _inputController.dispose();
     super.dispose();
   }
@@ -2269,9 +2551,11 @@ class _CommentsSectionState extends ConsumerState<_CommentsSection> {
                         ),
                       ),
                       const Spacer(),
-                      GestureDetector(
-                        onTap: () => _delete(comment),
-                        child: Icon(
+                      OrbitIconButton(
+                        compact: true,
+                        tooltip: '删除评论',
+                        onPressed: () => _delete(comment),
+                        icon: Icon(
                           OrbitIcons.delete,
                           size: AppDimens.iconSizeSm,
                           color: colors.secondaryText,
@@ -2293,8 +2577,11 @@ class _CommentsSectionState extends ConsumerState<_CommentsSection> {
               children: [
                 Expanded(
                   child: OrbitTextField(
+                    key: _inputFieldKey,
                     inline: true,
                     controller: _inputController,
+                    focusNode: _inputFocus,
+                    textInputAction: TextInputAction.send,
                     hintText: '输入评论...',
                     style: TextStyle(fontSize: 15, color: colors.bodyText),
                     insideMargin: const EdgeInsets.symmetric(
@@ -2644,10 +2931,10 @@ class _AttachmentsSectionState extends ConsumerState<_AttachmentsSection> {
               ),
             ),
       child: list == null
-          ? const SizedBox(height: 16)
+          ? const SizedBox(height: AppDimens.space16)
           : list.isEmpty
           ? Text(
-              '点 + 添加附件：文件 / 拍照（单任务 20 个，单文件 50MB）\n系统分享的文本会自动建任务（分享导入）',
+              '点 + 添加文件或拍照（单任务 20 个，单文件 50MB）',
               style: TextStyle(
                 fontSize: 13,
                 color: colors.secondaryText.withValues(alpha: 0.5),
@@ -2693,29 +2980,37 @@ class _AttachmentsSectionState extends ConsumerState<_AttachmentsSection> {
                             ],
                           ),
                         ),
-                        GestureDetector(
-                          onTap: () => _open(att),
-                          child: const Icon(OrbitIcons.openExternal, size: 18),
+                        OrbitIconButton(
+                          compact: true,
+                          tooltip: '打开附件',
+                          onPressed: () => _open(att),
+                          icon: Icon(
+                            OrbitIcons.openExternal,
+                            size: AppDimens.iconSizeSm,
+                            color: colors.secondaryText,
+                          ),
                         ),
-                        const SizedBox(width: AppDimens.space8),
-                        GestureDetector(
-                          onTap: att.isLocalCached == 0
+                        OrbitIconButton(
+                          compact: true,
+                          tooltip: '另存附件',
+                          onPressed: att.isLocalCached == 0
                               ? null
                               : () => _saveAs(att),
-                          child: Icon(
+                          icon: Icon(
                             OrbitIcons.download,
-                            size: 18,
+                            size: AppDimens.iconSizeSm,
                             color: att.isLocalCached == 0
                                 ? colors.secondaryText.withValues(alpha: 0.4)
                                 : colors.secondaryText,
                           ),
                         ),
-                        const SizedBox(width: AppDimens.space8),
-                        GestureDetector(
-                          onTap: () => _remove(att),
-                          child: Icon(
+                        OrbitIconButton(
+                          compact: true,
+                          tooltip: '移除附件',
+                          onPressed: () => _remove(att),
+                          icon: Icon(
                             OrbitIcons.delete,
-                            size: 18,
+                            size: AppDimens.iconSizeSm,
                             color: colors.secondaryText,
                           ),
                         ),

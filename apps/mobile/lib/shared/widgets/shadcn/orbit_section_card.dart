@@ -26,6 +26,7 @@ class SectionCard extends StatelessWidget {
     this.trailing,
     required this.child,
     this.padding = const EdgeInsets.all(AppDimens.cardPadding),
+    this.edgeToEdgeContent = false,
   });
 
   /// 卡片内边距（默认全 16）。由本组件分派给头行与内容（[OrbitCard] 归零），
@@ -33,6 +34,13 @@ class SectionCard extends StatelessWidget {
   /// 「贴边高亮」布局（miuix GroupCard 口径）传仅含 bottom 的内边距，
   /// 行按压灰底即可横贯整卡、由卡片圆角裁切。
   final EdgeInsetsGeometry padding;
+
+  /// 内容行贴边（头行仍按 [padding] 左右留白）。
+  ///
+  /// 承载 `OrbitDropdownPreference` 这类自带 16 水平内边距的行时必须置 true：
+  /// 否则卡片内边距会把行的按压灰底缩成一小块（设置/配置页档位行的统一口径）。
+  /// 同一卡片内的其余字段需自行补回 16 水平内边距。
+  final bool edgeToEdgeContent;
 
   /// 头部标题；缺省不渲染头行（详情标题区为无头卡片）
   final String? title;
@@ -114,8 +122,8 @@ class SectionCard extends StatelessWidget {
           ],
           Padding(
             padding: EdgeInsets.only(
-              left: p.left,
-              right: p.right,
+              left: edgeToEdgeContent ? 0 : p.left,
+              right: edgeToEdgeContent ? 0 : p.right,
               bottom: p.bottom,
             ),
             child: child,
