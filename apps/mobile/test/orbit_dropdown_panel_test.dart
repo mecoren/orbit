@@ -58,16 +58,34 @@ void main() {
         ],
       ];
 
+  // 承载由调用方给（原 `showOrbitDropdownPanel` 函数式入口已删除：
+  // 零调用点，实际用法是 `OrbitDropdownPanelView` 直接嵌进快加面板的
+  // Overlay 卡片）。这里用同一枚 [OrbitFloatCard] + 透明 barrier 复刻路由版，
+  // 保证交互断言仍覆盖产品口径。
   Widget host() => orbitTestApp(
         home: Scaffold(
           body: Builder(
             builder: (context) => Center(
               child: TextButton(
-                onPressed: () => showOrbitDropdownPanel(
-                  context,
-                  topInset: 0,
-                  groups: groups(),
-                ),
+                onPressed: () {
+                  final layout = orbitFloatCardLayout(context);
+                  showGeneralDialog<void>(
+                    context: context,
+                    barrierDismissible: true,
+                    barrierColor: Colors.transparent,
+                    barrierLabel: '关闭菜单',
+                    transitionDuration: Duration.zero,
+                    pageBuilder: (_, _, _) => Align(
+                      alignment: layout.align,
+                      child: Padding(
+                        padding: layout.padding,
+                        child: OrbitFloatCard(
+                          child: OrbitDropdownPanelView(groups: groups()),
+                        ),
+                      ),
+                    ),
+                  );
+                },
                 child: const Text('打开'),
               ),
             ),

@@ -13,8 +13,8 @@ import 'orbit_icon_button.dart';
 /// 玻璃菜单（材质档库内自动取 `popupViewGlass`——菜单/弹层的标准档），
 /// 点面板外/返回手势/Esc 收起，收起播放逆形变回按钮。
 ///
-/// **配置驱动**：复用 [OrbitPanelItem]，与 `showOrbitDropdownPanel`
-/// （底部锚定面板）数据同源，字段映射——
+/// **配置驱动**：复用 [OrbitPanelItem]，与 `OrbitDropdownPanelView`
+/// （锚定面板）数据同源，字段映射——
 /// - `checked` → `MiuixGlassPopupItem.selected`（行尾勾号 + 主题色）；
 /// - `trailingLabel` → `summary`（行尾副文案，如「已启用 2 项」）；
 /// - `color` → `contentColor`（破坏性红）；

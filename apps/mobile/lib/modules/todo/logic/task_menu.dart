@@ -119,66 +119,66 @@ Future<void> showTaskActionSheet(
     context,
     title: task.title,
     actions: [
-      MoreActionItem(
+      OrbitPanelItem(
         icon: OrbitIcons.calendarDays,
         label: '日期',
         onTap: () => _pickDue(context, ref, task, patch),
       ),
-      MoreActionItem(
+      OrbitPanelItem(
         icon: OrbitIcons.flag,
         label: '优先级',
         onTap: () => _pickPriority(context, task, patch),
       ),
       if (onEnterSelection != null)
-        MoreActionItem(
+        OrbitPanelItem(
           icon: OrbitIcons.listChecks,
           label: '多选',
           onTap: onEnterSelection,
         ),
-      MoreActionItem(
+      OrbitPanelItem(
         icon: task.isDone ? OrbitIcons.undo : OrbitIcons.success,
         label: task.isDone ? '标记未完成' : '标记完成',
         onTap: toggleDone,
       ),
-      MoreActionItem(
+      OrbitPanelItem(
         icon: OrbitIcons.edit,
         label: '编辑',
         onTap: () => showTodoFormSheet(context, editingTaskId: task.id),
       ),
-      MoreActionItem(
+      OrbitPanelItem(
         icon: OrbitIcons.sun,
         label: task.isInMyDay ? '移出我的一天' : '加入我的一天',
         color: OrbitAccents.myDayAmber,
         onTap: toggleMyDay,
       ),
-      MoreActionItem(
+      OrbitPanelItem(
         icon: OrbitIcons.star,
         label: task.isStarred ? '取消收藏' : '收藏',
         color: OrbitAccents.starYellow,
         onTap: toggleFavorite,
       ),
-      MoreActionItem(icon: OrbitIcons.copy, label: '复制任务', onTap: duplicate),
-      MoreActionItem(
+      OrbitPanelItem(icon: OrbitIcons.copy, label: '复制任务', onTap: duplicate),
+      OrbitPanelItem(
         icon: OrbitIcons.folder,
         label: '更换项目',
         onTap: () => _pickProject(context, ref, task, patch),
       ),
-      MoreActionItem(
+      OrbitPanelItem(
         icon: OrbitIcons.notification,
         label: '设置提醒',
         onTap: () => _addReminder(context, ref, task, onChanged),
       ),
-      MoreActionItem(
+      OrbitPanelItem(
         icon: OrbitIcons.message,
         label: '添加评论',
         onTap: () => _addComment(context, ref, task, onChanged),
       ),
-      MoreActionItem(
+      OrbitPanelItem(
         icon: OrbitIcons.tag,
         label: '修改标签',
         onTap: () => _editLabels(context, ref, task, onChanged),
       ),
-      MoreActionItem(
+      OrbitPanelItem(
         icon: OrbitIcons.delete,
         label: '删除',
         color: OrbitAccents.overdueRed,

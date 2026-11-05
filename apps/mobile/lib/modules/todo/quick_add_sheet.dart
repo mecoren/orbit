@@ -623,12 +623,12 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
           context,
           title: '图片（${_images.length}张待上传）',
           actions: [
-            MoreActionItem(
+            OrbitPanelItem(
               icon: OrbitIcons.image,
               label: '继续添加',
               onTap: () => _addImage(hadFocus),
             ),
-            MoreActionItem(
+            OrbitPanelItem(
               icon: OrbitIcons.delete,
               label: '清空图片',
               color: AppColors.ofContext(context).destructive,

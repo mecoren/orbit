@@ -5,8 +5,8 @@
 /// 公共 API 与旧实现逐字一致，保留原名与原参数以免制造无谓 diff。
 ///
 /// **单选已迁出（2026-11-03）**：从一组值里挑一个的交互不再从底部升起抽屉，
-/// 改为**复用页头 ⋮ 菜单的面板**（`OrbitDropdownPanelView` 行 + 玻璃卡面，
-/// 右上角弹出），实现见 `orbit_select_popup.dart`；`showSelectBottomSheet`
+/// 改为**复用页头 ⋮ 菜单的面板**（`MiuixGlassPopupItem` 行 + 玻璃卡面，
+/// 贴触发行下沿弹出），实现见 `orbit_select_popup.dart`；`showSelectBottomSheet`
 /// 保留为兼容名并直接转发，49 处存量调用点零改动即统一。
 ///
 /// **为什么承载回到 Material `showModalBottomSheet`**（2026-09-21 修复）：
@@ -56,6 +56,7 @@ import '../../../core/theme/app_dimens.dart';
 import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_shapes.dart';
 import 'package:flutter_miuix/miuix.dart';
+import 'orbit_dropdown_panel.dart' show OrbitPanelItem;
 import 'orbit_glass_surface.dart';
 import 'orbit_select_popup.dart';
 import 'orbit_sheet_scaffold.dart';
@@ -177,26 +178,15 @@ Future<void> showSelectBottomSheet<T>(
   anchor: anchor,
 );
 
-/// 更多操作菜单项（图标 + 文案；destructive 项由调用方传红色 [color]）
-class MoreActionItem {
-  final IconData icon;
-  final String label;
-  final Color? color;
-  final VoidCallback onTap;
-
-  const MoreActionItem({
-    required this.icon,
-    required this.label,
-    this.color,
-    required this.onTap,
-  });
-}
-
 /// 更多操作底部弹层；选项点击后自动关闭再回调
+///
+/// 条目模型复用下拉面板的 [OrbitPanelItem]（图标 + 文案 + 可选着色 + 回调）：
+/// 底部动作菜单与锚定面板/页头菜单同一份数据口径，调用方不再需要两套菜单项
+/// 类型（原 `MoreActionItem` 已并入，2026-11-05）。
 Future<void> showMoreActionsSheet(
   BuildContext context, {
   required String title,
-  required List<MoreActionItem> actions,
+  required List<OrbitPanelItem> actions,
 }) async {
   final backdrop = OrbitGlassScope.maybeOf(context);
   await showModalBottomSheet<void>(
@@ -215,7 +205,7 @@ Future<void> showMoreActionsSheet(
         actions: actions,
         onPick: (action) {
           Navigator.of(sheetContext).pop();
-          action.onTap();
+          action.onTap?.call();
         },
       ),
     ),
@@ -370,8 +360,8 @@ class _ActionsSheet extends StatelessWidget {
   });
 
   final String title;
-  final List<MoreActionItem> actions;
-  final ValueChanged<MoreActionItem> onPick;
+  final List<OrbitPanelItem> actions;
+  final ValueChanged<OrbitPanelItem> onPick;
 
   @override
   Widget build(BuildContext context) {
@@ -389,9 +379,13 @@ class _ActionsSheet extends StatelessWidget {
           for (final action in actions)
             MiuixGlassPopupItem(
               text: action.label,
-              icon: Icon(action.icon, color: action.color),
+              icon: action.icon == null
+                  ? null
+                  : Icon(action.icon, color: action.color),
               contentColor: action.color,
-              onPressed: () => onPick(action),
+              onPressed: action.onTap == null
+                  ? null
+                  : () => onPick(action),
             ),
           const SizedBox(height: AppDimens.space8),
         ],

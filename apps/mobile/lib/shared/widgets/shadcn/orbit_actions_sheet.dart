@@ -6,4 +6,8 @@
 library;
 
 export 'orbit_sheets.dart'
-    show MoreActionItem, bottomSheetMotion, bottomSheetTopShape, showMoreActionsSheet;
+    show bottomSheetMotion, bottomSheetTopShape, showMoreActionsSheet;
+
+/// 菜单条目模型（2026-11-05 起与下拉面板 / 页头菜单同一份口径，
+/// 原 `MoreActionItem` 已并入 [OrbitPanelItem]）
+export 'orbit_dropdown_panel.dart' show OrbitPanelItem;

@@ -194,13 +194,13 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
       context,
       title: task.title,
       actions: [
-        MoreActionItem(
+        OrbitPanelItem(
           icon: OrbitIcons.archiveRestore,
           label: '恢复',
           color: OrbitAccents.themeAccent,
           onTap: () => _restoreTask(task),
         ),
-        MoreActionItem(
+        OrbitPanelItem(
           icon: OrbitIcons.delete,
           label: '彻底删除',
           color: OrbitAccents.overdueRed,

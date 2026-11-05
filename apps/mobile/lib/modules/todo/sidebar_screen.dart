@@ -290,7 +290,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
       context,
       title: project.title,
       actions: [
-        MoreActionItem(
+        OrbitPanelItem(
           icon: OrbitIcons.edit,
           label: '编辑',
           onTap: () => context.push('/todo/projects/${project.id}/edit'),
@@ -298,23 +298,23 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
         // 改层级的显式入口：横向拖动是快捷手势（无提示难发现 + 无障碍不可达），
         // 这两条是它的等价可达路径；不可用时不出现在菜单里
         if (_canIndentInto(project))
-          MoreActionItem(
+          OrbitPanelItem(
             icon: OrbitIcons.indentIncrease,
             label: '移入上一项',
             onTap: () => _applyIndentChange(project, dragReparentPx),
           ),
         if (_canOutdent(project))
-          MoreActionItem(
+          OrbitPanelItem(
             icon: OrbitIcons.indentDecrease,
             label: '移出上一层',
             onTap: () => _applyIndentChange(project, -dragReparentPx),
           ),
-        MoreActionItem(
+        OrbitPanelItem(
           icon: OrbitIcons.archive,
           label: project.isArchived == 1 ? '取消归档' : '归档项目',
           onTap: () => toggleProjectArchive(ref, context, project),
         ),
-        MoreActionItem(
+        OrbitPanelItem(
           icon: OrbitIcons.delete,
           label: '删除',
           color: OrbitAccents.overdueRed,

@@ -31,7 +31,7 @@ import '../../shared/widgets/shadcn/orbit_actions_sheet.dart'
         bottomSheetMotion,
         bottomSheetTopShape,
         showMoreActionsSheet,
-        MoreActionItem;
+        OrbitPanelItem;
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_floating_sheet_card.dart';
 import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
@@ -168,24 +168,24 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
       context,
       title: task.title,
       actions: [
-        MoreActionItem(
+        OrbitPanelItem(
           icon: OrbitIcons.sun,
           label: task.isInMyDay ? '移出我的一天' : '加入我的一天',
           color: OrbitAccents.myDayAmber,
           onTap: () => _toggleMyDay(task),
         ),
-        MoreActionItem(
+        OrbitPanelItem(
           icon: OrbitIcons.star,
           label: task.isStarred ? '取消收藏' : '收藏',
           color: OrbitAccents.starYellow,
           onTap: () => _toggleFavorite(task),
         ),
-        MoreActionItem(
+        OrbitPanelItem(
           icon: OrbitIcons.copy,
           label: '复制任务',
           onTap: () => _duplicateTask(task),
         ),
-        MoreActionItem(
+        OrbitPanelItem(
           icon: OrbitIcons.delete,
           label: '删除',
           color: OrbitAccents.overdueRed,

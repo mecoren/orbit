@@ -26,7 +26,7 @@ const double orbitPanelMinWidth = 180;
 /// 参考竞品面板约占屏宽六成；再窄「已启用 N 项」这类行尾文案会被挤到省略号。
 const double orbitPanelWidthFactor = 0.62;
 
-/// 面板条目（[showOrbitDropdownPanel] 的数据项）
+/// 菜单条目（锚定面板 / 页头玻璃菜单 / 底部动作菜单共用的数据项）
 class OrbitPanelItem {
   const OrbitPanelItem({
     this.icon,
@@ -168,7 +168,7 @@ typedef OrbitFloatCardLayout = ({
   Alignment scale,
 });
 
-/// 锚点上方形态的定位计算（[showOrbitFloatCard] 与 Overlay 直挂版共用同一数值，
+/// 锚点形态的定位计算（快加面板的路由版与 Overlay 直挂版共用同一数值，
 /// 卡片与锚点不错位）
 OrbitFloatCardLayout orbitFloatCardLayout(
   BuildContext context, {
@@ -205,7 +205,7 @@ OrbitFloatCardLayout orbitFloatCardLayout(
   );
 }
 
-/// Overlay 直挂的锚点卡片进场动效件（与路由版 [showOrbitFloatCard] 同源：
+/// Overlay 直挂的锚点卡片进场动效件（与快加面板的路由版同源：
 /// 淡入 + 自锚点同侧轻微放大；Overlay 没有转场器，自带一次控制器）。
 class OrbitOverlayCard extends StatefulWidget {
   const OrbitOverlayCard({
@@ -254,113 +254,7 @@ class _OrbitOverlayCardState extends State<OrbitOverlayCard>
   }
 }
 
-/// 锚点浮层卡片通用入口（快加快捷卡片用；出场动效与下拉面板同源）
-/// [anchor] 为空回落右上（与面板默认同）。
-Future<T?> showOrbitFloatCard<T>(
-  BuildContext context, {
-  required Widget child,
-  Rect? anchor,
-  bool above = true,
-  double? topInset,
-  double? width,
-  MiuixLayerBackdrop? backdrop,
-}) {
-  final layout = orbitFloatCardLayout(
-    context,
-    anchor: anchor,
-    above: above,
-    topInset: topInset,
-    width: width,
-  );
-  return showGeneralDialog<T>(
-    context: context,
-    barrierDismissible: true,
-    // 有意不铺遮罩色：面板打开时下层照旧可读（竞品同款）；点别处即关闭
-    barrierColor: Colors.transparent,
-    barrierLabel: '关闭菜单',
-    transitionDuration: AppMotion.fast,
-    pageBuilder: (dialogContext, _, _) => Align(
-      alignment: layout.align,
-      child: Padding(
-        padding: layout.padding,
-        child: OrbitFloatCard(width: width, backdrop: backdrop, child: child),
-      ),
-    ),
-    // 出场：淡入 + 自锚点同侧轻微放大（空间上「从按钮里长出来」）
-    transitionBuilder: (context, animation, _, child) {
-      final curved =
-          CurvedAnimation(parent: animation, curve: AppMotion.decelerate);
-      return FadeTransition(
-        opacity: curved,
-        child: ScaleTransition(
-          scale: Tween<double>(begin: 0.96, end: 1).animate(curved),
-          alignment: layout.scale,
-          child: child,
-        ),
-      );
-    },
-  );
-}
-/// 顶部下拉面板（页头 ⋮ 的载体；设计系统 v3 原语层，2026-09-23）
-/// 快加面板的档位快捷项（优先级 / 项目单选、标签多选卡、「更多」）形态同源，
-/// 但走 Overlay 直挂（[OrbitOverlayCard]，不经过路由、不抢输入框焦点——
-/// 路由版弹出即失焦，输入法下沉；见快加面板键盘保持）。
-///
-/// **形态**：锚在触发钮附近的浮层卡片（见 [OrbitFloatCard]），条目成组、组间
-/// 1px `divider`；点面板外任意处关闭（不铺遮罩色——下层保持可见）。
-///
-/// **就地展开子项**：带 [OrbitPanelItem.children] 的条目点一下在**面板内**展开
-/// （子项缩进到文案列、选中项打勾），展开期间其余顶层条目置灰、点击只收起子菜单
-/// **不执行该条目**——「此刻只在挑子项」这一状态靠颜色一眼可辨，也不会误触到
-/// 别的动作（点空白/再点该项本身同样是收起）。
-///
-/// **与选择浮层的分工**（2026-11-03 修订，见 AGENTS.md）：从一组值里挑一个的
-/// 纯选择交互（`showOrbitSelectPopup`）**直接复用本面板**——同一
-/// `OrbitDropdownPanelView` 行渲染、同一右上角坐标，只是由 `showSelectBottomSheet`
-/// 兼容名转发；**页头的「当前列表操作」类入口**（含开关、就地展开子项）仍收敛
-/// 到本面板——「就地展开」的层级感是单项选择给不了的（竞品同款版式）。快加
-/// 面板的档位快捷项（优先级 / 项目单选、标签多选卡）同样锚在触发钮上方弹出，
-/// 与页头面板同源同形。
-Future<void> showOrbitDropdownPanel(
-  BuildContext context, {
-  required List<List<OrbitPanelItem>> groups,
-
-  /// 面板顶端避让（通常 = 状态栏 + 页头高，使面板贴在页头下沿）
-  double? topInset,
-
-  /// 锚矩形（全局坐标）：与 [above] 联用，面板长在锚点上方、右沿对齐锚右沿；
-  /// 为空时走默认的右上形态（此时 [above] 被忽略）。
-  Rect? anchor,
-
-  /// 锚点上方形态（快加面板「更多」与快捷档用）
-  bool above = false,
-
-  /// 标题行文案（如「更多」）；与 [actionLabel] 至少给一个才渲染标题行
-  String? title,
-
-  /// 标题行尾随动作文案（如「编辑」，主题强调色）；点击先收面板再回调
-  String? actionLabel,
-  VoidCallback? onAction,
-
-  /// OS4 玻璃背景采样器（壳层 `OrbitGlassScope` 的实例；null = 退实色）
-  MiuixLayerBackdrop? backdrop,
-}) {
-  return showOrbitFloatCard<void>(
-    context,
-    anchor: anchor,
-    above: above,
-    topInset: topInset,
-    backdrop: backdrop,
-    child: OrbitDropdownPanelView(
-      groups: groups,
-      title: title,
-      actionLabel: actionLabel,
-      onAction: onAction,
-    ),
-  );
-}
-
-/// 下拉面板内容视图（公开件：路由版包在 [OrbitFloatCard] 里，Overlay 直挂版
+/// 下拉面板内容视图（公开件：直挂版包在 [OrbitFloatCard] 里，Overlay 直挂版
 /// 由调用方包卡并传 [onClose] 接管关闭动作）。
 class OrbitDropdownPanelView extends StatefulWidget {
   const OrbitDropdownPanelView({
@@ -522,7 +416,7 @@ class OrbitDropdownPanelViewState extends State<OrbitDropdownPanelView> {
         ],
       ],
     );
-    // 壳由入口统一包（[showOrbitFloatCard] / OS4 形变弹层），此处只出条目列，
+    // 壳由调用方统一包（[OrbitFloatCard] / OS4 形变弹层），此处只出条目列，
     // 避免双层边框；形变弹层外层已带纵向滚动，[scrollable] 为 false 时不再套
     // 上下 8 呼吸位对齐玻璃菜单的 contentPadding
     const padding = EdgeInsets.symmetric(vertical: 8);
