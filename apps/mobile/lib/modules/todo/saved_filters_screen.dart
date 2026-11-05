@@ -11,6 +11,7 @@ import '../../data/providers/bridge_provider.dart';
 import '../../shared/widgets/shadcn/orbit_strikethrough.dart';
 import '../../shared/widgets/shadcn/orbit_bottom_nav.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_dropdown_preference.dart';
 import '../../shared/widgets/shadcn/orbit_text_field.dart';
 import '../../shared/widgets/shadcn/orbit_empty_state.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
@@ -237,75 +238,38 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
             children: [
               OrbitTextField(controller: nameCtl, label: '名称（如：本周 P0）'),
               const SizedBox(height: AppDimens.space12),
-              SizedBox(
-                height: AppDimens.touchTarget,
-                child: InkWell(
-                  onTap: () => showSelectBottomSheet<String?>(
-                    ctx,
-                    title: '状态',
-                    current: status,
-                    items: const [
-                      SelectItem(value: null, label: '全部状态'),
-                      SelectItem(value: 'pending', label: '待办'),
-                      SelectItem(value: 'doing', label: '进行中'),
-                      SelectItem(value: 'done', label: '已完成'),
-                    ],
-                    onSelect: (v) => setSheet(() => status = v),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          '状态：${status == null ? '全部' : statusLabel(status!)}',
-                          style: TextStyle(
-                            fontSize: 15,
-                            color: colors.bodyText,
-                          ),
-                        ),
-                      ),
-                      Icon(
-                        OrbitIcons.chevronRight,
-                        color: colors.secondaryText,
-                      ),
-                    ],
-                  ),
+              // 状态 / 优先级走设置页同款下拉偏好行：行内常驻当前档 +
+              // 上下双箭头，点行就地展开玻璃菜单。抽屉已有 16 水平内边距，
+              // 行自身取 0 水平内边距与上方名称字段同线
+              OrbitDropdownPreference<String?>(
+                title: '状态',
+                items: const [
+                  SelectItem(value: null, label: '全部状态'),
+                  SelectItem(value: 'pending', label: '待办'),
+                  SelectItem(value: 'doing', label: '进行中'),
+                  SelectItem(value: 'done', label: '已完成'),
+                ],
+                current: status,
+                insideMargin: const EdgeInsets.symmetric(
+                  vertical: AppDimens.space8,
                 ),
+                onSelect: (v) => setSheet(() => status = v),
               ),
-              SizedBox(
-                height: AppDimens.touchTarget,
-                child: InkWell(
-                  onTap: () => showSelectBottomSheet<int>(
-                    ctx,
-                    title: '最低优先级',
-                    current: priorityMin,
-                    items: const [
-                      SelectItem(value: 0, label: '全部优先级'),
-                      SelectItem(value: 1, label: 'P1 及以上'),
-                      SelectItem(value: 2, label: 'P2 及以上'),
-                      SelectItem(value: 3, label: 'P3 及以上'),
-                      SelectItem(value: 4, label: 'P4 及以上'),
-                      SelectItem(value: 5, label: '仅 P5'),
-                    ],
-                    onSelect: (v) => setSheet(() => priorityMin = v),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          '优先级≥：${priorityMin == 0 ? '全部' : 'P$priorityMin'}',
-                          style: TextStyle(
-                            fontSize: 15,
-                            color: colors.bodyText,
-                          ),
-                        ),
-                      ),
-                      Icon(
-                        OrbitIcons.chevronRight,
-                        color: colors.secondaryText,
-                      ),
-                    ],
-                  ),
+              OrbitDropdownPreference<int>(
+                title: '优先级',
+                items: const [
+                  SelectItem(value: 0, label: '全部优先级'),
+                  SelectItem(value: 1, label: 'P1 及以上'),
+                  SelectItem(value: 2, label: 'P2 及以上'),
+                  SelectItem(value: 3, label: 'P3 及以上'),
+                  SelectItem(value: 4, label: 'P4 及以上'),
+                  SelectItem(value: 5, label: '仅 P5'),
+                ],
+                current: priorityMin,
+                insideMargin: const EdgeInsets.symmetric(
+                  vertical: AppDimens.space8,
                 ),
+                onSelect: (v) => setSheet(() => priorityMin = v),
               ),
               OrbitTextField(
                 controller: withinCtl,

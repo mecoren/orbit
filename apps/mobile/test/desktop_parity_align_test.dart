@@ -289,13 +289,16 @@ void main() {
     await tester.tap(find.byType(FloatingActionButton));
     await tester.pumpAndSettle();
 
-    // 状态：全部 → 进行中（中文回显）
-    await tester.tap(find.text('状态：全部'));
+    // 状态：全部 → 进行中（下拉偏好行：尾随值常驻 + 就地玻璃菜单）
+    await tester.tap(find.text('全部状态'));
     await tester.pumpAndSettle();
-    expect(find.text('进行中'), findsWidgets);
-    await tester.tap(find.text('进行中').last);
+    expect(dropdownPreferencePopupRows(), findsNWidgets(4));
+    expect(selectedDropdownPreferenceLabels(tester), ['全部状态']);
+    // 弹层条目文字不是 Text，按浮层行位置点第 3 档（进行中）
+    await tester.tapAt(tester.getCenter(dropdownPreferencePopupRows().at(2)));
     await tester.pumpAndSettle();
-    expect(find.text('状态：进行中'), findsOneWidget);
+    expect(find.text('进行中'), findsOneWidget);
+    expect(find.text('全部状态'), findsNothing);
 
     // 项目行：按名称多选（不再要求用户输入数据库 id）
     final sheetScroll = find
