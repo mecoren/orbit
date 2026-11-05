@@ -10,6 +10,7 @@ import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_card.dart';
+import '../../shared/widgets/shadcn/orbit_dropdown_preference.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
@@ -324,96 +325,6 @@ class _BackupPageState extends ConsumerState<BackupPage> {
     }
   }
 
-  Future<void> _pickScheduleType() async {
-    await showSelectBottomSheet<String>(
-      context,
-      title: '自动备份频率',
-      current: _prefs.scheduleType,
-      items: [
-        for (final e in _scheduleLabels.entries)
-          SelectItem(value: e.key, label: e.value),
-      ],
-      onSelect: (v) => _savePrefs(_prefs.copyWith(scheduleType: v)),
-    );
-  }
-
-  Future<void> _pickScheduleTime() async {
-    final parts = _prefs.scheduleTime.split(':');
-    final hour = int.tryParse(parts.first) ?? 3;
-    final minute = parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0;
-
-    if (!mounted) return;
-    await showSelectBottomSheet<int>(
-      context,
-      title: '备份时刻 · 小时',
-      current: hour,
-      items: [
-        for (var h = 0; h < 24; h++)
-          SelectItem(value: h, label: '${h.toString().padLeft(2, '0')} 时'),
-      ],
-      onSelect: (h) async {
-        if (!mounted) return;
-        await showSelectBottomSheet<int>(
-          context,
-          title: '备份时刻 · 分钟',
-          current: minute - (minute % 15),
-          items: [
-            for (var m = 0; m < 60; m += 15)
-              SelectItem(value: m, label: '${m.toString().padLeft(2, '0')} 分'),
-          ],
-          onSelect: (m) => _savePrefs(
-            _prefs.copyWith(
-              scheduleTime:
-                  '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}',
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _pickWeekday() async {
-    await showSelectBottomSheet<int>(
-      context,
-      title: '备份日 · 星期',
-      current: _prefs.scheduleWeekday,
-      items: [
-        for (var i = 0; i < 7; i++)
-          SelectItem(value: i, label: _weekdayLabels[i]),
-      ],
-      onSelect: (v) => _savePrefs(_prefs.copyWith(scheduleWeekday: v)),
-    );
-  }
-
-  Future<void> _pickMonth() async {
-    await showSelectBottomSheet<int>(
-      context,
-      title: '备份月',
-      current: _prefs.scheduleMonth,
-      items: [
-        for (var i = 1; i <= 12; i++) SelectItem(value: i, label: '$i 月'),
-      ],
-      onSelect: (v) async {
-        await _savePrefs(_prefs.copyWith(scheduleMonth: v));
-        if (!mounted) return;
-        await _pickDayOfMonth();
-      },
-    );
-  }
-
-  Future<void> _pickDayOfMonth() async {
-    await showSelectBottomSheet<int>(
-      context,
-      title: '备份日',
-      current: _prefs.scheduleDayOfMonth,
-      items: [
-        // 上限 28：避免月末歧义（core validate_schedule 同口径）
-        for (var i = 1; i <= 28; i++) SelectItem(value: i, label: '$i 日'),
-      ],
-      onSelect: (v) => _savePrefs(_prefs.copyWith(scheduleDayOfMonth: v)),
-    );
-  }
-
   // ── 渲染 ──
 
   @override
@@ -565,104 +476,207 @@ class _BackupPageState extends ConsumerState<BackupPage> {
   }
 
   Widget _autoBackupCard(AppColorSet colors) {
+    final busy = _busy != null;
+    final timeParts = _prefs.scheduleTime.split(':');
+    final hour = int.tryParse(timeParts.first) ?? 3;
+    final rawMinute =
+        timeParts.length > 1 ? (int.tryParse(timeParts[1]) ?? 0) : 0;
+    final minuteSlot = rawMinute - (rawMinute % 15);
     final showTime =
         _prefs.scheduleType != 'off' && _prefs.scheduleType != 'hourly';
-    return SectionCard(
-      title: '自动备份',
+    String two(int v) => v.toString().padLeft(2, '0');
+
+    return OrbitCard(
+      // 水平内边距归零：下拉偏好行的按压灰底要横贯整卡（设置页档位行口径），
+      // 头行 / 说明 / 开关行各自补回 16
+      padding: EdgeInsets.zero,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            '按频率自动生成加密备份。应用未运行（进程被杀）时不会执行，'
-            '下次打开会补做当天缺额。',
-            style: TextStyle(fontSize: 12, color: colors.secondaryText),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppDimens.cardPadding,
+              AppDimens.cardPadding,
+              AppDimens.cardPadding,
+              0,
+            ),
+            child: Text(
+              '自动备份',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: OrbitAccents.todoAccent,
+              ),
+            ),
           ),
-          const SizedBox(height: AppDimens.space8),
-          _actionRow(
-            colors,
-            label: '频率',
-            value: _scheduleLabels[_prefs.scheduleType] ?? '关闭',
-            onTap: _pickScheduleType,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppDimens.cardPadding,
+              AppDimens.space8,
+              AppDimens.cardPadding,
+              0,
+            ),
+            child: Text(
+              '按频率自动生成加密备份。应用未运行（进程被杀）时不会执行，'
+              '下次打开会补做当天缺额。',
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.5,
+                color: colors.secondaryText,
+              ),
+            ),
+          ),
+          const SizedBox(height: AppDimens.space4),
+          // 频率 / 分钟 / 星期 / 日期全部走设置页同款下拉偏好行：行内常驻
+          // 当前档 + 上下双箭头，点行就地展开玻璃菜单
+          OrbitDropdownPreference<String>(
+            title: '频率',
+            items: [
+              for (final e in _scheduleLabels.entries)
+                SelectItem(value: e.key, label: e.value),
+            ],
+            current: _prefs.scheduleType,
+            enabled: !busy,
+            onSelect: (v) => _savePrefs(_prefs.copyWith(scheduleType: v)),
           ),
           if (_prefs.scheduleType == 'hourly')
-            _actionRow(
-              colors,
-              label: '分钟',
-              value: '${_prefs.scheduleMinute} 分',
-              onTap: () async {
-                await showSelectBottomSheet<int>(
-                  context,
-                  title: '每小时的第几分钟',
-                  current: _prefs.scheduleMinute,
-                  items: [
-                    for (var m = 0; m < 60; m += 5)
-                      SelectItem(value: m, label: '$m 分'),
-                  ],
-                  onSelect: (v) =>
-                      _savePrefs(_prefs.copyWith(scheduleMinute: v)),
-                );
-              },
+            OrbitDropdownPreference<int>(
+              title: '分钟',
+              items: [
+                for (var m = 0; m < 60; m += 5)
+                  SelectItem(value: m, label: '$m 分'),
+              ],
+              current: _prefs.scheduleMinute,
+              enabled: !busy,
+              onSelect: (v) => _savePrefs(_prefs.copyWith(scheduleMinute: v)),
             ),
-          if (showTime)
-            _actionRow(
-              colors,
-              label: '时刻',
-              value: _prefs.scheduleTime,
-              onTap: _pickScheduleTime,
+          // 时刻拆成「小时 + 分钟」两行：24 档小时放进单一弹层会超过限高，
+          // 拆开后每档都在一屏内，两行分别回写 HH / mm
+          if (showTime) ...[
+            OrbitDropdownPreference<int>(
+              title: '小时',
+              items: [
+                for (var h = 0; h < 24; h++)
+                  SelectItem(value: h, label: '${two(h)} 时'),
+              ],
+              current: hour,
+              enabled: !busy,
+              onSelect: (h) => _savePrefs(
+                _prefs.copyWith(scheduleTime: '${two(h)}:${two(minuteSlot)}'),
+              ),
             ),
-          if (_prefs.scheduleType == 'weekly')
-            _actionRow(
-              colors,
-              label: '星期',
-              value: _weekdayLabels[_prefs.scheduleWeekday.clamp(0, 6)],
-              onTap: _pickWeekday,
-            ),
-          if (_prefs.scheduleType == 'monthly')
-            _actionRow(
-              colors,
-              label: '日期',
-              value: '${_prefs.scheduleDayOfMonth} 日',
-              onTap: _pickDayOfMonth,
-            ),
-          if (_prefs.scheduleType == 'yearly')
-            _actionRow(
-              colors,
-              label: '日期',
-              value: '${_prefs.scheduleMonth} 月 ${_prefs.scheduleDayOfMonth} 日',
-              onTap: _pickMonth,
-            ),
-          const SizedBox(height: AppDimens.space4),
-          _switchRow(
-            colors,
-            label: '写入本机备份目录',
-            value: _prefs.localBackupEnabled,
-            onChanged: (v) =>
-                _savePrefs(_prefs.copyWith(localBackupEnabled: v)),
-          ),
-          _switchRow(
-            colors,
-            label: '上传云端副本',
-            value: _prefs.cloudBackupEnabled,
-            onChanged: (v) =>
-                _savePrefs(_prefs.copyWith(cloudBackupEnabled: v)),
-          ),
-          _switchRow(
-            colors,
-            label: '仅保留最新一份',
-            value: _prefs.keepLatest,
-            onChanged: (v) => _savePrefs(_prefs.copyWith(keepLatest: v)),
-          ),
-          if (_prefs.nextBackupAt > 0) ...[
-            const SizedBox(height: AppDimens.space8),
-            Text(
-              '下次自动备份：${formatDateTime(_prefs.nextBackupAt * 1000)}',
-              style: TextStyle(fontSize: 11, color: colors.secondaryText),
+            OrbitDropdownPreference<int>(
+              title: '分钟',
+              items: [
+                for (var m = 0; m < 60; m += 15)
+                  SelectItem(value: m, label: '${two(m)} 分'),
+              ],
+              current: minuteSlot,
+              enabled: !busy,
+              onSelect: (m) => _savePrefs(
+                _prefs.copyWith(scheduleTime: '${two(hour)}:${two(m)}'),
+              ),
             ),
           ],
+          if (_prefs.scheduleType == 'weekly')
+            OrbitDropdownPreference<int>(
+              title: '星期',
+              items: [
+                for (var i = 0; i < 7; i++)
+                  SelectItem(value: i, label: _weekdayLabels[i]),
+              ],
+              current: _prefs.scheduleWeekday.clamp(0, 6),
+              enabled: !busy,
+              onSelect: (v) => _savePrefs(_prefs.copyWith(scheduleWeekday: v)),
+            ),
+          if (_prefs.scheduleType == 'monthly')
+            OrbitDropdownPreference<int>(
+              title: '日期',
+              items: [
+                // 上限 28：避免月末歧义（core validate_schedule 同口径）
+                for (var i = 1; i <= 28; i++)
+                  SelectItem(value: i, label: '$i 日'),
+              ],
+              current: _prefs.scheduleDayOfMonth,
+              enabled: !busy,
+              onSelect: (v) =>
+                  _savePrefs(_prefs.copyWith(scheduleDayOfMonth: v)),
+            ),
+          if (_prefs.scheduleType == 'yearly') ...[
+            OrbitDropdownPreference<int>(
+              title: '月',
+              items: [
+                for (var i = 1; i <= 12; i++)
+                  SelectItem(value: i, label: '$i 月'),
+              ],
+              current: _prefs.scheduleMonth,
+              enabled: !busy,
+              onSelect: (v) => _savePrefs(_prefs.copyWith(scheduleMonth: v)),
+            ),
+            OrbitDropdownPreference<int>(
+              title: '日',
+              items: [
+                for (var i = 1; i <= 28; i++)
+                  SelectItem(value: i, label: '$i 日'),
+              ],
+              current: _prefs.scheduleDayOfMonth,
+              enabled: !busy,
+              onSelect: (v) =>
+                  _savePrefs(_prefs.copyWith(scheduleDayOfMonth: v)),
+            ),
+          ],
+          const SizedBox(height: AppDimens.space4),
+          _padded(
+            _switchRow(
+              colors,
+              label: '写入本机备份目录',
+              value: _prefs.localBackupEnabled,
+              onChanged: (v) =>
+                  _savePrefs(_prefs.copyWith(localBackupEnabled: v)),
+            ),
+          ),
+          _padded(
+            _switchRow(
+              colors,
+              label: '上传云端副本',
+              value: _prefs.cloudBackupEnabled,
+              onChanged: (v) =>
+                  _savePrefs(_prefs.copyWith(cloudBackupEnabled: v)),
+            ),
+          ),
+          _padded(
+            _switchRow(
+              colors,
+              label: '仅保留最新一份',
+              value: _prefs.keepLatest,
+              onChanged: (v) => _savePrefs(_prefs.copyWith(keepLatest: v)),
+            ),
+          ),
+          if (_prefs.nextBackupAt > 0)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppDimens.cardPadding,
+                AppDimens.space8,
+                AppDimens.cardPadding,
+                AppDimens.cardPadding,
+              ),
+              child: Text(
+                '下次自动备份：${formatDateTime(_prefs.nextBackupAt * 1000)}',
+                style: TextStyle(fontSize: 11, color: colors.secondaryText),
+              ),
+            )
+          else
+            const SizedBox(height: AppDimens.cardPadding),
         ],
       ),
     );
   }
+
+  /// 卡片零水平内边距时给开关行补回 16（[_switchRow] 本身不含水平内边距）
+  Widget _padded(Widget child) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: AppDimens.cardPadding),
+    child: child,
+  );
 
   Widget _localListCard(AppColorSet colors) {
     return SectionCard(

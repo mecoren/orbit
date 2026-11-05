@@ -31,6 +31,20 @@ Future<void> _drainToast(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 300));
 }
 
+/// 滚到目标可见（自动备份卡切档后变高，底部行会掉出 600 视口）
+Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
+  final listView = find.byType(ListView);
+  await tester.dragUntilVisible(finder, listView, const Offset(0, -200));
+  await tester.pumpAndSettle();
+  // dragUntilVisible 末尾的 ensureVisible 把目标顶到视口顶部，会被页头
+  // 盖住；往回滚一点让整行落在页头下方
+  for (var i = 0; i < 6; i++) {
+    if (tester.getRect(finder).top >= 80) break;
+    await tester.drag(listView, const Offset(0, 100));
+    await tester.pumpAndSettle();
+  }
+}
+
 void main() {
   testWidgets('首屏卡片渲染：备份 / 恢复 / 自动备份', (tester) async {
     await tester.pumpWidget(_wrap(MockOrbitBridge()));
@@ -79,20 +93,45 @@ void main() {
     await _drainToast(tester);
   });
 
-  testWidgets('自动备份：默认关闭，切到「每天」后出现时刻行', (tester) async {
+  testWidgets('自动备份：频率下拉选「每天」后出现小时/分钟两行', (tester) async {
     await tester.pumpWidget(_wrap(MockOrbitBridge()));
     await _settle(tester);
 
     expect(find.text('关闭'), findsOneWidget);
-    expect(find.text('时刻'), findsNothing);
+    expect(find.text('小时'), findsNothing);
 
+    // 频率行就地展开：六档，当前「关闭」打勾
     await tester.tap(find.text('关闭'));
-    // 选择抽屉有入场动画，未 settle 时点击会落空
     await tester.pumpAndSettle();
-    await tester.tap(find.text('每天'));
+    expect(dropdownPreferencePopupRows(), findsNWidgets(6));
+    expect(selectedDropdownPreferenceLabels(tester), ['关闭']);
+
+    // 弹层条目文字不是 Text，按浮层行位置点第 3 档（关闭/每小时/每天/…）
+    await tester.tapAt(tester.getCenter(dropdownPreferencePopupRows().at(2)));
     await _settle(tester);
 
-    expect(find.text('时刻'), findsOneWidget);
-    expect(find.text('03:00'), findsOneWidget);
+    expect(find.text('小时'), findsOneWidget);
+    expect(find.text('分钟'), findsOneWidget);
+    expect(find.text('03 时'), findsOneWidget);
+    expect(find.text('00 分'), findsOneWidget);
+    await _drainToast(tester);
+  });
+
+  testWidgets('自动备份：每月档的日期下拉 28 档（弹层限高滚动）', (tester) async {
+    await tester.pumpWidget(_wrap(MockOrbitBridge()));
+    await _settle(tester);
+
+    await tester.tap(find.text('关闭'));
+    await tester.pumpAndSettle();
+    // 第 5 档 = 每月（关闭/每小时/每天/每周/每月/每年）
+    await tester.tapAt(tester.getCenter(dropdownPreferencePopupRows().at(4)));
+    await _settle(tester);
+
+    await _scrollTo(tester, find.text('1 日'));
+    await tester.tap(find.text('1 日'));
+    await tester.pumpAndSettle();
+    expect(dropdownPreferencePopupRows(), findsNWidgets(28));
+    expect(tester.takeException(), isNull, reason: '长档位须限高滚动、不得溢出');
+    await _drainToast(tester);
   });
 }

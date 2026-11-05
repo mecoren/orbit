@@ -206,19 +206,28 @@ class _OrbitDropdownPreferenceState<T>
               material: isDark ? _materialDark : _materialLight,
             ),
             onDismissRequest: () => setState(() => _open = false),
-            child: Column(
-              key: orbitDropdownPopupKey,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final item in widget.items)
-                  MiuixGlassPopupItem(
-                    text: item.label,
-                    summary: item.hint,
-                    icon: orbitSelectItemLeading(item),
-                    selected: item.value == widget.current,
-                    onPressed: () => _pick(item.value),
-                  ),
-              ],
+            // 长档位（24 小时 / 28 日这类）限高滚动：库内弹层只按 child 尺寸
+            // 定位、不做屏幕限位，不限高会直接伸出屏幕外
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.5,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  key: orbitDropdownPopupKey,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final item in widget.items)
+                      MiuixGlassPopupItem(
+                        text: item.label,
+                        summary: item.hint,
+                        icon: orbitSelectItemLeading(item),
+                        selected: item.value == widget.current,
+                        onPressed: () => _pick(item.value),
+                      ),
+                  ],
+                ),
+              ),
             ),
           ),
       ],
