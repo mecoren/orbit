@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -7,12 +8,11 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../core/theme/icon_map.dart';
-import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
-import '../../shared/widgets/shadcn/orbit_card.dart';
+import '../../shared/widgets/shadcn/orbit_arrow_tile.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
-import '../../shared/widgets/shadcn/orbit_section_card.dart';
+import '../../shared/widgets/shadcn/orbit_settings_group.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../shared/widgets/shadcn/orbit_button.dart';
@@ -21,7 +21,8 @@ import 'update_check.dart';
 /// 关于页 /about（设置页关于卡入口）
 ///
 /// 三分区：品牌 + 版本（package_info_plus 真实构建版本，不硬编码）+
-/// 更新日志（数据源在 orbit-core，与桌面同一份；壳层只渲染）+
+/// 更新日志（只留一行入口，点进 /about/changelog 看版本列表、再点看明细；
+/// 数据源在 orbit-core，与桌面同一份）+
 /// 开源许可（showLicensePage 系统许可页）。
 class AboutPage extends ConsumerStatefulWidget {
   const AboutPage({super.key});
@@ -37,14 +38,9 @@ class _AboutPageState extends ConsumerState<AboutPage> {
   String _currentVersion = '';
   bool _checking = false;
 
-  /// 更新日志（数据源在 orbit-core；null = 加载中）
-  List<ChangelogVersionInfo>? _changelog;
-  bool _changelogFailed = false;
-
   @override
   void initState() {
     super.initState();
-    _loadChangelog();
     PackageInfo.fromPlatform()
         .then((info) {
           if (!mounted) return;
@@ -54,18 +50,6 @@ class _AboutPageState extends ConsumerState<AboutPage> {
           });
         })
         .catchError((_) {});
-  }
-
-  /// 加载应用内更新日志（数据源在 orbit-core；失败只影响该卡片）
-  Future<void> _loadChangelog() async {
-    try {
-      final versions = await ref.read(orbitBridgeProvider).changelogVersions();
-      if (!mounted) return;
-      setState(() => _changelog = versions);
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _changelogFailed = true);
-    }
   }
 
   /// 检查更新（#107）：只在点击时请求一次；有新版本给「打开发布页」，
@@ -129,8 +113,7 @@ class _AboutPageState extends ConsumerState<AboutPage> {
                     MediaQuery.of(context).padding.top +
                     OrbitPageHeader.rowHeight +
                     AppDimens.space16,
-                left: AppDimens.pageInline,
-                right: AppDimens.pageInline,
+                // 卡片自带 h:12 外距（OrbitSettingsGroup），列表不加水平边距
                 bottom: AppDimens.gestureInsetFallback + AppDimens.space32,
               ),
               children: [
@@ -171,58 +154,18 @@ class _AboutPageState extends ConsumerState<AboutPage> {
                   ],
                 ),
                 const SizedBox(height: AppDimens.space16),
-                SectionCard(
+                OrbitSettingsGroup(
                   title: '更新日志',
-                  child: Column(
-                    children: [
-                      if (_changelog == null)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                            vertical: AppDimens.space12,
-                          ),
-                          child: Text(
-                            _changelogFailed
-                                ? '更新日志加载失败，请重启应用后重试。'
-                                : '加载中…',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: colors.secondaryText,
-                            ),
-                          ),
-                        )
-                      else
-                        for (var i = 0; i < _changelog!.length; i++) ...[
-                          if (i > 0) const SizedBox(height: AppDimens.space8),
-                          OrbitCard(
-                            fillColor: colors.surfaceSecondary,
-                            padding: const EdgeInsets.all(AppDimens.space12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'v${_changelog![i].version}（${_changelog![i].date}）',
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  _changelog![i].summary,
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: colors.bodyText,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                    ],
+                  // 行自带 16 水平内边距：按压灰底要横贯整卡（设置页档位行同
+                  // 口径）。内容行贴底，卡片圆角统一裁切。
+                  padding: EdgeInsets.zero,
+                  child: OrbitArrowTile(
+                    title: '查看历史版本',
+                    onClick: () => context.push('/about/changelog'),
                   ),
                 ),
                 const SizedBox(height: AppDimens.cardGap),
-                SectionCard(
+                OrbitSettingsGroup(
                   title: '开源许可',
                   child: SizedBox(
                     width: double.infinity,

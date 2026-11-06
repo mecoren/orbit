@@ -7,6 +7,8 @@ import '../../shared/widgets/shadcn/orbit_glass_surface.dart';
 import '../../modules/settings/about_page.dart';
 import '../../modules/settings/appearance_page.dart';
 import '../../modules/settings/backup_page.dart';
+import '../../modules/settings/changelog_detail_page.dart';
+import '../../modules/settings/changelog_list_page.dart';
 import '../../modules/settings/holiday_cache_page.dart';
 import '../../modules/settings/label_manager_page.dart';
 import '../../modules/settings/nav_modules_page.dart';
@@ -342,6 +344,20 @@ final appRouter = GoRouter(
       // 与同级设置子页统一右滑入转场（原裸 builder 无转场，突兀）
       pageBuilder: (context, state) =>
           pageSlideFromRight(const AboutPage(), key: state.pageKey),
+    ),
+    // 更新日志：关于页一行入口 → 版本列表（待办列表版式）→ 版本明细
+    // （任务详情版式）
+    GoRoute(
+      path: '/about/changelog',
+      pageBuilder: (context, state) =>
+          pageSlideFromRight(const ChangelogListPage(), key: state.pageKey),
+    ),
+    GoRoute(
+      path: '/about/changelog/:version',
+      pageBuilder: (context, state) => pageSlideFromRight(
+        ChangelogDetailPage(version: state.pathParameters['version'] ?? ''),
+        key: state.pageKey,
+      ),
     ),
   ],
 );
