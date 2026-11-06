@@ -195,6 +195,9 @@ class _SheetHandle extends StatelessWidget {
 /// - 形态与间距：按钮圆角走原语默认的项目统一档 `AppShapes.medium`（14，
 ///   与卡片/输入框同档，docs/05 底部抽屉口径），外边距 16/16/16/20、
 ///   双钮间隙 12——不画内容分隔线，靠留白划界
+/// - 破坏性确认钮（[destructive]）：**浅灰实心底 + 红字**，与左侧取消同底
+///   只换字色（2026-11-06 起，`OrbitButton.primary(destructive: true)` 已按
+///   此口径渲染）；不用红底白字，避免删除比主行动还抢眼
 class OrbitSheetActions extends StatelessWidget {
   const OrbitSheetActions({
     super.key,

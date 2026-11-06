@@ -40,9 +40,10 @@ enum OrbitButtonVariant {
 ///   「透明底 + 强调色描边」（= 原 `outlinedButtonTheme`），2026-11-04 起
 ///   并入同一实心形态，描边语言废弃（`_ButtonOutlinePainter` 已删）；
 /// - text：透明底 + 强调色字（= 原 `textButtonTheme`）；
-/// - destructive：破坏性语义（primary 主色底 / secondary·outline 红字，
-///   删除类），替代各处
-///   `OutlinedButton.styleFrom(foregroundColor: colors.destructive)` 的手写样式。
+/// - destructive：破坏性语义（**一律红字、不用红底**，2026-11-06 收口）。
+///   primary 档也从「红底白字」改为与 secondary 同款的浅灰实心底 + 红字——
+///   红底白字在「取消 / 删除」并列时比主行动还抢眼，且被用户读成「默认推荐」；
+///   HyperOS 对话框的删除钮正是灰底红字，靠字色而非底色表达危险。
 ///
 /// **尺寸口径**：`MiuixButton` 的 `minHeight` 默认 40，本仓库触控目标是 48
 /// （[AppDimens.touchTarget]）。默认取 48 保证热区不下滑；`compact: true`
@@ -158,10 +159,11 @@ class OrbitButton extends StatelessWidget {
     final minHeight = compact ? 40.0 : AppDimens.touchTarget;
 
     final buttonColors = switch (variant) {
+      // primary：破坏性动作不铺红底（见类文档）——底落浅灰实心、只把字染红
       OrbitButtonVariant.primary => MiuixButtonColors(
-          color: accent,
+          color: destructive ? colors.surfaceSecondary : accent,
           disabledColor: colors.divider,
-          contentColor: mColors.onPrimary,
+          contentColor: destructive ? colors.destructive : mColors.onPrimary,
           disabledContentColor: colors.deactivatedText,
         ),
       // secondary / outline：浅灰实心（HyperOS 默认形态）；outline 历史

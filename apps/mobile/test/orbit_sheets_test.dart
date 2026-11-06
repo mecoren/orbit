@@ -44,6 +44,15 @@ Color buttonFillOf(WidgetTester tester, String label) {
   return tester.widget<MiuixButton>(button.first).colors!.color;
 }
 
+/// 取按钮文字色（同 `buttonFillOf` 口径，读构造上的 `colors` 配置）
+Color buttonContentColorOf(WidgetTester tester, String label) {
+  final button = find.ancestor(
+    of: find.text(label),
+    matching: find.byType(MiuixButton),
+  );
+  return tester.widget<MiuixButton>(button.first).colors!.contentColor;
+}
+
 void main() {
   Future<BuildContext> pumpHost(WidgetTester tester) async {
     late BuildContext ctx;
@@ -393,7 +402,7 @@ void main() {
     }
   });
 
-  testWidgets('确认弹层：删除按钮实心不透明（不是像禁用的淡粉）', (tester) async {
+  testWidgets('确认弹层：删除钮浅灰底 + 红字（不是红底实心）', (tester) async {
     final ctx = await pumpHost(tester);
     showConfirmBottomSheet(
       ctx,
@@ -408,9 +417,18 @@ void main() {
     expect(
       fill.a,
       1,
-      reason: '实心填充——shadcn 默认 0.5 alpha 的白字淡粉会被用户读成"不可点"',
+      reason: '实心填充——半透明底会被用户读成"不可点"',
     );
-    expect(fill, AppColors.light.destructive, reason: '取破坏性 token 实色');
+    expect(
+      fill,
+      AppColors.light.surfaceSecondary,
+      reason: '底色与「取消」同档浅灰，禁用红底实心',
+    );
+    expect(
+      buttonContentColorOf(tester, '删除'),
+      AppColors.light.destructive,
+      reason: '危险语义只走字色（2026-11-06 收口）',
+    );
   });
 
   testWidgets('确认弹层：长内容滚动时底部按钮固定（不被内容顶出）', (tester) async {
