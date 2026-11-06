@@ -10,7 +10,6 @@ import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/core/theme/icon_map.dart';
 import 'package:orbit/modules/todo/saved_filters_screen.dart';
-import 'package:orbit/shared/widgets/shadcn/orbit_dropdown_preference.dart';
 
 import 'support/orbit_test_app.dart';
 
