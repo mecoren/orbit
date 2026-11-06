@@ -277,23 +277,26 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
               ),
               // 截止区间（绝对日期；与「天内截止/已逾期」叠加恒无命中——
               // 桌面构建器在 UI 层互斥，此处靠条件摘要人工核对）
+              // 行标题用白话「晚于 / 早于」，不再往标题里塞 ≥ / ＜ 这类
+              // 尖括号样符号（2026-11-06 反馈：标题里不要加括号之类的记法）。
+              // 用词对齐桌面构建器（那里就是「创建晚于 / 完成晚于」）
               _FilterDateRow(
-                label: '截止≥',
+                label: '截止晚于',
                 value: dueFrom,
                 onPick: (v) => setSheet(() => dueFrom = v),
               ),
               _FilterDateRow(
-                label: '截止＜',
+                label: '截止早于',
                 value: dueUntil,
                 onPick: (v) => setSheet(() => dueUntil = v),
               ),
               _FilterDateRow(
-                label: '创建≥',
+                label: '创建晚于',
                 value: createdFrom,
                 onPick: (v) => setSheet(() => createdFrom = v),
               ),
               _FilterDateRow(
-                label: '完成≥',
+                label: '完成晚于',
                 value: doneFrom,
                 onPick: (v) => setSheet(() => doneFrom = v),
               ),
@@ -483,10 +486,10 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
         'favorite_only': '仅收藏',
       };
       const dateLabels = {
-        'due_from': '截止≥',
-        'due_until': '截止＜',
-        'created_from': '创建≥',
-        'done_from': '完成≥',
+        'due_from': '截止晚于',
+        'due_until': '截止早于',
+        'created_from': '创建晚于',
+        'done_from': '完成晚于',
       };
       const triLabels = {
         'has_reminder': ('有提醒', '无提醒'),
@@ -503,8 +506,10 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
       for (final e in dateLabels.entries) {
         if (c.containsKey(e.key)) {
           final ms = (c[e.key] as num).toInt();
+          // 标签已是「截止晚于」这类动宾短语，与日期之间留一空格，
+          // 免得读成「截止晚于2026-11-06」一长串
           parts.add(
-            '${e.value}${OrbitDatePicker.formatDate(DateTime.fromMillisecondsSinceEpoch(ms))}',
+            '${e.value} ${OrbitDatePicker.formatDate(DateTime.fromMillisecondsSinceEpoch(ms))}',
           );
         }
       }
@@ -810,6 +815,10 @@ class _FilterDateRow extends StatelessWidget {
 /// **行尾动作规则（2026-11-05）**：无值 → 上下双箭头（可点开选择）；有值且可
 /// 清除（[onClear] 非空）→ **只显示 X，覆盖箭头位置**（不并排、不占两格）。
 /// 用户改完立刻能在原位清空，不必再瞄一个额外的叉号。
+///
+/// **行高（2026-11-06）**：与上方状态 / 优先级偏好行同为 56（库内
+/// `MiuixBasicComponent` 的 `minHeight`），见 `build` 里 `insideMargin`
+/// 处的注释。
 class _FilterConditionRow extends StatelessWidget {
   const _FilterConditionRow({
     required this.label,
@@ -818,7 +827,7 @@ class _FilterConditionRow extends StatelessWidget {
     this.onClear,
   });
 
-  /// 行标题（项目 / 标签 / 截止≥ …）
+  /// 行标题（项目 / 标签 / 截止晚于 …；一律白话，不带 ≥ / ＜ 之类的符号）
   final String label;
 
   /// 尾随当前值文案（「不限」或已选名称 / 日期）
@@ -834,10 +843,16 @@ class _FilterConditionRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = MiuixTheme.of(context);
     final actionColor = theme.colors.onSurfaceVariantActions;
-    return MiuixBasicComponent(
-      title: label,
-      insideMargin: const EdgeInsets.symmetric(vertical: AppDimens.space8),
-      endActions: [
+
+    // 尾随块（值 + 行尾动作）与 `OrbitDropdownPreference` 同构：值紧贴动作、
+    // 动作槽只按双箭头的绘制宽（10）占位，整块按内在宽度收在行右沿。
+    //
+    // 2026-11-06 反馈「这些个『不限』应该右对齐」：动作槽原先按 48 触控宽
+    // 占位，值被挤到右侧 56 之外，比上面状态行的「全部状态」左出一大截。
+    // 热区不再用布局宽度换——X 的 48 热区改走下方透明覆盖层。
+    final trailing = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
         Flexible(
           flex: 1,
           fit: FlexFit.loose,
@@ -852,63 +867,66 @@ class _FilterConditionRow extends StatelessWidget {
             ),
           ),
         ),
-        // 行尾动作槽：X 与上下双箭头**右沿对齐**（不是居中）。
-        //
-        // 双箭头是库内 `Size(10, 16)` 的绘制件，X 图标是 22。两者若各自居中，
-        // 中心差 6；若给 X 加 48 宽槽居中，中心差反而扩大到 19、并与
-        // `OrbitDropdownPreference`（状态/优先级/三态三行）的箭头拉开
-        // （2026-11-05 实测 664 vs 683 两组）。故统一**按右沿对齐**：
-        // 视觉锚点落在行右沿，与全站其它偏好行同一条竖线。
-        //
-        // X 的热区仍是 48（a11y 口径）：用 10 宽的可视槽 + 48 热区叠加，
-        // 图标在 10 槽内居中 → 中心落在右沿内 5px，与箭头一致。
+        // 动作槽：10 宽（= 双箭头绘制宽）× 18 高，整体贴行右沿。
+        // X 图标 18 经 `OverflowBox` 撑出槽外各 4px，**中心落在右沿内 5**，
+        // 与箭头同一条竖线（2026-11-05 的口径不变，见下方几何用例）。
         SizedBox(
+          width: 10,
+          height: AppDimens.iconSizeSm,
+          child: onClear != null
+              ? OverflowBox(
+                  minWidth: AppDimens.iconSizeSm,
+                  maxWidth: AppDimens.iconSizeSm,
+                  minHeight: AppDimens.iconSizeSm,
+                  maxHeight: AppDimens.iconSizeSm,
+                  child: Icon(
+                    OrbitIcons.close,
+                    size: AppDimens.iconSizeSm,
+                    color: actionColor,
+                  ),
+                )
+              : Center(
+                  child: MiuixDropdownArrowEndAction(actionColor: actionColor),
+                ),
+        ),
+      ],
+    );
+
+    final row = MiuixBasicComponent(
+      title: label,
+      // 与偏好行同口径 8：行高由库内 `minHeight: 56` 兜平（文字约 20 + 8×2），
+      // 动作槽只有 18 高、不再把行撑到 64——六行与上方状态 / 优先级逐行等高
+      insideMargin: const EdgeInsets.symmetric(vertical: AppDimens.space8),
+      endActions: [trailing],
+      role: MiuixBasicComponentRole.dropdownList,
+      onClick: onTap,
+    );
+    if (onClear == null) return row;
+
+    // X 的 a11y 热区（48 宽 × 整行高）走**透明覆盖层**：布局上不占位，
+    // 值才能贴到行右沿（值右缘距右沿 18 = 8 间隙 + 10 动作槽），
+    // 而 X 中心仍与箭头重合。点右沿这 48 清空，点其余位置打开选择。
+    return Stack(
+      // X 图标比动作槽宽 8，向右溢出到行内边距里属预期，不能被 Stack 裁掉
+      clipBehavior: Clip.none,
+      children: [
+        row,
+        PositionedDirectional(
+          top: 0,
+          bottom: 0,
+          end: 0,
           width: AppDimens.touchTarget,
-          child: Align(
-            alignment: AlignmentDirectional.centerEnd,
-            child: SizedBox(
-              width: 10,
-              height: AppDimens.touchTarget,
-              child: onClear != null
-                  ? GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: onClear,
-                      // 热区扩到 48 宽（向左溢出，不影响右沿对齐）。图标在
-                      // 48 盒内居中 → **中心与箭头严格重合**（2026-11-05 实测
-                      // X 中心 683 = 箭头中心 683）。不要再加 `translate` 左移：
-                      // 那会把中心拉到 677、与箭头差 6，反而回到「没对齐」。
-                      // 22 图标在 10 槽内会向右溢出 6px 属预期（行内 padding
-                      // 之外仍有余量，不会被裁）。
-                      child: Semantics(
-                        button: true,
-                        label: '清除',
-                        child: OverflowBox(
-                          alignment: AlignmentDirectional.center,
-                          minWidth: AppDimens.touchTarget,
-                          maxWidth: AppDimens.touchTarget,
-                          child: Center(
-                            child: Icon(
-                              OrbitIcons.close,
-                              // 18 档（比箭头的 10×16 略宽）：中心仍与箭头
-                              // 重合在 683，右沿只溢出 2px，不会压出内容区
-                              size: AppDimens.iconSizeSm,
-                              color: actionColor,
-                            ),
-                          ),
-                        ),
-                      ),
-                    )
-                  : Center(
-                      child: MiuixDropdownArrowEndAction(
-                        actionColor: actionColor,
-                      ),
-                    ),
+          child: Semantics(
+            button: true,
+            label: '清除',
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onClear,
+              child: const SizedBox.expand(),
             ),
           ),
         ),
       ],
-      role: MiuixBasicComponentRole.dropdownList,
-      onClick: onTap,
     );
   }
 }

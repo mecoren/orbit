@@ -52,7 +52,7 @@ void main() {
   /// 2026-11-05：项目 / 标签 / 提醒 / 附件 / 未完成子任务五行原先各自手搓
   /// 「值 + 右箭头」（项目/标签是多选 InkWell，另三行是底部三态抽屉），
   /// 与上方状态/优先级不同档。现统一成同款行样式（双箭头 + 尾随值）；
-  /// 日期四行（截止≥ / 截止＜ / 创建≥ / 完成≥）同样收进这套行。
+  /// 日期四行（截止晚于 / 截止早于 / 创建晚于 / 完成晚于）同样收进这套行。
   testWidgets('全表单统一为下拉偏好行样式（尾随值 + 上下双箭头）', (tester) async {
     await tester.pumpWidget(_wrap(MockOrbitBridge()));
     await tester.pump(const Duration(milliseconds: 400));
@@ -68,10 +68,10 @@ void main() {
     for (final label in [
       '状态',
       '优先级',
-      '截止≥',
-      '截止＜',
-      '创建≥',
-      '完成≥',
+      '截止晚于',
+      '截止早于',
+      '创建晚于',
+      '完成晚于',
       '项目',
       '标签',
       '提醒',
@@ -87,6 +87,21 @@ void main() {
       findsNWidgets(11),
       reason: '十一行都应是下拉偏好行样式（上下双箭头），不得残留右箭头',
     );
+
+    // 行高几何契约（2026-11-06 反馈「截止…六行的间距和上面状态不一致」）：
+    // 行尾动作槽是 48 高触控区，内边距若取偏好行的 8 会把行撑到 64，整段
+    // 比状态/优先级松一档。判据：十一行同为库内 minHeight 56。
+    final rowHeights = <String, double>{
+      for (final element in find.byType(MiuixBasicComponent).evaluate())
+        (element.widget as MiuixBasicComponent).title ?? '': element.size!.height,
+    };
+    for (final entry in rowHeights.entries) {
+      expect(
+        entry.value,
+        56,
+        reason: '「${entry.key}」行高应为 56（与状态行一致），实际 ${entry.value}',
+      );
+    }
 
     // 三态行就地展开玻璃菜单，当前档「不限」打勾。
     // 长表单超出 600 视口，「提醒」在屏幕外，先滚进可视区再点
@@ -140,6 +155,18 @@ void main() {
       (xCenterX - arrowCenterX).abs(),
       lessThan(0.5),
       reason: 'X 中心 $xCenterX 应与箭头中心 $arrowCenterX 重合',
+    );
+
+    // 热区契约（2026-11-06 改法）：X 只占 10 宽的动作槽（值才能贴行右沿），
+    // 48 触控热区由行右沿的透明覆盖层承担——点图标左侧 30（仍在右沿 48 内、
+    // 已落到值文字上）也必须清空，否则等于把热区砍成 10 宽。
+    final xCenter = tester.getCenter(find.byIcon(OrbitIcons.close));
+    await tester.tapAt(Offset(xCenter.dx - 30, xCenter.dy));
+    await tester.pumpAndSettle();
+    expect(
+      find.byIcon(OrbitIcons.close),
+      findsNothing,
+      reason: '行右沿 48 内任意位置点击都应清空该日期',
     );
   });
 }
