@@ -33,6 +33,9 @@ class AppDimens {
   /// 分区间距
   static const double space24 = 24;
 
+  /// 卡外分组标题的水平内边距（卡外距 12 + 行内距 16，与行标题同一条竖线）
+  static const double space28 = 28;
+
   /// 大分区间距
   static const double space32 = 32;
 

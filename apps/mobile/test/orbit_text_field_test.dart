@@ -1,7 +1,9 @@
 // OrbitTextField 原语回归（2026-11-02 输入框收口到 MiuixTextField）：
 // 1. maxLength 由壳层截断（miuix 组件库不暴露 inputFormatters）；
 // 2. validator 走 Form.validate()，错误文案画在输入框下方；
-// 3. inline 形态用 hintText 当占位（详情页标题/项目名原地编辑口径）。
+// 3. inline 形态用 hintText 当占位（详情页标题/项目名原地编辑口径）；
+// 4. inline 占位随文本显隐——首字落下即隐藏、清空后回来（2026-11-06 修
+//    MiuixTextField 文本变化不重建导致占位叠在正文上、输入时被提示挡住）。
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_text_field.dart';
@@ -62,5 +64,33 @@ void main() {
 
     expect(find.text('项目名称'), findsOneWidget);
     expect(find.byType(OrbitTextField), findsOneWidget);
+  });
+
+  testWidgets('inline 占位随文本显隐：输入后隐藏、清空后回来', (tester) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      orbitTestApp(
+        home: Scaffold(
+          body: OrbitTextField(
+            controller: controller,
+            inline: true,
+            hintText: '输入评论...',
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('输入评论...'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), '这是一条评论');
+    await tester.pumpAndSettle();
+    // 占位必须让位：不能与输入正文叠在一起
+    expect(find.text('输入评论...'), findsNothing);
+    expect(find.text('这是一条评论'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), '');
+    await tester.pumpAndSettle();
+    expect(find.text('输入评论...'), findsOneWidget);
   });
 }

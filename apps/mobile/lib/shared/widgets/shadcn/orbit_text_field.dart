@@ -142,7 +142,7 @@ class OrbitTextField extends StatelessWidget {
     final isPlaceholder = label == null || inline;
     final placeholder = isPlaceholder ? (label ?? hintText ?? '') : null;
 
-    final field = Theme(
+    Widget buildField() => Theme(
       // MiuixTextField 内部的 Material TextField 只覆盖了 isDense/零内边距/
       // 无边框，`filled` 仍回落到全局 `inputDecorationTheme`（本仓为
       // filled: true + 浅灰底），会在 miuix 自己的 squircle 之外再铺一块
@@ -186,6 +186,18 @@ class OrbitTextField extends StatelessWidget {
         onSubmitted: onSubmitted,
       ),
     );
+
+    // 随文本重建：MiuixTextField 只在 label / 边框动画驱动时重建，文本变化
+    // 若既不播动画也不 `setState`，占位与输入文字的显隐（库内 `_showLabel`
+    // 读 controller 文本）就不会重新计算——占位一直叠在正在输入的文字上
+    // （2026-11-06 评论框「输入时被提示挡住」）。监听 controller 后，输入 /
+    // 清空都会立刻重算：占位随首字隐藏、清空后回来。
+    final field = controller == null
+        ? buildField()
+        : ValueListenableBuilder<TextEditingValue>(
+            valueListenable: controller!,
+            builder: (_, _, _) => buildField(),
+          );
 
     final withError = _withMessage(context, field, error);
     return onTapOutside == null

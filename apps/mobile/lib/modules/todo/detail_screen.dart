@@ -11,6 +11,7 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_miuix/miuix.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
@@ -38,7 +39,6 @@ import '../../shared/widgets/shadcn/orbit_actions_sheet.dart'
 import '../../shared/widgets/shadcn/orbit_glass_menu.dart';
 import '../../shared/widgets/shadcn/orbit_glass_surface.dart'
     show OrbitGlassScope;
-import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart'
     show showSelectBottomSheet;
@@ -65,6 +65,9 @@ import '../../core/theme/icon_map.dart';
 /// 提醒选择列表里「自定义时间…」项的哨兵值（与表单同口径）
 const String _reminderCustomKey = 'custom';
 
+/// 评论区列表滚动区（预览限高后区块内滑动；测试按 key 定位取高度）
+const Key detailCommentsListKey = ValueKey('task-detail-comments-list');
+
 /// 预计时长常用档（与任务表单 `_pickDuration` 同口径；值 = 分钟数字符串）
 const List<({String value, String label})> _durationPresets = [
   (value: '15', label: '15 分钟'),
@@ -75,6 +78,101 @@ const List<({String value, String label})> _durationPresets = [
   (value: '120', label: '2 小时'),
   (value: '180', label: '3 小时'),
 ];
+
+// ══ 分组版式：与设置页（settings_screen.dart 的 `_sectionCard` / `_RowDivider`
+// + `MiuixSmallTitle`）同构，2026-11-06 对齐 ══
+//
+// 原先详情页把分组标题画在卡内（13sp 蓝色），且行间没有分隔线——与设置页
+// 并排看是两套页面。统一为：卡外小标题（14sp 加粗、中性灰、28×8 内边距）
+// + 零内边距 [MiuixCard] 分组卡（左右 12 外距）+ 行间左缩进分隔线。
+
+/// 分组卡（设置页 `_sectionCard` 同款：h:12 外距 + 零内边距 MiuixCard）
+Widget _groupCard(List<Widget> children) => Padding(
+  padding: const EdgeInsets.symmetric(horizontal: AppDimens.space12),
+  child: MiuixCard(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: children,
+    ),
+  ),
+);
+
+/// 行间分隔线：左缩进 16 对齐行标题
+///
+/// 设置页用 56 是因为其行首有 24 图标位；详情页信息区的行首没有图标，
+/// 缩进取行内边距本身（16）才能与标题同一条竖线。
+class _GroupDivider extends StatelessWidget {
+  const _GroupDivider();
+
+  @override
+  Widget build(BuildContext context) => const Padding(
+    padding: EdgeInsets.only(left: AppDimens.space16),
+    child: MiuixHorizontalDivider(),
+  );
+}
+
+/// 卡外分组标题（[MiuixSmallTitle] 同规格：subtitle 14sp 加粗 /
+/// `onBackgroundVariant` / 28×8 内边距）
+///
+/// 左 28 = 卡片外距 12 + 行内边距 16，与卡内行标题同一条竖线；
+/// [trailing] 右缘同线（右 28），[subtitle] 换 12sp 次要色跟在标题后。
+class _GroupTitle extends StatelessWidget {
+  const _GroupTitle(this.title, {this.subtitle, this.trailing});
+
+  final String title;
+  final String? subtitle;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = MiuixTheme.of(context);
+    return Padding(
+      // 左 28 = 卡外距 12 + 行内距 16（与卡内行标题同线）；
+      // 右 16：trailing（编辑 / 添加提醒）贴齐卡片内容右缘，不跟标题同缩进——
+      // 同缩进会让按钮离卡右缘留 28 + 按钮自身内边距，读起来「没靠右」
+      // （2026-11-06 截图反馈）。
+      padding: const EdgeInsets.fromLTRB(
+        AppDimens.space28,
+        AppDimens.space8,
+        AppDimens.space16,
+        AppDimens.space8,
+      ),
+      child: Row(
+        children: [
+          // 标题集群整体 Expanded、内部 Flexible：trailing 恒贴右
+          // （SectionCard 头行同款，避免两个 flex 子项平分剩余空间）
+          Expanded(
+            child: Row(
+              children: [
+                Flexible(
+                  child: MiuixText(
+                    title,
+                    style: theme.textStyles.subtitle,
+                    color: theme.colors.onBackgroundVariant,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (subtitle != null) ...[
+                  const SizedBox(width: AppDimens.space8),
+                  Text(
+                    subtitle!,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.ofContext(context).secondaryText,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          ?trailing,
+        ],
+      ),
+    );
+  }
+}
 
 /// 关联类型中文标签（只读展示；桌面 RELATION_TYPE_LABEL 同口径）。
 /// `related` 是 2026-10 前移动端旧写入值的兼容别名（新写入一律 relates_to）
@@ -374,8 +472,8 @@ class _ErrorView extends StatelessWidget {
 
 /// 详情初次加载骨架：标题块 + 四行信息行占位
 ///
-/// 版式对齐 `_DetailView`（同款顶边距 + 横向 space16），加载落定即整块替换；
-/// `skipLoadingOnReload` 保证重查时旧内容保留，不闪骨架。
+/// 版式对齐 `_DetailView`（同款顶边距 + 卡外距 12 + 卡内 16 = 28），
+/// 加载落定即整块替换；`skipLoadingOnReload` 保证重查时旧内容保留，不闪骨架。
 class _DetailSkeleton extends StatelessWidget {
   const _DetailSkeleton();
 
@@ -388,8 +486,8 @@ class _DetailSkeleton extends StatelessWidget {
             MediaQuery.of(context).padding.top +
             OrbitPageHeader.rowHeight +
             AppDimens.space12,
-        left: AppDimens.space16,
-        right: AppDimens.space16,
+        left: AppDimens.space28,
+        right: AppDimens.space28,
       ),
       children: const [
         OrbitSkeleton.block(height: 26, borderRadius: 13),
@@ -407,6 +505,9 @@ class _DetailSkeleton extends StatelessWidget {
 }
 
 /// 详情主体：十区块滚动容器（区块间距 12、页面尾留白）
+///
+/// 水平留白由分组卡自带（卡外距 12，见 [_groupCard]），列表本身不再加
+/// 水平内边距——与设置页同口径，卡外标题才能与卡内行标题同一条竖线。
 class _DetailView extends StatelessWidget {
   const _DetailView({
     super.key,
@@ -434,8 +535,6 @@ class _DetailView extends StatelessWidget {
             MediaQuery.of(context).padding.top +
             OrbitPageHeader.rowHeight +
             AppDimens.space12,
-        left: AppDimens.space16,
-        right: AppDimens.space16,
         bottom: AppDimens.gestureInsetFallback + AppDimens.space32,
       ),
       children: [
@@ -564,8 +663,10 @@ class _TitleSectionState extends State<_TitleSection> {
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
     final task = widget.detail;
-    return SectionCard(
-      child: Row(
+    return _groupCard([
+      Padding(
+        padding: const EdgeInsets.all(AppDimens.cardPadding),
+        child: Row(
         // 三者高度天然不同（28 图形 + 44 热区的复选框 / 22px 行盒标题 /
         // 18px 铅笔），start 对齐会让小图标贴顶、复选框沉底。center 才是
         // 「复选框—标题—编辑图标」共一条中线的唯一解。
@@ -654,8 +755,9 @@ class _TitleSectionState extends State<_TitleSection> {
                   ),
           ),
         ],
+        ),
       ),
-    );
+    ]);
   }
 }
 
@@ -714,12 +816,7 @@ class _InfoSection extends ConsumerWidget {
 
     // 九行同款：左标题 + 右当前值 + 上下双箭头，点行就地展开玻璃菜单。
     // 只读两行用 disabled 档位行承载（当前值常显、箭头转弱、不可展开）。
-    return SectionCard(
-      title: '信息',
-      edgeToEdgeContent: true,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
+    final rows = <Widget>[
           OrbitDropdownPreference<int>(
             title: '优先级',
             items: [
@@ -848,8 +945,21 @@ class _InfoSection extends ConsumerWidget {
             current: 'keep',
             onSelect: (v) => _applyRepeatChoice(context, v),
           ),
-        ],
-      ),
+    ];
+
+    // 与设置页同款：卡外分组标题 + 行间分隔线（行自带 16 水平内边距，
+    // 按压灰底横贯整卡）
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _GroupTitle('信息'),
+        _groupCard([
+          for (var i = 0; i < rows.length; i++) ...[
+            if (i > 0) const _GroupDivider(),
+            rows[i],
+          ],
+        ]),
+      ],
     );
   }
 
@@ -1018,13 +1128,25 @@ class _DescriptionSectionState extends State<_DescriptionSection> {
     final description = widget.detail.description;
     // 展示态走 Markdown 渲染（与桌面详情抽屉同源口径：标题/粗体/斜体/
     // 行内代码/链接/列表；编辑入口 = 右上按钮 + 整块空态热区）
-    return SectionCard(
-      title: '描述',
-      trailing: OrbitButton.text(
-        onPressed: () => _openEditor(context),
-        child: const Text('编辑'),
-      ),
-      child: description != null
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _GroupTitle(
+          '描述',
+          trailing: OrbitButton.text(
+            onPressed: () => _openEditor(context),
+            child: const Text('编辑'),
+          ),
+        ),
+        _groupCard([
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppDimens.space16,
+              AppDimens.space12,
+              AppDimens.space16,
+              AppDimens.space16,
+            ),
+            child: description != null
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: buildMarkdownWidgets(
@@ -1050,6 +1172,9 @@ class _DescriptionSectionState extends State<_DescriptionSection> {
                 ),
               ),
             ),
+          ),
+        ]),
+      ],
     );
   }
 
@@ -1309,12 +1434,21 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
     }
 
     final progress = subtasks.isEmpty ? 0.0 : doneCount / subtasks.length;
-    return SectionCard(
-      title: '子任务',
-      subtitle: '$doneCount/${subtasks.length}',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _GroupTitle('子任务', subtitle: '$doneCount/${subtasks.length}'),
+        _groupCard([
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppDimens.space16,
+              AppDimens.space8,
+              AppDimens.space16,
+              AppDimens.space16,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
           if (subtasks.isNotEmpty) ...[
             OrbitProgressBar(
               value: progress,
@@ -1437,8 +1571,11 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
                   ),
                   label: const Text('添加子任务'),
                 ),
-        ],
-      ),
+              ],
+            ),
+          ),
+        ]),
+      ],
     );
   }
 
@@ -1496,13 +1633,25 @@ class _LabelsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
-    return SectionCard(
-      title: '标签',
-      trailing: OrbitButton.text(
-        onPressed: () => _openEditor(context),
-        child: const Text('编辑'),
-      ),
-      child: Wrap(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _GroupTitle(
+          '标签',
+          trailing: OrbitButton.text(
+            onPressed: () => _openEditor(context),
+            child: const Text('编辑'),
+          ),
+        ),
+        _groupCard([
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppDimens.space16,
+              AppDimens.space12,
+              AppDimens.space16,
+              AppDimens.space16,
+            ),
+            child: Wrap(
         spacing: AppDimens.space8,
         runSpacing: AppDimens.space8,
         children: [
@@ -1544,8 +1693,11 @@ class _LabelsSection extends StatelessWidget {
                 color: colors.secondaryText.withValues(alpha: 0.5),
               ),
             ),
-        ],
-      ),
+            ],
+            ),
+          ),
+        ]),
+      ],
     );
   }
 
@@ -1921,13 +2073,25 @@ class _RemindersSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = AppColors.ofContext(context);
-    return SectionCard(
-      title: '提醒',
-      trailing: OrbitButton.text(
-        onPressed: () => _add(context, ref),
-        child: const Text('添加提醒'),
-      ),
-      child: reminders.isEmpty
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _GroupTitle(
+          '提醒',
+          trailing: OrbitButton.text(
+            onPressed: () => _add(context, ref),
+            child: const Text('添加提醒'),
+          ),
+        ),
+        _groupCard([
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppDimens.space16,
+              AppDimens.space8,
+              AppDimens.space16,
+              AppDimens.space12,
+            ),
+            child: reminders.isEmpty
           ? Text(
               '暂无提醒',
               style: TextStyle(
@@ -2091,6 +2255,9 @@ class _RemindersSection extends ConsumerWidget {
                   ),
               ],
             ),
+          ),
+        ]),
+      ],
     );
   }
 }
@@ -2218,19 +2385,31 @@ class _RelationsSectionState extends ConsumerState<_RelationsSection> {
 
   @override
   Widget build(BuildContext context) {
-    return SectionCard(
-      title: '关联',
-      trailing: OrbitIconButton(
-        visualDensity: VisualDensity.compact,
-        tooltip: '添加关联',
-        icon: const Icon(
-          OrbitIcons.add,
-          size: AppDimens.iconSizeSm,
-          color: OrbitAccents.todoAccent,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _GroupTitle(
+          '关联',
+          trailing: OrbitIconButton(
+            visualDensity: VisualDensity.compact,
+            tooltip: '添加关联',
+            icon: const Icon(
+              OrbitIcons.add,
+              size: AppDimens.iconSizeSm,
+              color: OrbitAccents.todoAccent,
+            ),
+            onPressed: _pickAndAdd,
+          ),
         ),
-        onPressed: _pickAndAdd,
-      ),
-      child: widget.relations.isEmpty
+        _groupCard([
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppDimens.space16,
+              AppDimens.space12,
+              AppDimens.space16,
+              AppDimens.space16,
+            ),
+            child: widget.relations.isEmpty
           ? Text(
               '暂无关联任务，可点右上 + 搜索添加',
               style: TextStyle(
@@ -2292,6 +2471,9 @@ class _RelationsSectionState extends ConsumerState<_RelationsSection> {
                   ),
               ],
             ),
+          ),
+        ]),
+      ],
     );
   }
 }
@@ -2458,6 +2640,14 @@ class _CommentsSectionState extends ConsumerState<_CommentsSection> {
   final _inputFocus = FocusNode();
   final _inputFieldKey = GlobalKey();
 
+  /// 评论列表预览上限：区块内最多露出 3 条的篇幅，超出在区块内滑动查看
+  ///
+  /// 单条约 84dp（正文 15sp 单行 + 4 + 时间/删除行 + 上下各 10 + 条间距 8）。
+  /// 正文可能多行，故这是「篇幅」而非精确条数：内容不足 3 条高度时列表
+  /// 自然收缩，超出才出现内层滚动，并在列表上方常驻一条条数提示。
+  static const int _previewCount = 3;
+  static const double _previewHeight = _previewCount * 84.0;
+
   @override
   void initState() {
     super.initState();
@@ -2520,104 +2710,169 @@ class _CommentsSectionState extends ConsumerState<_CommentsSection> {
     }
   }
 
+  /// 单条评论（灰底圆角块：正文 + 相对时间 + 删除）
+  Widget _commentTile(AppColorSet colors, TodoComment comment) => Container(
+    width: double.infinity,
+    margin: const EdgeInsets.only(bottom: AppDimens.space8),
+    padding: const EdgeInsets.all(AppDimens.space8 + 2),
+    decoration: BoxDecoration(
+      color: colors.surfaceSecondary,
+      borderRadius: AppShapes.small,
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          comment.content,
+          style: TextStyle(fontSize: 15, color: colors.bodyText),
+        ),
+        const SizedBox(height: AppDimens.space4),
+        Row(
+          children: [
+            Text(
+              formatRelativeTime(comment.createdAt),
+              style: TextStyle(fontSize: 12, color: colors.secondaryText),
+            ),
+            const Spacer(),
+            OrbitIconButton(
+              compact: true,
+              tooltip: '删除评论',
+              onPressed: () => _delete(comment),
+              icon: Icon(
+                OrbitIcons.delete,
+                size: AppDimens.iconSizeSm,
+                color: colors.secondaryText,
+              ),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
     final comments = widget.detail.comments;
 
-    return SectionCard(
-      title: '评论',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (comments.isEmpty)
-            Text(
-              '暂无评论',
-              style: TextStyle(
-                fontSize: 13,
-                color: colors.secondaryText.withValues(alpha: 0.5),
-              ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _GroupTitle('评论'),
+        _groupCard([
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppDimens.space16,
+              AppDimens.space12,
+              AppDimens.space16,
+              AppDimens.space16,
             ),
-          for (final comment in comments)
-            Container(
-              width: double.infinity,
-              margin: const EdgeInsets.only(bottom: AppDimens.space8),
-              padding: const EdgeInsets.all(AppDimens.space8 + 2),
-              decoration: BoxDecoration(
-                color: colors.surfaceSecondary,
-                borderRadius: AppShapes.small,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (comments.isEmpty)
                   Text(
-                    comment.content,
-                    style: TextStyle(fontSize: 15, color: colors.bodyText),
-                  ),
-                  const SizedBox(height: AppDimens.space4),
-                  Row(
-                    children: [
-                      Text(
-                        formatRelativeTime(comment.createdAt),
+                    '暂无评论',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: colors.secondaryText.withValues(alpha: 0.5),
+                    ),
+                  )
+                else ...[
+                  // 超出 3 条篇幅才给提示：条数常驻在列表上方，滚动时也看得见
+                  if (comments.length > _previewCount)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: AppDimens.space8),
+                      child: Text(
+                        '共 ${comments.length} 条评论 · 上下滑动查看',
                         style: TextStyle(
                           fontSize: 12,
                           color: colors.secondaryText,
                         ),
                       ),
-                      const Spacer(),
-                      OrbitIconButton(
-                        compact: true,
-                        tooltip: '删除评论',
-                        onPressed: () => _delete(comment),
-                        icon: Icon(
-                          OrbitIcons.delete,
-                          size: AppDimens.iconSizeSm,
-                          color: colors.secondaryText,
+                    ),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: _previewHeight),
+                    child: SingleChildScrollView(
+                      key: detailCommentsListKey,
+                      // 详情页本身是 ListView：内层滚动必须显式 primary=false，
+                      // 否则两层都认 PrimaryScrollController
+                      primary: false,
+                      physics: const ClampingScrollPhysics(),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          for (final comment in comments)
+                            _commentTile(colors, comment),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+                // 底部输入区：分隔线 + 灰底圆角输入条 + 发送钮
+                //
+                // 内联档的 OrbitTextField 是透明底（标签降级为占位符），直接
+                // 贴在分隔线下会读成「一行灰字」——占位与上方空态文案同色同
+                // 字号，看不出这是输入框（2026-11-06 反馈「输入文字看不清」）。
+                // 补一层 surfaceSecondary 圆角底 + 水平 12 内边距 + 44 最小
+                // 行高后，输入区有明确边界，占位也不再贴着分隔线。
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.only(top: AppDimens.space12),
+                  decoration: BoxDecoration(
+                    border: Border(top: BorderSide(color: colors.divider)),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          constraints: const BoxConstraints(
+                            minHeight: AppDimens.touchTarget,
+                          ),
+                          alignment: Alignment.centerLeft,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppDimens.space12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: colors.surfaceSecondary,
+                            borderRadius: AppShapes.small,
+                          ),
+                          child: OrbitTextField(
+                            key: _inputFieldKey,
+                            inline: true,
+                            controller: _inputController,
+                            focusNode: _inputFocus,
+                            textInputAction: TextInputAction.send,
+                            hintText: '输入评论...',
+                            style: TextStyle(
+                              fontSize: 15,
+                              color: colors.bodyText,
+                            ),
+                            insideMargin: const EdgeInsets.symmetric(
+                              vertical: AppDimens.space8,
+                            ),
+                            onSubmitted: (_) => _submit(),
+                          ),
                         ),
+                      ),
+                      const SizedBox(width: AppDimens.space8),
+                      OrbitIconButton(
+                        tooltip: '发送',
+                        icon: const Icon(
+                          OrbitIcons.send,
+                          size: AppDimens.iconSizeMd,
+                          color: OrbitAccents.todoAccent,
+                        ),
+                        onPressed: _submit,
                       ),
                     ],
                   ),
-                ],
-              ),
-            ),
-          // 底部输入框 + 发送钮
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.only(top: AppDimens.space8),
-            decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: colors.divider)),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: OrbitTextField(
-                    key: _inputFieldKey,
-                    inline: true,
-                    controller: _inputController,
-                    focusNode: _inputFocus,
-                    textInputAction: TextInputAction.send,
-                    hintText: '输入评论...',
-                    style: TextStyle(fontSize: 15, color: colors.bodyText),
-                    insideMargin: const EdgeInsets.symmetric(
-                      vertical: AppDimens.space8,
-                    ),
-                    onSubmitted: (_) => _submit(),
-                  ),
-                ),
-                OrbitIconButton(
-                  tooltip: '发送',
-                  icon: const Icon(
-                    OrbitIcons.send,
-                    size: AppDimens.iconSizeMd,
-                    color: OrbitAccents.todoAccent,
-                  ),
-                  onPressed: _submit,
                 ),
               ],
             ),
           ),
-        ],
-      ),
+        ]),
+      ],
     );
   }
 }
@@ -2923,28 +3178,40 @@ class _AttachmentsSectionState extends ConsumerState<_AttachmentsSection> {
     final colors = AppColors.ofContext(context);
     final list = _attachments;
 
-    return SectionCard(
-      title: '附件',
-      trailing: _busy
-          ? const OrbitSpinner(size: 16)
-          : OrbitIconButton(
-              tooltip: '添加附件',
-              icon: const Icon(OrbitIcons.add),
-              iconSize: 18,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-              onPressed: () => showSelectBottomSheet<String>(
-                context,
-                title: '添加附件',
-                current: null,
-                items: const [
-                  SelectItem(value: 'file', label: '选择文件'),
-                  SelectItem(value: 'camera', label: '拍照'),
-                ],
-                onSelect: (v) => v == 'camera' ? _addCamera() : _addFile(),
-              ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _GroupTitle(
+          '附件',
+          trailing: _busy
+              ? const OrbitSpinner(size: 16)
+              : OrbitIconButton(
+                  tooltip: '添加附件',
+                  icon: const Icon(OrbitIcons.add),
+                  iconSize: 18,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onPressed: () => showSelectBottomSheet<String>(
+                    context,
+                    title: '添加附件',
+                    current: null,
+                    items: const [
+                      SelectItem(value: 'file', label: '选择文件'),
+                      SelectItem(value: 'camera', label: '拍照'),
+                    ],
+                    onSelect: (v) => v == 'camera' ? _addCamera() : _addFile(),
+                  ),
+                ),
+        ),
+        _groupCard([
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppDimens.space16,
+              AppDimens.space12,
+              AppDimens.space16,
+              AppDimens.space16,
             ),
-      child: list == null
+            child: list == null
           ? const SizedBox(height: AppDimens.space16)
           : list.isEmpty
           ? Text(
@@ -3033,6 +3300,9 @@ class _AttachmentsSectionState extends ConsumerState<_AttachmentsSection> {
                   ),
               ],
             ),
+          ),
+        ]),
+      ],
     );
   }
 }
@@ -3063,9 +3333,19 @@ class _HistorySectionState extends ConsumerState<_HistorySection> {
       taskActivityProvider((taskId: widget.taskId, limit: _limit)),
     );
 
-    return SectionCard(
-      title: '历史',
-      child: asyncRows.when(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _GroupTitle('历史'),
+        _groupCard([
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppDimens.space16,
+              AppDimens.space12,
+              AppDimens.space16,
+              AppDimens.space16,
+            ),
+            child: asyncRows.when(
         loading: () => const SizedBox(height: 16),
         error: (_, _) => Text(
           '历史加载失败',
@@ -3131,7 +3411,10 @@ class _HistorySectionState extends ConsumerState<_HistorySection> {
                     ),
                 ],
               ),
-      ),
+            ),
+          ),
+        ]),
+      ],
     );
   }
 }

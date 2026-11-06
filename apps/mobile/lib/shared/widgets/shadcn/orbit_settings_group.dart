@@ -132,28 +132,43 @@ class _SettingsGroupTitle extends StatelessWidget {
       ),
       child: Row(
         children: [
+          // 标题+副标题整体 Expanded、内部各自 Flexible：不能把标题与副标题
+          // 各自做成 flex 子项——两个 flex 子项均分剩余空间，副标题用不完的
+          // 份额会按 mainAxisAlignment.start 堆到行尾，trailing 悬在中间
+          // （2026-11-06 同步配置页「近 0 次 + 刷新」踩坑，与
+          // `orbit_section_card.dart` 2026-11-04 同一根因）。内层行的剩余
+          // 空间天然落在文案与 trailing 之间，trailing 恒贴右缘。
           Expanded(
-            child: MiuixText(
-              title,
-              style: theme.textStyles.subtitle,
-              color: theme.colors.onBackgroundVariant,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            child: Row(
+              children: [
+                Flexible(
+                  child: MiuixText(
+                    title,
+                    style: theme.textStyles.subtitle,
+                    color: theme.colors.onBackgroundVariant,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (subtitle != null) ...[
+                  const SizedBox(width: AppDimens.space8),
+                  Flexible(
+                    child: MiuixText(
+                      subtitle!,
+                      fontSize: 12,
+                      color: colors.secondaryText,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
-          if (subtitle != null) ...[
+          if (trailing != null) ...[
             const SizedBox(width: AppDimens.space8),
-            Flexible(
-              child: MiuixText(
-                subtitle!,
-                fontSize: 12,
-                color: colors.secondaryText,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
+            trailing!,
           ],
-          ?trailing,
         ],
       ),
     );
