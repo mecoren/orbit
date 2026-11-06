@@ -19,14 +19,12 @@ import '../../shared/widgets/shadcn/orbit_floating_sheet_card.dart';
 import '../../shared/widgets/shadcn/orbit_segmented_filter.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_password_sheet.dart';
-import '../../shared/widgets/shadcn/orbit_card.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
-import '../../shared/widgets/shadcn/orbit_section_card.dart';
+import '../../shared/widgets/shadcn/orbit_settings_group.dart';
 import '../../shared/widgets/shadcn/orbit_dropdown_preference.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_text_field.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
-import '../../shared/widgets/shadcn/orbit_switch.dart';
 import '../../shared/widgets/shadcn/orbit_button.dart';
 import '../../shared/widgets/shadcn/orbit_divider.dart';
 import '../todo/providers/todo_providers.dart';
@@ -227,26 +225,31 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
                     MediaQuery.of(context).padding.top +
                     OrbitPageHeader.rowHeight +
                     AppDimens.space16,
-                left: AppDimens.space16,
-                right: AppDimens.space16,
+                // 卡体自带 h:12 外距（OrbitSettingsGroup），列表不再加水平边距
                 bottom: AppDimens.gestureInsetFallback + AppDimens.space32,
               ),
               children: [
-                OrbitCard(
-                  // 整卡零水平内边距：下拉偏好行展开时的按压灰底才能横贯整卡
-                  // （撑满），头行与表单字段各自补 16 水平内边距。
-                  padding: const EdgeInsets.only(bottom: AppDimens.cardPadding),
-                  child: _loading
-                      ? Padding(
-                          padding: const EdgeInsets.all(AppDimens.cardPadding),
-                          child: Center(
-                            child: OrbitSpinner(
-                              size: AppDimens.iconSizeLg,
-                              color: OrbitAccents.themeAccent,
+                // 卡外分组标题 + 行式分组卡（设置页同一口径）
+                OrbitSettingsGroup.rows(
+                  title: '云同步连接',
+                  subtitle: _config == null
+                      ? null
+                      : '已配置 · ${_engineLabel(_engine)}',
+                  children: _loading
+                      ? [
+                          Padding(
+                            padding: const EdgeInsets.all(
+                              AppDimens.cardPadding,
+                            ),
+                            child: Center(
+                              child: OrbitSpinner(
+                                size: AppDimens.iconSizeLg,
+                                color: OrbitAccents.themeAccent,
+                              ),
                             ),
                           ),
-                        )
-                      : _connectionForm(colors),
+                        ]
+                      : _connectionRows(colors),
                 ),
                 const SizedBox(height: AppDimens.space12),
                 const _SyncCryptoCard(),
@@ -301,237 +304,177 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
       SelectItem(value: e.key, label: e.value),
   ];
 
-  Widget _connectionForm(AppColorSet colors) {
+  /// 连接卡行式内容（设置页口径：说明段 → 引擎 → 表单块 → 开关行 → 按钮区）
+  ///
+  /// 行件都自带 16 水平内边距、卡片水平内边距为零，下拉行展开时的按压灰底
+  /// 才能横贯整卡；表单块由 [_formBlock] 补回 16 与行文字同线。
+  List<Widget> _connectionRows(AppColorSet colors) {
     final isS3 = _engine == 's3';
     final endpointEmpty = _endpointController.text.trim().isEmpty;
 
-    return Column(
-      // stretch：两个下拉偏好行拿到整卡宽，展开时按压灰底才能撑满
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _cardHeader(colors),
+    return <Widget>[
+      OrbitSettingsDesc(
+        isS3
+            ? '连接 S3 兼容存储：Endpoint、存储桶与访问密钥只保存在本机；'
+                  '上传前已做端到端加密，服务商无法读取内容。'
+            : '连接 WebDAV 服务：地址与账号只保存在本机；'
+                  '上传前已做端到端加密，服务商无法读取内容。',
+      ),
+      const OrbitSettingsDivider(),
+      OrbitDropdownPreference<String>(
+        title: '引擎',
+        items: _engineItems,
+        current: _engine,
+        onSelect: (v) => setState(() => _engine = v),
+        insideMargin: kSettingsRowMargin,
+      ),
+      const OrbitSettingsDivider(),
+      _formBlock([
+        OrbitTextField(
+          controller: _endpointController,
+          keyboardType: TextInputType.url,
+          label: isS3 ? 'Endpoint' : '服务器地址',
+          onChanged: (_) => setState(() {}),
+        ),
+        if (isS3) ...[
+          const SizedBox(height: AppDimens.space12),
+          OrbitTextField(controller: _bucketController, label: '存储桶'),
+          const SizedBox(height: AppDimens.space12),
+          OrbitTextField(controller: _regionController, label: 'Region'),
+        ],
         const SizedBox(height: AppDimens.space12),
-        // 引擎选择：整行自带 16 水平内边距，展开时按压灰底横贯整卡
-        OrbitDropdownPreference<String>(
-          title: '引擎',
-          items: _engineItems,
-          current: _engine,
-          onSelect: (v) => setState(() => _engine = v),
+        OrbitTextField(
+          controller: _usernameController,
+          label: isS3 ? 'Access Key' : '用户名',
         ),
         const SizedBox(height: AppDimens.space12),
-        _formFields([
-          OrbitTextField(
-            controller: _endpointController,
-            keyboardType: TextInputType.url,
-            label: isS3 ? 'Endpoint' : '服务器地址',
-            onChanged: (_) => setState(() {}),
-          ),
-          if (isS3) ...[
-            const SizedBox(height: AppDimens.space12),
-            OrbitTextField(controller: _bucketController, label: '存储桶'),
-            const SizedBox(height: AppDimens.space12),
-            OrbitTextField(controller: _regionController, label: 'Region'),
-          ],
+        OrbitTextField(
+          controller: _passwordController,
+          obscureText: true,
+          label: isS3 ? 'Secret Key' : '密码',
+          helperText: _config?.passwordSet == true
+              ? '已保存（修改请重新输入）'
+              : null,
+        ),
+        if (isS3) ...[
           const SizedBox(height: AppDimens.space12),
           OrbitTextField(
-            controller: _usernameController,
-            label: isS3 ? 'Access Key' : '用户名',
-          ),
-          const SizedBox(height: AppDimens.space12),
-          OrbitTextField(
-            controller: _passwordController,
+            controller: _sessionTokenController,
             obscureText: true,
-            label: isS3 ? 'Secret Key' : '密码',
-            helperText: _config?.passwordSet == true ? '已保存（修改请重新输入）' : null,
+            label: '会话令牌（STS 临时凭据专用）',
+            helperText: _config?.sessionTokenSet == true ? '已设置，留空沿用' : null,
           ),
-          if (isS3) ...[
-            const SizedBox(height: AppDimens.space12),
-            OrbitTextField(
-              controller: _sessionTokenController,
-              obscureText: true,
-              label: '会话令牌（STS 临时凭据专用）',
-              helperText: _config?.sessionTokenSet == true ? '已设置，留空沿用' : null,
-            ),
-          ],
-          const SizedBox(height: AppDimens.space12),
-          OrbitTextField(controller: _basePathController, label: '远端路径'),
-        ]),
+        ],
         const SizedBox(height: AppDimens.space12),
-        // 定时同步：开关作为行首动作并入同一偏好行，按压灰底覆盖整行
-        OrbitDropdownPreference<int>(
-          title: '定时同步',
-          startAction: OrbitSwitch(
-            value: _autoEnabled,
-            onChanged: (v) => setState(() => _autoEnabled = v),
-          ),
-          items: _intervalItems,
-          current: _intervalMin,
-          enabled: _autoEnabled,
-          onSelect: (v) => setState(() => _intervalMin = v),
-          insideMargin: const EdgeInsets.symmetric(
-            horizontal: AppDimens.cardPadding,
-            vertical: AppDimens.space8,
-          ),
+        OrbitTextField(controller: _basePathController, label: '远端路径'),
+      ]),
+      const OrbitSettingsDivider(),
+      OrbitSettingsSwitchRow(
+        '定时同步',
+        // 移动端无后台调度器：间隔只存档，由桌面端执行
+        summary: '按固定间隔自动同步。移动端不驻后台调度，该间隔由桌面端执行；'
+            '此处配置全端共享。',
+        value: _autoEnabled,
+        onChanged: (v) => setState(() => _autoEnabled = v),
+      ),
+      OrbitDropdownPreference<int>(
+        title: '同步间隔',
+        items: _intervalItems,
+        current: _intervalMin,
+        enabled: _autoEnabled,
+        onSelect: (v) => setState(() => _intervalMin = v),
+        insideMargin: kSettingsRowMargin,
+      ),
+      const OrbitSettingsDivider(),
+      OrbitSettingsSwitchRow(
+        '修改后立即同步',
+        // 门控与桌面同口径：需「定时同步」总开关同时开启（见
+        // sync_on_change_scheduler.dart 的 pushNow 门控链）
+        summary: !_onChange
+            ? '仅按定时或手动同步'
+            : _autoEnabled
+            ? '编辑后约 5 秒自动推送（需已解锁同步密码）'
+            : '编辑后约 5 秒自动推送（需开启上方「定时同步」总开关）',
+        value: _onChange,
+        onChanged: (v) => setState(() => _onChange = v),
+      ),
+      const OrbitSettingsDivider(),
+      _formBlock([
+        OrbitTextField(
+          controller: _timeoutController,
+          keyboardType: TextInputType.number,
+          label: '请求超时（秒，5–600）',
         ),
-        _formFields([
-          if (_autoEnabled)
-            Padding(
-              padding: const EdgeInsets.only(top: AppDimens.space4),
-              child: Text(
-                '移动端不驻后台调度，该间隔由桌面端执行；此处配置全端共享。',
-                style: TextStyle(fontSize: 12, color: colors.secondaryText),
-              ),
-            ),
-          const SizedBox(height: AppDimens.space12),
-          _switchRow(
-            colors: colors,
-            label: '修改后立即同步',
-            value: _onChange,
-            onChanged: (v) => setState(() => _onChange = v),
-            // 门控与桌面同口径：需「定时同步」总开关同时开启（见
-            // sync_on_change_scheduler.dart 的 pushNow 门控链）
-            description: !_onChange
-                ? '仅按定时或手动同步'
-                : _autoEnabled
-                ? '编辑后约 5 秒自动推送（需已解锁同步密码）'
-                : '编辑后约 5 秒自动推送（需开启上方「定时同步」总开关）',
-          ),
-          const SizedBox(height: AppDimens.space12),
-          Row(
-            children: [
-              Expanded(
-                child: OrbitTextField(
-                  controller: _timeoutController,
-                  keyboardType: TextInputType.number,
-                  label: '请求超时（秒，5–600）',
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppDimens.space12),
-          _switchRow(
-            colors: colors,
-            label: '跳过 TLS 验证',
-            value: _skipTls,
-            onChanged: (v) => setState(() => _skipTls = v),
-            description: _skipTls ? '自签名证书场景专用，存在中间人风险' : '校验服务器证书（推荐）',
-            warning: _skipTls,
-          ),
-          const SizedBox(height: AppDimens.space4),
-          Text(
-            '数据以 AES-256-GCM 端到端加密后上传，服务商无法读取内容。',
-            style: TextStyle(fontSize: 12, color: colors.secondaryText),
-          ),
-          const SizedBox(height: AppDimens.space12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              if (_config != null)
-                OrbitButton.text(
-                  onPressed: _busy ? null : () => _confirmDisconnect(context),
-                  child: Text(
-                    '断开',
-                    style: TextStyle(color: colors.destructive),
+      ]),
+      const OrbitSettingsDivider(),
+      OrbitSettingsSwitchRow(
+        '跳过 TLS 验证',
+        summary: _skipTls ? '自签名证书场景专用，存在中间人风险' : '校验服务器证书（推荐）',
+        value: _skipTls,
+        onChanged: (v) => setState(() => _skipTls = v),
+      ),
+      OrbitSettingsNote('数据以 AES-256-GCM 端到端加密后上传，服务商无法读取内容。'),
+      const OrbitSettingsDivider(),
+      OrbitSettingsActions(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: OrbitButton.outline(
+                    onPressed: (_testing || _busy || endpointEmpty)
+                        ? null
+                        : _testConnection,
+                    child: _testing
+                        ? const OrbitSpinner(size: AppDimens.iconSizeSm)
+                        : const Text('测试连接'),
                   ),
                 ),
-              const SizedBox(width: AppDimens.space8),
-              OrbitButton.outline(
-                onPressed: (_testing || _busy || endpointEmpty)
-                    ? null
-                    : _testConnection,
-                child: _testing
-                    ? const OrbitSpinner(size: AppDimens.iconSizeSm)
-                    : const Text('测试连接'),
-              ),
-              const SizedBox(width: AppDimens.space8),
-              OrbitButton.primary(
-                onPressed: (_busy || endpointEmpty) ? null : _save,
-                child: _busy
-                    ? const OrbitSpinner(
-                        size: AppDimens.iconSizeSm,
-                        color: Colors.white,
-                      )
-                    : const Text('保存'),
+                const SizedBox(width: AppDimens.space8),
+                Expanded(
+                  child: OrbitButton.primary(
+                    onPressed: (_busy || endpointEmpty) ? null : _save,
+                    child: _busy
+                        ? const OrbitSpinner(
+                            size: AppDimens.iconSizeSm,
+                            color: Colors.white,
+                          )
+                        : const Text('保存'),
+                  ),
+                ),
+              ],
+            ),
+            if (_config != null) ...[
+              const SizedBox(height: AppDimens.space8),
+              OrbitButton.text(
+                onPressed: _busy ? null : () => _confirmDisconnect(context),
+                child: Text(
+                  '断开云同步',
+                  style: TextStyle(color: colors.destructive),
+                ),
               ),
             ],
-          ),
-        ]),
-      ],
-    );
+          ],
+        ),
+      ),
+    ];
   }
 
-  /// 表单字段组：卡片零水平内边距时补回 16，与卡头/下拉行文字保持同线。
-  /// 下拉偏好行必须留在本组之外，展开时的按压灰底才能横贯整卡。
-  Widget _formFields(List<Widget> children) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: AppDimens.cardPadding),
+  /// 卡内表单块：卡片零水平内边距时补回 16，与行文字保持同线。
+  /// 下拉偏好行必须留在本块之外，展开时的按压灰底才能横贯整卡。
+  Widget _formBlock(List<Widget> children) => Padding(
+    padding: const EdgeInsets.fromLTRB(
+      AppDimens.space16,
+      AppDimens.space12,
+      AppDimens.space16,
+      AppDimens.space12,
+    ),
     child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: children,
     ),
   );
-
-  /// 卡头（原 `SectionCard` 头行口径）：卡片零水平内边距，本行自带 16。
-  Widget _cardHeader(AppColorSet colors) => Padding(
-    padding: const EdgeInsets.fromLTRB(
-      AppDimens.cardPadding,
-      AppDimens.cardPadding,
-      AppDimens.cardPadding,
-      0,
-    ),
-    child: Row(
-      children: [
-        const Text(
-          '云同步连接',
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: OrbitAccents.todoAccent,
-          ),
-        ),
-        if (_config != null) ...[
-          const SizedBox(width: AppDimens.space8),
-          Text(
-            '已配置 · ${_engineLabel(_engine)}',
-            style: TextStyle(fontSize: 12, color: colors.secondaryText),
-          ),
-        ],
-      ],
-    ),
-  );
-
-  Widget _switchRow({
-    required AppColorSet colors,
-    required String label,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-    required String description,
-    bool warning = false,
-  }) {
-    return Row(
-      children: [
-        OrbitSwitch(value: value, onChanged: onChanged),
-        const SizedBox(width: AppDimens.space8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: TextStyle(fontSize: 14, color: colors.bodyText),
-              ),
-              Text(
-                description,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: warning ? colors.warning : colors.secondaryText,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
 
   /// 断开确认：断开仅清除本机连接配置，不删本地数据与云端文件
   Future<void> _confirmDisconnect(BuildContext context) async {
@@ -895,7 +838,7 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
     final colors = AppColors.ofContext(context);
     final status = _status;
 
-    return SectionCard(
+    return OrbitSettingsGroup(
       title: '同步密码（端到端加密）',
       child: status == null
           ? Text(
@@ -1139,7 +1082,7 @@ class _SyncHistoryCardState extends ConsumerState<_SyncHistoryCard> {
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
 
-    return SectionCard(
+    return OrbitSettingsGroup(
       title: '同步历史',
       subtitle: _loading ? null : '近 ${_rows.length} 次',
       trailing: OrbitButton.text(
@@ -1305,7 +1248,7 @@ class _SyncLedgerCardState extends ConsumerState<_SyncLedgerCard> {
     final colors = AppColors.ofContext(context);
     final state = _state;
 
-    return SectionCard(
+    return OrbitSettingsGroup(
       title: '同步账本',
       subtitle: '桶指纹与水位线（排障用）',
       trailing: OrbitButton.text(
@@ -1706,7 +1649,7 @@ class _CloudCleanupCardState extends ConsumerState<_CloudCleanupCard> {
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
-    return SectionCard(
+    return OrbitSettingsGroup(
       title: '云端存储',
       subtitle: '孤儿附件与孤儿数据桶',
       child: Column(
@@ -1795,7 +1738,7 @@ class _SyncDiagnosticCardState extends ConsumerState<_SyncDiagnosticCard> {
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
-    return SectionCard(
+    return OrbitSettingsGroup(
       title: '同步排障',
       subtitle: '单向同步（排障用）',
       child: Column(

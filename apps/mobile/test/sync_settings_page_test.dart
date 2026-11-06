@@ -17,9 +17,9 @@ import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/settings/sync_settings_page.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_button.dart';
-import 'package:orbit/shared/widgets/shadcn/orbit_card.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_dropdown_preference.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_filter_chip.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_settings_group.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_switch.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_text_field.dart';
 import 'support/orbit_test_app.dart';
@@ -107,7 +107,7 @@ void main() {
     expect(find.text('Region'), findsOneWidget);
   });
 
-  testWidgets('定时同步间隔：下拉偏好行回勾当前档 + 关闭总开关后不可展开', (tester) async {
+  testWidgets('定时同步：开关行 + 独立间隔档位行，关闭总开关后间隔不可展开', (tester) async {
     await tester.pumpWidget(_wrap(MockOrbitBridge()));
     await _flush(tester);
 
@@ -121,41 +121,49 @@ void main() {
     expect(find.text('每 2 小时'), findsOneWidget);
 
     // 关掉「定时同步」总开关 → 间隔行整行禁用，点不开弹层
-    await tester.tap(find.byType(OrbitSwitch).first);
+    await _tapAt(tester, find.byType(OrbitSwitch).first);
     await tester.pumpAndSettle();
-    // 开关并入同一偏好行后，点开关不能顺带把下拉展开
+    // 开关是独立开关行（设置页口径），点开关不会顺带把下拉展开
     expect(dropdownPreferencePopupRows(), findsNothing);
     await tester.tap(find.text('每 2 小时'));
     await tester.pumpAndSettle();
     expect(dropdownPreferencePopupRows(), findsNothing);
   });
 
-  testWidgets('下拉展开阴影撑满整卡：两行宽度 = 卡宽，开关并入同一行', (tester) async {
+  testWidgets('下拉展开阴影撑满整卡：档位行与开关行宽度 = 卡宽', (tester) async {
     await tester.pumpWidget(_wrap(MockOrbitBridge()));
     await _flush(tester);
 
     Finder row(String title) => find.byWidgetPredicate(
           (w) => w is OrbitDropdownPreference<Object?> && w.title == title,
         );
-    final cardWidth = tester.getRect(find.byType(OrbitCard).first).width;
+    // 分组卡（MiuixCard）：行件零外层内边距，按压灰底才能横贯整卡
+    final cardWidth = tester.getRect(find.byType(MiuixCard).first).width;
     expect(tester.getRect(row('引擎')).width,
         moreOrLessEquals(cardWidth, epsilon: 1),
         reason: '引擎行按压灰底必须横贯整卡');
 
-    // 定时同步行在首屏下方，先滚入树再量宽度
+    // 定时同步/同步间隔在首屏下方，先滚入树再量宽度
     await _scrollTo(tester, find.text('每 60 分钟'));
-    expect(tester.getRect(row('定时同步')).width,
+    expect(tester.getRect(row('同步间隔')).width,
         moreOrLessEquals(cardWidth, epsilon: 1),
-        reason: '开关右侧那一段不算撑满');
+        reason: '档位行按压灰底必须横贯整卡');
+
+    // 定时同步是标准开关行（文字在左、开关贴右），不再是行首动作
+    final switchRow = find.byWidgetPredicate(
+      (w) => w is OrbitSettingsSwitchRow && w.title == '定时同步',
+    );
+    expect(switchRow, findsOneWidget);
+    expect(tester.getRect(switchRow).width,
+        moreOrLessEquals(cardWidth, epsilon: 1),
+        reason: '开关行同样要横贯整卡');
+    final sw = tester.getRect(
+      find.descendant(of: switchRow, matching: find.byType(OrbitSwitch)),
+    );
     expect(
-      find.byWidgetPredicate(
-        (w) =>
-            w is OrbitDropdownPreference<Object?> &&
-            w.title == '定时同步' &&
-            w.startAction != null,
-      ),
-      findsOneWidget,
-      reason: '总开关必须作为行首动作并入同一偏好行',
+      sw.right,
+      moreOrLessEquals(tester.getRect(switchRow).right - 16, epsilon: 1),
+      reason: '开关贴行右缘（设置页口径 16 内边距）',
     );
   });
 
@@ -257,8 +265,8 @@ void main() {
     // 回读：endpoint 已填入
     expect(find.text('https://dav.example.com'), findsOneWidget);
 
-    // 断开需二次确认
-    await _tapAt(tester, find.text('断开'));
+    // 断开需二次确认（卡尾红字动作行，与设置页危险操作同口径）
+    await _tapAt(tester, find.text('断开云同步'));
     await tester.pumpAndSettle();
     expect(find.text('断开云同步？'), findsOneWidget);
 
