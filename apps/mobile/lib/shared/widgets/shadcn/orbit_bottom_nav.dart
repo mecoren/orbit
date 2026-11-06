@@ -34,6 +34,14 @@ import '../../../core/theme/orbit_accents.dart';
 /// 栏体才「浮」在真实内容（列表行、卡片）之上，玻璃能采样到东西。此时页面
 /// 的滚动尾部必须自带 [clearanceOf] 的净空，末行才不会停在栏体背后。
 ///
+/// **2026-11-06 栏体材质降档**：采样链路本身没问题（诊断构建验证过：把白色
+/// 混色层压到 0x08 后，栏体立刻透出背后整行内容），问题在库内
+/// `puredThinGlass` 原档的两层白把「白卡 + 深色文字」盖死，观感是内容滚到
+/// 栏体背后**整行消失**（真机反馈「内容滚过底栏时没有模糊」）。现材质的
+/// 三层结构与混合模式保留、白色层基本撤掉（0x99→0x0A / 0x66→0x05）、打底
+/// 黑提到 6%，模糊半径维持 20（40 那档反而把内容糊成均匀灰、更看不出来），
+/// 取值理由见 [_OrbitBottomNavState._barMaterialLight] 的注释。
+///
 /// 公共 API 与旧实现一致（`items` / `currentIndex` / `onTap` /
 /// `moreTabIndex` / `onMoreTap` / `badges`），`home_shell.dart` 只多传
 /// [backdrop]。**2026-11-03 起「更多」菜单改 OS4 形变弹层**：[onMoreTap] 退回
@@ -105,6 +113,62 @@ class OrbitBottomNav extends StatefulWidget {
 }
 
 class _OrbitBottomNavState extends State<OrbitBottomNav> {
+  /// 栏体材质（**必须是缓存实例**：`MiuixGlassMaterial` 是 `_RenderGlass`
+  /// 纹理缓存的 key 之一，逐帧新建等于逐帧丢缓存）
+  ///
+  /// **2026-11-06 为什么要偏离库内 `puredThinGlass` 原档**：原档 = blur 20 +
+  /// 两层白（0x99 softLight + 0x66 hardLight）。库内 showcase 用的彩色背景上
+  /// 这是标准的 OS4 浅色玻璃；但本仓页面是「白卡为主」，这层白把背后内容盖死，
+  /// 列表行滚到栏体背后**整行消失**（真机反馈「内容滚过底栏时没有模糊」）。
+  /// 现保留 pured-thin 的三层结构与混合模式，只做两件事：
+  /// 1. **白色混色基本撤掉**（0x99→0x0A、0x66→0x05）：0x99/0x66 那版在真机上
+  ///    把整行内容盖成纯白（栏体里什么都看不见）；0x59/0x33、0x26/0x14 两版
+  ///    仍只留下几乎测不出的亮度差（背后文字 232/255）——本仓页面是白卡 +
+  ///    深色文字，白层每多一档，磨砂拖影就淡一档；
+  /// 2. **打底黑从 2% 提到 6%**：栏体要比白卡「深一档」，背后的白底内容才会
+  ///    以亮暗差显出来——栏体与卡片同为 #FFF 时，霜化后的内容还是 #FFF，
+  ///    等于看不见。
+  /// **模糊半径保持原档 20**（曾试过 40，反而更看不出来：sigma 折到 18 后整行
+  /// 文字被糊成一片均匀灰，栏体里什么都读不出——「糊掉」和「看得见在糊」是
+  /// 两件事，磨砂要保留可辨认的形状与移动感）。
+  /// 档位验证方法：把第二层临时改成 `0xFFFF0000 + srcOver`，栏体整条变红即证明
+  /// `material` 真的传到了 `MiuixGlassPanel`（排查过「参数没生效」这一层）。
+  /// 栏体仍是一块浅色玻璃：图标对比度由描边 + 图标自身色保证，未受影响。
+  static const _barMaterialLight = MiuixGlassMaterial(
+    blurRadius: 20,
+    // 6% 黑打底：栏体要比白卡「深一档」，背后滚过的白底内容才会以亮暗差
+    // 显出来（栏体与卡片同是 #FFF 时，霜化后的内容仍是 #FFF，等于看不见）
+    first: MiuixGlassColorLayer(
+      Color(0x0F000000),
+      MiuixGlassColorBlendMode.plusDarker,
+    ),
+    second: MiuixGlassColorLayer(
+      Color(0x0AFFFFFF),
+      MiuixGlassColorBlendMode.softLight,
+    ),
+    third: MiuixGlassColorLayer(
+      Color(0x05FFFFFF),
+      MiuixGlassColorBlendMode.hardLight,
+    ),
+  );
+  static const _barMaterialDark = MiuixGlassMaterial(
+    blurRadius: 20,
+    first: MiuixGlassColorLayer(
+      Color(0x1A000000),
+      MiuixGlassColorBlendMode.plusDarker,
+    ),
+    second: MiuixGlassColorLayer(
+      Color(0x1A565656),
+      MiuixGlassColorBlendMode.luminosity,
+    ),
+    third: MiuixGlassColorLayer(
+      Color(0x333F3F3F),
+      MiuixGlassColorBlendMode.overlay,
+    ),
+  );
+  static MiuixGlassMaterial _barMaterial(bool isDark) =>
+      isDark ? _barMaterialDark : _barMaterialLight;
+
   void _handleTap(int index) {
     if (index == widget.moreTabIndex) {
       HapticFeedback.selectionClick();
@@ -118,6 +182,7 @@ class _OrbitBottomNavState extends State<OrbitBottomNav> {
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     // 悬浮留白 + 手势区让位：OS4 玻璃栏自身不吃 `viewPadding.bottom`（库内只画
     // 54 高的玻璃条），系统手势条/三键导航会与图标叠在一起，故底边距取
     // 「12 + 手势区」；左右 12 让它离屏边、浮起来。
@@ -136,6 +201,8 @@ class _OrbitBottomNavState extends State<OrbitBottomNav> {
           constraints: const BoxConstraints(maxWidth: OrbitBottomNav.maxWidth),
           child: MiuixGlassNavigationBar(
             backdrop: widget.backdrop,
+            // 栏体玻璃档（白色层降档 + 更强霜化，见 [_barMaterialLight]）
+            material: _barMaterial(isDark),
             selectedIndex: widget.currentIndex,
             // 「更多」动作位：OS4 的 isAction 项只触发回调、不移动指示器
             onSelect: _handleTap,
