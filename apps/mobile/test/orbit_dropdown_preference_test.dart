@@ -179,6 +179,59 @@ void main() {
     expect(find.text('保留时间'), findsOneWidget);
   });
 
+  /// 锚点收窄（2026-11-06 详情页「优先级」反馈）：形变期只有「尾随值 + 箭头」
+  /// 参与，标题不许跟着一起弹出去——副本若仍带整行，标题会在弹层打开/回收
+  /// 期间出现第二份（随锚点矩形缩放、模糊淡出的那一份）。
+  testWidgets('形变期只有值参与，标题不进副本', (tester) async {
+    await tester.pumpWidget(
+      orbitTestApp(
+        home: Scaffold(
+          body: Center(
+            child: OrbitDropdownPreference<int>(
+              title: '保留时间',
+              items: const [
+                SelectItem(value: 7, label: '7 天'),
+                SelectItem(value: 30, label: '30 天'),
+              ],
+              current: 30,
+              onSelect: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('保留时间'));
+    await tester.pump();
+    // 形变进行中（副本尚未完全淡出）
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(
+      find.text('保留时间').evaluate().length,
+      1,
+      reason: '标题只应留在行上，不得进入形变副本',
+    );
+
+    // 锚点矩形只覆盖行尾值块：宽度远小于整行（标题区不被采样）
+    final popup = tester.widget<MiuixGlassTransformPopup>(
+      find.byType(MiuixGlassTransformPopup),
+    );
+    final anchorBounds = popup.anchor?.bounds;
+    final rowWidth = tester
+        .getSize(find.byType(OrbitDropdownPreference<int>))
+        .width;
+    expect(anchorBounds, isNotNull);
+    expect(
+      anchorBounds!.width,
+      lessThan(rowWidth * 0.5),
+      reason: '形变起点应是值块，不是整行轮廓',
+    );
+
+    await tester.pumpAndSettle();
+    expect(find.byKey(orbitDropdownPopupKey), findsOneWidget);
+    expect(find.text('保留时间').evaluate().length, 1);
+  });
+
   testWidgets('OrbitGlassPage 下弹层拿到背景采样器', (tester) async {
     await tester.pumpWidget(
       orbitTestApp(

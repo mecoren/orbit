@@ -234,8 +234,9 @@ class OrbitMenuPopupBody extends StatefulWidget {
   ///
   /// 库内语义（`popup_presenter.dart`）：true 时展开期不叠 [anchorContent]
   /// 副本、卡片直接从轮廓长出；false（默认）会叠一份副本并模糊渐隐。
-  /// 页头「今天 ▾」菜单用 true（`OrbitGlassMenu`），底栏「更多」/快速添加
-  /// 沿用默认 false——设置项下拉偏好行要求与页头同款，传 true。
+  /// 页头「今天 ▾」菜单用 true（`OrbitGlassMenu`）；底栏「更多」/快速添加/
+  /// 下拉偏好行沿用默认 false——它们要让触发件内容（按钮文字、尾随值）
+  /// 连续长成卡片，而不是凭空出现。
   final bool simplified;
 
   /// 形变期触发件副本（按钮内容被隐藏后由它按按钮矩形缩放显示）
