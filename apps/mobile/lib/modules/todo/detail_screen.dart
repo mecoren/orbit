@@ -533,7 +533,13 @@ class _TitleSectionState extends State<_TitleSection> {
   /// 旧实现把 `onTapOutside` 直接接到提交，点到键盘/页面空白处会当帧卸载
   /// 输入框，表现为「刚点进去就没了」；改由显式按钮与键盘「完成」收口。
   void _startEditing() {
-    _controller.text = widget.detail.title;
+    final title = widget.detail.title;
+    // 光标落末尾（点标题多为续写/改结尾）；只赋 text 会得到 offset -1，
+    // 由 TextField 自行归位到中间某个位置，移动端手感很怪
+    _controller.value = TextEditingValue(
+      text: title,
+      selection: TextSelection.collapsed(offset: title.length),
+    );
     setState(() => _editing = true);
   }
 
@@ -560,7 +566,10 @@ class _TitleSectionState extends State<_TitleSection> {
     final task = widget.detail;
     return SectionCard(
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        // 三者高度天然不同（28 图形 + 44 热区的复选框 / 22px 行盒标题 /
+        // 18px 铅笔），start 对齐会让小图标贴顶、复选框沉底。center 才是
+        // 「复选框—标题—编辑图标」共一条中线的唯一解。
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           OrbitCheckbox(
             checked: task.isDone,
@@ -571,23 +580,28 @@ class _TitleSectionState extends State<_TitleSection> {
           Expanded(
             child: _editing
                 ? Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Expanded(
                         child: OrbitTextField(
                           inline: true,
                           controller: _controller,
                           autofocus: true,
-                          minLines: 1,
-                          maxLines: 2,
+                          // 单行：标题原地编辑不该换行把行高顶起来（右侧还要
+                          // 让出 2 个 40px 图标钮），超长时输入框内水平滚动
+                          maxLines: 1,
                           textInputAction: TextInputAction.done,
                           style: TextStyle(
                             fontSize: 22,
+                            // 与展示态同字号同行高（22×1.3）：进出编辑卡片
+                            // 高度不跳，视觉上只是「文字变成可输入」
+                            height: 1.3,
                             color: colors.titleText,
                           ),
                           onSubmitted: (_) => _commit(),
                         ),
                       ),
+                      const SizedBox(width: AppDimens.space4),
                       OrbitIconButton(
                         compact: true,
                         tooltip: '取消编辑',

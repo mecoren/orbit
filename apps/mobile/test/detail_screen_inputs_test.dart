@@ -49,8 +49,10 @@ Future<void> _scrollTo(
   }
 }
 
+/// 标题输入框：页面里唯一 22px 字号的内联输入（编辑态已改单行，
+/// 不能再用 `maxLines == 2` 识别）
 Finder _titleInput() => find.byWidgetPredicate(
-      (w) => w is OrbitTextField && w.maxLines == 2,
+      (w) => w is OrbitTextField && w.inline && w.style?.fontSize == 22,
     );
 
 Finder _subtaskDraftInput() => find.byWidgetPredicate(

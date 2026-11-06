@@ -124,6 +124,9 @@ class SectionCard extends StatelessWidget {
             padding: EdgeInsets.only(
               left: edgeToEdgeContent ? 0 : p.left,
               right: edgeToEdgeContent ? 0 : p.right,
+              // 无头卡（详情标题区）没有头行承载顶部留白，内容须自己补回
+              // padding.top，否则贴顶、与底部 16 留白不对称
+              top: title == null ? p.top : 0,
               bottom: p.bottom,
             ),
             child: child,
