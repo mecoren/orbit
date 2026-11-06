@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
-import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
@@ -12,7 +11,7 @@ import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_card.dart';
 import '../../shared/widgets/shadcn/orbit_dropdown_preference.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
-import '../../shared/widgets/shadcn/orbit_section_card.dart';
+import '../../shared/widgets/shadcn/orbit_settings_group.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
@@ -343,8 +342,7 @@ class _BackupPageState extends ConsumerState<BackupPage> {
                     MediaQuery.of(context).padding.top +
                     OrbitPageHeader.rowHeight +
                     AppDimens.space16,
-                left: AppDimens.space16,
-                right: AppDimens.space16,
+                // 卡片自带 h:12 外距（OrbitSettingsGroup），列表不加水平边距
                 bottom: AppDimens.gestureInsetFallback + AppDimens.space32,
               ),
               children: [
@@ -371,7 +369,7 @@ class _BackupPageState extends ConsumerState<BackupPage> {
 
   Widget _backupCard(AppColorSet colors, bool busy) {
     final last = _prefs.lastBackupAt;
-    return SectionCard(
+    return OrbitSettingsGroup(
       title: '备份',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -443,35 +441,37 @@ class _BackupPageState extends ConsumerState<BackupPage> {
   }
 
   Widget _restoreCard(AppColorSet colors, bool busy) {
-    return SectionCard(
+    return OrbitSettingsGroup.rows(
       title: '恢复',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '恢复前会先展示备份内容（时间、来源设备、任务抽样），确认后才覆盖本机。',
-            style: TextStyle(fontSize: 12, color: colors.secondaryText),
+      children: [
+        const OrbitSettingsDesc(
+          '恢复前会先展示备份内容（时间、来源设备、任务抽样），确认后才覆盖本机。',
+        ),
+        const OrbitSettingsDivider(),
+        OrbitSettingsRow(
+          '从本地文件恢复',
+          leading: Icon(
+            OrbitIcons.file,
+            size: AppDimens.iconSizeSm + 2,
+            color: colors.bodyText,
           ),
-          const SizedBox(height: AppDimens.space8),
-          _actionRow(
-            colors,
-            icon: OrbitIcons.file,
-            label: '从本地文件恢复',
-            trailing: _busy == 'restore' ? const _MiniSpinner() : null,
-            onTap: busy ? null : _restoreFromFile,
+          trailing: _busy == 'restore' ? const _MiniSpinner() : null,
+          enabled: !busy,
+          onClick: busy ? null : _restoreFromFile,
+        ),
+        const OrbitSettingsDivider(),
+        OrbitSettingsRow(
+          '从云端副本恢复',
+          value: _cloud.isEmpty ? '无副本' : '${_cloud.length} 份',
+          leading: Icon(
+            OrbitIcons.cloudDownload,
+            size: AppDimens.iconSizeSm + 2,
+            color: colors.bodyText,
           ),
-          _actionRow(
-            colors,
-            icon: OrbitIcons.cloudDownload,
-            label: '从云端副本恢复',
-            trailing: Text(
-              _cloud.isEmpty ? '无副本' : '${_cloud.length} 份',
-              style: TextStyle(fontSize: 12, color: colors.secondaryText),
-            ),
-            onTap: busy ? null : _pickCloudAndRestore,
-          ),
-        ],
-      ),
+          enabled: !busy,
+          onClick: busy ? null : _pickCloudAndRestore,
+        ),
+      ],
     );
   }
 
@@ -486,49 +486,17 @@ class _BackupPageState extends ConsumerState<BackupPage> {
         _prefs.scheduleType != 'off' && _prefs.scheduleType != 'hourly';
     String two(int v) => v.toString().padLeft(2, '0');
 
-    return OrbitCard(
-      // 水平内边距归零：下拉偏好行的按压灰底要横贯整卡（设置页档位行口径），
-      // 头行 / 说明 / 开关行各自补回 16
-      padding: EdgeInsets.zero,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppDimens.cardPadding,
-              AppDimens.cardPadding,
-              AppDimens.cardPadding,
-              0,
-            ),
-            child: Text(
-              '自动备份',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: OrbitAccents.todoAccent,
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppDimens.cardPadding,
-              AppDimens.space8,
-              AppDimens.cardPadding,
-              0,
-            ),
-            child: Text(
-              '按频率自动生成加密备份。应用未运行（进程被杀）时不会执行，'
-              '下次打开会补做当天缺额。',
-              style: TextStyle(
-                fontSize: 12,
-                height: 1.5,
-                color: colors.secondaryText,
-              ),
-            ),
-          ),
-          const SizedBox(height: AppDimens.space4),
-          // 频率 / 分钟 / 星期 / 日期全部走设置页同款下拉偏好行：行内常驻
-          // 当前档 + 上下双箭头，点行就地展开玻璃菜单
+    return OrbitSettingsGroup.rows(
+      title: '自动备份',
+      children: [
+        const OrbitSettingsDesc(
+          '按频率自动生成加密备份。应用未运行（进程被杀）时不会执行，'
+          '下次打开会补做当天缺额。',
+        ),
+        const OrbitSettingsDivider(),
+        // 频率 / 分钟 / 星期 / 日期全部走设置页同款下拉偏好行：行内常驻
+        // 当前档 + 上下双箭头，点行就地展开玻璃菜单
+        ...orbitSettingsSeparated([
           OrbitDropdownPreference<String>(
             title: '频率',
             items: [
@@ -625,61 +593,41 @@ class _BackupPageState extends ConsumerState<BackupPage> {
                   _savePrefs(_prefs.copyWith(scheduleDayOfMonth: v)),
             ),
           ],
-          const SizedBox(height: AppDimens.space4),
-          _padded(
-            _switchRow(
-              colors,
-              label: '写入本机备份目录',
-              value: _prefs.localBackupEnabled,
-              onChanged: (v) =>
-                  _savePrefs(_prefs.copyWith(localBackupEnabled: v)),
-            ),
+          OrbitSettingsSwitchRow(
+            '写入本机备份目录',
+            value: _prefs.localBackupEnabled,
+            onChanged: _busy == null
+                ? (v) => _savePrefs(_prefs.copyWith(localBackupEnabled: v))
+                : null,
           ),
-          _padded(
-            _switchRow(
-              colors,
-              label: '上传云端副本',
-              value: _prefs.cloudBackupEnabled,
-              onChanged: (v) =>
-                  _savePrefs(_prefs.copyWith(cloudBackupEnabled: v)),
-            ),
+          OrbitSettingsSwitchRow(
+            '上传云端副本',
+            value: _prefs.cloudBackupEnabled,
+            onChanged: _busy == null
+                ? (v) => _savePrefs(_prefs.copyWith(cloudBackupEnabled: v))
+                : null,
           ),
-          _padded(
-            _switchRow(
-              colors,
-              label: '仅保留最新一份',
-              value: _prefs.keepLatest,
-              onChanged: (v) => _savePrefs(_prefs.copyWith(keepLatest: v)),
-            ),
+          OrbitSettingsSwitchRow(
+            '仅保留最新一份',
+            value: _prefs.keepLatest,
+            onChanged: _busy == null
+                ? (v) => _savePrefs(_prefs.copyWith(keepLatest: v))
+                : null,
           ),
-          if (_prefs.nextBackupAt > 0)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppDimens.cardPadding,
-                AppDimens.space8,
-                AppDimens.cardPadding,
-                AppDimens.cardPadding,
-              ),
-              child: Text(
-                '下次自动备份：${formatDateTime(_prefs.nextBackupAt * 1000)}',
-                style: TextStyle(fontSize: 11, color: colors.secondaryText),
-              ),
-            )
-          else
-            const SizedBox(height: AppDimens.cardPadding),
-        ],
-      ),
+        ]),
+        if (_prefs.nextBackupAt > 0)
+          OrbitSettingsNote(
+            '下次自动备份：${formatDateTime(_prefs.nextBackupAt * 1000)}',
+            faint: true,
+          )
+        else
+          const SizedBox(height: AppDimens.space12),
+      ],
     );
   }
 
-  /// 卡片零水平内边距时给开关行补回 16（[_switchRow] 本身不含水平内边距）
-  Widget _padded(Widget child) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: AppDimens.cardPadding),
-    child: child,
-  );
-
   Widget _localListCard(AppColorSet colors) {
-    return SectionCard(
+    return OrbitSettingsGroup(
       title: '本机备份文件',
       subtitle: _local.isEmpty ? null : '${_local.length} 份',
       child: _loading
@@ -743,78 +691,6 @@ class _BackupPageState extends ConsumerState<BackupPage> {
     );
   }
 
-  Widget _actionRow(
-    AppColorSet colors, {
-    required String label,
-    String? value,
-    IconData? icon,
-    Widget? trailing,
-    VoidCallback? onTap,
-  }) {
-    return InkWell(
-      borderRadius: AppShapes.medium,
-      onTap: onTap,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: AppDimens.touchTarget),
-        child: Row(
-          children: [
-            if (icon != null) ...[
-              Icon(
-                icon,
-                size: AppDimens.iconSizeSm + 2,
-                color: colors.bodyText,
-              ),
-              const SizedBox(width: AppDimens.space12),
-            ],
-            Text(label, style: TextStyle(fontSize: 14, color: colors.bodyText)),
-            const Spacer(),
-            if (trailing != null)
-              trailing
-            else ...[
-              if (value != null)
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: OrbitAccents.themeAccent,
-                  ),
-                ),
-              Icon(
-                OrbitIcons.chevronRight,
-                size: AppDimens.iconSizeMd,
-                color: colors.secondaryText,
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _switchRow(
-    AppColorSet colors, {
-    required String label,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-  }) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: AppDimens.touchTarget),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: TextStyle(fontSize: 14, color: colors.bodyText),
-            ),
-          ),
-          Switch.adaptive(
-            value: value,
-            onChanged: _busy == null ? onChanged : null,
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 /// 恢复预览正文（备份时间 / 来源设备 / 任务统计 / 抽样列表）

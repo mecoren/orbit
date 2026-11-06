@@ -8,7 +8,7 @@ import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
-import '../../shared/widgets/shadcn/orbit_section_card.dart';
+import '../../shared/widgets/shadcn/orbit_settings_group.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../shared/widgets/shadcn/orbit_button.dart';
 import '../../shared/widgets/shadcn/orbit_choice_grid.dart';
@@ -56,14 +56,13 @@ class _TestDataPageState extends ConsumerState<TestDataPage> {
               top: MediaQuery.of(context).padding.top +
                   OrbitPageHeader.rowHeight +
                   AppDimens.space16,
-              left: AppDimens.pageInline,
-              right: AppDimens.pageInline,
+              // 卡片自带 h:12 外距（OrbitSettingsGroup），列表不加水平边距
               bottom: AppDimens.gestureInsetFallback + AppDimens.space32,
             ),
             children: kDebugMode
                 ? _buildContent(colors)
                 : [
-                    SectionCard(
+                    OrbitSettingsGroup(
                       title: '测试数据',
                       child: Text(
                         '当前不是开发构建，测试数据功能不可用。',
@@ -87,7 +86,7 @@ class _TestDataPageState extends ConsumerState<TestDataPage> {
   }
 
   List<Widget> _buildContent(AppColorSet colors) => [
-        SectionCard(
+        OrbitSettingsGroup(
           title: '生成规模',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -153,7 +152,7 @@ class _TestDataPageState extends ConsumerState<TestDataPage> {
         ),
         if (_seeded != null) ...[
           const SizedBox(height: AppDimens.cardGap),
-          SectionCard(
+          OrbitSettingsGroup(
             title: '生成结果',
             child: _buildResult(
               colors,
@@ -166,7 +165,7 @@ class _TestDataPageState extends ConsumerState<TestDataPage> {
         ],
         if (_cleared != null) ...[
           const SizedBox(height: AppDimens.cardGap),
-          SectionCard(
+          OrbitSettingsGroup(
             title: '清理结果',
             child: _buildResult(
               colors,
@@ -177,13 +176,16 @@ class _TestDataPageState extends ConsumerState<TestDataPage> {
           ),
         ],
         const SizedBox(height: AppDimens.space16),
-        Text(
-          '示例数据的标题带「【示例】」前缀、uuid 以 dev-seed- 开头，便于与手工'
-          '数据区分；生产构建不显示本页，桥层在 release 下也会拒绝执行。',
-          style: TextStyle(
-            fontSize: 12,
-            height: 1.5,
-            color: colors.secondaryText,
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppDimens.space16),
+          child: Text(
+            '示例数据的标题带「【示例】」前缀、uuid 以 dev-seed- 开头，便于与手工'
+            '数据区分；生产构建不显示本页，桥层在 release 下也会拒绝执行。',
+            style: TextStyle(
+              fontSize: 12,
+              height: 1.5,
+              color: colors.secondaryText,
+            ),
           ),
         ),
       ];

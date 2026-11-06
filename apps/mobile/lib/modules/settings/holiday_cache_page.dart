@@ -12,7 +12,7 @@ import '../../data/providers/bridge_provider.dart';
 import '../../shared/widgets/shadcn/orbit_empty_state.dart';
 import '../../shared/widgets/shadcn/orbit_month_calendar.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
-import '../../shared/widgets/shadcn/orbit_section_card.dart';
+import '../../shared/widgets/shadcn/orbit_settings_group.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../shared/widgets/shadcn/orbit_switch.dart';
@@ -284,7 +284,7 @@ class _HolidayCachePageState extends ConsumerState<HolidayCachePage> {
     final yearLabel =
         years.length == 1 ? '${years.first}' : '${years.last}–${years.first}';
     final busy = _rangeBusy || _yearBusy != null;
-    return SectionCard(
+    return OrbitSettingsGroup(
       title: '缓存概览',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -376,7 +376,7 @@ class _HolidayCachePageState extends ConsumerState<HolidayCachePage> {
   /// 按年分组卡：行 = 日期 + 休/班徽标 + 假日名（徽标配色与日历页同源）；
   /// 标题右侧「更新该年」= 单年整年替换
   Widget _yearCard(AppColorSet colors, int year, List<HolidayInfo> items) {
-    return SectionCard(
+    return OrbitSettingsGroup(
       title: '$year 年（${items.length} 条）',
       trailing: OrbitButton.text(
         onPressed:

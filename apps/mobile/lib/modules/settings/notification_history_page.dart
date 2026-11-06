@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
-import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../services/local_prefs.dart';
@@ -13,7 +12,7 @@ import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_dropdown_preference.dart';
 import '../../shared/widgets/shadcn/orbit_empty_state.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
-import '../../shared/widgets/shadcn/orbit_section_card.dart';
+import '../../shared/widgets/shadcn/orbit_settings_group.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../shared/widgets/shadcn/orbit_button.dart';
@@ -124,58 +123,32 @@ class _NotificationHistoryPageState
               top: MediaQuery.of(context).padding.top +
                   OrbitPageHeader.rowHeight +
                   AppDimens.space16,
-              left: AppDimens.pageInline,
-              right: AppDimens.pageInline,
+              // 卡片自带 h:12 外距（OrbitSettingsGroup），列表不加水平边距
               bottom: AppDimens.gestureInsetFallback + AppDimens.space32,
             ),
             children: [
-              SectionCard(
+              OrbitSettingsGroup.rows(
                 title: '提醒设置',
-                child: _switchRow(
-                  colors,
-                  title: '到期提醒',
-                  subtitle: '关闭后仅记历史，不弹窗',
-                  value: _reminderOn,
-                  onChanged: _toggleReminder,
-                ),
+                children: [
+                  OrbitSettingsSwitchRow(
+                    '到期提醒',
+                    summary: '关闭后仅记历史，不弹窗',
+                    value: _reminderOn,
+                    onChanged: _toggleReminder,
+                  ),
+                ],
               ),
               const SizedBox(height: AppDimens.cardGap),
-              OrbitCard(
-                // 水平内边距归零：类型下拉行展开时的按压灰底要横贯整卡
-                // （设置页档位行同口径），头行与列表各自补回 16。
-                padding: EdgeInsets.zero,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        AppDimens.cardPadding,
-                        AppDimens.cardPadding,
-                        AppDimens.cardPadding,
-                        0,
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              '历史记录',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: OrbitAccents.todoAccent,
-                              ),
-                            ),
-                          ),
-                          // 清空：破坏性动作收进卡头；0 条时禁用（桌面端同口径）
-                          OrbitButton.text(
-                            compact: true,
-                            destructive: true,
-                            onPressed: rows.isEmpty ? null : _clear,
-                            child: const Text('清空'),
-                          ),
-                        ],
-                      ),
-                    ),
+              OrbitSettingsGroup.rows(
+                title: '历史记录',
+                // 清空：破坏性动作收进分组标题行；0 条时禁用（桌面端同口径）
+                trailing: OrbitButton.text(
+                  compact: true,
+                  destructive: true,
+                  onPressed: rows.isEmpty ? null : _clear,
+                  child: const Text('清空'),
+                ),
+                children: [
                     // 类型过滤：行内当前值 + 上下双箭头，点行就地展开玻璃菜单
                     // （与设置页「外观 / 优先级」各档位行同一原语）
                     OrbitDropdownPreference<String?>(
@@ -293,8 +266,7 @@ class _NotificationHistoryPageState
                         ],
                       ),
                     ),
-                  ],
-                ),
+                ],
               ),
             ],
           ),
@@ -311,39 +283,5 @@ class _NotificationHistoryPageState
     );
   }
 
-  /// 开关行：左标题 + 副标题 + 右开关（热区同 `touchTarget`）
-  Widget _switchRow(
-    AppColorSet colors, {
-    required String title,
-    required String subtitle,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-  }) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: AppDimens.touchTarget),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(title,
-                    style: TextStyle(fontSize: 14, color: colors.bodyText)),
-                const SizedBox(height: 2),
-                Text(subtitle,
-                    style: TextStyle(
-                        fontSize: 12, color: colors.secondaryText)),
-              ],
-            ),
-          ),
-          Switch.adaptive(
-            value: value,
-            onChanged: onChanged,
-          ),
-        ],
-      ),
-    );
-  }
 }
 

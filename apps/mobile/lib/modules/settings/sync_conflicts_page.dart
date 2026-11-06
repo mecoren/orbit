@@ -12,7 +12,7 @@ import '../../data/providers/bridge_provider.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_card.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
-import '../../shared/widgets/shadcn/orbit_section_card.dart';
+import '../../shared/widgets/shadcn/orbit_settings_group.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../shared/widgets/shadcn/orbit_button.dart';
@@ -163,12 +163,11 @@ class _SyncConflictsPageState extends ConsumerState<SyncConflictsPage> {
                     MediaQuery.of(context).padding.top +
                     OrbitPageHeader.rowHeight +
                     AppDimens.space16,
-                left: AppDimens.space16,
-                right: AppDimens.space16,
+                // 卡片自带 h:12 外距（OrbitSettingsGroup），列表不加水平边距
                 bottom: AppDimens.gestureInsetFallback + AppDimens.space32,
               ),
               children: [
-                SectionCard(
+                OrbitSettingsGroup(
                   title: '冲突记录',
                   subtitle: _loading ? null : '待处理 $pending 条',
                   child: Column(

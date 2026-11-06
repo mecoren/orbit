@@ -6,14 +6,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../core/theme/icon_map.dart';
-import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
-import '../../shared/widgets/shadcn/orbit_card.dart';
 import '../../shared/widgets/shadcn/orbit_dropdown_preference.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
-import '../../shared/widgets/shadcn/orbit_section_card.dart';
+import '../../shared/widgets/shadcn/orbit_settings_group.dart';
 import '../../shared/widgets/shadcn/orbit_button.dart';
 import '../../shared/widgets/shadcn/orbit_icon_button.dart';
 
@@ -108,8 +106,7 @@ class _DiagnosticsPageState extends ConsumerState<DiagnosticsPage> {
               top: MediaQuery.of(context).padding.top +
                   OrbitPageHeader.rowHeight +
                   AppDimens.space16,
-              left: AppDimens.pageInline,
-              right: AppDimens.pageInline,
+              // 卡片自带 h:12 外距（OrbitSettingsGroup），列表不加水平边距
               bottom: AppDimens.gestureInsetFallback + AppDimens.space32,
             ),
             children: [
@@ -121,7 +118,7 @@ class _DiagnosticsPageState extends ConsumerState<DiagnosticsPage> {
                   style: TextStyle(fontSize: 13, color: colors.secondaryText),
                 )
               else ...[
-                SectionCard(
+                OrbitSettingsGroup(
                   title: '本地存储',
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -172,41 +169,19 @@ class _DiagnosticsPageState extends ConsumerState<DiagnosticsPage> {
                   ),
                 ),
                 const SizedBox(height: AppDimens.cardGap),
-                OrbitCard(
-                  // 水平内边距归零：采样场景下拉行的按压灰底要横贯整卡
-                  // （与通知历史/同步配置页档位行同口径），其余内容补回 16。
+                OrbitSettingsGroup(
+                  title: '运行时',
+                  // 采样：手动采一次当前 RSS（会话峰值），动作收进分组标题行
+                  trailing: OrbitButton.text(
+                    compact: true,
+                    onPressed: _sampleNow,
+                    child: const Text('采样'),
+                  ),
+                  // 内容行自带内边距：采样场景下拉行的按压灰底要横贯整卡
                   padding: EdgeInsets.zero,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(
-                          AppDimens.cardPadding,
-                          AppDimens.cardPadding,
-                          AppDimens.cardPadding,
-                          0,
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                '运行时',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: OrbitAccents.todoAccent,
-                                ),
-                              ),
-                            ),
-                            // 采样：手动采一次当前 RSS（会话峰值），动作收进卡头
-                            OrbitButton.text(
-                              compact: true,
-                              onPressed: _sampleNow,
-                              child: const Text('采样'),
-                            ),
-                          ],
-                        ),
-                      ),
                       Padding(
                         padding: const EdgeInsets.fromLTRB(
                           AppDimens.cardPadding,

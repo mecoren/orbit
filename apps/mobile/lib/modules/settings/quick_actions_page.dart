@@ -31,7 +31,7 @@ import '../../core/theme/app_shapes.dart';
 import '../../core/theme/icon_map.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
-import '../../shared/widgets/shadcn/orbit_section_card.dart';
+import '../../shared/widgets/shadcn/orbit_settings_group.dart';
 import '../../shared/widgets/shadcn/orbit_icon_button.dart';
 import '../todo/logic/quick_actions.dart';
 import '../todo/quick_add_sheet.dart' show quickActionIcon;
@@ -219,14 +219,18 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
                     MediaQuery.of(context).padding.top +
                     OrbitPageHeader.rowHeight +
                     AppDimens.space16,
-                left: AppDimens.pageInline,
-                right: AppDimens.pageInline,
+                // 卡片自带 h:12 外距（OrbitSettingsGroup），列表不加水平边距
                 bottom: AppDimens.gestureInsetFallback + AppDimens.space32,
               ),
               children: [
-                _preview(colors, _liveOrder(enabled)),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppDimens.space12,
+                  ),
+                  child: _preview(colors, _liveOrder(enabled)),
+                ),
                 const SizedBox(height: AppDimens.cardGap),
-                SectionCard(
+                OrbitSettingsGroup(
                   title: '编辑操作',
                   child: enabled.isEmpty
                       // 空段也挂定位 key：更多段的行可直接拖进来建首位
@@ -244,7 +248,7 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
                 ),
                 if (hidden.isNotEmpty) ...[
                   const SizedBox(height: AppDimens.cardGap),
-                  SectionCard(
+                  OrbitSettingsGroup(
                     title: '更多',
                     child: _sectionList(
                       colors,
@@ -256,13 +260,18 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
                   ),
                 ],
                 const SizedBox(height: AppDimens.cardGap),
-                Text(
-                  '左右滑动行可在「编辑操作」与「更多」之间移动，也可用行内加减按钮；'
-                  '按住右侧手柄可直接拖到另一段（含跨卡片），上方预览实时跟随。',
-                  style: TextStyle(
-                    fontSize: 12,
-                    height: 1.5,
-                    color: colors.secondaryText,
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppDimens.space16,
+                  ),
+                  child: Text(
+                    '左右滑动行可在「编辑操作」与「更多」之间移动，也可用行内加减按钮；'
+                    '按住右侧手柄可直接拖到另一段（含跨卡片），上方预览实时跟随。',
+                    style: TextStyle(
+                      fontSize: 12,
+                      height: 1.5,
+                      color: colors.secondaryText,
+                    ),
                   ),
                 ),
               ],

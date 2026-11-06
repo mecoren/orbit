@@ -10,7 +10,7 @@ import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
-import '../../shared/widgets/shadcn/orbit_section_card.dart';
+import '../../shared/widgets/shadcn/orbit_settings_group.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../shared/widgets/shadcn/orbit_button.dart';
@@ -112,12 +112,11 @@ class _StorageCleanupPageState extends ConsumerState<StorageCleanupPage> {
                   MediaQuery.of(context).padding.top +
                   OrbitPageHeader.rowHeight +
                   AppDimens.space16,
-              left: AppDimens.pageInline,
-              right: AppDimens.pageInline,
+              // 卡片自带 h:12 外距（OrbitSettingsGroup），列表不加水平边距
               bottom: AppDimens.gestureInsetFallback + AppDimens.space32,
             ),
             children: [
-              SectionCard(
+              OrbitSettingsGroup(
                 title: '本地未使用附件',
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -166,7 +165,7 @@ class _StorageCleanupPageState extends ConsumerState<StorageCleanupPage> {
                   child: Center(child: OrbitSpinner(size: AppDimens.iconSizeLg)),
                 )
               else if (rows.isEmpty)
-                SectionCard(
+                OrbitSettingsGroup(
                   title: '没有可清理的附件',
                   child: Text(
                     '当前本地附件都有任务引用，或已被自动回收。',
@@ -174,7 +173,7 @@ class _StorageCleanupPageState extends ConsumerState<StorageCleanupPage> {
                   ),
                 )
               else ...[
-                SectionCard(
+                OrbitSettingsGroup(
                   title: '待清理清单',
                   child: Column(
                     children: [for (final a in rows) _row(colors, a)],

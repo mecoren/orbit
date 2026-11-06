@@ -48,7 +48,7 @@ import '../../core/theme/orbit_accents.dart';
 import '../../shared/widgets/shadcn/orbit_card.dart';
 import '../../shared/widgets/shadcn/orbit_divider.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
-import '../../shared/widgets/shadcn/orbit_section_card.dart';
+import '../../shared/widgets/shadcn/orbit_settings_group.dart';
 import '../../shared/widgets/shadcn/orbit_icon_button.dart';
 import '../shell/nav_modules.dart';
 
@@ -251,12 +251,16 @@ class _NavModulesPageState extends ConsumerState<NavModulesPage> {
                   top: MediaQuery.of(context).padding.top +
                       OrbitPageHeader.rowHeight +
                       AppDimens.space16,
-                  left: AppDimens.pageInline,
-                  right: AppDimens.pageInline,
+                  // 卡片自带 h:12 外距（OrbitSettingsGroup），列表不加水平边距
                   bottom: AppDimens.gestureInsetFallback + AppDimens.space32,
                 ),
                 children: [
-                  _preview(context, colors, _liveOrder(nav.enabled)),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppDimens.space12,
+                    ),
+                    child: _preview(context, colors, _liveOrder(nav.enabled)),
+                  ),
                   const SizedBox(height: AppDimens.cardGap),
                   _section(
                     context,
@@ -412,7 +416,7 @@ class _NavModulesPageState extends ConsumerState<NavModulesPage> {
     required bool enabledSection,
   }) {
     final colors = AppColors.ofContext(context);
-    return SectionCard(
+    return OrbitSettingsGroup(
       title: label,
       child: modules.isEmpty
           ? _emptyHint(context, colors, '全部模块已启用，左滑行或点减号可停用。')
@@ -807,7 +811,7 @@ class _NavModulesPageState extends ConsumerState<NavModulesPage> {
         : true;
     final textStyles = MiuixTheme.of(context).textStyles;
     return MiuixBasicComponent(
-      // 水平内边距交给外层卡片（[SectionCard] → `OrbitCard` 的 16）：miuix 的
+      // 水平内边距交给外层分组卡（[OrbitSettingsGroup] 的 16）：miuix 的
       // 「卡内 16 + 行内 16」在本页会叠成 32，360dp 窄屏下简介被挤成两行；
       // 垂直 8 + 库内 `minHeight` 56 保持 miuix 行高口径
       insideMargin: const EdgeInsets.symmetric(

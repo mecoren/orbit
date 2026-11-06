@@ -27,7 +27,7 @@ import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/utils/sync_status_text.dart';
 import '../../shared/widgets/shadcn/orbit_dropdown_preference.dart';
 import '../../shared/widgets/shadcn/orbit_spinner.dart';
-import '../../shared/widgets/shadcn/orbit_switch.dart';
+import '../../shared/widgets/shadcn/orbit_settings_group.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../shared/widgets/shadcn/orbit_wheel_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_button.dart';
@@ -58,71 +58,39 @@ import '../../services/digest_scheduler.dart';
 /// - 数据导出/CSV 导入卡（07 报告 #15）；
 /// - 关于卡：版本 → push /about。
 
-// ══ 「列表项 Item」示例同构版式件 ══
-// 对齐 example/lib/showcase/preferences.dart + common.dart：行内边距取示例
-// _itemMargin（16×14）；分隔线缩进 56 对齐行标题；说明段/按钮区水平 16 与
-// 行内边距同线。
+// ══ 「列表项 Item」版式件 ══
+// 版式本体已沉淀到原语层 `orbit_settings_group.dart`（设置主页面与全部
+// 设置子页面共用同一口径：卡外 28×8 小标题、h:12 外距零内边距 MiuixCard、
+// 行 16×14 内边距、行间 56 缩进分隔线）。本页只保留参数适配薄包装，
+// 调用点保持原样。
 
-/// 行内边距（示例 `_itemMargin` 同值）
-const EdgeInsets _rowMargin = EdgeInsets.symmetric(horizontal: 16, vertical: 14);
+/// 行内边距（原语 [kSettingsRowMargin] 同值 16×14）
+const EdgeInsets _rowMargin = kSettingsRowMargin;
 
-/// 分组卡（示例 `GroupCard` 同构：h:12 外距 + 零内边距 MiuixCard）
-Widget _sectionCard(List<Widget> children) => Padding(
-  padding: const EdgeInsets.symmetric(horizontal: 12),
-  child: MiuixCard(
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: children,
-    ),
-  ),
-);
+/// 分组卡（行式内容；卡外分组标题由调用方另置）
+Widget _sectionCard(List<Widget> children) =>
+    OrbitSettingsGroup.rows(children: children);
 
-/// 行间分隔线（示例 `IndentDivider` 同款：左缩进 56 对齐行标题）
+/// 行间分隔线（左缩进 56 对齐行标题）
 class _RowDivider extends StatelessWidget {
   const _RowDivider();
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(left: 56),
-    child: const MiuixHorizontalDivider(),
-  );
+  Widget build(BuildContext context) => const OrbitSettingsDivider();
 }
 
-/// 卡内说明段（卡片顶部描述文字，水平 16 与行内边距同线）
+/// 卡内说明段
 Widget _sectionDesc(AppColorSet colors, String text, {bool faint = false}) =>
-    Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontSize: 12,
-          color: colors.secondaryText.withValues(alpha: faint ? 0.7 : 1),
-        ),
-      ),
-    );
+    OrbitSettingsDesc(text, faint: faint);
 
-/// 卡内尾注（行区之下的补充说明）
+/// 卡内尾注
 Widget _sectionNote(AppColorSet colors, String text, {bool faint = false}) =>
-    Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontSize: 12,
-          color: colors.secondaryText.withValues(alpha: faint ? 0.7 : 1),
-        ),
-      ),
-    );
+    OrbitSettingsNote(text, faint: faint);
 
-/// 卡内按钮区（水平 16，与行内边距同线）
-Widget _sectionButtons(Widget child) => Padding(
-  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-  child: child,
-);
+/// 卡内按钮区
+Widget _sectionButtons(Widget child) => OrbitSettingsActions(child);
 
-/// 箭头跳转行：值文本取 `onSurfaceVariantActions` 灰（示例同款），
-/// [trailing] 排在内置箭头之前（角标/转环等小件）
+/// 箭头跳转行
 Widget _arrowRow(
   BuildContext context,
   String title, {
@@ -132,55 +100,29 @@ Widget _arrowRow(
   VoidCallback? onClick,
   bool enabled = true,
   Widget? trailing,
-}) {
-  final theme = MiuixTheme.of(context);
-  return MiuixArrowPreference(
-    title: title,
-    summary: summary,
-    titleColor: titleColor == null
-        ? null
-        : MiuixBasicComponentColors(
-            color: titleColor,
-            disabledColor: theme.colors.disabledOnSecondaryVariant,
-          ),
-    insideMargin: _rowMargin,
-    onClick: onClick,
-    enabled: enabled,
-    endActions: [
-      if (value != null)
-        MiuixText(
-          value,
-          fontSize: theme.textStyles.body2.fontSize,
-          color: enabled
-              ? theme.colors.onSurfaceVariantActions
-              : theme.colors.disabledOnSecondaryVariant,
-        ),
-      ?trailing,
-    ],
-  );
-}
+}) => OrbitSettingsRow(
+  title,
+  summary: summary,
+  value: value,
+  titleColor: titleColor,
+  onClick: onClick,
+  enabled: enabled,
+  trailing: trailing,
+);
 
-/// 开关行（与 [_arrowRow] 同构，右侧为 [OrbitSwitch] 蓝色开关）
-///
-/// 整行可点切换；禁用时回调传 null（标题/摘要同转灰，开关不可用，
-/// miuix 禁用项口径）。onChanged 为 null 即禁用。
+/// 开关行
 Widget _switchRow(
   BuildContext context,
   String title, {
   String? summary,
   required bool value,
   ValueChanged<bool>? onChanged,
-}) {
-  return MiuixBasicComponent(
-    title: title,
-    summary: summary,
-    insideMargin: _rowMargin,
-    onClick: onChanged == null ? null : () => onChanged(!value),
-    endActions: [
-      OrbitSwitch(value: value, onChanged: onChanged, semanticLabel: title),
-    ],
-  );
-}
+}) => OrbitSettingsSwitchRow(
+  title,
+  summary: summary,
+  value: value,
+  onChanged: onChanged,
+);
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key, this.showBack = true});
@@ -1052,7 +994,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     MediaQuery.of(context).padding.top +
                     OrbitPageHeader.rowHeight +
                     AppDimens.space16,
-                // 卡体自带 h:12 外距（_sectionCard），列表不再加水平边距
+                // 卡体自带 h:12 外距（OrbitSettingsGroup），列表不加水平边距
                 // 悬浮底栏净空 + 呼吸留白（末张设置卡不被玻璃栏扣住）
                 bottom:
                     OrbitBottomNav.clearanceOf(context) + AppDimens.space32,

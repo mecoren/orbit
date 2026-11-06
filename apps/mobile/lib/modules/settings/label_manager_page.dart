@@ -15,7 +15,7 @@ import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart'
     show bottomSheetMotion, bottomSheetTopShape;
 import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
-import '../../shared/widgets/shadcn/orbit_section_card.dart';
+import '../../shared/widgets/shadcn/orbit_settings_group.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../shared/widgets/shadcn/orbit_button.dart';
 import '../../shared/widgets/shadcn/orbit_icon_button.dart';
@@ -271,12 +271,11 @@ class _LabelManagerPageState extends ConsumerState<LabelManagerPage> {
                     MediaQuery.of(context).padding.top +
                     OrbitPageHeader.rowHeight +
                     AppDimens.space16,
-                left: AppDimens.space16,
-                right: AppDimens.space16,
+                // 卡片自带 h:12 外距（OrbitSettingsGroup），列表不加水平边距
                 bottom: AppDimens.gestureInsetFallback + AppDimens.space32,
               ),
               children: [
-                SectionCard(
+                OrbitSettingsGroup(
                   title: '标签',
                   subtitle: labels.isEmpty ? null : '${labels.length} 个',
                   child: Column(
