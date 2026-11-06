@@ -4,7 +4,10 @@
 /// （`MiuixGlassTransformPopup`，2026-11-05 收口）：
 /// - 承载：[showOrbitMenuPopup] 的 `transformAnchor` + `anchorContent` 路径，
 ///   与底栏「更多」、快速添加五处同源——卡片从**本行轮廓**连续形变长出，
-///   关闭同样播逆形变、退场完成才移除条目；
+///   关闭同样播逆形变，但**卡面贴合本行就交还**、不等库内弹簧尾巴（整行宽
+///   锚点的逆形变尾巴是一块已收好的玻璃壳，空挂约 370ms 读起来就是
+///   「回收到最后一步卡一下」，见 `orbit_menu_popup.dart` 的
+///   `_transformExitCutoff`）；
 /// - 玻璃：形变承载 `inherited = true`，材质继承锚点表面（`MiuixGlassAnchor`
 ///   发布的 surface），不再走 `widget.backdrop` 的「无快照退实色」分支——
 ///   这正是 2026-11-05 云同步「引擎」弹层看着是实色白卡、退场又「模糊着

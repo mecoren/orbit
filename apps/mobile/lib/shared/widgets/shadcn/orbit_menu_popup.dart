@@ -15,8 +15,9 @@
 /// **承载是 Overlay 直挂，不是路由**：菜单打开期间不重建页面、不新建路由，
 /// 输入框焦点与键盘保持升起（库内 `FocusScope(autofocus)` 会先接管一次，
 /// 组件在测量落定后再等两帧归还，见 `_scheduleFocusRestore`）；关闭先切
-/// `show=false` 播逆形变，`onDismissFinished` 后才移除 entry；行回调仍立即
-/// 执行（调用方可以马上写库），不等待退场动画。
+/// `show=false` 播逆形变，退场收尾后才移除 entry（形变承载在卡面贴合触发件
+/// 那一刻就收尾，不等库内弹簧尾巴，见 [_transformExitCutoff]）；行回调仍
+/// 立即执行（调用方可以马上写库），不等待退场动画。
 ///
 /// **返回键**：Overlay 下 `ModalRoute.of` 为 null，库内 `LocalHistoryEntry`
 /// 不生效；调用方有底部面板时用既有 `PopScope` 兜底（会话 `close()` 幂等）。
@@ -52,6 +53,17 @@ const double _estimatePanelPadding = 24;
 
 /// 标题行高度（`OrbitDropdownPanelView` 的标题行 + 上下留白）
 const double _estimateHeaderHeight = 40;
+
+/// 形变承载的退场截断时长：卡面贴合触发件即收尾
+///
+/// 库内 transform 退场是 `bounds(.8,.28)` 与 `center(.8,.4)` 两条弹簧取 max，
+/// 按 0.0015 容差要跑到 **~690ms**；但实测卡面在 **~320ms** 就已经落到触发件
+/// 矩形上，此后只剩 1–2px 的过冲回摆（肉眼不可见），而行内容副本最迟 130ms
+/// （`_icon` 延迟 50 + 80）就完全顶出来了。那多出来的 ~370ms 里画面已经收好、
+/// 弹层却还挂着（还压着那层玻璃卡壳），观感就是**回收到最后一步卡一下**
+/// （2026-11-06 云同步「引擎」行反馈，探针实测卡壳矩形 320ms 已等于行矩形、
+/// 688ms 才移除）。故形变承载不等库内收尾，到点自己交还给触发件。
+const Duration _transformExitCutoff = Duration(milliseconds: 320);
 
 /// 锚定菜单会话：`close` 幂等，`closed` 在弹层移除后完成。
 ///
@@ -257,7 +269,10 @@ class OrbitMenuPopupBody extends StatefulWidget {
   /// 点外部/返回键请求关闭（由承载入口处理）
   final VoidCallback onDismiss;
 
-  /// 逆形变结束（Overlay 承载此时才移除 entry）
+  /// 退场收尾（Overlay 承载此时才移除 entry）
+  ///
+  /// 形变承载在卡面贴合触发件时（约 320ms）即回调，不等库内弹簧尾巴；
+  /// dropdown 承载仍由库内退场结束回调。
   final VoidCallback? onDismissFinished;
 
   /// 行点击时的「先关面板」动作（默认同 [onDismiss]）
@@ -274,17 +289,48 @@ class OrbitMenuPopupBodyState extends State<OrbitMenuPopupBody> {
   bool _show = true;
   bool _closing = false;
 
-  /// 请求回收；库内退场完成后由 [OrbitMenuPopupBody.onDismissFinished] 收尾。
+  /// 承载方是否已收尾（库里完成回调与退场截断只认先到的那个）
+  bool _finished = false;
+
+  /// 形变承载的退场截断定时器（见 [_transformExitCutoff]）
+  Timer? _cutoff;
+
+  /// 请求回收；库内退场完成后（或形变承载到点截断后）由 [_finish] 收尾。
   void dismiss() {
     if (_closing || !mounted) return;
     _closing = true;
     // 首帧尚未挂上库内 portal 时没有退场可播，直接让承载方清理，避免
     // 「show=false 但从未 present」时收不到完成回调而泄漏 entry。
     if (_measured == null) {
-      widget.onDismissFinished?.call();
+      _finish();
       return;
     }
     setState(() => _show = false);
+    // 形变承载：库内逆形变的弹簧尾巴很长（见 [_transformExitCutoff]），
+    // 卡面贴上触发件就交还，不再空挂那 ~370ms
+    if (widget.transformAnchor != null) {
+      _cutoff = Timer(_transformExitCutoff, _finish);
+    }
+  }
+
+  /// 退场收尾（幂等）：放出锚点内容 → 由承载方移除弹层
+  ///
+  /// 先放锚点内容再移除：库内 presenter 卸载时才在**帧末**恢复
+  /// `contentHidden`，先摘承载会空出一帧「行内容消失」；这里两件事在同一个
+  /// 构建帧生效，行与弹层无缝交接。
+  void _finish() {
+    if (_finished || !mounted) return;
+    _finished = true;
+    _cutoff?.cancel();
+    _cutoff = null;
+    widget.transformAnchor?.contentHidden = false;
+    widget.onDismissFinished?.call();
+  }
+
+  @override
+  void dispose() {
+    _cutoff?.cancel();
+    super.dispose();
   }
 
   /// 卡面材质（与页头 ⋮ 菜单 / 下拉偏好同档：puredThinGlass + blur 32；
@@ -472,7 +518,8 @@ class OrbitMenuPopupBodyState extends State<OrbitMenuPopupBody> {
         visuals: visuals,
         onMeasured: _handleMeasured,
         onDismissRequest: widget.onDismiss,
-        onDismissFinished: widget.onDismissFinished,
+        // 统一走 _finish：退场截断与库内完成幂等互斥，都只收尾一次
+        onDismissFinished: _finish,
         child: panel,
       );
     }
@@ -487,7 +534,7 @@ class OrbitMenuPopupBodyState extends State<OrbitMenuPopupBody> {
       contentPadding: EdgeInsets.zero,
       onMeasured: _handleMeasured,
       onDismissRequest: widget.onDismiss,
-      onDismissFinished: widget.onDismissFinished,
+      onDismissFinished: _finish,
       child: panel,
     );
   }

@@ -120,6 +120,65 @@ void main() {
     expect(find.text('永久'), findsNothing);
   });
 
+  /// 退场截断（2026-11-06 反馈「回收到最后一步还是卡一下」）：库内 transform
+  /// 逆形变按 0.0015 容差要跑到 ~690ms，但探针实测卡面 **320ms** 就已贴合本行
+  /// 矩形，此后只有 1–2px 过冲回摆——那 ~370ms「画面已经收好、弹层还挂着」
+  /// 就是最后一步的停顿。断言：贴合即收尾（360ms 内收走，远早于库内 ~690ms），
+  /// 且本行内容与撤弹层**同帧**复位（不能空出一帧「行内容消失」）。
+  testWidgets('回收在卡面贴合本行时收尾（不等库内弹簧尾巴）', (tester) async {
+    await tester.pumpWidget(
+      orbitTestApp(
+        home: Scaffold(
+          body: Center(
+            child: OrbitDropdownPreference<int>(
+              title: '保留时间',
+              items: const [
+                SelectItem(value: 7, label: '7 天'),
+                SelectItem(value: 30, label: '30 天'),
+              ],
+              current: 30,
+              onSelect: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+    double anchorOpacity() => tester
+        .widget<Opacity>(
+          find
+              .descendant(
+                of: find.byType(MiuixGlassAnchor),
+                matching: find.byType(Opacity),
+              )
+              .first,
+        )
+        .opacity;
+
+    await tester.tap(find.text('保留时间'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(orbitDropdownPopupKey), findsOneWidget);
+
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(
+      find.byKey(orbitDropdownPopupKey),
+      findsOneWidget,
+      reason: '逆形变仍在播（卡面还没落到本行上）',
+    );
+    expect(anchorOpacity(), 0, reason: '形变期本行内容由副本承担');
+
+    await tester.pump(const Duration(milliseconds: 60));
+    expect(
+      find.byKey(orbitDropdownPopupKey),
+      findsNothing,
+      reason: '卡面贴合本行即收尾，不再空挂到库内 ~690ms',
+    );
+    expect(anchorOpacity(), 1, reason: '行内容与撤弹层同帧复位，不空帧');
+
+    await tester.pumpAndSettle();
+    expect(find.text('保留时间'), findsOneWidget);
+  });
+
   testWidgets('OrbitGlassPage 下弹层拿到背景采样器', (tester) async {
     await tester.pumpWidget(
       orbitTestApp(
