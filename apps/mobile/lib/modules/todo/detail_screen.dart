@@ -33,11 +33,11 @@ import '../../shared/widgets/shadcn/orbit_image_thumb.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_skeleton.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart'
-    show
-        bottomSheetMotion,
-        bottomSheetTopShape,
-        showMoreActionsSheet,
-        OrbitPanelItem;
+    show bottomSheetMotion, bottomSheetTopShape, OrbitPanelItem;
+// 页头 ⋮：OS4 玻璃形变菜单（与「今天」页头 ⋮ 同一套承载，2026-11-06）
+import '../../shared/widgets/shadcn/orbit_glass_menu.dart';
+import '../../shared/widgets/shadcn/orbit_glass_surface.dart'
+    show OrbitGlassScope;
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart'
@@ -179,40 +179,38 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
   }
 
   // ── 页头 ⋮ 任务级动作（对齐桌面详情标题行 Sunrise/Star/Copy/Trash 四枚钮；
-  //    移动端收进弹层，与列表长按菜单同族——四枚图标并排会把标题挤到半行，
-  //    列表页视图/筛选/排序收 ⋮ 是同款既有决策）──
+  //    移动端收进页头 ⋮ 玻璃形变菜单——与「今天」页头 ⋮ 同一套承载（按钮 →
+  //    菜单连续形变、玻璃卡面、行与组间分隔同源），不再从底部升抽屉；四枚
+  //    图标并排会把标题挤到半行，列表页视图/筛选/排序收 ⋮ 是同款既有决策）──
 
-  void _showTaskActions(TodoTask task) {
-    showMoreActionsSheet(
-      context,
-      title: task.title,
-      actions: [
-        OrbitPanelItem(
-          icon: OrbitIcons.sun,
-          label: task.isInMyDay ? '移出我的一天' : '加入我的一天',
-          color: OrbitAccents.myDayAmber,
-          onTap: () => _toggleMyDay(task),
-        ),
-        OrbitPanelItem(
-          icon: OrbitIcons.star,
-          label: task.isStarred ? '取消收藏' : '收藏',
-          color: OrbitAccents.starYellow,
-          onTap: () => _toggleFavorite(task),
-        ),
-        OrbitPanelItem(
-          icon: OrbitIcons.copy,
-          label: '复制任务',
-          onTap: () => _duplicateTask(task),
-        ),
-        OrbitPanelItem(
-          icon: OrbitIcons.delete,
-          label: '删除',
-          color: OrbitAccents.overdueRed,
-          onTap: () => _deleteTask(task),
-        ),
-      ],
-    );
-  }
+  /// ⋮ 菜单条目：标签回显我的一天/收藏的当前状态（点开时按当下 detail 构建）
+  List<List<OrbitPanelItem>> _taskActionGroups(TodoTask task) => [
+    [
+      OrbitPanelItem(
+        icon: OrbitIcons.sun,
+        label: task.isInMyDay ? '移出我的一天' : '加入我的一天',
+        color: OrbitAccents.myDayAmber,
+        onTap: () => _toggleMyDay(task),
+      ),
+      OrbitPanelItem(
+        icon: OrbitIcons.star,
+        label: task.isStarred ? '取消收藏' : '收藏',
+        color: OrbitAccents.starYellow,
+        onTap: () => _toggleFavorite(task),
+      ),
+      OrbitPanelItem(
+        icon: OrbitIcons.copy,
+        label: '复制任务',
+        onTap: () => _duplicateTask(task),
+      ),
+      OrbitPanelItem(
+        icon: OrbitIcons.delete,
+        label: '删除',
+        color: OrbitAccents.overdueRed,
+        onTap: () => _deleteTask(task),
+      ),
+    ],
+  ];
 
   /// 我的一天：加入今天（本地零点）/ 移出（null）——与桌面 toggleMyDayValue 同口径
   Future<void> _toggleMyDay(TodoTask task) {
@@ -323,13 +321,15 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
             right: 0,
             child: OrbitPageHeader(
               title: detail?.title ?? '详情',
-              // 任务级动作收进 ⋮ 弹层（对照桌面标题行四枚动作钮；标签回显
-              // 我的一天/收藏的当前状态）
+              // 任务级动作收进页头 ⋮ 玻璃形变菜单（对照桌面标题行四枚动作钮；
+              // 标签回显我的一天/收藏的当前状态）。弹层经 OverlayPortal 挂在
+              // 捕获树之外，采样器走本页 OrbitGlassPage 暴露的实例
               actions: detail == null
                   ? null
                   : [
-                      OrbitIconButton(
-                        onPressed: () => _showTaskActions(detail),
+                      OrbitGlassMenuButton(
+                        groupsBuilder: () => _taskActionGroups(detail),
+                        backdrop: OrbitGlassScope.maybeOf(context),
                         tooltip: '任务操作',
                         icon: Icon(
                           OrbitIcons.moreVertical,

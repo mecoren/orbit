@@ -2,6 +2,7 @@
 // （对齐桌面详情标题行 Sunrise/Star/Copy/Trash；移动端按列表页既有决策
 // 收进 ⋮ 弹层，标签回显当前状态）
 import 'package:flutter/material.dart';
+import 'package:flutter_miuix/miuix.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -35,13 +36,16 @@ Future<void> _openDetail(WidgetTester tester, MockOrbitBridge bridge) async {
   await _settle(tester);
 }
 
-/// 打开页头 ⋮ 动作弹层并点选其中的某一条目（文本定位限定在抽屉内，
-/// 避免与页面正文撞词）
+/// 打开页头 ⋮ 动作菜单并点选其中的某一条目（弹层是 OS4 玻璃形变菜单，
+/// 行渲染为 `MiuixGlassPopupItem`；文本定位限定在条目内，避免与页面正文撞词）
 Future<void> _pickAction(WidgetTester tester, String label) async {
   await tester.tap(find.byTooltip('任务操作'));
   await tester.pumpAndSettle();
   await tester.tap(
-    find.descendant(of: find.byType(BottomSheet), matching: find.text(label)),
+    find.ancestor(
+      of: find.text(label),
+      matching: find.byType(MiuixGlassPopupItem),
+    ),
   );
   await tester.pumpAndSettle();
 }

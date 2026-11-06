@@ -17,6 +17,14 @@
 
 ## [Unreleased]
 
+### 优化：移动端任务详情页 ⋮ 改为页头玻璃形变菜单——对齐「今天」页头 ⋮（2026-11-06）
+
+详情页右上 `⋮` 原先从底部升起动作抽屉（任务名作标题 + 四行条目），与「今天」页头 ⋮ 的形态不同源：同一枚角落按钮，一处从按钮轮廓形变长出玻璃卡、一处从屏幕底部推上来。
+
+- **承载换源**：`_showTaskActions`（`showMoreActionsSheet`）改为 `_taskActionGroups` + `OrbitGlassMenuButton`——OS4 玻璃形变菜单（`MiuixGlassTransformPopup`，材质 `puredThinGlass` + blur 32、行渲染 `MiuixGlassPopupItem`、宽度档 180–240 与全站弹出菜单一致）；四项动作（我的一天 / 收藏 / 复制任务 / 删除）与标签回显口径不变，旭日琥珀 / 星标黄 / 删除红的着色原样保留。
+- **采样器**：详情页是根级推入页，采样器由路由侧的 `OrbitGlassPage` 自建，`backdrop` 取 `OrbitGlassScope.maybeOf(context)`（弹层经 `OverlayPortal` 挂在捕获树之外，不会自采样）。
+- **验证**：`flutter analyze` 0 issue；`flutter test test/detail_header_actions_test.dart` 4 绿（条目定位改为按 `MiuixGlassPopupItem` 找，四动作落库与弹层开合语义不变）。
+
 ### 修复：移动端悬浮新建钮没有玻璃效果——玻璃档三态收口 + 缺描边/投影/折射档（2026-11-06）
 
 `OrbitFab` 玻璃档原先只在「有采样器且快照已就绪」时走 `MiuixGlassPanel`，其余情况（首帧快照未就绪、裸页无采样器）直接回落成实心强调色圆片，且玻璃组件不监听采样器——快照就绪后也不会自己刷新，真机见到的就是一颗纯蓝钮。
