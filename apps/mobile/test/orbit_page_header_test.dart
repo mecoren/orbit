@@ -117,7 +117,7 @@ void main() {
     expect(tester.getSize(bar).width, closeTo(pageWidth * 0.5, 1.5));
   });
 
-  testWidgets('OS4 形态：标题+副标居中，leading/actions 套圆形玻璃底，几何口径不变',
+  testWidgets('OS4 形态：标题+副标居中，两侧图标槽不垫浮块，几何口径不变',
       (tester) async {
     await tester.pumpWidget(orbitTestApp(
       home: MediaQuery(
@@ -157,13 +157,13 @@ void main() {
       closeTo(headerSize.width / 2, 1),
     );
 
-    // leading / actions 各套一枚圆形玻璃底（OS4 折叠栏静止态的承载面）
+    // 两侧只留裸图标：图标槽不再垫圆形玻璃底（白圆浮块已收掉）
     expect(
       find.descendant(
         of: find.byType(OrbitPageHeader),
         matching: find.byType(MiuixGlassPanel),
       ),
-      findsNWidgets(2),
+      findsNothing,
     );
   });
 }

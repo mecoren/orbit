@@ -17,6 +17,13 @@
 
 ## [Unreleased]
 
+### 优化：移动端首页页头两侧图标去掉玻璃浮块（2026-11-06）
+
+「循迹」页头 os4 形态的左端云同步图标与右端设置钮不再各垫一枚 44dp 圆形玻璃底，只留裸图标——白圆浮块压在栏体玻璃上观感过重，两侧本来也只是两个图标。
+
+- **实现**：`OrbitPageHeader._glassSlot` 改为 `_iconSlot`，只保留 44dp 对称槽位 + 原控件居中叠放（`OrbitIconButton` 热区、状态栏避让、居中标题基准均不变），删除 `_Os4GlassCircle` 与对应注释；其余 27 页页头与栏体玻璃层零改动。
+- **验证**：`flutter analyze` 0 issue；`flutter test test/orbit_page_header_test.dart test/home_shell_test.dart` 17 绿（页头 OS4 用例断言改为「页头内无 `MiuixGlassPanel` 浮块」）。
+
 ### 修复：移动端锚定菜单回收到最后一步停顿——卡面贴合触发件即收尾（2026-11-06）
 
 库内 `MiuixGlassTransformPopup` 的逆形变是 `bounds(.8,.28)` 与 `center(.8,.4)` 两条弹簧取 max，按 0.0015 容差要跑到 **~690ms**；但探针实测卡面在 **320ms** 就已落到触发件矩形上，此后只剩 1–2px 的过冲回摆（肉眼不可见），而行内容副本最迟 130ms 就完全顶出来。那多出来的 ~370ms 里画面已经收好、弹层却还挂着一块玻璃壳，读起来就是「回收到最后一步卡一下」（云同步「引擎」行反馈）。

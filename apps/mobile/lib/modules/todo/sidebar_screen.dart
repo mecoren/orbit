@@ -670,7 +670,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
               right: 0,
               child: OrbitPageHeader(
                 title: '循迹',
-                // 根页走 OS4 折叠栏形态（标题 + 日期副标居中、两侧圆形玻璃钮），
+                // 根页走 OS4 折叠栏形态（标题 + 日期副标居中、两侧 44dp 裸图标槽），
                 // 其余页仍是左对齐单行标题（见 orbit_page_header.dart 文件头）
                 os4: true,
                 subtitle: todayHeaderLabel(DateTime.now()),

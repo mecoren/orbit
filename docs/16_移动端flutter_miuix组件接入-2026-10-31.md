@@ -38,7 +38,7 @@
 | `MiuixSurface`（squircle） | `OrbitFilterChip`（新增） | 4 处（2 处 `ChoiceChip` + 2 处手搓容器） | 筛选标签统一为 squircle 表面 + 强调色 16% 选中底 |
 | `MiuixHorizontalDivider` / `MiuixVerticalDivider` | `OrbitDivider` / `OrbitVerticalDivider`（新增） | 6 处 | 0.75 细线 + `dividerLine` 语义角色（保留 `height`/`thickness` 语义） |
 | `MiuixGlassNavigationBar`（**OS4 玻璃**） | `OrbitBottomNav` | 1 处（壳） | 液态玻璃底栏 + 滑动胶囊指示器 + 弹簧回弹 + 支持拖动换页 |
-| `MiuixGlassPanel` + `miuixGlassSurface`（**OS4 玻璃**） | `OrbitPageHeader` 玻璃层 / `OrbitFloatCard` 浮层 / `OrbitGlassSurface` + `OrbitGlassSheet`（更多操作抽屉，2026-11-03）/ 页头 os4 形态圆形钮底（2026-11-04） | 28 页页头 + 全部锚点浮层 + 快速添加面板 + 动作抽屉 | 页头：OS4 材质（模糊 + 混色 + 描边），无采样器时回落实时 `BackdropFilter`；os4 形态（首页）另把 leading/actions 套 44dp 圆形玻璃底；浮层：`puredThinGlass` + blur 32；弹层：`puredThinGlass` 栏体材质 + `shading: false` |
+| `MiuixGlassPanel` + `miuixGlassSurface`（**OS4 玻璃**） | `OrbitPageHeader` 玻璃层 / `OrbitFloatCard` 浮层 / `OrbitGlassSurface` + `OrbitGlassSheet`（更多操作抽屉，2026-11-03） | 28 页页头 + 全部锚点浮层 + 快速添加面板 + 动作抽屉 | 页头：OS4 材质（模糊 + 混色 + 描边），无采样器时回落实时 `BackdropFilter`；os4 形态（首页）leading/actions 只占 44dp 槽位、不垫玻璃底（2026-11-06 收掉浮块）；浮层：`puredThinGlass` + blur 32；弹层：`puredThinGlass` 栏体材质 + `shading: false` |
 | `MiuixTheme` / `MiuixColors` / `MiuixTextStyles` | `OrbitMiuixTheme`（`core/theme/miuix_theme.dart`） | 根装配 + 测试壳 | 54 个语义色角色全部由 `AppColors` / `OrbitAccents` 派生，三套体系（Material / shadcn / Miuix）数值同源 |
 | `MiuixGlassRendering` | `HomeShell.initState` 预热 | 1 处 | 首帧前加载 OS4 shader，避免"先实色后玻璃"的跳变 |
 
