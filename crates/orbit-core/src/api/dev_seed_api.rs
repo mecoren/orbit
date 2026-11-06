@@ -554,13 +554,16 @@ async fn insert_seed_rows(
 
         if trashed {
             // 先活行后墓碑：FTS 的 INSERT 触发器不看 is_deleted，UPDATE 触发器
-            // 才会把软删行从索引摘掉（否则回收站任务会混进搜索结果）
+            // 才会把软删行从索引摘掉（否则回收站任务会混进搜索结果）。
+            // 墓碑的 updated_at 只做「最近一小时内删掉」的散布，但不得早于该行
+            // 自身的 updated_at——今天完成的行 done_at 会被夹到 now-60s，若直接
+            // 取 now - k 分钟就会写出「先更新、后完成」的时间线倒挂
             sqlx::query(
                 "UPDATE todo_tasks SET is_deleted = 1, deleted_at = ?, updated_at = ?, \
                     version = version + 1 WHERE id = ?",
             )
             .bind(now - (i % 5) * DAY_MS)
-            .bind(now - (i % 60) * 60_000)
+            .bind((now - (i % 60) * 60_000).max(updated_at))
             .bind(task_id)
             .execute(&mut **tx)
             .await?;
