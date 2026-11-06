@@ -27,6 +27,7 @@ import 'package:flutter_miuix/miuix.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimens.dart';
+import '../../../core/theme/orbit_accents.dart';
 
 /// 标准表单输入 / 内联编辑器（见文件头）
 class OrbitTextField extends StatelessWidget {
@@ -141,32 +142,49 @@ class OrbitTextField extends StatelessWidget {
     final isPlaceholder = label == null || inline;
     final placeholder = isPlaceholder ? (label ?? hintText ?? '') : null;
 
-    final field = MiuixTextField(
-      controller: controller,
-      focusNode: focusNode,
-      label: placeholder ?? label ?? '',
-      useLabelAsPlaceholder: isPlaceholder,
-      enabled: enabled,
-      readOnly: readOnly,
-      autofocus: autofocus,
-      obscureText: obscureText,
-      keyboardType: keyboardType,
-      textInputAction: textInputAction,
-      textCapitalization: textCapitalization,
-      // 库内 `singleLine` 会强制 maxLines=1（obscureText 同理）
-      singleLine: maxLines == 1,
-      minLines: minLines,
-      maxLines: maxLines,
-      textStyle: style ?? TextStyle(fontSize: 15, color: colors.bodyText),
-      leadingIcon: leadingIcon,
-      trailingIcon: trailingIcon,
-      insideMargin: inline
-          ? (insideMargin ?? EdgeInsets.zero)
-          : const EdgeInsets.all(AppDimens.space16),
-      cornerRadius: inline ? 8 : MiuixTextFieldDefaults.cornerRadius,
-      colors: _colors(colors, base, error),
-      onChanged: _limited(onChanged),
-      onSubmitted: onSubmitted,
+    final field = Theme(
+      // MiuixTextField 内部的 Material TextField 只覆盖了 isDense/零内边距/
+      // 无边框，`filled` 仍回落到全局 `inputDecorationTheme`（本仓为
+      // filled: true + 浅灰底），会在 miuix 自己的 squircle 之外再铺一块
+      // 直角灰矩形——内联态（标题原地编辑）看着像叠了个老式输入框。
+      // 底色统一交给 miuix 的背景，Material 那层恒关。
+      data: Theme.of(context).copyWith(
+        inputDecorationTheme: Theme.of(context).inputDecorationTheme.copyWith(
+              filled: false,
+              fillColor: Colors.transparent,
+            ),
+      ),
+      child: MiuixTextField(
+        controller: controller,
+        focusNode: focusNode,
+        label: placeholder ?? label ?? '',
+        useLabelAsPlaceholder: isPlaceholder,
+        enabled: enabled,
+        readOnly: readOnly,
+        autofocus: autofocus,
+        obscureText: obscureText,
+        keyboardType: keyboardType,
+        textInputAction: textInputAction,
+        textCapitalization: textCapitalization,
+        // 库内 `singleLine` 会强制 maxLines=1（obscureText 同理）
+        singleLine: maxLines == 1,
+        minLines: minLines,
+        maxLines: maxLines,
+        textStyle: style ?? TextStyle(fontSize: 15, color: colors.bodyText),
+        // 内联态的 borderColor 是透明的（不能画出聚焦框），库内
+        // `cursorColor ?? borderColor` 会连带把光标也画成透明——显式给
+        // 主题强调色，否则原地编辑看不见光标。
+        cursorColor: inline ? OrbitAccents.themeAccent : null,
+        leadingIcon: leadingIcon,
+        trailingIcon: trailingIcon,
+        insideMargin: inline
+            ? (insideMargin ?? EdgeInsets.zero)
+            : const EdgeInsets.all(AppDimens.space16),
+        cornerRadius: inline ? 8 : MiuixTextFieldDefaults.cornerRadius,
+        colors: _colors(colors, base, error),
+        onChanged: _limited(onChanged),
+        onSubmitted: onSubmitted,
+      ),
     );
 
     final withError = _withMessage(context, field, error);
