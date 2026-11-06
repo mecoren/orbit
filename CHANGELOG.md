@@ -17,6 +17,15 @@
 
 ## [Unreleased]
 
+### 修复：移动端悬浮新建钮没有玻璃效果——玻璃档三态收口 + 缺描边/投影/折射档（2026-11-06）
+
+`OrbitFab` 玻璃档原先只在「有采样器且快照已就绪」时走 `MiuixGlassPanel`，其余情况（首帧快照未就绪、裸页无采样器）直接回落成实心强调色圆片，且玻璃组件不监听采样器——快照就绪后也不会自己刷新，真机见到的就是一颗纯蓝钮。
+
+- **三态收口**（与 `OrbitGlassSurface` 同口径）：采样器就绪 → `MiuixGlassPanel` + `puredThinGlass`；采样器存在但快照未就绪 → 实时 `BackdropFilter`（blur 18 + 表面色 66%）；无采样器 → 同一条实时模糊路径。**任一态都不再回落实心圆片**，快照就绪后经 `ListenableBuilder` 自动切 OS4 玻璃。
+- **承载不变**：`MiuixPressable` 弹簧按压 + 外层 `GestureDetector` 长按（模板新建），玻璃面板本身不吃手势。
+- **真机二次反馈（白底上仍是一坨白雾）三条根因**：① `MiuixPressable(borderRadius:)` 把 child 裁到圆形，而 `MiuixGlassPanel` 的 OS4 阴影画在面板矩形之外（`paintBounds` 外扩）→ 阴影被 100% 裁掉，钮没有厚度；现把投影挪到裁切层之外（外层 `DecoratedBox`，沿用库内 FAB 的 elevation 4 口径：黑 15%、blur 16、下移 6），面板本身 `shadow: null`。② 漏了底栏/菜单都挂的 `MiuixGlassStrokes.forTheme` 那圈高光，白卡上连轮廓都读不出来。③ 材质档跟着底栏取了 `shading: false`（**栏体档**，只做模糊 + 混色）——栏体横在底部、背后是与页面同色的连续内容，够用；小面积按钮四周全是白卡，只混色就是纯白圆片。按钮档改为 `shading: true`（`glass` shader 的边缘折射 + 内层白 + 光照反射），白底上能读出透镜边缘的高光；shader 缺席时库内自动退「模糊 + 混色」，不报错。
+- **验证**：新增 `test/orbit_fab_test.dart` 4 绿（实心档仍是 `MiuixFloatingActionButton`；无采样器 / 快照未就绪两态均为 `BackdropFilter` 且无实心 FAB；玻璃档点击 + 长按生效）；`home_shell_test.dart` 12 绿；`flutter analyze` 0 issue；真机（x86_64 / Android 15）亮暗两色截图确认钮缘高光、投影与折射可见。
+
 ### 优化：移动端首页页头两侧图标去掉玻璃浮块（2026-11-06）
 
 「循迹」页头 os4 形态的左端云同步图标与右端设置钮不再各垫一枚 44dp 圆形玻璃底，只留裸图标——白圆浮块压在栏体玻璃上观感过重，两侧本来也只是两个图标。
