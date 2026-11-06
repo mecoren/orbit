@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_miuix/miuix.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -62,10 +64,29 @@ abstract final class WaitToast {
   /// message/actionLabel，其余按 data 身份挂表，条目完成时移除
   static final Map<MiuixSnackbarData, _ToastPayload> _payloads = {};
 
+  /// 当前卡片实测高度（顶部定位用）
+  ///
+  /// miuix 宿主只能把卡片钉在**贴底**位置（内部 `Align(bottomCenter)`），
+  /// 要把它搬到顶部就得知道卡高——内容行数可变（标题 / 副文案 / 动作按钮），
+  /// 只能 layout 后量（见 [_MeasuredCard]），帧末回写后宿主再平移到顶部。
+  static final ValueNotifier<double> _cardHeight = ValueNotifier<double>(0);
+
+  /// 最新一条的队列句柄：只有它的卡高能回写（退场中的旧卡尺寸不同会串位）
+  static MiuixSnackbarData? _current;
+
+  /// 顶部落点：状态栏（刘海 / 打孔区）下沿再留 8，避开状态栏图标
+  static const double _topGap = AppDimens.space8;
+
+  /// miuix 宿主内卡片距屏底的固定值（`miuix_snackbar.dart` 的
+  /// `_hostBottomPadding`，库未参数化）——顶部平移量要把它一并扣掉
+  static const double _hostBottomPadding = 12;
+
   /// 宿主挂载时换一份全新队列（见 [_host] 注释）
   static MiuixSnackbarHostState _bindHost() {
     _host = MiuixSnackbarHostState();
     _payloads.clear();
+    _current = null;
+    _cardHeight.value = 0;
     return _host;
   }
 
@@ -127,7 +148,14 @@ abstract final class WaitToast {
     // 数据句柄只能异步取（microtask，先于下一帧）：取到后登记 payload，
     // 卡面构建时按身份查表
     final data = await _host.newestSnackbarData();
-    if (data != null) _payloads[data] = payload;
+    if (data != null) {
+      _payloads[data] = payload;
+      // 换卡：新卡成为唯一的高度上报方（退场中的旧卡按身份被挡掉，
+      // 否则新卡首帧会沿用上一张的高度），高度归零让首帧退到屏外，
+      // 实测后再落位（见 [_cardHeight]）
+      _current = data;
+      _cardHeight.value = 0;
+    }
 
     final result = await resultFuture;
     _payloads.remove(data);
@@ -169,19 +197,24 @@ abstract final class WaitToast {
   static Widget _buildCard(BuildContext context, MiuixSnackbarData data) {
     final payload = _payloads[data];
     final actionLabel = data.visuals.actionLabel;
-    return _ToastCard(
-      title: data.visuals.message,
-      description: payload?.description,
-      variant: payload?.variant ?? WaitToastVariant.info,
-      actionLabel: actionLabel,
-      onAction: actionLabel == null
-          ? null
-          : () => unawaited(data.performAction()),
-      // 旧口径：不传 onTap 时点击仅收起
-      onTap: () {
-        unawaited(data.dismiss());
-        payload?.onTap?.call();
-      },
+    return _MeasuredCard(
+      height: _cardHeight,
+      data: data,
+      child: _ToastCard(
+        key: const ValueKey<String>('orbit_toast_card'),
+        title: data.visuals.message,
+        description: payload?.description,
+        variant: payload?.variant ?? WaitToastVariant.info,
+        actionLabel: actionLabel,
+        onAction: actionLabel == null
+            ? null
+            : () => unawaited(data.performAction()),
+        // 旧口径：不传 onTap 时点击仅收起
+        onTap: () {
+          unawaited(data.dismiss());
+          payload?.onTap?.call();
+        },
+      ),
     );
   }
 }
@@ -191,6 +224,15 @@ abstract final class WaitToast {
 /// 必须与消费方同处于 `OrbitMiuixTheme` 子树（卡面/按钮取 miuix 主题与
 /// `core/theme` token）。空队列时整层 hit-test 透明（Align/Column 无不透明
 /// 命中层），不挡页面手势；条目卡自身吃点击与横滑。
+///
+/// **顶部定位**（2026-11-06 定稿）：轻提示是「过路反馈」，压住底部就同时
+/// 挡住悬浮玻璃底栏、FAB 与批量工具条（撤销/横滑还抢点击）。现统一贴在
+/// 状态栏下方 8 处，从顶部滑入，页面底部控件全程可点；代价是短暂覆盖页头，
+/// 点卡即收（[WaitToast.defaultDwell] 2.6s 或撤销窗口 5s 后自动收）。
+///
+/// 实现上不改 miuix 宿主的 `Align(bottomCenter)`：宿主只负责队列/动画/横滑，
+/// 位置由本层 `Transform.translate` 把整层搬到顶部，位移量取「屏高 - 宿主
+/// 贴底 12 - 实测卡高 - 落点」（卡高见 [WaitToast._cardHeight]）。
 class OrbitToastHost extends StatefulWidget {
   const OrbitToastHost({super.key});
 
@@ -211,11 +253,85 @@ class _OrbitToastHostState extends State<OrbitToastHost> {
 
   @override
   Widget build(BuildContext context) {
-    return MiuixSnackbarHost(
-      state: _state,
-      canSwipeToDismiss: true,
-      builder: WaitToast._buildCard,
+    final media = MediaQuery.of(context);
+    return ValueListenableBuilder<double>(
+      valueListenable: WaitToast._cardHeight,
+      builder: (context, cardHeight, child) {
+        // 卡片顶边落点 = 状态栏下沿 + 8；整层上移量把「宿主贴底 12」与
+        // 卡高一起扣掉。首帧卡高未测到（内容行数决定高度）时推到屏外，
+        // 量到后下一帧落位——避免卡片先在底部闪一下再跳上来。
+        final targetTop = media.viewPadding.top + WaitToast._topGap;
+        final shift = cardHeight <= 0
+            ? media.size.height
+            : media.size.height -
+                WaitToast._hostBottomPadding -
+                cardHeight -
+                targetTop;
+        return Transform.translate(
+          offset: Offset(0, -shift),
+          child: Opacity(
+            opacity: cardHeight <= 0 ? 0 : 1,
+            child: child,
+          ),
+        );
+      },
+      child: MiuixSnackbarHost(
+        state: _state,
+        canSwipeToDismiss: true,
+        builder: WaitToast._buildCard,
+      ),
     );
+  }
+}
+
+/// 量卡片实测高度并回写到 [WaitToast._cardHeight]（顶部定位用）
+///
+/// 卡高由内容行数决定，只能在 layout 后拿到；layout 阶段直接改
+/// [ValueNotifier] 会触发「build 期间 setState」，故推到帧末回写。
+/// 只回报**最新一条**（[WaitToast._current]）：换卡时退场中的旧卡仍在树上，
+/// 它的高度会覆盖新卡的首帧落位。
+class _MeasuredCard extends SingleChildRenderObjectWidget {
+  const _MeasuredCard({
+    required this.height,
+    required this.data,
+    super.child,
+  });
+
+  final ValueNotifier<double> height;
+  final MiuixSnackbarData data;
+
+  @override
+  _RenderMeasuredCard createRenderObject(BuildContext context) =>
+      _RenderMeasuredCard(height, data);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderMeasuredCard renderObject,
+  ) {
+    renderObject.height = height;
+    renderObject.data = data;
+  }
+}
+
+class _RenderMeasuredCard extends RenderProxyBox {
+  _RenderMeasuredCard(this.height, this.data);
+
+  ValueNotifier<double> height;
+  MiuixSnackbarData data;
+
+  @override
+  void performLayout() {
+    super.performLayout();
+    final measured = size.height;
+    if (measured <= 0 || height.value == measured) return;
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (measured > 0 &&
+          height.value != measured &&
+          identical(WaitToast._current, data)) {
+        height.value = measured;
+      }
+    });
   }
 }
 
@@ -258,6 +374,7 @@ IconData _variantIcon(WaitToastVariant variant) => switch (variant) {
 /// 观感不劣化。
 class _ToastCard extends StatelessWidget {
   const _ToastCard({
+    super.key,
     required this.title,
     required this.variant,
     required this.onTap,
@@ -301,32 +418,51 @@ class _ToastCard extends StatelessWidget {
               ),
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.all(AppDimens.cardPadding),
+                  // 顶部条比底部浮层更紧凑：竖向我们收一档（16→12），
+                  // 横向与页头同基线（16），顶部不长出「大白块」
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppDimens.pageInline,
+                    vertical: AppDimens.space12,
+                  ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(_variantIcon(variant),
-                          size: AppDimens.iconSizeSm, color: color),
+                      Padding(
+                        // 18 图标与 15 字号的标题行视觉居中（光学对齐）
+                        padding: const EdgeInsets.only(top: 1),
+                        child: Icon(_variantIcon(variant),
+                            size: AppDimens.iconSizeSm, color: color),
+                      ),
                       const SizedBox(width: AppDimens.space12),
-                      Flexible(
+                      // 必须是 Expanded（tight）：Flexible 的 loose 约束让正文列
+                      // 按内容宽度自适应，短文案时动作按钮会停在卡片中间
+                      // （2026-11-06 真机反馈「撤销」跑到中间）。撑满剩余宽度
+                      // 后按钮恒贴右缘，长文案只在正文列内换行/省略。
+                      Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
                               title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w500,
+                                height: 1.3,
                                 color: colors.titleText,
                               ),
                             ),
                             if (description != null) ...[
-                              const SizedBox(height: AppDimens.space4),
+                              const SizedBox(height: AppDimens.space2),
                               Text(
                                 description!,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   fontSize: 13,
+                                  height: 1.35,
                                   color: colors.secondaryText,
                                 ),
                               ),
@@ -359,7 +495,9 @@ class _ToastCard extends StatelessWidget {
         filter: ui.ImageFilter.blur(sigmaX: 28, sigmaY: 28),
         child: DecoratedBox(
           decoration: ShapeDecoration(
-            color: colors.surfaceElevated.withValues(alpha: 0.82),
+            // 顶部条：背后是页头标题/统计数字这类高对比文字，半透明 0.82
+            // 会把这些笔画透成噪点，提到 0.90 既保留磨砂观感又不影响读字
+            color: colors.surfaceElevated.withValues(alpha: 0.90),
             shape: MiuixSquircleBorder(
               cornerRadius: radius,
               side: BorderSide(color: colors.outline, width: 1),
