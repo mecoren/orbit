@@ -2,7 +2,9 @@
 //!
 //! 零 FFI 依赖：不依赖 tauri。由 src-tauri 薄壳包装为 #[tauri::command]。
 //! 资产平移自 wait-home wait_core（02 文档 §四），按 MVP 范围裁剪：
-//! 剔除 douban / excel / password / changelog / sync(v1 引擎) / movie / asset 等模块。
+//! 剔除 douban / excel / password / sync(v1 引擎) / movie / asset 等模块。
+//! `changelog` 于 2026-11-06 从蓝本回迁：应用内更新日志收为双端唯一数据源（见
+//! `models::changelog` 与 `api::changelog_api`），仓库根 `CHANGELOG.md` 仍独立维护。
 //!
 //! 模块分层：
 //! - 统一错误/上下文：error / context

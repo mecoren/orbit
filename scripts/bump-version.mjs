@@ -190,7 +190,8 @@ function printChecklist(version) {
   1. 从上一 tag 起提炼变更：git log v<prev>..HEAD --oneline（忽略 docs/chore/style 噪声）
   2. 两份更新日志同一次提交写完：
      - CHANGELOG.md：把 [Unreleased] 段改为 ## [${version}] - YYYY-MM-DD
-     - apps/desktop/src/lib/changelog.ts：CHANGELOG_VERSIONS 头部插 ${version}（应用内「关于」数据源）
+     - crates/orbit-core/src/models/changelog/data.rs：ALL_VERSIONS 头部插 ${version}
+       （应用内「关于」唯一数据源，桌面/移动自动同源）
   3. 本地跑通 CI 等价检查：pnpm typecheck / pnpm test / pnpm e2e
      + pnpm lint:rust（cargo fmt --check + clippy）
   4. 提交：git commit -m "chore(release): 版本 ${version}"；打 tag 并推送：git tag v${version} && git push origin main --tags

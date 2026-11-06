@@ -3936,6 +3936,18 @@ class MockOrbitBridge implements OrbitBridge {
   });
 
   @override
+  Future<List<ChangelogVersionInfo>> changelogVersions() => _delay(
+    () => const [
+      ChangelogVersionInfo(
+        version: '0.1.0',
+        date: '2026-09-26',
+        summary: 'Mock 桥占位更新日志（真实数据源在 orbit-core）',
+        changes: [],
+      ),
+    ],
+  );
+
+  @override
   Future<UpdateInfo> checkLatestRelease() => _delay(
     () => const UpdateInfo(
       // mock 固定返回「无新版本」，避免测试/纯 UI 开发时弹无关弹层

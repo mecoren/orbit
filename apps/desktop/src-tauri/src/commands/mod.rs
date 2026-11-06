@@ -5,6 +5,7 @@ pub mod aumid_registry;
 pub mod asset_cmd;
 pub mod backup_scheduler;
 pub mod business_cmd;
+pub mod changelog_cmd;
 pub mod cloud_sync_cmd;
 pub mod crypto_cmd;
 pub mod csv_import_cmd;

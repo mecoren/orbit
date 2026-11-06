@@ -7,6 +7,7 @@ import 'api/activity_log.dart';
 import 'api/asset.dart';
 import 'api/auth.dart';
 import 'api/biometric.dart';
+import 'api/changelog.dart';
 import 'api/csv_import.dart';
 import 'api/dev_seed.dart';
 import 'api/diagnostics.dart';
@@ -224,6 +225,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt dco_decode_box_autoadd_usize(dynamic raw);
 
   @protected
+  ChangelogEntryDto dco_decode_changelog_entry_dto(dynamic raw);
+
+  @protected
+  ChangelogVersionDto dco_decode_changelog_version_dto(dynamic raw);
+
+  @protected
   CloudBackupEntryView dco_decode_cloud_backup_entry_view(dynamic raw);
 
   @protected
@@ -344,6 +351,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<BackupTableCount> dco_decode_list_backup_table_count(dynamic raw);
+
+  @protected
+  List<ChangelogEntryDto> dco_decode_list_changelog_entry_dto(dynamic raw);
+
+  @protected
+  List<ChangelogVersionDto> dco_decode_list_changelog_version_dto(dynamic raw);
 
   @protected
   List<CloudBackupEntryView> dco_decode_list_cloud_backup_entry_view(
@@ -965,6 +978,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt sse_decode_box_autoadd_usize(SseDeserializer deserializer);
 
   @protected
+  ChangelogEntryDto sse_decode_changelog_entry_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ChangelogVersionDto sse_decode_changelog_version_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   CloudBackupEntryView sse_decode_cloud_backup_entry_view(
     SseDeserializer deserializer,
   );
@@ -1121,6 +1144,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<BackupTableCount> sse_decode_list_backup_table_count(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<ChangelogEntryDto> sse_decode_list_changelog_entry_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<ChangelogVersionDto> sse_decode_list_changelog_version_dto(
     SseDeserializer deserializer,
   );
 
@@ -1919,6 +1952,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_usize(BigInt self, SseSerializer serializer);
 
   @protected
+  void sse_encode_changelog_entry_dto(
+    ChangelogEntryDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_changelog_version_dto(
+    ChangelogVersionDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_cloud_backup_entry_view(
     CloudBackupEntryView self,
     SseSerializer serializer,
@@ -2107,6 +2152,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_backup_table_count(
     List<BackupTableCount> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_changelog_entry_dto(
+    List<ChangelogEntryDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_changelog_version_dto(
+    List<ChangelogVersionDto> self,
     SseSerializer serializer,
   );
 

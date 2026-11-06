@@ -1890,3 +1890,27 @@ export const devSeedDemoData = (plan: DevSeedPlan) =>
   invoke<DevSeedResult>("dev_seed_demo_data", { plan });
 /** 清除示例数据（按 uuid 前缀物理删除） */
 export const devSeedClear = () => invoke<DevSeedClearResult>("dev_seed_clear");
+
+// ========== 应用内更新日志（数据源在 orbit-core，双端共用） ==========
+
+/** 变更分类（串值与 Rust `ChangelogCategory` 的 serde snake_case 一致） */
+export type ChangeCategory = "feature" | "fix" | "refactor" | "chore";
+
+/** 单条变更（镜像 orbit_core::models::changelog::ChangelogEntry） */
+export interface ChangeEntry {
+  category: ChangeCategory;
+  description: string;
+}
+
+/** 单个版本（镜像 orbit_core::models::changelog::ChangelogVersion） */
+export interface ChangelogVersion {
+  version: string;
+  /** 发布日期（YYYY-MM-DD） */
+  date: string;
+  summary: string;
+  changes: ChangeEntry[];
+}
+
+/** 全部已发布版本的更新日志（新版本在前；只读静态数据，不读 DB） */
+export const changelogVersions = () =>
+  invoke<ChangelogVersion[]>("changelog_versions");

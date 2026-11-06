@@ -4,4 +4,5 @@
 
 pub mod business;
 pub mod cfg_option;
+pub mod changelog;
 pub mod sync_config;

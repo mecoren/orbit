@@ -113,8 +113,10 @@ MVP 发布（06 文档 §二 M5）要求五端产物签名/分发就绪。现状
 - 一致性由 `pnpm bump:check`（发版门禁）与
   `apps/desktop/src/test/release-consistency.test.ts`（回归护栏）双向守护。
 - 更新日志**两份同源双写**：`CHANGELOG.md`（Keep a Changelog 1.1.0 + semver，
-  发版时把 `[Unreleased]` 改为版本段并归档）+ `apps/desktop/src/lib/changelog.ts`
-  （应用内「关于 → 更新日志」），同一次提交写完；Android 端 pubspec 版本
+  发版时把 `[Unreleased]` 改为版本段并归档）+ `crates/orbit-core/src/models/changelog/data.rs`
+  （应用内「关于 → 更新日志」唯一数据源，桌面 `changelog_versions` 命令与移动 FRB 同名桥
+  转发，壳层不再内联日志常量；2026-11-06 由桌面 `src/lib/changelog.ts` 收口而来），
+  同一次提交写完；Android 端 pubspec 版本
   `major.minor.patch+build` 中 build 号每次发版 +1（由脚本自增）。
 
 ### 4. Release CI 脚手架（2026-09-15 修订：作业拆分与更新清单单点化）

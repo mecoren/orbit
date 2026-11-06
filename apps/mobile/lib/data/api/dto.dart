@@ -1719,6 +1719,35 @@ class UpdateInfo {
   });
 }
 
+/// 单条变更（应用内更新日志；FRB changelog.rs 镜像）
+class ChangelogEntryInfo {
+  /// 分类串值：feature / fix / refactor / chore（壳层映射中文标签）
+  final String category;
+
+  final String description;
+
+  const ChangelogEntryInfo({required this.category, required this.description});
+}
+
+/// 单个版本的更新日志（FRB changelog.rs 镜像）
+class ChangelogVersionInfo {
+  final String version;
+
+  /// 发布日期（YYYY-MM-DD）
+  final String date;
+
+  final String summary;
+
+  final List<ChangelogEntryInfo> changes;
+
+  const ChangelogVersionInfo({
+    required this.version,
+    required this.date,
+    required this.summary,
+    required this.changes,
+  });
+}
+
 /// TTL 清理统计（回收站「立即清理」；FRB trash.rs 镜像）
 class TrashPurgeStats {
   /// 物理删除的墓碑行数

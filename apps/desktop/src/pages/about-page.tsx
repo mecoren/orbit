@@ -3,7 +3,7 @@
  *
  * 左导航：应用信息 / 更新日志 / 开源许可 / 开源组件。
  * - 应用信息：图标 + 名称 + 版本徽标 + 信息行（版本号取构建期注入，数据库模式实时读取）
- * - 更新日志：src/lib/changelog.ts 数据 + Accordion（分类徽标）
+ * - 更新日志：changelog_versions 命令（数据源在 orbit-core，双端共用）+ Accordion
  * - 开源许可：名称 / 许可证 / 主页 行列表
  * - 开源组件：前端依赖（npm）/ Rust 依赖（crates.io）双 Tab Accordion
  */
@@ -26,8 +26,12 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { CHANGELOG_VERSIONS, type ChangeEntry } from "@/lib/changelog";
-import { masterAuthHas } from "@/lib/tauri";
+import {
+  changelogVersions,
+  masterAuthHas,
+  type ChangeEntry,
+  type ChangelogVersion,
+} from "@/lib/tauri";
 
 /** 构建期注入（源：apps/desktop/package.json#version），不再手写以防清单漂移 */
 const APP_VERSION = __APP_VERSION__;
@@ -102,15 +106,44 @@ const CHANGE_CATEGORY_STYLE: Record<
 };
 
 function ChangelogSection() {
+  const [versions, setVersions] = useState<ChangelogVersion[] | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  // 数据源在 orbit-core（只读静态数据）：桌面壳不再内联日志，双端同一份
+  useEffect(() => {
+    let cancelled = false;
+    changelogVersions()
+      .then((data) => {
+        if (!cancelled) setVersions(data);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!versions) {
+    return (
+      <div className="space-y-4">
+        <h2 className="text-base font-semibold">更新日志</h2>
+        <p className="text-sm text-muted-foreground">
+          {failed ? "更新日志加载失败，请重启应用后重试。" : "加载中…"}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <h2 className="text-base font-semibold">更新日志</h2>
       <p className="text-sm text-muted-foreground">
-        版本迭代记录（共 {CHANGELOG_VERSIONS.length} 个版本）
+        版本迭代记录（共 {versions.length} 个版本）
       </p>
 
-      <Accordion type="single" defaultValue={CHANGELOG_VERSIONS[0]?.version} collapsible>
-        {CHANGELOG_VERSIONS.map((log) => (
+      <Accordion type="single" defaultValue={versions[0]?.version} collapsible>
+        {versions.map((log) => (
           <AccordionItem key={log.version} value={log.version}>
             <AccordionTrigger>
               <span className="flex items-baseline gap-2">

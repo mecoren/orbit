@@ -7,6 +7,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../core/theme/icon_map.dart';
+import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/widgets/shadcn/orbit_card.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
@@ -20,7 +21,7 @@ import 'update_check.dart';
 /// 关于页 /about（设置页关于卡入口）
 ///
 /// 三分区：品牌 + 版本（package_info_plus 真实构建版本，不硬编码）+
-/// 更新日志（与 CHANGELOG.md / changelog.ts 同源要点）+
+/// 更新日志（数据源在 orbit-core，与桌面同一份；壳层只渲染）+
 /// 开源许可（showLicensePage 系统许可页）。
 class AboutPage extends ConsumerStatefulWidget {
   const AboutPage({super.key});
@@ -36,9 +37,14 @@ class _AboutPageState extends ConsumerState<AboutPage> {
   String _currentVersion = '';
   bool _checking = false;
 
+  /// 更新日志（数据源在 orbit-core；null = 加载中）
+  List<ChangelogVersionInfo>? _changelog;
+  bool _changelogFailed = false;
+
   @override
   void initState() {
     super.initState();
+    _loadChangelog();
     PackageInfo.fromPlatform()
         .then((info) {
           if (!mounted) return;
@@ -48,6 +54,18 @@ class _AboutPageState extends ConsumerState<AboutPage> {
           });
         })
         .catchError((_) {});
+  }
+
+  /// 加载应用内更新日志（数据源在 orbit-core；失败只影响该卡片）
+  Future<void> _loadChangelog() async {
+    try {
+      final versions = await ref.read(orbitBridgeProvider).changelogVersions();
+      if (!mounted) return;
+      setState(() => _changelog = versions);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _changelogFailed = true);
+    }
   }
 
   /// 检查更新（#107）：只在点击时请求一次；有新版本给「打开发布页」，
@@ -97,22 +115,6 @@ class _AboutPageState extends ConsumerState<AboutPage> {
       if (mounted) setState(() => _checking = false);
     }
   }
-
-  /// 最近版本要点（与仓库 CHANGELOG.md 同源；发版时同步更新，
-  /// 不写「Unreleased」——关于页是用户可见的已发布说明）
-  static const _changelog = <Map<String, String>>[
-    {
-      'version': '0.6.0（2026-10-26）',
-      'summary':
-          '平板/横屏适配、强调色自定义、存储清理（未使用附件/过期回收站）、'
-          '检查更新、保存筛选器编辑与窗口化下推',
-    },
-    {
-      'version': '0.1.0（2026-09-19）',
-      'summary':
-          '首个版本：本地优先 + 端到端加密的跨平台待办——双端全功能、云同步/备份、附件、统计与 ICS/CSV 数据出口一次到位',
-    },
-  ];
 
   @override
   Widget build(BuildContext context) {
@@ -173,33 +175,49 @@ class _AboutPageState extends ConsumerState<AboutPage> {
                   title: '更新日志',
                   child: Column(
                     children: [
-                      for (var i = 0; i < _changelog.length; i++) ...[
-                        if (i > 0) const SizedBox(height: AppDimens.space8),
-                        OrbitCard(
-                          fillColor: colors.surfaceSecondary,
-                          padding: const EdgeInsets.all(AppDimens.space12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _changelog[i]['version']!,
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                _changelog[i]['summary']!,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: colors.bodyText,
-                                ),
-                              ),
-                            ],
+                      if (_changelog == null)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: AppDimens.space12,
                           ),
-                        ),
-                      ],
+                          child: Text(
+                            _changelogFailed
+                                ? '更新日志加载失败，请重启应用后重试。'
+                                : '加载中…',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: colors.secondaryText,
+                            ),
+                          ),
+                        )
+                      else
+                        for (var i = 0; i < _changelog!.length; i++) ...[
+                          if (i > 0) const SizedBox(height: AppDimens.space8),
+                          OrbitCard(
+                            fillColor: colors.surfaceSecondary,
+                            padding: const EdgeInsets.all(AppDimens.space12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'v${_changelog![i].version}（${_changelog![i].date}）',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  _changelog![i].summary,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: colors.bodyText,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                     ],
                   ),
                 ),

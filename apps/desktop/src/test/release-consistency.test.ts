@@ -1,24 +1,25 @@
 /**
  * 发版一致性护栏（流程见 docs/08_发布与更新流程.md）
  *
- * 守三件事：
+ * 守四件事：
  * 1. 版本号清单必须全部等于唯一数据源 `apps/desktop/package.json#version`
  *    —— 含两个 Cargo.lock 的本地包版本行（漏改会让 `cargo --locked` 直接失败）；
- * 2. 应用内更新日志（src/lib/changelog.ts）头部条目 = 当前版本
- *    —— 只写 CHANGELOG.md 漏写应用内数据的经典漂移（qraft 0.2.7 教训）；
- * 3. 更新日志头部条目日期为 YYYY-MM-DD，防手滑写成其它格式。
+ * 2. 应用内更新日志头部条目 = 当前版本
+ *    —— 数据源在 `crates/orbit-core/src/models/changelog/data.rs`（双端共用），
+ *    只写 CHANGELOG.md 漏写它会让关于页永久缺失该版本（qraft 0.2.7 教训）；
+ * 3. 仓库 `CHANGELOG.md` 存在当前版本的归档段（发版时两份日志同一次提交写完）；
+ * 4. 更新日志头部日期为 YYYY-MM-DD，防手滑写成其它格式。
  *
  * 此处刻意不复用 scripts/bump-version.mjs 的实现：独立重读文件才能真正交叉验证脚本，
- * 复用同一份解析代码等于自证。
+ * 复用同一份解析代码等于自证。Rust 数据文件用最小正则读取，不引 Rust 工具链。
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { CHANGELOG_VERSIONS } from "@/lib/changelog";
-
 const DESKTOP = path.resolve(import.meta.dirname, "../..");
 const ROOT = path.resolve(DESKTOP, "../..");
+const RUST_CHANGELOG = path.join(ROOT, "crates/orbit-core/src/models/changelog/data.rs");
 
 const read = (abs: string) => readFileSync(abs, "utf8");
 
@@ -39,6 +40,12 @@ function cargoSectionVersion(text: string, section: string): string | null {
 function lockVersion(text: string, pkg: string): string | null {
   const m = new RegExp(`\\[\\[package\\]\\]\\r?\\nname = "${pkg}"\\r?\\nversion = "([^"]+)"`).exec(text);
   return m ? m[1] : null;
+}
+
+/** 取 Rust 更新日志数据文件的首条 `vec![v("x.y.z","YYYY-MM-DD", …)` */
+function rustChangelogHead(text: string): { version: string; date: string } | null {
+  const m = /vec!\[v\(\s*"([^"]+)",\s*"([^"]+)"/.exec(text);
+  return m ? { version: m[1], date: m[2] } : null;
 }
 
 describe("发版一致性", () => {
@@ -80,16 +87,14 @@ describe("发版一致性", () => {
     );
   });
 
-  it("应用内更新日志头部条目 = 当前版本（发版时两处日志同一次提交写完）", () => {
-    expect(CHANGELOG_VERSIONS[0]?.version).toBe(sourceVersion);
+  it("应用内更新日志头部条目 = 当前版本（Rust 数据源，发版时两处日志同一次提交写完）", () => {
+    const head = rustChangelogHead(read(RUST_CHANGELOG));
+    expect(head, "应能在 data.rs 中解析出首条 vec![v(...)]").not.toBeNull();
+    expect(head?.version).toBe(sourceVersion);
+    expect(head?.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
-  it("更新日志条目字段完整且日期格式正确", () => {
-    for (const entry of CHANGELOG_VERSIONS) {
-      expect(entry.version).toMatch(/^\d+\.\d+\.\d+$/);
-      expect(entry.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-      expect(entry.summary.length).toBeGreaterThan(0);
-      expect(entry.changes.length).toBeGreaterThan(0);
-    }
+  it("仓库 CHANGELOG.md 存在当前版本的归档段（about 日志与仓库记录不漂移）", () => {
+    expect(read(path.join(ROOT, "CHANGELOG.md"))).toContain(`## [${sourceVersion}]`);
   });
 });

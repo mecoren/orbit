@@ -6,6 +6,7 @@
 pub mod activity_log_api;
 pub mod asset_api;
 pub mod business_api;
+pub mod changelog_api;
 pub mod cloud_sync_api;
 pub mod csv_import_api;
 pub mod day_planner_api;

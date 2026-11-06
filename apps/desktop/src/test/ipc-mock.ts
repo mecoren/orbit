@@ -962,6 +962,16 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   db_set_device_id: () => undefined,
   // 冷启动首屏标记（真桥 ORBIT_PERF_MARKER 未设置时 no-op，mock 恒成功）
   perf_first_screen_mark: () => undefined,
+  // 关于页更新日志（真实数据在 orbit-core；mock 只保证头部版本 = 清单版本，
+  // 供 e2e 断言「关于页头部条目同版本」的发布护栏）
+  changelog_versions: () => [
+    {
+      version: __APP_VERSION__,
+      date: "2026-09-26",
+      summary: "浏览器 mock 占位更新日志（真实数据源在 orbit-core）",
+      changes: [{ category: "feature", description: "同上" }],
+    },
+  ],
 
   // ---- projects ----
   // 对齐 Rust business_api::list_todo_projects：排除已归档（is_archived=1），

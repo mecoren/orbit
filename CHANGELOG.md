@@ -17,6 +17,16 @@
 
 ## [Unreleased]
 
+### 重构：应用内更新日志收口到 Rust 核心——桌面/移动同一份（2026-11-06）
+
+「关于 → 更新日志」原先是三处手写（根 `CHANGELOG.md`、桌面 `src/lib/changelog.ts`、移动 `about_page.dart` 内联常量），移动端头部还残留 `0.6.0` 脏数据。现按 wait-home 口径收口：
+
+- **数据源**：`crates/orbit-core/src/models/changelog/data.rs` 内联 `ALL_VERSIONS` 作为应用内唯一源，`api/changelog_api.rs` 只读转发；仓库 `CHANGELOG.md` 仍是仓库/GitHub 面记录，发版时两份同一次提交写完。
+- **桌面**：新增 `changelog_versions` 命令（`commands/changelog_cmd.rs` 薄转发），关于页改异步加载（加载/失败态），删除 `src/lib/changelog.ts` 常量。
+- **移动**：`crates/orbit-flutter/src/api/changelog.rs` 本地 DTO 镜像 + `OrbitBridge.changelogVersions()`，关于页改读同一份数据源；丢弃不存在的 `0.6.0（2026-10-26）` 条目。
+- **护栏**：Rust 单测锁「头部版本 = `CARGO_PKG_VERSION`」与条目结构；`release-consistency.test.ts` 改为解析 Rust 数据首条并校验 `CHANGELOG.md` 有当前版本归档段；`bridge-parity` 自动配对双端同名命令。
+- **验证**：`cargo test --workspace --lib` 932 绿；core / 移动桥 / 桌面壳 `cargo check` 通过；`pnpm typecheck`、vitest 776、`pnpm e2e` 83 全绿；`flutter analyze` 0 issue、`flutter test` 1205 全绿；`bridge-parity` 与 `audit-unbounded --gate` 通过。
+
 ### 优化：移动端任务详情页 ⋮ 改为页头玻璃形变菜单——对齐「今天」页头 ⋮（2026-11-06）
 
 详情页右上 `⋮` 原先从底部升起动作抽屉（任务名作标题 + 四行条目），与「今天」页头 ⋮ 的形态不同源：同一枚角落按钮，一处从按钮轮廓形变长出玻璃卡、一处从屏幕底部推上来。

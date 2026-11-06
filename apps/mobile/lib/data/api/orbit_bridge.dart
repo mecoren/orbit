@@ -891,6 +891,9 @@ abstract class OrbitBridge {
   /// 失败原样抛出，调用方降级为「打开发布页」。
   Future<UpdateInfo> checkLatestRelease();
 
+  /// 应用内更新日志（新版本在前；数据源在 orbit-core，与桌面同一份）
+  Future<List<ChangelogVersionInfo>> changelogVersions();
+
   /// 回收站元数据（保留档位 + 上次自动清理时间）
   Future<TrashMeta> trashMeta();
 

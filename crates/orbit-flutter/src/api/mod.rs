@@ -28,6 +28,7 @@
 //! - [widget]：Android 桌面小组件数据口（快照查询 + 勾选落库，#3）
 //! - [ics_export]：ICS 日历导出（VTODO 日历，#4）
 //! - [sync_conflict]：冲突败方副本（查看 / 恢复 / 忽略 / 清空，03 文档 §八）
+//! - [changelog]：应用内更新日志（数据在 orbit-core，移动端只镜像 DTO）
 //! - [update]：检查更新（只在用户点击时拉一次 GitHub Releases 清单，#107）
 //! - [activity_log]：任务活动历史（详情抽屉/页「历史」区块只读查询）
 //! - [events]：下行事件流 + 提醒轮询守护
@@ -37,6 +38,7 @@ pub mod activity_log;
 pub mod asset;
 pub mod auth;
 pub mod biometric;
+pub mod changelog;
 pub mod csv_import;
 pub mod dev_seed;
 pub mod diagnostics;

@@ -16,6 +16,7 @@ Orbit（循迹）是本地优先的跨平台任务管理应用：待办（项目
 - **迁移文件增量策略**：DDL 只在 `orbit-core/src/db/migrations/`，`0001_init.sql` 为冻结基线永不改；新增结构默认追加 `NNNN_xxx.sql`（sqlx 按文件名顺序执行，老库只跑新增文件，不删库）。加列必须带 `DEFAULT`，加表/加索引用 `IF NOT EXISTS`，破坏性变更走重建表；未发布的多文件可合并为一个，已发布文件永不改/删。新字段补行尾中文注释（DDL 注释随 sqlite_master 落库，GUI 可见），存量库升级靠增量迁移原地完成（仅大版本基线重建才走删库+云同步/`.orsync`恢复）。
 - **双强调色体系勿混用**：待办模块色 `TODO_ACCENT = #3B82F6`（checkbox/选中态/图表）与全局主题色 `themeAccent = #4E8CFF`（OrbitFab/Spinner，shadcn `primary` 角色）两个 Context 并存（docs/05 §2.1）。
 - **悬浮提示统一主题色底白字**：桌面所有 tooltip 对齐 `ui/tooltip.tsx` 原语口径 `bg-primary text-primary-foreground`（手搓 Portal 提示也不得用 `bg-popover` 灰白弹层色——2026-09-10 热力图曾踩坑）；移动端原生 `Tooltip` 由 `app_theme.dart` 全局 `tooltipTheme` 统一（强调色底白字），不逐处覆写。
+- **轻提示卡面：动作按钮恒贴卡片最右**（2026-11-06 真机反馈「撤销」跑到中间，不能有）：正文列必须 `Expanded`（tight）撑满剩余宽度，**禁止**用 `Flexible` 的 loose 自适应——它会按文案内容取宽，短文案时按钮停在卡片中间；正文 `maxLines: 2` + 省略号，按钮与正文互不挤压。移动端轻提示统一贴顶部（状态栏下沿 +8），不压底部玻璃底栏/FAB（`orbit_toast.dart` 的 `OrbitToastHost`）。
 - **滚动条全项目标准**：桌面全局 `index.css` 定义 `::-webkit-scrollbar` 10px 透明轨道主题色圆角滑块，原生 `overflow-auto` 容器自动继承——**禁设 `scrollbar-width` 非 auto 值**（会禁用 webkit 自定义退化为系统原生条）；需隐藏的用三件套 `scrollbar-width:none + -ms-overflow-style:none + ::-webkit-scrollbar display:none`。移动端全局 `ScrollbarThemeData`（app_theme.dart）只对显式 Scrollbar 生效，`SingleChildScrollView` 惯例不挂。
 - **UI 一律走组件库/原语层，缺件自造同风格原语**：桌面先取 `components/ui/` 原语（shadcn 体系）；移动先取 flutter_miuix（`Miuix*`，2026-11-01 起为组件主体，经 `shared/widgets/shadcn/orbit_*.dart` 原语层使用）；库内无等价物就**自绘一个与既有设计语言一致的组件并沉淀进原语层**（桌面 `components/ui/`、移动 `shared/widgets/shadcn/orbit_*.dart`），吃主题 token、不写裸魔法值。业务/页面层禁止裸用系统原生控件外观（`<input type="number">` 原生 spinner、`<select>` 原生下拉、`<input type="date">` 原生日期面板等）与手搓灰白弹层——2026-10-22 每日容量数字输入用原生 number spinner、与主题完全不搭，改 `NumberInput` 原语收口。
 - **设置/配置页的档位选择统一参考移动端「外观」页**（2026-11-04 起，细则见「移动端约定（Flutter）」）：判据是「点开前就得看见当前档」——一律走 `shared/widgets/shadcn/orbit_dropdown_preference.dart` 的 `OrbitDropdownPreference<T>`（行内当前值 + 上下双箭头 + 就地展开下拉，当前档蓝字打勾），**不要**手搓灰底胶囊浮动标签行 + 右箭头，也**不要**对这类行调 `showSelectBottomSheet`；下拉展开时的按压灰底（"阴影"）必须横贯整卡撑满，不能让卡片内边距把它缩成一小块。
@@ -160,7 +161,7 @@ pnpm bump:check           # 只校验一致性（零写入，CI/本地通用）
 - **发版六步**：
   1. `pnpm bump X.Y.Z`（同步 `tauri.conf.json` / 桌面壳 `Cargo.toml [package]` / 根 `Cargo.toml [workspace.package]` / `pubspec.yaml`（`+build` 自增）/ 两个 lock），确认输出 `VERSION_SYNC_OK`；
   2. 提炼变更：`git log v<上一 tag>..HEAD --oneline`，按功能合并同类提交，忽略 docs/chore/style 噪声；
-  3. **两份更新日志同一次提交写完**：`CHANGELOG.md`（`[Unreleased]` 段改为 `## [X.Y.Z] - YYYY-MM-DD`）+ `apps/desktop/src/lib/changelog.ts`（`CHANGELOG_VERSIONS` 头部插入同版本条目）。只写一处 → 应用内关于页永久缺版本（qraft 0.2.7 的历史事故）；
+  3. **两份更新日志同一次提交写完**：`CHANGELOG.md`（`[Unreleased]` 段改为 `## [X.Y.Z] - YYYY-MM-DD`）+ `crates/orbit-core/src/models/changelog/data.rs`（`ALL_VERSIONS` 头部插入同版本条目，桌面/移动关于页自动同源；壳层不再维护日志常量）。只写一处 → 应用内关于页永久缺版本（qraft 0.2.7 的历史事故）；
   4. 本地跑通 CI 等价检查：`pnpm typecheck` / `pnpm test` / `pnpm e2e` / `pnpm lint:rust` / 内存门禁（`perf-metrics/audit-unbounded.mjs --gate` + `growth-curve.mjs --gate`）（`src/test/release-consistency.test.ts` 会把「版本与日志漂移」直接判红）；
   5. **不主动提交**：保持工作区交用户确认；提交用 `chore(release): 版本 X.Y.Z`；
   6. 打 tag `vX.Y.Z` 并推送（`git push origin main --tags`）—— **tag 名必须等于清单版本**（`release.yml` 的 audit job 强校验），推送即公开 Release。
