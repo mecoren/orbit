@@ -33,6 +33,7 @@ import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../shared/widgets/shadcn/orbit_switch.dart';
+import '../../shared/widgets/shadcn/orbit_swipe_guard.dart';
 import '../../shared/widgets/shadcn/orbit_bottom_nav.dart';
 import '../../shared/widgets/shadcn/orbit_button.dart';
 import '../../shared/widgets/shadcn/orbit_text_field.dart';
@@ -3142,169 +3143,181 @@ class TodoTaskTile extends StatelessWidget {
         ((showTags && labels.isNotEmpty) ||
             (showProject && projectTitle != null && task.projectId != null));
 
-    return Slidable(
-      // 每行独立 key，避免虚拟化复用时动作面板串行
-      key: ValueKey('slidable-task-${task.id}'),
-      endActionPane: onDelete == null
-          ? null
-          : ActionPane(
-              motion: const BehindMotion(),
-              extentRatio: 0.26,
-              children: [
-                SlidableAction(
-                  onPressed: (_) {
-                    HapticFeedback.mediumImpact();
-                    onDelete?.call();
-                  },
-                  backgroundColor: colors.destructive,
-                  foregroundColor: Colors.white,
-                  icon: OrbitIcons.delete,
-                  label: '删除',
-                  borderRadius: AppShapes.medium,
-                ),
-              ],
-            ),
-      startActionPane: ActionPane(
-        motion: const BehindMotion(),
-        extentRatio: 0.26,
-        children: [
-          SlidableAction(
-            onPressed: (_) {
-              // 触感只给「完成」确认；滑回来恢复不震（与勾选框同口径）
-              if (!task.isDone) HapticFeedback.mediumImpact();
-              onToggleDone();
-            },
-            backgroundColor: OrbitAccents.todoAccent,
-            foregroundColor: Colors.white,
-            icon: task.isDone ? OrbitIcons.undo : OrbitIcons.check,
-            label: task.isDone ? '恢复' : '完成',
-            borderRadius: AppShapes.medium,
-          ),
-        ],
-      ),
-      child: InkWell(
-        onTap: onOpen,
-        onLongPress: onLongPress,
-        child: OrbitCardSegment(
-          edge: edge,
-          child: Container(
-            // 单行行也有完整热区高度（卡片里行高不随元信息有无跳动）
-            constraints: const BoxConstraints(minHeight: AppDimens.touchTarget),
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppDimens.space16,
-              vertical: AppDimens.space8,
-            ),
-            decoration: edge == OrbitCardEdge.none
-                // 扁平行（卡片外复用：看板 / 表格 / 搜索）：仅下沿 1px 分隔线
-                ? BoxDecoration(
-                    border: Border(bottom: BorderSide(color: colors.divider)),
-                  )
-                : null,
-            child: Row(
-              children: [
-                // 24px 方角 checkbox：描边承载优先级语义（完成态不再保留色环）
-                OrbitCheckbox(
-                  checked: done,
-                  onToggle: onToggleDone,
-                  borderColor: done ? null : _priorityRingColor(),
-                ),
-                const SizedBox(width: AppDimens.space12),
-                // 左列：标题 +（标签 / 项目名 / 被动元信息）——读「这是什么 / 什么状态」
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      AnimatedStrikethrough(
-                        text: task.title,
-                        done: done,
-                        maxLines: 1,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                          color: colors.titleText,
-                        ),
-                        // 完成态全口径统一：划线 + 置灰（弱化灰，与日期/元信息同源）
-                        doneColor: muted,
-                      ),
-                      // 副标题段（标签 / 项目名 / 被动元信息）按需渲染。
-                      // 元信息（重复 / 提醒 / 时长 / 进度 / 关联）跟在标签 / 项目名
-                      // 之后进同一 Wrap：**归位到标题列**（对齐桌面 task-list-view
-                      // 元信息行随标题截断的结构）——原先塞进右列会与 G8 的状态
-                      // 开关对抢宽，360dp 窄屏下把标题挤塌并溢出（2026-10-17）。
-                      // Wrap 自动换行，长标题列不再被右列挤出可视区。
-                      if (hasSubtitle || meta.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Wrap(
-                            spacing: AppDimens.space4,
-                            runSpacing: 2,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            children: [
-                              // 标签段：色点 + 名（最多 3 个，超出折叠 +N）
-                              if (showTags) ..._labelChips(colors, done: done),
-                              if (showProject &&
-                                  projectTitle != null &&
-                                  task.projectId != null)
-                                Text(
-                                  projectTitle!,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    // #36：未完成态项目名按项目色着字（无色回退次要色）；
-                                    // 完成态统一弱化灰
-                                    color: done
-                                        ? muted
-                                        : ((projectColorHex != null &&
-                                                  projectColorHex!.isNotEmpty)
-                                              ? hexToColor(
-                                                  projectColorHex!,
-                                                  fallback:
-                                                      colors.secondaryText,
-                                                )
-                                              : colors.secondaryText),
-                                  ),
-                                ),
-                              ...meta,
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                // 右列：截止日期 + 状态开关对——读「什么时候 / 可切换状态」
-                // （我的一天 / 星标是**可写开关**，独立右对齐列恒显可点；
-                // 被动元信息已归位左列，避免与开关对抢宽）
-                if (dueLabel != null || toggles.isNotEmpty) ...[
-                  const SizedBox(width: AppDimens.space8),
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      if (dueLabel != null)
-                        Text(
-                          dueLabel,
-                          style: TextStyle(
-                            fontSize: 12,
-                            // 未完成态未来与今天走主题蓝，逾期转红；完成态置灰
-                            color: done
-                                ? muted
-                                : (overdue
-                                      ? OrbitAccents.overdueRed
-                                      : OrbitAccents.themeAccent),
-                          ),
-                        ),
-                      if (toggles.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: toggles,
-                          ),
-                        ),
-                    ],
+    // 侧滑方向锁：列表上下滚动时手指的横向抖动不再误露动作面板
+    //（`OrbitSwipeGuard` 判定纵向占优即关掉本行侧滑，把该次手势交还滚动）
+    return OrbitSwipeGuard(
+      // 与行内 Slidable 同 key：列表复用换任务时连 controller 一起重建，
+      // 避免上一行的开合姿态残留到新行
+      key: ValueKey('swipe-guard-${task.id}'),
+      builder: (context, swipeEnabled, slidableController) => Slidable(
+        // 每行独立 key，避免虚拟化复用时动作面板串行
+        key: ValueKey('slidable-task-${task.id}'),
+        controller: slidableController,
+        enabled: swipeEnabled,
+        endActionPane: onDelete == null
+            ? null
+            : ActionPane(
+                motion: const BehindMotion(),
+                extentRatio: 0.26,
+                children: [
+                  SlidableAction(
+                    onPressed: (_) {
+                      HapticFeedback.mediumImpact();
+                      onDelete?.call();
+                    },
+                    backgroundColor: colors.destructive,
+                    foregroundColor: Colors.white,
+                    icon: OrbitIcons.delete,
+                    label: '删除',
+                    borderRadius: AppShapes.medium,
                   ),
                 ],
-              ],
+              ),
+        startActionPane: ActionPane(
+          motion: const BehindMotion(),
+          extentRatio: 0.26,
+          children: [
+            SlidableAction(
+              onPressed: (_) {
+                // 触感只给「完成」确认；滑回来恢复不震（与勾选框同口径）
+                if (!task.isDone) HapticFeedback.mediumImpact();
+                onToggleDone();
+              },
+              backgroundColor: OrbitAccents.todoAccent,
+              foregroundColor: Colors.white,
+              icon: task.isDone ? OrbitIcons.undo : OrbitIcons.check,
+              label: task.isDone ? '恢复' : '完成',
+              borderRadius: AppShapes.medium,
+            ),
+          ],
+        ),
+        child: InkWell(
+          onTap: onOpen,
+          onLongPress: onLongPress,
+          child: OrbitCardSegment(
+            edge: edge,
+            child: Container(
+              // 单行行也有完整热区高度（卡片里行高不随元信息有无跳动）
+              constraints: const BoxConstraints(
+                minHeight: AppDimens.touchTarget,
+              ),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppDimens.space16,
+                vertical: AppDimens.space8,
+              ),
+              decoration: edge == OrbitCardEdge.none
+                  // 扁平行（卡片外复用：看板 / 表格 / 搜索）：仅下沿 1px 分隔线
+                  ? BoxDecoration(
+                      border: Border(bottom: BorderSide(color: colors.divider)),
+                    )
+                  : null,
+              child: Row(
+                children: [
+                  // 24px 方角 checkbox：描边承载优先级语义（完成态不再保留色环）
+                  OrbitCheckbox(
+                    checked: done,
+                    onToggle: onToggleDone,
+                    borderColor: done ? null : _priorityRingColor(),
+                  ),
+                  const SizedBox(width: AppDimens.space12),
+                  // 左列：标题 +（标签 / 项目名 / 被动元信息）——读「这是什么 / 什么状态」
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AnimatedStrikethrough(
+                          text: task.title,
+                          done: done,
+                          maxLines: 1,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: colors.titleText,
+                          ),
+                          // 完成态全口径统一：划线 + 置灰（弱化灰，与日期/元信息同源）
+                          doneColor: muted,
+                        ),
+                        // 副标题段（标签 / 项目名 / 被动元信息）按需渲染。
+                        // 元信息（重复 / 提醒 / 时长 / 进度 / 关联）跟在标签 / 项目名
+                        // 之后进同一 Wrap：**归位到标题列**（对齐桌面 task-list-view
+                        // 元信息行随标题截断的结构）——原先塞进右列会与 G8 的状态
+                        // 开关对抢宽，360dp 窄屏下把标题挤塌并溢出（2026-10-17）。
+                        // Wrap 自动换行，长标题列不再被右列挤出可视区。
+                        if (hasSubtitle || meta.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Wrap(
+                              spacing: AppDimens.space4,
+                              runSpacing: 2,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                // 标签段：色点 + 名（最多 3 个，超出折叠 +N）
+                                if (showTags)
+                                  ..._labelChips(colors, done: done),
+                                if (showProject &&
+                                    projectTitle != null &&
+                                    task.projectId != null)
+                                  Text(
+                                    projectTitle!,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      // #36：未完成态项目名按项目色着字（无色回退次要色）；
+                                      // 完成态统一弱化灰
+                                      color: done
+                                          ? muted
+                                          : ((projectColorHex != null &&
+                                                    projectColorHex!.isNotEmpty)
+                                                ? hexToColor(
+                                                    projectColorHex!,
+                                                    fallback:
+                                                        colors.secondaryText,
+                                                  )
+                                                : colors.secondaryText),
+                                    ),
+                                  ),
+                                ...meta,
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  // 右列：截止日期 + 状态开关对——读「什么时候 / 可切换状态」
+                  // （我的一天 / 星标是**可写开关**，独立右对齐列恒显可点；
+                  // 被动元信息已归位左列，避免与开关对抢宽）
+                  if (dueLabel != null || toggles.isNotEmpty) ...[
+                    const SizedBox(width: AppDimens.space8),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        if (dueLabel != null)
+                          Text(
+                            dueLabel,
+                            style: TextStyle(
+                              fontSize: 12,
+                              // 未完成态未来与今天走主题蓝，逾期转红；完成态置灰
+                              color: done
+                                  ? muted
+                                  : (overdue
+                                        ? OrbitAccents.overdueRed
+                                        : OrbitAccents.themeAccent),
+                            ),
+                          ),
+                        if (toggles.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: toggles,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
             ),
           ),
         ),
