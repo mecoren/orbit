@@ -19,6 +19,7 @@ class OrbitSkeleton extends StatefulWidget {
     this.width,
     this.height = 14,
     this.borderRadius = AppShapes.radiusSmall,
+    this.pulse,
   });
 
   /// 文本行占位（默认宽 120；胶囊圆角）
@@ -26,6 +27,7 @@ class OrbitSkeleton extends StatefulWidget {
     super.key,
     this.width = 120,
     this.height = 14,
+    this.pulse,
   }) : borderRadius = height / 2;
 
   /// 块占位（卡片 / 图区）
@@ -34,12 +36,14 @@ class OrbitSkeleton extends StatefulWidget {
     this.width,
     this.height = 96,
     this.borderRadius = AppShapes.radiusMedium,
+    this.pulse,
   });
 
   /// 圆形占位（复选框 / 色点 / 头像）
   const OrbitSkeleton.circle({
     super.key,
     double size = 20,
+    this.pulse,
   })  : width = size,
         height = size,
         borderRadius = size / 2;
@@ -48,20 +52,46 @@ class OrbitSkeleton extends StatefulWidget {
   final double height;
   final double borderRadius;
 
+  /// 共享呼吸动画（2026-11-08）
+  ///
+  /// 非空 = **复用外部动画**，本节不建 controller。列表类骨架一次铺 8 行 ×
+  /// 3 块，逐块自建 `AnimationController` 就是 24 路 ticker 同时逐帧驱动
+  /// 24 次 opacity 重绘；由外层建一个 controller 向下传，`FadeTransition`
+  /// 只求值不 tick，成本降到 1 路。
+  ///
+  /// 动画应已带 `AppMotion.breathe` 曲线与 0.45→1.0 的 tween（外层照
+  /// 本节默认档构造即可，见 `_TaskListSkeleton`）。
+  final Animation<double>? pulse;
+
   @override
   State<OrbitSkeleton> createState() => _OrbitSkeletonState();
 }
 
 class _OrbitSkeletonState extends State<OrbitSkeleton>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl = AnimationController(
-    vsync: this,
-    duration: AppMotion.skeletonPulse,
-  )..repeat(reverse: true);
+  /// 自建 ticker（仅 `pulse == null` 时创建）
+  AnimationController? _ctrl;
+
+  /// 自建呼吸动画（与 [pulse] 同档：0.45→1.0 + `AppMotion.breathe`）
+  Animation<double>? _ownPulse;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.pulse != null) return;
+    final ctrl = AnimationController(
+      vsync: this,
+      duration: AppMotion.skeletonPulse,
+    )..repeat(reverse: true);
+    _ctrl = ctrl;
+    _ownPulse = Tween<double>(begin: 0.45, end: 1.0).animate(
+      CurvedAnimation(parent: ctrl, curve: AppMotion.breathe),
+    );
+  }
 
   @override
   void dispose() {
-    _ctrl.dispose();
+    _ctrl?.dispose();
     super.dispose();
   }
 
@@ -69,9 +99,7 @@ class _OrbitSkeletonState extends State<OrbitSkeleton>
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
     return FadeTransition(
-      opacity: Tween<double>(begin: 0.45, end: 1.0).animate(
-        CurvedAnimation(parent: _ctrl, curve: AppMotion.breathe),
-      ),
+      opacity: widget.pulse ?? _ownPulse!,
       child: Container(
         width: widget.width,
         height: widget.height,

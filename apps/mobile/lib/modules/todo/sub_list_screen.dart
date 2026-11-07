@@ -1437,13 +1437,17 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   /// 重排档渲染流：逾期置顶**平铺**（与标准分支的逾期置顶段同序）。
   /// 头行/分隔行若插进流会打破 ReorderableListView 的槽位索引，
   /// 故只排序不插行；无逾期时原样返回（重排落库数学与旧口径一致）。
-  List<TodoTask> _manualReorderStream(List<TodoTask> undone) {
+  List<TodoTask> _manualReorderStream(
+    List<TodoTask> undone, {
+    OverdueGroups? grouped,
+  }) {
     // 与 build 里的 overdueGroups 共用同一时间基准：两处各取 DateTime.now()
-    // 会在分钟边界上把同一行判成「逾期/不逾期」两种，槽位与渲染对不上
-    final grouped = groupOverdueFirst(undone, _nowTick);
-    return grouped.overdue.isEmpty
+    // 会在分钟边界上把同一行判成「逾期/不逾期」两种，槽位与渲染对不上。
+    // build 已算过一次时直接传进来（[grouped]），别同一列表分两遍（2026-11-08）
+    final groups = grouped ?? groupOverdueFirst(undone, _nowTick);
+    return groups.overdue.isEmpty
         ? undone
-        : [...grouped.overdue, ...grouped.rest];
+        : [...groups.overdue, ...groups.rest];
   }
 
   Future<void> _reorderTasks(int oldIndex, int newIndex) async {
@@ -1870,7 +1874,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     // 顶部的红调区块，其余照旧——长按拖拽语义不受影响（重排走下方
     // manualUndone 同口径平铺流）
     final overdueGroups = groupOverdueFirst(undone, _nowTick);
-    final manualUndone = _manualReorderStream(undone);
+    final manualUndone = _manualReorderStream(undone, grouped: overdueGroups);
 
     // Logbook 分组（done 视图）：按完成日倒序，组内完成时刻倒序
     final doneGroups = isLogbook ? groupDoneByDay(visible) : <DoneDayGroup>[];
@@ -2227,28 +2231,29 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                       _showTaskActions(manualUndone[from]);
                     }
                   },
+                  // 抬起：轻微放大；底面与阴影**固定**（2026-11-08）。
+                  // 旧版按 elevation 逐帧插值：每帧重算一次阴影模糊 + 每帧
+                  // 一层 antiAlias 裁剪 layer，拖动全程都在为「影子深一点」
+                  // 买单。抬起态在松手即销毁，不需要渐变。
                   proxyDecorator: (child, index, animation) => AnimatedBuilder(
                     animation: animation,
                     builder: (context, child) {
                       final elevated = AppMotion.standard.transform(
                         Tween<double>(begin: 0, end: 1).evaluate(animation),
                       );
-                      // 抬起：轻微放大 + 阴影加深（抬手即销毁，不驻留）。
-                      // 底面给 surface：行本身是扁平透明行，抬起时要靠这层才
-                      // 看得出「拿起来的是一张卡」，否则阴影会落空。
                       final scale =
                           1 + (AppMotion.dragLiftScale - 1) * elevated;
                       return Transform.scale(
                         scale: scale,
                         child: Material(
-                          elevation: 6 * elevated,
+                          // 固定档（不再 6 * elevated 插值）：抬起即一张浮起卡，
+                          // 逐帧插值只会让阴影每帧重算一次
+                          elevation: 6,
                           borderRadius: AppShapes.medium,
                           clipBehavior: Clip.antiAlias,
-                          color: Color.lerp(
-                            Colors.transparent,
-                            colors.surface,
-                            elevated,
-                          ),
+                          // 底面给 surface：行本身是扁平透明行，抬起时要靠
+                          // 这层才看得出「拿起来的是一张卡」，否则阴影会落空
+                          color: colors.surface,
                           child: child,
                         ),
                       );
@@ -2758,17 +2763,39 @@ class _TaskListEntry {
 /// 只在"无旧值可守"的初次加载出现（tasksLoading 见 build）；重查/下拉刷新
 /// 走旧内容，不闪骨架。内边距与下沿分隔线与真实行（`TodoTaskTile` 扁平行）
 /// 同口径，落定替换时跳变最小。
-class _TaskListSkeleton extends StatelessWidget {
+class _TaskListSkeleton extends StatefulWidget {
   const _TaskListSkeleton({required this.padding});
 
   final EdgeInsetsGeometry padding;
+
+  @override
+  State<_TaskListSkeleton> createState() => _TaskListSkeletonState();
+}
+
+class _TaskListSkeletonState extends State<_TaskListSkeleton>
+    with SingleTickerProviderStateMixin {
+  /// 整屏只开一路呼吸（2026-11-08）：8 行 × 3 块逐块自建 controller 就是
+  /// 24 路 ticker 同时逐帧驱动 24 次 opacity 重绘，而它们本就该同相位。
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: AppMotion.skeletonPulse,
+  )..repeat(reverse: true);
+
+  late final Animation<double> _pulse = Tween<double>(begin: 0.45, end: 1.0)
+      .animate(CurvedAnimation(parent: _ctrl, curve: AppMotion.breathe));
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
     return ListView.builder(
       physics: const NeverScrollableScrollPhysics(),
-      padding: padding,
+      padding: widget.padding,
       itemCount: 8,
       itemBuilder: (context, index) => Container(
         padding: const EdgeInsets.symmetric(
@@ -2778,17 +2805,17 @@ class _TaskListSkeleton extends StatelessWidget {
         decoration: BoxDecoration(
           border: Border(bottom: BorderSide(color: colors.divider)),
         ),
-        child: const Row(
+        child: Row(
           children: [
-            OrbitSkeleton.circle(size: 22),
-            SizedBox(width: AppDimens.space12),
+            OrbitSkeleton.circle(size: 22, pulse: _pulse),
+            const SizedBox(width: AppDimens.space12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  OrbitSkeleton.line(width: 180, height: 15),
-                  SizedBox(height: AppDimens.space6),
-                  OrbitSkeleton.line(width: 130, height: 12),
+                  OrbitSkeleton.line(width: 180, height: 15, pulse: _pulse),
+                  const SizedBox(height: AppDimens.space6),
+                  OrbitSkeleton.line(width: 130, height: 12, pulse: _pulse),
                 ],
               ),
             ),
