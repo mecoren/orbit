@@ -134,12 +134,15 @@ void main() {
 
       await _scrollTo(tester, find.text('仅显示最近 30 条操作'));
       expect(find.text('显示更多'), findsOneWidget);
+      // 条数提示跟随当前载入档：30 档显示 30 条
+      expect(find.text('共 30 条操作 · 上下滑动查看'), findsOneWidget);
 
       await tester.tap(find.text('显示更多'));
       await _settle(tester);
-      // 38 < 100：档位展满后截断提示整体消失
+      // 38 < 100：档位展满后截断提示整体消失，条数提示换成实际 38 条
       expect(find.text('仅显示最近 30 条操作'), findsNothing);
       expect(find.text('显示更多'), findsNothing);
+      expect(find.text('共 38 条操作 · 上下滑动查看'), findsOneWidget);
     });
 
     testWidgets('超过 9 条：区块内限高且滚动条常显', (tester) async {
@@ -153,6 +156,8 @@ void main() {
       final list = find.byKey(detailHistoryListKey);
       // 预览限高 9 条篇幅（9 × 28）
       expect(tester.getSize(list).height, closeTo(252, 0.5));
+      // 超出预览篇幅：列表上方常驻条数 + 滑动提示（对齐评论区口径）
+      expect(find.text('共 30 条操作 · 上下滑动查看'), findsOneWidget);
 
       final bar = tester.widget<Scrollbar>(
         find.ancestor(of: list, matching: find.byType(Scrollbar)).first,
@@ -160,7 +165,7 @@ void main() {
       expect(bar.thumbVisibility, isTrue, reason: '可滚时滑块必须常显');
     });
 
-    testWidgets('不足 9 条：区块随内容收缩、滑块不常显', (tester) async {
+    testWidgets('不足 9 条：区块随内容收缩、滑块与条数提示均不出现', (tester) async {
       final t1 = await tester.runAsync(seededTask);
       await tester
           .pumpWidget(_wrap(DetailScreen(taskId: t1!.id), bridge));
@@ -170,6 +175,7 @@ void main() {
       final list = find.byKey(detailHistoryListKey);
       // seeded 3 行（单行约 26dp），远低于限高 252
       expect(tester.getSize(list).height, lessThan(200));
+      expect(find.textContaining('条操作 · 上下滑动查看'), findsNothing);
 
       final bar = tester.widget<Scrollbar>(
         find.ancestor(of: list, matching: find.byType(Scrollbar)).first,

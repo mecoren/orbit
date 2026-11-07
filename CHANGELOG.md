@@ -31,8 +31,9 @@
 
 - **限高**：`ConstrainedBox(maxHeight: 9 × 28)` + `Scrollbar` + 内层 `SingleChildScrollView`（`primary: false`，避免与详情页 ListView 争 `PrimaryScrollController`）；滑块 `thumbVisibility` 只在条数超过 9 条时置 true（9 条最小篇幅已超限高，必然可滚；触屏无 hover 态，不常显就没有线索）。不足 9 条时列表自然收缩，与原先一致。
 - **滑块让位**：滚动内容右侧留 8，避免常显滑块压在行尾文案上。
+- **条数提示**：超出 9 条时列表上方常驻「共 N 条操作 · 上下滑动查看」（12sp 次要色，口径同评论区「共 N 条评论 · 上下滑动查看」），滚动时也看得见；N 跟随当前载入档（默认 30、展开后 100）。
 - **档位提示外移**：「仅显示最近 30 条操作 + 显示更多」钉在滚动区外，列表内滚动时也常驻可见。
-- **验证**：`test/task_activity_test.dart` 追加 2 例（>9 条限高 252 且滑块常显、≤9 条随内容收缩且不常显）；详情页五份定向用例与 `flutter analyze` 全绿。
+- **验证**：`test/task_activity_test.dart` 追加 2 例（>9 条限高 252、滑块常显且出条数提示；≤9 条随内容收缩、滑块与提示均不出现）；详情页五份定向用例与 `flutter analyze` 全绿。
 
 ### 重构：应用内更新日志收口到 Rust 核心——桌面/移动同一份（2026-11-06）
 

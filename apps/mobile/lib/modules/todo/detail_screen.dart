@@ -3381,6 +3381,19 @@ class _HistorySectionState extends ConsumerState<_HistorySection> {
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // 超出预览篇幅才给提示：条数与「可滑动」常驻在列表上方，
+                  // 滚动时也看得见（口径同评论区「共 N 条评论 · 上下滑动查看」）
+                  if (rows.length > _previewRows)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: AppDimens.space8),
+                      child: Text(
+                        '共 ${rows.length} 条操作 · 上下滑动查看',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colors.secondaryText,
+                        ),
+                      ),
+                    ),
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxHeight: _previewHeight),
                     child: Scrollbar(
