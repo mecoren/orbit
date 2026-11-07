@@ -902,7 +902,9 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
                   maxLength: 200,
                   hintText: '准备做什么？',
                   style: TextStyle(fontSize: 15, color: colors.bodyText),
-                  onChanged: (_) => setState(() {}),
+                  // 输入不再整面板 setState：发送钮自己订阅 controller
+                  // （见 `_sendButton`，2026-11-08）。敲字重建范围从
+                  // 「面板 + 玻璃壳 + 工具栏」收到 40px 圆钮。
                   onSubmitted: (_) => _submit(),
                 ),
               ),
@@ -1107,26 +1109,33 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
   }
 
   Widget _sendButton(AppColorSet colors) {
-    final canSend = _titleController.text.trim().isNotEmpty && !_saving;
-    return SizedBox.square(
-      dimension: 40,
-      child: Material(
-        color: canSend ? OrbitAccents.themeAccent : colors.surfaceSecondary,
-        shape: const CircleBorder(),
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: canSend ? _submit : null,
-          child: Center(
-            child: _saving
-                ? const OrbitSpinner(size: 16, color: Colors.white)
-                : Icon(
-                    OrbitIcons.send,
-                    size: AppDimens.iconSizeSm,
-                    color: canSend ? Colors.white : colors.deactivatedText,
-                  ),
+    // 只订阅标题 controller：面板里唯一随输入变化的是这颗钮的可用态。
+    // 直接 `setState` 会让整面板（含玻璃壳与工具栏）每敲一个字符重建一次。
+    return ListenableBuilder(
+      listenable: _titleController,
+      builder: (context, _) {
+        final canSend = _titleController.text.trim().isNotEmpty && !_saving;
+        return SizedBox.square(
+          dimension: 40,
+          child: Material(
+            color: canSend ? OrbitAccents.themeAccent : colors.surfaceSecondary,
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: canSend ? _submit : null,
+              child: Center(
+                child: _saving
+                    ? const OrbitSpinner(size: 16, color: Colors.white)
+                    : Icon(
+                        OrbitIcons.send,
+                        size: AppDimens.iconSizeSm,
+                        color: canSend ? Colors.white : colors.deactivatedText,
+                      ),
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
