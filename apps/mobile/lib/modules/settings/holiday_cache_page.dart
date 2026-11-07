@@ -218,11 +218,11 @@ class _HolidayCachePageState extends ConsumerState<HolidayCachePage> {
       body: Stack(
         children: [
           ListView(
-            padding: const EdgeInsets.fromLTRB(
-              AppDimens.space16,
-              96,
-              AppDimens.space16,
-              AppDimens.space24,
+            // 卡体自带 h:12 外距（OrbitSettingsGroup），列表不加水平边距，
+            // 与设置页同口径（2026-11-07 本页曾多 16 导致卡片比设置页各窄 16）
+            padding: const EdgeInsets.only(
+              top: 96,
+              bottom: AppDimens.space24,
             ),
             children: [
               holidaysAsync.when(
