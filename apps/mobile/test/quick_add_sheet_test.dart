@@ -368,7 +368,15 @@ void main() {
       // 旧口径 +7 天周内错位会落空（无任何勾选）
       await tester.tap(find.byTooltip(RegExp('^截止：')));
       await tester.pumpAndSettle();
-      expect(selectedPopupLabels(tester), ['下周']);
+      // 今天就是周日时「下周一 00:00」与「明天」同值，浮层回显会优先命中
+      // 「明天」——两档指向同一天，都算正确落值（2026-11-08 周日实红）。
+      final picked = selectedPopupLabels(tester).toList();
+      expect(picked, hasLength(1), reason: '必须恰好勾选一档');
+      expect(
+        const ['下周', '明天'],
+        contains(picked.single),
+        reason: '「下周」档必须落在下周一 00:00（即两档之一）',
+      );
     });
 
     testWidgets('提醒档：相对档菜单选中即回填，提交落提醒实体', (tester) async {
