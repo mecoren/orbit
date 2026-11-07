@@ -108,7 +108,7 @@ void main() {
     expect(find.byIcon(OrbitIcons.remove), findsNothing);
   });
 
-  testWidgets('小时下拉：点框弹滚轮 → 滑一格 → 确认落值', (tester) async {
+  testWidgets('小时下拉：点框弹滚轮 → 滑一格即落值（无需再点确认）', (tester) async {
     final initialHour = DateTime.now().hour;
     await openPicker(tester);
     expect(hourText(tester), initialHour.toString().padLeft(2, '0'));
@@ -124,15 +124,17 @@ void main() {
     await tester.drag(find.byType(MiuixNumberPicker),
         Offset(0, atLast ? 44 : -44));
     await tester.pumpAndSettle();
-
-    // 确认弹层（弹层在上层，取 last）→ 数值按滑动方向 ±1
-    await tester.tap(find.text('确认').last);
+    // 滑停后的自动确认延时（无帧调度的 Timer，pumpAndSettle 不推进）
+    await tester.pump(const Duration(milliseconds: 200));
     await tester.pumpAndSettle();
+
+    // 滑停即自动回传并收起滚轮弹层 → 日期面板数值直接更新（2026-11-07）
     final expected = atLast ? initialHour - 1 : initialHour + 1;
+    expect(find.byType(MiuixNumberPicker), findsNothing);
     expect(hourText(tester), expected.toString().padLeft(2, '0'));
   });
 
-  testWidgets('分钟下拉：点框弹滚轮 → 滑一格 → 确认落值', (tester) async {
+  testWidgets('分钟下拉：点框弹滚轮 → 滑一格即落值（无需再点确认）', (tester) async {
     final initialMinute = DateTime.now().minute;
     await openPicker(tester);
     expect(minuteText(tester), initialMinute.toString().padLeft(2, '0'));
@@ -147,10 +149,11 @@ void main() {
     await tester.drag(find.byType(MiuixNumberPicker),
         Offset(0, atLast ? 44 : -44));
     await tester.pumpAndSettle();
-
-    await tester.tap(find.text('确认').last);
+    await tester.pump(const Duration(milliseconds: 200));
     await tester.pumpAndSettle();
+
     final expected = atLast ? initialMinute - 1 : initialMinute + 1;
+    expect(find.byType(MiuixNumberPicker), findsNothing);
     expect(minuteText(tester), expected.toString().padLeft(2, '0'));
   });
 }

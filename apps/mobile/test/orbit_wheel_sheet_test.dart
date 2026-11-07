@@ -67,4 +67,42 @@ void main() {
 
     expect(picked, (hour: 7, minute: 0));
   });
+
+  testWidgets('单列滚轮：滑停即自动回传（不必再点「确认」）', (tester) async {
+    int? picked;
+    late BuildContext ctx;
+    await tester.pumpWidget(
+      orbitTestApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) {
+              ctx = context;
+              return const SizedBox.shrink();
+            },
+          ),
+        ),
+      ),
+    );
+
+    showOrbitNumberWheelSheet(
+      ctx,
+      title: '选择小时',
+      value: 8,
+      min: 0,
+      max: 23,
+      label: (v) => v.toString().padLeft(2, '0'),
+    ).then((value) => picked = value);
+    await tester.pumpAndSettle();
+    expect(find.text('选择小时'), findsOneWidget);
+
+    // 下滑一格 → 08 变 07；**不点「确认」**，滑停后抽屉自己回传并收起
+    await tester.drag(find.byType(OrbitWheelColumn), const Offset(0, 44));
+    await tester.pumpAndSettle();
+    // 自动确认带 140ms 落屏延时（无帧调度的 Timer，pumpAndSettle 不推进）
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pumpAndSettle();
+
+    expect(picked, 7);
+    expect(find.byType(OrbitWheelColumn), findsNothing);
+  });
 }

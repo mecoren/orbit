@@ -17,6 +17,8 @@
 /// 故内容区一律 `contentScrollable: false`。
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_miuix/miuix.dart';
 
@@ -77,7 +79,15 @@ class OrbitWheelColumn extends StatelessWidget {
   }
 }
 
-/// 单列数值滚轮弹层；确认返回选中值，取消 / 下滑 / 点遮罩返回 `null`
+/// 单列数值滚轮弹层；返回选中值，取消 / 下滑 / 点遮罩返回 `null`
+///
+/// **滑动即选中**（2026-11-07）：滚轮停稳就自动确认回传并收起抽屉，不需要
+/// 再点一次「确认」——单列只有「一个值」这一个自由度，手指离开 + 弹簧吸附到
+/// 中心项时选择就已经完成。此前「滑完还得点确认」与项目其它选择器
+/// 「点一下即生效」的肌肉记忆冲突（快速添加 → 提醒 → 自定义时间，点开
+/// 「时」/「分」各要再点一次确认）。双列 [showOrbitTimeWheelSheet] /
+/// [showOrbitYearRangeWheelSheet] 仍保留确认：它们要连着调两列，
+/// 自动收起会把第二列打断。
 Future<int?> showOrbitNumberWheelSheet(
   BuildContext context, {
   required String title,
@@ -191,6 +201,39 @@ class _SingleWheelSheet extends StatefulWidget {
 class _SingleWheelSheetState extends State<_SingleWheelSheet> {
   late int _selected = widget.value.clamp(widget.min, widget.max).toInt();
 
+  /// 滑停后的自动确认定时器
+  Timer? _autoConfirm;
+
+  /// 已提交（防定时器与手动「确认」重复 pop）
+  bool _committed = false;
+
+  @override
+  void dispose() {
+    _autoConfirm?.cancel();
+    super.dispose();
+  }
+
+  /// 滚轮停稳 = 用户已选好，自动回传并收起抽屉
+  ///
+  /// 停 140ms 再提交：让「中心项放大 / 变主题色」这一帧先落屏，抽屉不会在
+  /// 弹簧收尾的同一帧就滑走；这 140ms 内用户再碰一下滚轮即取消
+  /// （[Listener.onPointerDown]），继续调值不会被抢走。
+  void _scheduleAutoConfirm() {
+    _autoConfirm?.cancel();
+    _autoConfirm = Timer(const Duration(milliseconds: 140), _commit);
+  }
+
+  void _commit() {
+    if (!mounted || _committed) return;
+    _committed = true;
+    widget.onConfirm(_selected);
+  }
+
+  void _cancel() {
+    _autoConfirm?.cancel();
+    Navigator.of(context).pop();
+  }
+
   @override
   Widget build(BuildContext context) {
     return OrbitSheetScaffold(
@@ -199,18 +242,26 @@ class _SingleWheelSheetState extends State<_SingleWheelSheet> {
       contentPadding: const EdgeInsets.symmetric(
         horizontal: AppDimens.space16,
       ),
-      content: OrbitWheelColumn(
-        value: _selected,
-        min: widget.min,
-        max: widget.max,
-        label: widget.label,
-        onChanged: (v) => setState(() => _selected = v),
+      // `Listener` 只旁听指针按下（不参与手势竞技）：手指再落到滚轮上就撤销
+      // 待执行的自动确认，避免「刚想微调就被收走抽屉」
+      content: Listener(
+        onPointerDown: (_) => _autoConfirm?.cancel(),
+        child: OrbitWheelColumn(
+          value: _selected,
+          min: widget.min,
+          max: widget.max,
+          label: widget.label,
+          onChanged: (v) {
+            setState(() => _selected = v);
+            _scheduleAutoConfirm();
+          },
+        ),
       ),
       actions: OrbitSheetActions(
         cancelLabel: '取消',
-        onCancel: () => Navigator.of(context).pop(),
+        onCancel: _cancel,
         confirmLabel: '确认',
-        onConfirm: () => widget.onConfirm(_selected),
+        onConfirm: _commit,
       ),
     );
   }
