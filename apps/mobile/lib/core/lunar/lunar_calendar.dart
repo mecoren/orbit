@@ -13,6 +13,10 @@
 ///   保证双平台换算结果完全一致。修改任一侧时必须同步另一侧。
 /// - 2026-10-08 校准：经天文历逐日校验 1901–2100，修正 1933 / 1996 /
 ///   2057 / 2060 四年的月长错位（原表闰月大小与相邻平月天数颠倒）。
+library;
+
+import 'package:flutter/foundation.dart' show visibleForTesting;
+
 class LunarCalendar {
   LunarCalendar._();
 
@@ -47,6 +51,10 @@ class LunarCalendar {
   static final List<int> _info =
       _kLunarInfoRaw.split(',').map((e) => int.parse(e)).toList(growable: false);
 
+  /// 压缩表只读视图（等价性用例据此内联旧算法、避免第二份数据源漂移）
+  @visibleForTesting
+  static List<int> get debugLunarInfo => _info;
+
   /// 某农历年的闰月月份（0 = 无闰月）
   static int _leapMonth(int y) => _info[y - 1900] & 0xf;
 
@@ -58,8 +66,8 @@ class LunarCalendar {
   static int _monthDays(int y, int m) =>
       (_info[y - 1900] & (0x10000 >> m)) != 0 ? 30 : 29;
 
-  /// 某农历年总天数（含闰月）
-  static int _yearDays(int y) {
+  /// 位循环原实现——**只用于构建 [_yearStart]**（直接调用会造成初始化递归）
+  static int _yearDaysRaw(int y) {
     var sum = 348;
     for (var i = 0x8000; i > 0x8; i >>= 1) {
       sum += (_info[y - 1900] & i) != 0 ? 1 : 0;
@@ -67,24 +75,66 @@ class LunarCalendar {
     return sum + _leapDays(y);
   }
 
+  /// 各农历年「正月初一」距基准日的天数（202 项：1900..2100 起点 + 2101 起点）
+  ///
+  /// 首次访问时用 [_yearDaysRaw] 建一次（201 次位循环，只发生一次）。有了它：
+  /// - 年长 = 相邻两项相减；
+  /// - 公历年定位 = 二分查找（原先从 1900 起逐年线性累减，2026 年要跑 126 步，
+  ///   年视图 365 格 ≈ 0.5M 次位运算）。
+  static final List<int> _yearStart = _buildYearStart();
+
+  static List<int> _buildYearStart() {
+    final starts = List<int>.filled(_info.length + 1, 0);
+    var acc = 0;
+    for (var i = 0; i < _info.length; i++) {
+      starts[i] = acc;
+      acc += _yearDaysRaw(1900 + i);
+    }
+    starts[_info.length] = acc;
+    return starts;
+  }
+
+  /// 按日缓存（2026-11-08）：年视图/月历日格/议程三条路径对同一天反复换算
+  ///
+  /// 有界：超过 [ _cacheMax ] 条整体清空——农历换算是纯函数，清空只损失
+  /// 一次重算，不会产生错误值。
+  static const int _cacheMax = 4096;
+  static final Map<int, LunarDate> _cache = <int, LunarDate>{};
+
   /// 公历 → 农历。早于基准日或超出 1900–2100 返回 null。
   static LunarDate? solarToLunar(DateTime solar) {
     final date = DateTime(solar.year, solar.month, solar.day);
     if (date.isBefore(_baseDate) || solar.year < 1900 || solar.year > 2100) {
       return null;
     }
+    final key = solar.year * 10000 + solar.month * 100 + solar.day;
+    final cached = _cache[key];
+    if (cached != null) return cached;
+    final result = _solarToLunar(date);
+    if (result != null) {
+      if (_cache.length >= _cacheMax) _cache.clear();
+      _cache[key] = result;
+    }
+    return result;
+  }
+
+  /// 换算本体（无缓存；见 [solarToLunar]）
+  static LunarDate? _solarToLunar(DateTime date) {
     var offset = date.difference(_baseDate).inDays;
 
-    var year = 1900;
-    var temp = 0;
-    for (; year < 2101 && offset > 0; year++) {
-      temp = _yearDays(year);
-      offset -= temp;
+    // 二分定位农历年：找最大的 i 使 _yearStart[i] <= offset
+    var lo = 0;
+    var hi = _info.length - 1;
+    while (lo < hi) {
+      final mid = (lo + hi + 1) >> 1;
+      if (_yearStart[mid] <= offset) {
+        lo = mid;
+      } else {
+        hi = mid - 1;
+      }
     }
-    if (offset < 0) {
-      offset += temp;
-      year--;
-    }
+    final year = 1900 + lo;
+    offset -= _yearStart[lo];
 
     final leap = _leapMonth(year);
     var isLeap = false;
@@ -140,11 +190,8 @@ class LunarCalendar {
     final maxDay = isLeapMonth ? _leapDays(year) : _monthDays(year, month);
     if (day > maxDay) return null;
 
-    // 年偏移：1900..year-1 各年总天数之和
-    var offset = 0;
-    for (var i = 1900; i < year; i++) {
-      offset += _yearDays(i);
-    }
+    // 年偏移：1900..year-1 各年总天数之和（查前缀和，O(1)）
+    var offset = _yearStart[year - 1900];
 
     // 月偏移：构造当年有序月序列 [(月, 是否闰)]，累加目标月之前的天数
     final seq = <(int, bool)>[];

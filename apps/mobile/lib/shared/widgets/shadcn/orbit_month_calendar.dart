@@ -271,6 +271,11 @@ class OrbitMonthCalendar extends StatelessWidget {
     final formats = availableCalendarFormats;
     final multiFormat = formats != null && formats.length > 1;
 
+    // 每页只取一次「现在」与选中日 ymd（2026-11-08）：逐格调
+    // `DateTime.now()` / `_ymd(selected!)` 是 42 次重复，翻页动画期间逐帧重算
+    final now = DateTime.now();
+    final selectedYmd = selected == null ? null : _ymd(selected!);
+
     Widget calendar = TableCalendar<void>(
       // 网格与手势交给 table_calendar；今天/选中的底色由我们自己画，
       // 故把内置装饰全部置空，避免"双份高亮"
@@ -313,8 +318,15 @@ class OrbitMonthCalendar extends StatelessWidget {
       calendarBuilders: CalendarBuilders<void>(
         // 单一入口接管全部日格（含前后月补位），保证 today/selected/
         // 休班/农历副标签/事件圆点 的判定与旧实现完全一致
-        prioritizedBuilder: (context, day, _) =>
-            _buildCell(context, colors, day, accent, weekend),
+        prioritizedBuilder: (context, day, _) => _buildCell(
+          context,
+          colors,
+          day,
+          accent,
+          weekend,
+          now: now,
+          selectedYmd: selectedYmd,
+        ),
         dowBuilder: showWeekdays
             ? (context, day) => Center(
                 child: Text(
@@ -490,17 +502,18 @@ class OrbitMonthCalendar extends StatelessWidget {
     AppColorSet colors,
     DateTime date,
     Color accent,
-    Color weekend,
-  ) {
+    Color weekend, {
+    required DateTime now,
+    required String? selectedYmd,
+  }) {
     final ymd = _ymd(date);
-    final now = DateTime.now();
     // 周档跨月周不弱化补位（dimOutsideMonth = false）：单行周条里前后月日期
     // 与当月日期同等显示，只弱化可选范围外的越界格
     final inMonth =
         !dimOutsideMonth ||
         (date.month == month.month && date.year == month.year);
     final isToday = isSameDay(date, now);
-    final isSelected = selected != null && _ymd(selected!) == ymd;
+    final isSelected = selectedYmd != null && selectedYmd == ymd;
     final isWeekend =
         date.weekday == DateTime.saturday || date.weekday == DateTime.sunday;
     final isOffDay = holidays?[ymd] == true;
