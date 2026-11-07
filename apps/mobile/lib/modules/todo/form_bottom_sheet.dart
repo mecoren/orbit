@@ -78,6 +78,9 @@ Future<void> showTodoFormSheet(
   /// 新建态预填的截止日期毫秒（日历长按日格快捷新增用；编辑态忽略）
   int? initialDueDate,
 
+  /// 新建态预填的提醒时刻毫秒（快速添加面板「全屏」带入已选提醒；编辑态忽略）
+  int? initialRemindAt,
+
   /// 当前选中的快捷视图（#39：视图内新建自动带本视图标记；仅新建态消费）
   QuickViewKey? quickView,
 
@@ -94,6 +97,7 @@ Future<void> showTodoFormSheet(
       editingTaskId: editingTaskId,
       defaultProjectId: defaultProjectId,
       initialDueDate: initialDueDate,
+      initialRemindAt: initialRemindAt,
       quickView: quickView,
       presetTemplate: presetTemplate,
     ),
@@ -200,6 +204,7 @@ class _TodoFormSheet extends ConsumerStatefulWidget {
     this.editingTaskId,
     this.defaultProjectId,
     this.initialDueDate,
+    this.initialRemindAt,
     this.quickView,
     this.presetTemplate,
   });
@@ -212,6 +217,9 @@ class _TodoFormSheet extends ConsumerStatefulWidget {
 
   /// 新建态预填的截止日期毫秒（日历长按快捷新增；编辑态忽略）
   final int? initialDueDate;
+
+  /// 新建态预填的提醒时刻毫秒（快速添加面板「全屏」带入；编辑态忽略）
+  final int? initialRemindAt;
 
   /// 当前选中的快捷视图（#39：视图内新建自动带本视图标记；仅新建态消费）
   final QuickViewKey? quickView;
@@ -381,6 +389,8 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
       if (tpl?.title != null) _titleController.text = tpl!.title!;
       if (tpl?.notes != null) _descriptionController.text = tpl!.notes!;
       if (tpl?.priority != null) _priority = tpl!.priority!;
+      // 提醒预填：只有显式带入（快速添加「全屏」）才预置，模板无提醒字段
+      _remindAt = widget.initialRemindAt;
       // 新增默认开始日期：今天（本地零点，与桌面表单同口径）
       _startDate = dateToMidnightMs(DateTime.now());
       _loaded = true;

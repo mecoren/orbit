@@ -3,18 +3,29 @@ import '../../../services/local_prefs.dart';
 /// 底部快速添加面板的快捷操作档（「编辑操作」设置的 Orbit 等价物）
 ///
 /// 只收录**本仓真有对应能力**的档位：
-/// - [due]/[priority]/[label]/[project] → 截止日期 / 优先级 / 标签 / 项目；
+/// - [due]/[reminder]/[priority]/[label]/[project] → 截止日期 / 提醒时间 /
+///   优先级 / 标签 / 项目；
 /// - [image] → 相册图片（任务落库后挂附件，复用 `task_attachment_add`）；
 /// - [template] → 任务模板（复用模板选择 + 表单预填链）；
 /// - [fullscreen] → 展开为完整新建表单（详细字段编辑）。
 ///
 /// 语音输入 / 转换为笔记等竞品档位本仓无对应能力，刻意不设档位（不做假功能）。
-enum QuickActionId { due, priority, label, project, image, template, fullscreen }
+enum QuickActionId {
+  due,
+  reminder,
+  priority,
+  label,
+  project,
+  image,
+  template,
+  fullscreen,
+}
 
 extension QuickActionMeta on QuickActionId {
   /// 设置页与「更多」菜单展示用的中文名
   String get label => switch (this) {
         QuickActionId.due => '日期',
+        QuickActionId.reminder => '提醒',
         QuickActionId.priority => '优先级',
         QuickActionId.label => '标签',
         QuickActionId.project => '项目',
@@ -102,9 +113,10 @@ class QuickActions {
 
   static const key = 'todo_quick_actions';
 
-  /// 工具栏默认直显四档
+  /// 工具栏默认直显五档（日期与提醒相邻：先定「哪天」，再定「几点喊我」）
   static const List<QuickActionId> defaultEnabled = [
     QuickActionId.due,
+    QuickActionId.reminder,
     QuickActionId.priority,
     QuickActionId.label,
     QuickActionId.project,

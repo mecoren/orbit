@@ -190,7 +190,12 @@ OrbitGlassScope（向下暴露同一个 backdrop）
   - **快加面板 4 张锚定卡片（优先级/标签/项目/更多）保留 `OrbitOverlayCard`
     直挂**：`MiuixGlassTransformPopup` 内部 `FocusScope(autofocus: true)` 会抢走
     标题输入框焦点、键盘下沉，违背「边打字边选」的既有交互（`quick_add_sheet_test`
-    三个用例锁死）；它们已是玻璃表面，只差形变动画。
+    三个用例锁死）；它们已是玻璃表面，只差形变动画。**2026-11-07 已解**：
+    `showOrbitMenuPopup` 在传入 `restoreFocus`（打开前确实持有焦点的输入框）时，
+    把整棵弹层子树包进 `Focus(canRequestFocus: false, descendantsAreFocusable: false)`
+    ——库内 autofocus 在 `_Autofocus.applyIfValid` 里因 `canRequestFocus == false`
+    直接丢弃，焦点全程留在输入框；四张卡片已全部改走形变承载（见 AGENTS.md
+    「所有弹出选择/菜单统一…」条）。
 - **锚定浮层卡片接玻璃采样器（2026-11-03）**：`OrbitFloatCard` 早先已挂
   `miuixGlassSurface`，但**没接 `MiuixLayerBackdrop`**——库内无快照即退实色，
   于是「页头 ⋮ 是玻璃菜单、所有锚定卡片是白色实色卡片」两套观感并存。现由
@@ -212,8 +217,8 @@ OrbitGlassScope（向下暴露同一个 backdrop）
 
 #### 5.3.1 锚定弹层性能闸门（2026-11-07）
 
-真机反馈「弹窗菜单太卡」（今天页头标题切换、清单/详情 ⋮、快速添加五处、
-底栏「更多」）。两处开销都在库内形变承载上，收口到 `orbit_popup_glass.dart`
+真机反馈「弹窗菜单太卡」（今天页头标题切换、清单/详情 ⋮、快速添加五处（现为
+六处，2026-11-07 增「提醒」）、底栏「更多」）。两处开销都在库内形变承载上，收口到 `orbit_popup_glass.dart`
 的 `OrbitPopupGlass` + `OrbitPopupGlassMotion`（所有锚定弹层共用，调用点只传
 「是否打开」）：
 

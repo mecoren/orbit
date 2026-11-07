@@ -13,6 +13,7 @@ import 'package:orbit/modules/todo/logic/task_logic.dart'
         TaskFilterInput,
         dateToMidnightMs,
         formatDueLabel,
+        formatDueShort,
         formatYmd,
         priorityColorHex;
 import 'package:orbit/modules/todo/quick_add_sheet.dart' show showQuickAddSheet;
@@ -86,16 +87,24 @@ void main() {
   });
 
   group('跨段拖拽（纯逻辑：越过「更多」标题即换段）', () {
+    // 可拖序列 = 启用段 + 哨兵标题 + 未启用段；索引一律按档位身份取，
+    // 默认档增减不会让用例错位（2026-11-07 新增「提醒」档）
+    List<Object> items() => quickActionDragItems(
+      QuickActions.defaultEnabled,
+      QuickActions.defaultHidden,
+    );
+
     test('未启用档拖到标题上方 → 提到工具栏', () {
       final (on, off) = reorderQuickActions(
         enabled: QuickActions.defaultEnabled,
         hidden: QuickActions.defaultHidden,
-        oldIndex: 5, // image（标题行之后）
+        oldIndex: items().indexOf(QuickActionId.image),
         newIndex: 1,
       );
       expect(on, [
         QuickActionId.due,
         QuickActionId.image,
+        QuickActionId.reminder,
         QuickActionId.priority,
         QuickActionId.label,
         QuickActionId.project,
@@ -107,18 +116,20 @@ void main() {
       final (on, off) = reorderQuickActions(
         enabled: QuickActions.defaultEnabled,
         hidden: QuickActions.defaultHidden,
-        oldIndex: 0, // due
-        newIndex: 6, // 落到标题行之后的末段
+        oldIndex: items().indexOf(QuickActionId.due),
+        // 落到标题行之后的末段（image 与 template 之间）
+        newIndex: items().indexOf(QuickActionId.image),
       );
       expect(on, [
+        QuickActionId.reminder,
         QuickActionId.priority,
         QuickActionId.label,
         QuickActionId.project,
       ]);
       expect(off, [
         QuickActionId.image,
-        QuickActionId.template,
         QuickActionId.due,
+        QuickActionId.template,
         QuickActionId.fullscreen,
       ]);
     });
@@ -127,12 +138,13 @@ void main() {
       final (on, off) = reorderQuickActions(
         enabled: QuickActions.defaultEnabled,
         hidden: QuickActions.defaultHidden,
-        oldIndex: 2, // label
+        oldIndex: items().indexOf(QuickActionId.label),
         newIndex: 0,
       );
       expect(on, [
         QuickActionId.label,
         QuickActionId.due,
+        QuickActionId.reminder,
         QuickActionId.priority,
         QuickActionId.project,
       ]);
@@ -143,7 +155,7 @@ void main() {
       final (on, off) = reorderQuickActions(
         enabled: QuickActions.defaultEnabled,
         hidden: QuickActions.defaultHidden,
-        oldIndex: 4, // 哨兵标题行
+        oldIndex: items().indexOf(moreHeaderSentinel), // 哨兵标题行
         newIndex: 0,
       );
       expect(on, QuickActions.defaultEnabled);
@@ -154,9 +166,10 @@ void main() {
   group('段内重排（双卡片各持一段，只调顺序不换段）', () {
     test('启用段内下移', () {
       expect(reorderWithinSection(QuickActions.defaultEnabled, 0, 2), [
+        QuickActionId.reminder,
         QuickActionId.priority,
-        QuickActionId.label,
         QuickActionId.due,
+        QuickActionId.label,
         QuickActionId.project,
       ]);
     });
@@ -356,6 +369,68 @@ void main() {
       await tester.tap(find.byTooltip(RegExp('^截止：')));
       await tester.pumpAndSettle();
       expect(selectedPopupLabels(tester), ['下周']);
+    });
+
+    testWidgets('提醒档：相对档菜单选中即回填，提交落提醒实体', (tester) async {
+      final bridge = await _openPanel(tester);
+
+      await tester.tap(find.byTooltip('提醒'));
+      await tester.pumpAndSettle();
+      Finder sheetRow(String label) =>
+          find.descendant(of: selectPopup(), matching: find.text(label));
+      // 无截止日期 → 今天/明天 9:00 两档 + 自定义；未设时无清除入口
+      expect(find.text('提醒时间'), findsOneWidget);
+      expect(sheetRow('今天 09:00'), findsOneWidget);
+      expect(sheetRow('明天 09:00'), findsOneWidget);
+      expect(sheetRow('自定义时间…'), findsOneWidget);
+      expect(sheetRow('清除提醒'), findsNothing);
+
+      await tester.tap(sheetRow('明天 09:00'));
+      await tester.pumpAndSettle();
+
+      final tomorrow = DateTime.now().add(const Duration(days: 1));
+      final remindAt = DateTime(
+        tomorrow.year,
+        tomorrow.month,
+        tomorrow.day,
+        9,
+      ).millisecondsSinceEpoch;
+      expect(
+        find.byTooltip('提醒：${formatDueShort(remindAt)}'),
+        findsOneWidget,
+      );
+
+      await tester.enterText(find.byType(TextField), '交房租');
+      await tester.pump();
+      await tester.tap(find.byIcon(OrbitIcons.send));
+      await _settle(tester);
+
+      final task = bridge.store.tasks.values.firstWhere(
+        (t) => t['title'] == '交房租',
+      );
+      final reminder = bridge.store.reminders.values.firstWhere(
+        (r) => r['task_id'] == task['id'],
+      );
+      expect(reminder['remind_at'], remindAt);
+    });
+
+    testWidgets('提醒档：已设时可清除，清除后回未选态', (tester) async {
+      await _openPanel(tester);
+
+      await tester.tap(find.byTooltip('提醒'));
+      await tester.pumpAndSettle();
+      Finder sheetRow(String label) =>
+          find.descendant(of: selectPopup(), matching: find.text(label));
+      await tester.tap(sheetRow('今天 09:00'));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip(RegExp('^提醒：')), findsOneWidget);
+
+      await tester.tap(find.byTooltip(RegExp('^提醒：')));
+      await tester.pumpAndSettle();
+      expect(sheetRow('清除提醒'), findsOneWidget);
+      await tester.tap(sheetRow('清除提醒'));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('提醒'), findsOneWidget);
     });
 
     testWidgets('更多菜单：未启用三档 + 固定「设置」入口', (tester) async {
@@ -795,6 +870,24 @@ void main() {
       await tester.tapAt(const Offset(10, 100));
       await tester.pumpAndSettle();
       expect(selectPopup(), findsNothing);
+      expect(inputFocused(tester), isTrue);
+      expect(tester.testTextInput.isVisible, isTrue);
+    });
+
+    testWidgets('菜单展开过程中焦点一帧都不丢（不再「收回再弹出」）', (tester) async {
+      await _openPanel(tester);
+      expect(inputFocused(tester), isTrue);
+
+      await tester.tap(find.byTooltip('优先级'));
+      // 逐帧校验：库内 `FocusScope(autofocus)` 若接管过焦点，输入法会先沉再升——
+      // 只在 pumpAndSettle 之后断言（如旧的「输入法不消失」用例）看不出这段抖动
+      for (var i = 0; i < 12; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+        expect(inputFocused(tester), isTrue, reason: '第 $i 帧焦点丢失');
+        expect(tester.testTextInput.isVisible, isTrue, reason: '第 $i 帧输入法收起');
+      }
+      await tester.pumpAndSettle();
+      expect(selectPopup(), findsOneWidget);
       expect(inputFocused(tester), isTrue);
       expect(tester.testTextInput.isVisible, isTrue);
     });

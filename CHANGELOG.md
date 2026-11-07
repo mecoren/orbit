@@ -19,10 +19,18 @@
 
 ### 修复：移动端快速添加点菜单时输入法「先收回再弹出」（2026-11-07）
 
-点快速添加工具栏任一档（日期／优先级／标签／项目／更多）时，输入法会先收起再升起。根因在库内弹层承载：`GlassPopupPresenter` 自带 `FocusScope(autofocus: true)`，弹层挂载首帧就抢走输入框焦点，`EditableText` 随即关闭输入连接、输入法开始收起；原实现靠测量落定后再等两帧归还焦点，视觉上就是这段抖动。
+点快速添加工具栏任一档（日期／提醒／优先级／标签／项目／更多）时，输入法会先收起再升起。根因在库内弹层承载：`GlassPopupPresenter` 自带 `FocusScope(autofocus: true)`，弹层挂载首帧就抢走输入框焦点，`EditableText` 随即关闭输入连接、输入法开始收起；原实现靠测量落定后再等两帧归还焦点，视觉上就是这段抖动。
 
 - **焦点护航**：`showOrbitMenuPopup` 在调用方传入 `restoreFocus`（且打开前**确实持有焦点**）时，把整棵弹层子树包进 `Focus(canRequestFocus: false, descendantsAreFocusable: false)`——库内 autofocus 在 `_Autofocus.applyIfValid` 里因 `canRequestFocus == false` 直接丢弃，焦点自始至终留在输入框上；行仍是点按交互，语义树不受影响。焦点归还（`_scheduleFocusRestore`）退为兜底，且只在真的丢了焦点时才执行，不会在菜单关闭后把键盘无端叫起来；
 - **验证**：`quick_add_sheet_test.dart` 新增逐帧用例（连 pump 12 帧断言 `focusNode.hasFocus` 与 `testTextInput.isVisible` 全程为真；抽掉护航后该用例在第 1 帧即红）。
+
+### 新增：移动端快速添加支持「提醒」档（2026-11-07）
+
+快速添加面板此前只能设截止日期，提醒要进详情页/完整表单才能加。新增第六个快捷操作档「提醒」（默认排在工具栏「日期」之后；老配置由 `QuickActions.read()` 的缺档回填自动收进「更多」）：
+
+- **菜单**：与日期档同款的锚定玻璃菜单，档位复用表单/详情同源的 `reminderPresets`——有截止日期给「截止当天 9:00 / 截止前 1 小时·30·15 分钟」，无截止给「今天 9:00 / 明天 9:00」，末项「自定义时间…」进日期+时分面板，已设时多一行「清除提醒」；已选值以「图标 + 具体时刻」胶囊直接可见（如「明天 09:00」）；
+- **落库**：提醒是独立实体，提交仍走两段式（任务 `todo_task_create` 成功后 `todo_reminder_create`，与桌面 QuickAddBar、移动表单同口径；提醒失败不阻断任务本身）；`showTodoFormSheet` 新增 `initialRemindAt`，面板「全屏」展开时已选提醒随之带入表单；
+- **验证**：`quick_add_sheet_test.dart` 覆盖相对档选中/清除与提交落提醒实体；`flutter analyze` 0 issue、`flutter test` 1221 绿。
 
 ### 优化：移动端弹窗菜单不再掉帧——形变期实色卡面 + 冻结弹簧尾巴 + 背景快照降采样（2026-11-07）
 

@@ -57,15 +57,18 @@ import 'logic/task_logic.dart'
         atViewDueHour,
         dateToMidnightMs,
         formatDueLabel,
+        formatDueShort,
         nextMondayMidnightMs,
         priorityColorHex,
         priorityLabel,
-        quickViewCreateDefaults;
+        quickViewCreateDefaults,
+        reminderPresets;
 import 'providers/todo_providers.dart';
 
 /// 快捷操作档 → 图标（面板工具栏与设置页预览/列表共用同一映射）
 IconData quickActionIcon(QuickActionId id) => switch (id) {
   QuickActionId.due => OrbitIcons.calendar,
+  QuickActionId.reminder => OrbitIcons.notification,
   QuickActionId.priority => OrbitIcons.flag,
   QuickActionId.label => OrbitIcons.tag,
   QuickActionId.project => OrbitIcons.list,
@@ -184,6 +187,10 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
 
   int _priority = 0;
   int? _dueDate;
+
+  /// 提醒时刻（绝对毫秒；提交时任务落库后再建提醒实体，两段式与表单同口径）
+  int? _remindAt;
+
   int? _projectId;
   List<TodoLabel> _labels = [];
   final List<_PendingImage> _images = [];
@@ -270,6 +277,17 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
           repeatWeekdays: parsed.repeat?.weekdays,
         ),
       );
+      // 提醒：任务落库后建提醒实体（两段式，与表单/桌面 QuickAddBar 同口径；
+      // 提醒是独立表，创建入参里没有该字段）
+      if (_remindAt != null) {
+        try {
+          await bridge.todoReminderCreate(
+            TodoReminderCreateInput(taskId: created.id, remindAt: _remindAt!),
+          );
+        } catch (_) {
+          /* 忽略提醒失败（任务本身已建成） */
+        }
+      }
       // 标签：NLP 命中 ∪ 手动选择（去重；单条失败不阻断任务本身）
       final labelIds = <int>{...parsed.labelIds, ..._labels.map((l) => l.id)};
       for (final labelId in labelIds) {
@@ -309,6 +327,8 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
     switch (id) {
       case QuickActionId.due:
         _pickDue();
+      case QuickActionId.reminder:
+        _pickReminder();
       case QuickActionId.priority:
         _pickPriority();
       case QuickActionId.label:
@@ -496,6 +516,75 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
     if (!mounted) return;
     if (picked != null) {
       setState(() => _dueDate = dateToMidnightMs(picked));
+    }
+    _restoreKeyboard(hadFocus);
+  }
+
+  /// 提醒档：相对档快捷（与表单/详情同源的 [reminderPresets]）+ 自定义时刻 +
+  /// 已设时清除。
+  ///
+  /// 档位随截止日期变化（有截止 → 截止当天 9:00 / 截止前 N 分钟；无截止 →
+  /// 今天/明天 9:00），故每次打开都按当下 [_dueDate] 重算；产物仍是**绝对
+  /// 毫秒时刻**，不做「随截止漂移」的绑定（与表单、桌面同口径）。
+  void _pickReminder() {
+    final presets = reminderPresets(
+      dueDate: _dueDate,
+      // 新建任务恒有开始日期（今天零点）：零点不带时刻，不会凭空多出「结束时」档
+      startDate: dateToMidnightMs(DateTime.now()),
+    );
+    // 自定义时间会再开下级日期+时分面板（路由）：焦点记忆传下去，由下级关闭
+    // 时恢复（本级菜单 Overlay 直挂 + 焦点护航，不抢焦点）
+    final hadFocus = _titleFocus.hasFocus;
+    late final OrbitMenuSession session;
+
+    session = _openMenu(
+      anchor: _menuAnchors[QuickActionId.reminder]!,
+      anchorContent: _menuAnchorContent(QuickActionId.reminder),
+      title: '提醒时间',
+      groupsBuilder: () => [
+        [
+          for (final preset in presets)
+            OrbitPanelItem(
+              label: preset.label,
+              checked: _remindAt == preset.ms,
+              onTap: () {
+                if (mounted) setState(() => _remindAt = preset.ms);
+              },
+            ),
+          OrbitPanelItem(
+            label: '自定义时间…',
+            // 与日期档同：先等本级菜单回收完成再开下级面板，避免退场归还焦点
+            // 与下级路由进场抢帧
+            onTap: () => session.closed.then((_) {
+              if (mounted) _pickCustomReminder(hadFocus);
+            }),
+          ),
+          if (_remindAt != null)
+            OrbitPanelItem(
+              label: '清除提醒',
+              onTap: () {
+                if (mounted) setState(() => _remindAt = null);
+              },
+            ),
+        ],
+      ],
+    );
+  }
+
+  /// 自定义提醒时刻：日期 + 时分单面板（与表单 `_pickCustomReminder` 同源）。
+  /// 取消不清值——清空走菜单里的「清除提醒」。
+  Future<void> _pickCustomReminder([bool hadFocus = false]) async {
+    final picked = await OrbitDatePicker.pick(
+      context,
+      initialDate: _remindAt != null
+          ? DateTime.fromMillisecondsSinceEpoch(_remindAt!)
+          : null,
+      showTime: true,
+      accent: OrbitAccents.todoAccent,
+    );
+    if (!mounted) return;
+    if (picked != null) {
+      setState(() => _remindAt = picked.millisecondsSinceEpoch);
     }
     _restoreKeyboard(hadFocus);
   }
@@ -691,18 +780,21 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
     );
   }
 
-  /// 全屏档：把当前草稿（标题/优先级/截止）带进完整新建表单做详细编辑
+  /// 全屏档：把当前草稿（标题/优先级/截止/提醒）带进完整新建表单做详细编辑
   Future<void> _openFullForm() async {
     final projectId = _projectId;
     final quickView = widget.quickView;
     final title = _titleController.text.trim();
     final priority = _priority;
     final dueOffsetDays = _dueOffsetDays(_dueDate);
+    final remindAt = _remindAt;
     Navigator.of(context).pop();
     await showTodoFormSheet(
       context,
       defaultProjectId: projectId,
       quickView: quickView,
+      // 提醒是绝对时刻，模板 payload 不承接（模板域无提醒能力），单独带入
+      initialRemindAt: remindAt,
       presetTemplate: TemplatePayload(
         title: title.isEmpty ? null : title,
         priority: priority > 0 ? priority : null,
@@ -927,6 +1019,8 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
     switch (id) {
       case QuickActionId.due:
         return _dueDate == null ? null : formatDueLabel(_dueDate!);
+      case QuickActionId.reminder:
+        return _remindAt == null ? null : formatDueShort(_remindAt!);
       case QuickActionId.priority:
         return null;
       case QuickActionId.label:
@@ -962,6 +1056,8 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
     switch (id) {
       case QuickActionId.due:
         return _dueDate == null ? '日期' : '截止：${formatDueLabel(_dueDate!)}';
+      case QuickActionId.reminder:
+        return _remindAt == null ? '提醒' : '提醒：${formatDueShort(_remindAt!)}';
       case QuickActionId.priority:
         return _priority <= 0
             ? '优先级'
