@@ -17,6 +17,15 @@
 
 ## [Unreleased]
 
+### 优化：移动端详情页历史区块限高——超出 9 条在区块内滑动、常显滚动条（2026-11-07）
+
+历史条目多的任务同样把详情页尾部撑得很长，且触屏不给滚动提示「下面还有」。历史列表改为**预览上限 + 常显滑块**：
+
+- **限高**：`ConstrainedBox(maxHeight: 9 × 28)` + `Scrollbar` + 内层 `SingleChildScrollView`（`primary: false`，避免与详情页 ListView 争 `PrimaryScrollController`）；滑块 `thumbVisibility` 只在条数超过 9 条时置 true（9 条最小篇幅已超限高，必然可滚；触屏无 hover 态，不常显就没有线索）。不足 9 条时列表自然收缩，与原先一致。
+- **滑块让位**：滚动内容右侧留 8，避免常显滑块压在行尾文案上。
+- **档位提示外移**：「仅显示最近 30 条操作 + 显示更多」钉在滚动区外，列表内滚动时也常驻可见。
+- **验证**：`test/task_activity_test.dart` 追加 2 例（>9 条限高 252 且滑块常显、≤9 条随内容收缩且不常显）；详情页五份定向用例与 `flutter analyze` 全绿。
+
 ### 重构：应用内更新日志收口到 Rust 核心——桌面/移动同一份（2026-11-06）
 
 「关于 → 更新日志」原先是三处手写（根 `CHANGELOG.md`、桌面 `src/lib/changelog.ts`、移动 `about_page.dart` 内联常量），移动端头部还残留 `0.6.0` 脏数据。现按 wait-home 口径收口：

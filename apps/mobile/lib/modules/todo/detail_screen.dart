@@ -68,6 +68,9 @@ const String _reminderCustomKey = 'custom';
 /// 评论区列表滚动区（预览限高后区块内滑动；测试按 key 定位取高度）
 const Key detailCommentsListKey = ValueKey('task-detail-comments-list');
 
+/// 历史区块列表滚动区（预览限高 + 常显滚动条；测试按 key 定位取高度）
+const Key detailHistoryListKey = ValueKey('task-detail-history-list');
+
 /// 预计时长常用档（与任务表单 `_pickDuration` 同口径；值 = 分钟数字符串）
 const List<({String value, String label})> _durationPresets = [
   (value: '15', label: '15 分钟'),
@@ -3325,6 +3328,22 @@ class _HistorySectionState extends ConsumerState<_HistorySection> {
   static const _maxLimit = 100;
   int _limit = _baseLimit;
 
+  /// 历史列表预览上限：区块内最多露出约 9 条篇幅，超出在区块内滑动查看
+  ///
+  /// 单条约 28dp（11sp 时间与 13sp 正文取高 18 + 条间距 8；正文换行更高），
+  /// 故按篇幅而非精确条数限高。9 条最小篇幅已超限高——条数多于
+  /// [_previewRows] 时必然可滚，滑块才转常显。
+  static const int _previewRows = 9;
+  static const double _previewHeight = _previewRows * 28.0;
+
+  final _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
@@ -3362,52 +3381,88 @@ class _HistorySectionState extends ConsumerState<_HistorySection> {
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  for (final r in rows)
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: _previewHeight),
+                    child: Scrollbar(
+                      controller: _scrollController,
+                      // 触屏没有 hover 态：可滚时滑块常显，否则「下面还有」
+                      // 没有任何视觉线索（条数超限高即一定可滚）
+                      thumbVisibility: rows.length > _previewRows,
+                      child: SingleChildScrollView(
+                        key: detailHistoryListKey,
+                        // 详情页本身是 ListView：内层滚动必须显式 primary=false，
+                        // 否则两层都认 PrimaryScrollController
+                        primary: false,
+                        controller: _scrollController,
+                        physics: const ClampingScrollPhysics(),
+                        // 右侧留出滑块位置，避免常显滑块压在行尾文字上
+                        child: Padding(
+                          padding: const EdgeInsets.only(
+                            right: AppDimens.space8,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              for (final r in rows)
+                                Padding(
+                                  padding: const EdgeInsets.only(
+                                    bottom: AppDimens.space8,
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        formatStampLabel(r.createdAt),
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: colors.secondaryText,
+                                        ),
+                                      ),
+                                      const SizedBox(width: AppDimens.space8),
+                                      Expanded(
+                                        child: Text(
+                                          describeActivity(r.action, r.detail),
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            color: colors.bodyText,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  // 档位提示钉在滚动区外：列表内滚动时也常驻可见
+                  if (rows.length >= _limit)
                     Padding(
-                      padding: const EdgeInsets.only(bottom: AppDimens.space8),
+                      padding: const EdgeInsets.only(top: AppDimens.space8),
                       child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            formatStampLabel(r.createdAt),
+                            '仅显示最近 $_limit 条操作',
                             style: TextStyle(
-                              fontSize: 11,
+                              fontSize: 12,
                               color: colors.secondaryText,
                             ),
                           ),
-                          const SizedBox(width: AppDimens.space8),
-                          Expanded(
-                            child: Text(
-                              describeActivity(r.action, r.detail),
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: colors.bodyText,
+                          if (_limit < _maxLimit)
+                            OrbitButton.text(
+                              compact: true,
+                              onPressed: () =>
+                                  setState(() => _limit = _maxLimit),
+                              child: const Text(
+                                '显示更多',
+                                style: TextStyle(fontSize: 12),
                               ),
                             ),
-                          ),
                         ],
                       ),
-                    ),
-                  if (rows.length >= _limit)
-                    Row(
-                      children: [
-                        Text(
-                          '仅显示最近 $_limit 条操作',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: colors.secondaryText,
-                          ),
-                        ),
-                        if (_limit < _maxLimit)
-                          OrbitButton.text(
-                            compact: true,
-                            onPressed: () => setState(() => _limit = _maxLimit),
-                            child: const Text(
-                              '显示更多',
-                              style: TextStyle(fontSize: 12),
-                            ),
-                          ),
-                      ],
                     ),
                 ],
               ),

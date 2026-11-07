@@ -36,6 +36,20 @@ Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
   await tester.pumpAndSettle();
 }
 
+/// 直灌内存库补轨迹（createdAt 早于全部 seeded，倒序后排在末尾）
+void _padActivity(MockOrbitBridge bridge, TodoTask task, int count) {
+  for (var i = 0; i < count; i++) {
+    bridge.store.activityLog[10000 + i] = {
+      'id': 10000 + i,
+      'task_id': task.id,
+      'task_title': task.title,
+      'action': 'create',
+      'detail': '{}',
+      'created_at': DateTime.now().millisecondsSinceEpoch - 10 * 86400000 - i,
+    };
+  }
+}
+
 void main() {
   late MockOrbitBridge bridge;
 
@@ -113,18 +127,7 @@ void main() {
     testWidgets('满档 30 条：提示 + 显示更多展到 100 后提示消失', (tester) async {
       final t1 = await tester.runAsync(seededTask);
       // 直灌内存库补足 38 条（3 seeded + 35 注入，createdAt 早于全部 seeded）
-      await tester.runAsync(() async {
-        for (var i = 0; i < 35; i++) {
-          bridge.store.activityLog[10000 + i] = {
-            'id': 10000 + i,
-            'task_id': t1!.id,
-            'task_title': t1.title,
-            'action': 'create',
-            'detail': '{}',
-            'created_at': DateTime.now().millisecondsSinceEpoch - 10 * 86400000 - i,
-          };
-        }
-      });
+      await tester.runAsync(() async => _padActivity(bridge, t1!, 35));
       await tester
           .pumpWidget(_wrap(DetailScreen(taskId: t1!.id), bridge));
       await _settle(tester);
@@ -137,6 +140,41 @@ void main() {
       // 38 < 100：档位展满后截断提示整体消失
       expect(find.text('仅显示最近 30 条操作'), findsNothing);
       expect(find.text('显示更多'), findsNothing);
+    });
+
+    testWidgets('超过 9 条：区块内限高且滚动条常显', (tester) async {
+      final t1 = await tester.runAsync(seededTask);
+      await tester.runAsync(() async => _padActivity(bridge, t1!, 35));
+      await tester
+          .pumpWidget(_wrap(DetailScreen(taskId: t1!.id), bridge));
+      await _settle(tester);
+
+      await _scrollTo(tester, find.text('仅显示最近 30 条操作'));
+      final list = find.byKey(detailHistoryListKey);
+      // 预览限高 9 条篇幅（9 × 28）
+      expect(tester.getSize(list).height, closeTo(252, 0.5));
+
+      final bar = tester.widget<Scrollbar>(
+        find.ancestor(of: list, matching: find.byType(Scrollbar)).first,
+      );
+      expect(bar.thumbVisibility, isTrue, reason: '可滚时滑块必须常显');
+    });
+
+    testWidgets('不足 9 条：区块随内容收缩、滑块不常显', (tester) async {
+      final t1 = await tester.runAsync(seededTask);
+      await tester
+          .pumpWidget(_wrap(DetailScreen(taskId: t1!.id), bridge));
+      await _settle(tester);
+
+      await _scrollTo(tester, find.text('历史'));
+      final list = find.byKey(detailHistoryListKey);
+      // seeded 3 行（单行约 26dp），远低于限高 252
+      expect(tester.getSize(list).height, lessThan(200));
+
+      final bar = tester.widget<Scrollbar>(
+        find.ancestor(of: list, matching: find.byType(Scrollbar)).first,
+      );
+      expect(bar.thumbVisibility, isFalse);
     });
   });
 }
