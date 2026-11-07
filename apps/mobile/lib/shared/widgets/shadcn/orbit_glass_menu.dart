@@ -63,7 +63,7 @@ class OrbitGlassMenuButton extends StatelessWidget {
   }
 }
 
-/// 任意触发控件版的玻璃形变菜单（2026-11-03，页头标题「今天 ▾」的快捷视图
+/// 任意触发控件版的玻璃形变菜单（2026-11-03，页头标题「今天 ▾」的**视图菜单**
 /// 切换器）：与 [OrbitGlassMenuButton] 同一套承载、材质与二级面板口径，
 /// 差别只在触发件由调用方给——非图标按钮（标题文字 + 箭头）也能长出菜单。
 class OrbitGlassMenu extends StatefulWidget {
@@ -72,11 +72,16 @@ class OrbitGlassMenu extends StatefulWidget {
     required this.groupsBuilder,
     required this.triggerBuilder,
     required this.anchorContent,
+    this.semanticsLabel,
     this.backdrop,
   });
 
   /// 菜单条目（点开时构建一次，回调闭包取调用方当下状态）
   final List<List<OrbitPanelItem>> Function() groupsBuilder;
+
+  /// 读屏语义名（如「视图菜单」）：触发件是文字时，光读标题分不出"这是菜单"。
+  /// null = 不额外包 Semantics，沿用触发控件自身的语义
+  final String? semanticsLabel;
 
   /// 触发控件（收开/收回调；形变期该控件被隐藏，由 [anchorContent] 接管）
   final Widget Function(VoidCallback onTap) triggerBuilder;
@@ -166,9 +171,12 @@ class _OrbitGlassMenuState extends State<OrbitGlassMenu> {
       children: [
         // 触发控件：包进 MiuixGlassAnchor（弹层展开时其内容被隐藏，
         // 副本由 anchorContent 承担形变）
-        MiuixGlassAnchor(
-          anchor: _anchor,
-          child: widget.triggerBuilder(_toggle),
+        // 语义名包在锚点外：读屏读作「视图菜单 今天」，既有"这是菜单"又有当前档
+        _withSemantics(
+          MiuixGlassAnchor(
+            anchor: _anchor,
+            child: widget.triggerBuilder(_toggle),
+          ),
         ),
         // 玻璃闸门包住一级 + 二级两件：卡面材质、背景采样与弹簧尾巴统一口径
         // （形变期实色卡面，窗口结束切真玻璃并冻结——见 orbit_popup_glass.dart）
@@ -234,6 +242,13 @@ class _OrbitGlassMenuState extends State<OrbitGlassMenu> {
         ),
       ],
     );
+  }
+
+  /// 有语义名时给触发件补 `button` 角色 + 名称；无则原样返回（不多包一层）
+  Widget _withSemantics(Widget child) {
+    final label = widget.semanticsLabel;
+    if (label == null) return child;
+    return Semantics(button: true, label: label, child: child);
   }
 
   /// 组间分隔（对齐库内 `MiuixGlassPopupDefaults` 的分隔线规格）

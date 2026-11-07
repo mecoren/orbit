@@ -51,6 +51,7 @@ import 'logic/repeat_logic.dart' as rep;
 import 'logic/display_prefs.dart';
 import 'logic/paged_query.dart';
 import 'logic/project_tree.dart';
+import 'logic/quick_view_prefs.dart';
 import 'logic/task_logic.dart';
 import 'logic/undo_stack.dart';
 import 'logic/view_mode.dart';
@@ -241,8 +242,9 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   /// 批量动作进行中（防重复触发；批量期间串行写库）
   bool _batchBusy = false;
 
-  /// 今天页签的快捷视图覆写（null = 跟随路由 query；页头标题点选切换后落此处）。
-  /// 会话态不持久化——下次进页签回到「今天」本位（与排序档退出即回 manual 同口径）
+  /// 今天页签「视图菜单」的选中档覆写（null = 跟随路由 query，即「今天」本位）。
+  /// 选中档按本机偏好持久化（`logic/quick_view_prefs.dart`）——退出重进仍停在
+  /// 上一档，不再回到「今天」
   QuickViewKey? _viewOverride;
 
   /// 生效中的筛选（今天页签切换视图后即覆写值；其余入口恒等于路由 query）
@@ -276,17 +278,21 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   bool get _isTodayTab =>
       widget.query.quickView == QuickViewKey.today && !widget.showBack;
 
-  /// 标题点选切换快捷视图：切到哪标题就叫哪（[_viewOverride]），列表、
-  /// 空态、分隔行、Logbook 分组与新建落点同步跟随；切回今天即清覆写
+  /// 视图菜单点选：切到哪标题就叫哪（[_viewOverride]），列表、空态、分隔行、
+  /// Logbook 分组与新建落点同步跟随；切回今天即清覆写。选中档写本机偏好——
+  /// 退出重进仍停在这一档
   void _switchQuickView(QuickViewKey view) {
     if (!mounted) return;
     setState(() => _viewOverride = view == QuickViewKey.today ? null : view);
+    // 「今天」也写：重启后回到本位，而不是残留在上一档
+    unawaited(saveQuickView(view));
     // 新建落点跟随当前列表（与 initState 登记同源，退场清空不变）
     QuickAddContext.set(_effectiveQuery);
   }
 
-  /// 页头标题（今天页签根：标题即快捷视图玻璃形变菜单的触发件——点标题在
-  /// 标题旁长出菜单，切到哪标题就叫哪；尾随下箭头明示可点）
+  /// 页头标题（今天页签根：标题即**视图菜单**的玻璃形变触发件——点标题在
+  /// 标题旁长出菜单，切到哪标题就叫哪；尾随下箭头明示可点）。
+  /// 菜单的无障碍名统一为「视图菜单」（界面文案仍显示当前档名）
   Widget _headerTitle(String title, AppColorSet colors) {
     if (!_isTodayTab) {
       return Text(
@@ -326,6 +332,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     );
     return OrbitGlassMenu(
       groupsBuilder: _quickViewGroups,
+      semanticsLabel: '视图菜单',
       backdrop: OrbitGlassScope.maybeOf(context),
       anchorContent: content(),
       triggerBuilder: (onTap) => InkWell(
@@ -336,7 +343,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     );
   }
 
-  /// 标题玻璃菜单的条目（八键单选，当前档打勾；图标与清单页快捷行同源
+  /// 视图菜单的条目（八档单选，当前档打勾；图标与清单页快捷行同源
   /// `QuickViewKey.icon` + `colorHex`）
   List<List<OrbitPanelItem>> _quickViewGroups() {
     final current = _effectiveQuery.quickView ?? QuickViewKey.today;
@@ -358,8 +365,16 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   void initState() {
     super.initState();
     _viewMode = loadViewModeForProject(widget.query.projectId);
+    // 视图菜单的选中档：本机偏好记住上次选的那一档（只对今天页签根生效；
+    // 项目 / 未分组的标题不挂菜单，恒等于路由 query）。`today` 即路由本位，
+    // 覆写置 null，与「切回今天」同一条语义
+    if (_isTodayTab) {
+      final saved = loadQuickView();
+      _viewOverride = saved == QuickViewKey.today ? null : saved;
+    }
     // 登记新建落点：底部导航中央添加钮读取本屏筛选入参做预填（退场清空）
-    QuickAddContext.set(widget.query);
+    // 走 `_effectiveQuery` 而非 `widget.query`：持久化恢复的选中档也要预填
+    QuickAddContext.set(_effectiveQuery);
     // 逾期/今天/近7天/我的一天的日界基准每分钟走一格
     _nowTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       if (!mounted) return;

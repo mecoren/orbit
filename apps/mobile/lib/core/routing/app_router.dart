@@ -98,7 +98,11 @@ CustomTransitionPage<void> pageSlideFromRight(
 NoTransitionPage<void> tabRoot(Widget child, {LocalKey? key}) =>
     NoTransitionPage<void>(key: key, child: child);
 
-/// 「今天」页签：今日截止视图（无返回键，页头带日期副标）
+/// 「今天」页签：今日截止视图（无返回键，页头带日期副标）。
+///
+/// 页头标题同时是**视图菜单**的触发件：实际显示的档名由
+/// `SubListScreen._viewOverride` 决定（本机偏好记住上次选的档），
+/// 这里的 `titleOverride` 只是「今天」本位的兜底文案。
 SubListScreen _todayTab() => const SubListScreen(
   query: TaskFilterInput(quickView: QuickViewKey.today),
   showBack: false,
