@@ -17,6 +17,26 @@
 
 ## [Unreleased]
 
+### 新增：移动端帧耗时门禁 `mobile-jank`（2026-11-08）
+
+移动端此前只有内存门禁（`mobile-mem.mjs`，PSS 口径），「卡不卡」长期靠手感判断。新增 `perf-metrics/mobile-jank.mjs` + `apps/mobile/integration_test/perf_jank_test.dart`（五个动画场景，`SchedulerBinding.addTimingsCallback` 采 `FrameTiming`），经 `flutter drive --profile` 落盘后按基线判阈值：
+
+- **只卡 build 侧**（丢帧率与 P99 构建耗时），raster 只记录不拦——本仓只有 x64 模拟器，玻璃模糊的 raster 耗时与真机无可比性；
+- 三退出码与 `mobile-mem.mjs` 同语义：**无设备 / drive 失败 / 阈值未校准一律 exit 2 SKIP，不得读成通过**；profile 之外整组 skip；
+- 首轮实测（`--record`，模拟器口径、Mock 桥）：5 场景 build 侧 0 丢帧；raster 侧唯一超 16.7ms 预算的是底部玻璃弹层入场（44 帧里 2 帧、P99 23.6–25.2ms）。数字与口径见 `docs/09` §8.6。
+
+### 优化：移动端动画路径掉帧收口——底部玻璃弹层形变降级等六处（2026-11-08）
+
+上一轮只给**锚定弹层**做了形变期闸门，底部弹层那条路漏着：快速添加 / 更多操作面板入场 220ms 与键盘抬升期间，玻璃面板 `origin/size` 逐帧变化 → 纹理缓存逐帧失效 → 每帧重跑离屏模糊 + 两趟混色 + `toImageSync`。本轮补齐并顺带收掉几处动画期重计算：
+
+- **底部弹层形变闸门**（新增 `orbit_sheet_glass_motion.dart`）：入场 320ms 窗口、键盘每次变化、路由反向（退场 150ms）都切实色卡面（`MiuixGlassPanel` 传 `backdrop: null`，保留阴影与形状），落定同帧切回真玻璃。与锚定弹层不同，**不冻结 ticker**——那会停住 `ModalBottomSheetRoute` 自身动画；
+- **两档同类型树**：无采样器场景下实色档只改 `BackdropFilter` 的 sigma 与表面色，不换 widget 类型；换类型会重挂子树、`EditableText` 重建导致输入法收起（实红后定位，`quick_add_sheet_test` 的「工具栏不抢键盘」组就是哨兵）；
+- **快速添加不再整面板重建**：删掉输入框 `onChanged: (_) => setState`，发送钮改 `ListenableBuilder(_titleController)`，敲字重建范围从「面板 + 玻璃壳 + 工具栏」收到 40px 圆钮（新增 `quick_add_send_button_test.dart` 防回退）；
+- **骨架屏一路 ticker**：`OrbitSkeleton` 新增可选 `pulse`，主列表骨架由 24 路 controller 收到 1 路（`FadeTransition` 只求值不 tick）；
+- **拖拽 proxy 固定阴影**：`elevation` 不再按进度插值，抬起即一张浮起卡，去掉每帧阴影重算；
+- **农历换算查表**：年份定位改「前缀和 + 二分」、年长改相邻前缀和相减、加按日有界缓存（4096）。原来年视图一次 build 约 365 次换算、数十万次位运算；等价性由新增用例逐日（1900-01-31～2100-12-31）与旧算法对比锁定。月历日格同时把 `DateTime.now()` 与选中日 `ymd` 提到每页一次；`_manualReorderStream` 复用 build 已算好的逾期分组，不再把同一列表分两遍；
+- **复测**：`sheet_open` 的 raster P99 23.6–25.2ms → 18.1–20.2ms（-21%），超预算帧 2 → 1（剩那一帧是切真玻璃的首次采样，一次性）；其余场景在噪声内。`flutter analyze` 0 issue、`flutter test` 1235 绿。
+
 ### 修复：移动端快速添加点菜单时输入法「先收回再弹出」（2026-11-07）
 
 点快速添加工具栏任一档（日期／提醒／优先级／标签／项目／更多）时，输入法会先收起再升起。根因在库内弹层承载：`GlassPopupPresenter` 自带 `FocusScope(autofocus: true)`，弹层挂载首帧就抢走输入框焦点，`EditableText` 随即关闭输入连接、输入法开始收起；原实现靠测量落定后再等两帧归还焦点，视觉上就是这段抖动。
