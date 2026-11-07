@@ -468,6 +468,45 @@ void main() {
     expect(tester.getRect(confirm), before, reason: '内容滚动不应带动按钮');
   });
 
+  testWidgets('确认弹层：底部安全区留在卡片外，按钮行下不多出一条空白带', (tester) async {
+    // 真机手势条（24dp inset）下，骨架曾把 SafeArea 消费在卡内 → 按钮行下
+    // 多出一条与 inset 等高的空白（卡片看着「多出一截」）。安全区改由调用方
+    // 包在卡片外后，卡内只留按钮行自身的 20 下边距。
+    tester.view.physicalSize = const Size(1080, 2340);
+    tester.view.devicePixelRatio = 3.0;
+    tester.view.padding = const FakeViewPadding(bottom: 72);
+    addTearDown(tester.view.reset);
+
+    final ctx = await pumpHost(tester);
+    showConfirmBottomSheet(
+      ctx,
+      title: '删除任务',
+      message: '删除后将移入回收站',
+      confirmLabel: '删除',
+      destructive: true,
+    );
+    await tester.pumpAndSettle();
+
+    final card = tester.getRect(find.byKey(confirmDialogCardKey));
+    final confirm = tester.getRect(
+      find.ancestor(
+        of: find.text('删除'),
+        matching: find.byType(MiuixButton),
+      ).first,
+    );
+    // 卡片外层 16 下边距之外才是卡面底
+    expect(
+      card.bottom - AppDimens.space16 - confirm.bottom,
+      closeTo(AppDimens.space20, 0.5),
+      reason: '按钮行下只留自身 20，不再叠加安全区空白',
+    );
+    expect(
+      card.bottom - AppDimens.space16,
+      closeTo(780 - 24 - AppDimens.space16, 0.5),
+      reason: '卡面整体浮在手势条安全区之上（不被压在系统区里）',
+    );
+  });
+
   testWidgets('确认弹层：点确认返回 true、点取消返回 false', (tester) async {
     final ctx = await pumpHost(tester);
 

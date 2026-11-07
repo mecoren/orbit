@@ -17,6 +17,14 @@
 
 ## [Unreleased]
 
+### 修复：移动端确认弹层底部多出一截空白——安全区改包在卡片外（2026-11-07）
+
+真机（含手势条 / 三键导航）下，确认类底部弹层按钮行下方多出一条与系统底部 inset 等高的空白带，卡片整体看着「多出一截」，与输入型抽屉的紧凑收尾不一致。根因是卡片由 `showConfirmBottomSheet` 自绘、骨架却仍按 `floatingCard: false` 在**卡内**消费 `SafeArea`：
+
+- **骨架**：`OrbitSheetScaffold` 在 `floatingCard: true`（骨架自绘卡片）时才把 `SafeArea(top: false)` 包在卡片外；`floatingCard: false` 档交给卡片宿主消费，卡内不再让出 inset。
+- **宿主**：`showConfirmBottomSheet` 与 `OrbitGlassSheet`（更多操作 / 快速添加等玻璃弹层）改为把 `SafeArea(top: false)` 包在卡片外——卡片整体浮在手势条/导航栏之上，卡内只留按钮行自身的 20 下边距。
+- **验证**：`orbit_sheets_test.dart` 新增真机手势条几何用例（24dp inset 下按钮到卡面底恒为 20、卡面浮在安全区之上）；`flutter analyze` 0 issue、`flutter test` 1218 绿。
+
 ### 优化：移动端详情页历史区块限高——超出 9 条在区块内滑动、常显滚动条（2026-11-07）
 
 历史条目多的任务同样把详情页尾部撑得很长，且触屏不给滚动提示「下面还有」。历史列表改为**预览上限 + 常显滑块**：

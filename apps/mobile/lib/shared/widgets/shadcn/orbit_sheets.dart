@@ -121,32 +121,38 @@ Future<bool> showConfirmBottomSheet(
     barrierColor: Colors.black.withValues(alpha: 0.32),
     elevation: 0,
     sheetAnimationStyle: bottomSheetMotion,
-    builder: (sheetContext) => Container(
-      key: confirmDialogCardKey,
-      margin: const EdgeInsets.only(
-        left: AppDimens.space16,
-        right: AppDimens.space16,
-        bottom: AppDimens.space16,
-      ),
-      decoration: BoxDecoration(
-        color: colors.popup,
-        borderRadius: AppShapes.xl,
-      ),
-      clipBehavior: Clip.antiAlias,
-      // 卡片底色是 DecoratedBox，会隔断 BottomSheet 的 Material：内容里的
-      // ListTile / InkWell 需要就近的 Material 才能画水波纹（库内对话框同款兜底）
-      child: Material(
-        type: MaterialType.transparency,
-        child: _ConfirmSheet(
-          title: title,
-          message: message,
-          content: content,
-          confirmLabel: confirmLabel,
-          cancelLabel: cancelLabel,
-          destructive: destructive,
-          holdSeconds: holdSeconds,
-          onCancel: () => Navigator.of(sheetContext).pop(false),
-          onConfirm: () => Navigator.of(sheetContext).pop(true),
+    // 安全区包在卡片外：卡片整体浮在手势条/导航栏之上，卡内不再让出一截
+    // inset 高的空白带（骨架在 floatingCard: false 档不再消费安全区，
+    // 见 orbit_sheet_scaffold.dart；2026-11-07 删除提示「多出一截」）
+    builder: (sheetContext) => SafeArea(
+      top: false,
+      child: Container(
+        key: confirmDialogCardKey,
+        margin: const EdgeInsets.only(
+          left: AppDimens.space16,
+          right: AppDimens.space16,
+          bottom: AppDimens.space16,
+        ),
+        decoration: BoxDecoration(
+          color: colors.popup,
+          borderRadius: AppShapes.xl,
+        ),
+        clipBehavior: Clip.antiAlias,
+        // 卡片底色是 DecoratedBox，会隔断 BottomSheet 的 Material：内容里的
+        // ListTile / InkWell 需要就近的 Material 才能画水波纹（库内对话框同款兜底）
+        child: Material(
+          type: MaterialType.transparency,
+          child: _ConfirmSheet(
+            title: title,
+            message: message,
+            content: content,
+            confirmLabel: confirmLabel,
+            cancelLabel: cancelLabel,
+            destructive: destructive,
+            holdSeconds: holdSeconds,
+            onCancel: () => Navigator.of(sheetContext).pop(false),
+            onConfirm: () => Navigator.of(sheetContext).pop(true),
+          ),
         ),
       ),
     ),

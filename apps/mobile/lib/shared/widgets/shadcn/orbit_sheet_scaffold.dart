@@ -98,38 +98,43 @@ class OrbitSheetScaffold extends StatelessWidget {
       ],
     );
 
+    // #107 平板：抽屉内容限宽居中（640），避免输入框/按钮横贯 1200dp。
+    // 卡片本身再留左右下各 16，承载（showModalBottomSheet）必须是透明底。
+    //
+    // `heightFactor: 1` 不是可选项：`showModalBottomSheet` 给的是
+    // `maxHeight = 屏高` 的松约束，裸 `Align` 会铺满整屏 —— 抽屉背板变成
+    // 一整页白（内容贴在屏底，背后页面全被盖住，2026-11-02 云同步「同步引擎」
+    // 抽屉实测）。钉住高度后抽屉才按内容收缩、仍由底部弹层贴屏底锚定。
+    final body = Align(
+      alignment: Alignment.bottomCenter,
+      heightFactor: 1,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          // 只订阅 height 字段（同文件 viewInsetsOf 口径）：键盘开合不应
+          // 让整个抽屉内容跟着重建
+          // 浮起卡片的左右下留白由卡片自身占掉，高度上限要补回这 16，
+          // 否则内容可用高度凭空少 16（日期面板时间行被挤出滚动区）。
+          maxHeight: MediaQuery.sizeOf(context).height * maxHeightFactor +
+              (floatingCard ? AppDimens.space16 : 0),
+          maxWidth: OrbitBreakpoints.sheetMaxWidth,
+        ),
+        child: floatingCard
+            ? OrbitFloatingSheetCard(cardKey: cardKey, child: sheetBody)
+            : sheetBody,
+      ),
+    );
+
     // 键盘避让：底部 padding 跟随 viewInsets（输入型抽屉必有）
+    //
+    // 底部安全区必须留在卡片**外**（卡片贴屏底，卡内元素让开手势条即可）：
+    // 骨架自绘卡片（floatingCard: true）时由这里包 SafeArea；`floatingCard:
+    // false` 的卡面由调用方（确认弹层 Container / OrbitGlassSheet）自绘，
+    // 骨架若仍在卡内消费安全区，按钮行下方就会多出一条与 inset 等高的空白带
+    // （2026-11-07 删除提示「多出一截」）——这一档改由调用方把 SafeArea 包在
+    // 卡片外，卡内只留按钮行自身的 20 下边距。
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: SafeArea(
-        top: false,
-        // #107 平板：抽屉内容限宽居中（640），避免输入框/按钮横贯 1200dp。
-        // 卡片本身再留左右下各 16，承载（showModalBottomSheet）必须是透明底。
-        //
-        // `heightFactor: 1` 不是可选项：`showModalBottomSheet` 给的是
-        // `maxHeight = 屏高` 的松约束，裸 `Align` 会铺满整屏 —— 抽屉背板变成
-        // 一整页白（内容贴在屏底，背后页面全被盖住，2026-11-02 云同步「同步引擎」
-        // 抽屉实测）。钉住高度后抽屉才按内容收缩、仍由底部弹层贴屏底锚定。
-        child: Align(
-          alignment: Alignment.bottomCenter,
-          heightFactor: 1,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              // 只订阅 height 字段（同文件 viewInsetsOf 口径）：键盘开合不应
-              // 让整个抽屉内容跟着重建
-              // 浮起卡片的左右下留白由卡片自身占掉，高度上限要补回这 16，
-              // 否则内容可用高度凭空少 16（日期面板时间行被挤出滚动区）。
-              maxHeight:
-                  MediaQuery.sizeOf(context).height * maxHeightFactor +
-                  (floatingCard ? AppDimens.space16 : 0),
-              maxWidth: OrbitBreakpoints.sheetMaxWidth,
-            ),
-            child: floatingCard
-                ? OrbitFloatingSheetCard(cardKey: cardKey, child: sheetBody)
-                : sheetBody,
-          ),
-        ),
-      ),
+      child: floatingCard ? SafeArea(top: false, child: body) : body,
     );
   }
 }

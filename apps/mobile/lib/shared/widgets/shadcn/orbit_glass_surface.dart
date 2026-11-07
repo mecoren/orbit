@@ -193,19 +193,25 @@ class OrbitGlassSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: Container(
-        margin: const EdgeInsets.only(
-          left: AppDimens.space16,
-          right: AppDimens.space16,
-          bottom: AppDimens.space16,
-        ),
-        child: OrbitGlassSurface(
-          backdrop: backdrop,
-          borderRadius: BorderRadius.circular(radius),
-          child: MediaQuery.removeViewInsets(
-            context: context,
-            removeBottom: true,
-            child: child,
+      // 安全区包在玻璃卡外：卡面整体浮在手势条/导航栏之上，卡内不再多出一截
+      // inset 高的空白（骨架在 floatingCard: false 档不再消费安全区，见
+      // orbit_sheet_scaffold.dart；与确认弹层同口径，2026-11-07）
+      child: SafeArea(
+        top: false,
+        child: Container(
+          margin: const EdgeInsets.only(
+            left: AppDimens.space16,
+            right: AppDimens.space16,
+            bottom: AppDimens.space16,
+          ),
+          child: OrbitGlassSurface(
+            backdrop: backdrop,
+            borderRadius: BorderRadius.circular(radius),
+            child: MediaQuery.removeViewInsets(
+              context: context,
+              removeBottom: true,
+              child: child,
+            ),
           ),
         ),
       ),
