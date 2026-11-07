@@ -124,7 +124,7 @@ final taskWindowItemsProvider =
   return ref.watch(taskWindowProvider(query)).value?.items ?? const [];
 });
 
-/// 主窗口总数（条幅「已加载 X / 共 Y」）：SQL COUNT 聚合，不拉行。
+/// 主窗口总数（页头计数「已加载/共」的分子分母）：SQL COUNT 聚合，不拉行。
 final taskWindowTotalProvider =
     FutureProvider.autoDispose.family<int, PagedTaskQuery>((ref, query) async {
   final overview =

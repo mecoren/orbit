@@ -131,9 +131,9 @@ void main() {
     expect(find.text('无日期'), findsOneWidget);
   });
 
-  testWidgets('任务子列表：窗口化后出「已加载 X / 共 Y」条幅（A5）', (tester) async {
+  testWidgets('任务子列表：窗口化续拉进度并进页头计数（A5）', (tester) async {
     final bridge = MockOrbitBridge();
-    // 造满 10000 条：窗口首屏 kTaskPageWindow（500）条，条幅按 SQL 总数报「已加载 / 共」
+    // 造满 10000 条：窗口首屏 kTaskPageWindow（500）条，页头计数按 SQL 总数报「已加载/共」
     final now = bridge.store.now();
     while (bridge.store.tasks.length < taskListPageSize) {
       final t = <String, dynamic>{
@@ -171,10 +171,11 @@ void main() {
     ));
     await _settlePastMockLatency(tester);
 
-    // 窗口化条幅：首屏 kTaskPageWindow 条 + SQL 总数（造数受 id 冲突影响可能少 1 条，
-    // 故只断言「已加载 X / 共」前缀与续拉提示，不写死总数）
-    expect(find.textContaining('已加载 $kTaskPageWindow / 共'), findsOneWidget);
-    expect(find.textContaining('条，继续滚动加载更多'), findsOneWidget);
+    // 续拉进度并进页头计数：首屏 kTaskPageWindow 条 + SQL 总数（造数受 id 冲突
+    // 影响可能少 1 条，故只断言「500/」前缀，不写死总数）
+    expect(find.textContaining('$kTaskPageWindow/'), findsOneWidget);
+    // 不再另挂一条「已加载 X / 共 Y」条幅
+    expect(find.textContaining('已加载'), findsNothing);
   });
 
   // 多选崩屏回归（2026-09-20）：选择态强制回落 ListView.builder 分支，该分支

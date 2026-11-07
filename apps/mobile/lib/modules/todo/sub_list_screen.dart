@@ -1903,12 +1903,19 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     // 选择态强制回落普通列表：整行长按拾起与「点行切换选中」抢同一手势
     final reorderable = _sortKey == TaskSortKey.manual && !_selectionMode;
 
-    // 条幅：窗口化后不再是「超过上限」，而是「已加载 X / 共 Y」的进度
-    //（滚动续拉，收窄范围后消失）；回退全量时仍是上限提示
+    // 窗口化续拉进度（已加载 X / 共 Y）并进页头计数，不单独占一条（2026-11-07
+    // 真机反馈：页头下方再挂一条进度条既占首屏又和计数重复）；回退全量命中
+    // taskListPageSize 才是「列表真不完整」的警告，文案长、仍走条幅
     final loadedCount = windowItems.length;
-    final truncated = windowed
-        ? (windowTotal != null && loadedCount < windowTotal)
-        : tasks.length >= taskListPageSize;
+    final windowPending =
+        windowed && windowTotal != null && loadedCount < windowTotal;
+    final cappedFallback = !windowed && tasks.length >= taskListPageSize;
+    // 页头计数：窗口化读 SQL 总数；续拉未完成时并成「已加载/共」进度
+    final headerCount = windowed
+        ? (windowTotal ?? undone.length)
+        : undone.length;
+    final headerCountLabel =
+        windowPending ? '$loadedCount/$headerCount' : '$headerCount';
     final topInset =
         MediaQuery.of(context).padding.top + OrbitPageHeader.rowHeight;
     // 今日上下文条（G2 正反馈 + G4 容量）：有内容才显示（今日已达成/
@@ -1920,7 +1927,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
       top:
           topInset +
           AppDimens.space8 +
-          (truncated ? _TruncationBanner.height : 0) +
+          (cappedFallback ? _TruncationBanner.height : 0) +
           (showTodayStrip ? TodayStrip.height : 0),
       bottom:
           OrbitBottomNav.clearanceOf(context) +
@@ -2364,19 +2371,18 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
               ),
             ),
           ),
-          if (truncated)
+          if (cappedFallback)
             Positioned(
               top: topInset,
               left: 0,
               right: 0,
-              child: windowed
-                  ? _TruncationBanner(loaded: loadedCount, total: windowTotal)
-                  : const _TruncationBanner(),
+              child: const _TruncationBanner(),
             ),
           // 今日上下文条（G2 正反馈 + G4 容量）：紧贴截断条幅下沿（无则页头下沿）
           if (showTodayStrip)
             Positioned(
-              top: topInset + (truncated ? _TruncationBanner.height : 0),
+              top:
+                  topInset + (cappedFallback ? _TruncationBanner.height : 0),
               left: 0,
               right: 0,
               child: TodayStrip(
@@ -2409,8 +2415,10 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                             if (undone.isNotEmpty) ...[
                               const SizedBox(width: AppDimens.space6),
                               Text(
-                                // 窗口化后 undone 只是已加载页：计数读 SQL 总数
-                                '${windowed ? (windowTotal ?? undone.length) : undone.length}',
+                                // 窗口化后 undone 只是已加载页：计数读 SQL 总数；
+                                // 续拉未完成时并成「已加载/共」进度，滚动到底
+                                // 自动回到纯总数
+                                headerCountLabel,
                                 style: TextStyle(
                                   fontSize: 13,
                                   color: colors.secondaryText,
@@ -2435,11 +2443,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
               // 档隐藏完成行（done 空）、Logbook 恒为完成集（undone 空），
               // 进度线在这些档位只会误导
               progress: !_selectionMode && undone.isNotEmpty && doneTotal > 0
-                  ? doneTotal /
-                        (doneTotal +
-                            (windowed
-                                ? (windowTotal ?? undone.length)
-                                : undone.length))
+                  ? doneTotal / (doneTotal + headerCount)
                   : null,
               actions: _selectionMode
                   ? [
@@ -3427,15 +3431,15 @@ class _LogbookList extends StatelessWidget {
   }
 }
 
-/// 命中上限条幅（A5）：单份任务缓存命中 taskListPageSize 时列表不完整——
-/// 文案与桌面 task-panel 条幅同口径，收窄范围（搜索/项目/快捷视图）后
-/// 结果集低于上限即自动消失。固定高度（定值），列表顶部按其让位。
+/// 命中上限条幅（A5）：回退全量（标题排序/标签看板）时单份任务缓存命中
+/// taskListPageSize，列表不完整——文案与桌面 task-panel 条幅同口径，收窄
+/// 范围（搜索/项目/快捷视图）后结果集低于上限即自动消失。固定高度（定值），
+/// 列表顶部按其让位。
+///
+/// 窗口化的「已加载 X / 共 Y」续拉进度**不走这里**：它并进页头计数
+/// （`500/504`），不再单独占一条（2026-11-07 真机反馈）。
 class _TruncationBanner extends StatelessWidget {
-  const _TruncationBanner({this.loaded, this.total});
-
-  /// 已加载行数 / 总行数（窗口化）：null = 回退全量时的上限提示
-  final int? loaded;
-  final int? total;
+  const _TruncationBanner();
 
   /// 条幅高度（固定值）：列表 padding 与 Positioned 共用，改这里即两处同步
   static const height = 44.0;
@@ -3443,12 +3447,9 @@ class _TruncationBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
-    final windowed = loaded != null && total != null;
     return Container(
       height: height,
-      color: windowed
-          ? colors.accent.withValues(alpha: 0.10)
-          : colors.warning.withValues(alpha: 0.12),
+      color: colors.warning.withValues(alpha: 0.12),
       padding: const EdgeInsets.symmetric(
         horizontal: AppDimens.space16,
         vertical: AppDimens.space4,
@@ -3456,24 +3457,18 @@ class _TruncationBanner extends StatelessWidget {
       child: Row(
         children: [
           Icon(
-            windowed ? OrbitIcons.refresh : OrbitIcons.warning,
+            OrbitIcons.warning,
             size: AppDimens.iconSizeSm,
-            color: windowed ? colors.accent : colors.warning,
+            color: colors.warning,
           ),
           const SizedBox(width: AppDimens.space4),
           Expanded(
             child: Text(
-              windowed
-                  ? '已加载 ${_withThousands(loaded!)} / 共 '
-                        '${_withThousands(total!)} 条，继续滚动加载更多'
-                  : '任务数超过单次加载上限 ${_withThousands(taskListPageSize)} 条，'
-                        '当前列表不完整——请用搜索、项目或快捷视图收窄范围',
+              '任务数超过单次加载上限 ${_withThousands(taskListPageSize)} 条，'
+              '当前列表不完整——请用搜索、项目或快捷视图收窄范围',
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 12,
-                color: windowed ? colors.accent : colors.warning,
-              ),
+              style: TextStyle(fontSize: 12, color: colors.warning),
             ),
           ),
         ],
