@@ -17,9 +17,12 @@
 /// 模糊），窗口结束同帧切真玻璃并冻结库内弹簧尾巴。细则与实测见
 /// `orbit_popup_glass.dart` 文件头。
 ///
-/// **承载是 Overlay 直挂，不是路由**：菜单打开期间不重建页面、不新建路由，
-/// 输入框焦点与键盘保持升起（库内 `FocusScope(autofocus)` 会先接管一次，
-/// 组件在测量落定后再等两帧归还，见 `_scheduleFocusRestore`）；关闭先切
+/// **承载是 Overlay 直挂，不是路由**：菜单打开期间不重建页面、不新建路由。
+/// 调用方传了 [showOrbitMenuPopup] 的 `restoreFocus`（弹层背后有输入框、要求
+/// 键盘全程不落）时，整棵弹层子树被包进不可获焦的 `Focus`——库内 presenter
+/// 自带 `FocusScope(autofocus: true)`，只要它可获焦就会在挂载首帧抢走输入框
+/// 焦点，`EditableText` 因此关闭输入连接、输入法收起（等两帧再归还就是肉眼
+/// 可见的「键盘收回再弹出」，2026-11-07 真机反馈）；关闭先切
 /// `show=false` 播逆形变，退场收尾后才移除 entry（形变承载在卡面贴合触发件
 /// 那一刻就收尾，不等库内弹簧尾巴，见 [_transformExitCutoff]）；行回调仍
 /// 立即执行（调用方可以马上写库），不等待退场动画。
@@ -118,8 +121,9 @@ class OrbitMenuSession {
 /// - [closeOnTap]：单选/动作菜单为 true（点行即关）；多选常驻传 false。
 /// - [minWidth]/[maxWidth]：null = 库内菜单档（200–288，与底栏「更多」同档）；
 ///   标签这类长文案菜单可传 `maxWidth: 300`。
-/// - [restoreFocus]：菜单落定后把焦点归还给它（输入框仍在的快速添加面板
-///   必传，否则键盘会落下、面板位移导致锚点错位）。
+/// - [restoreFocus]：打开前持有焦点的输入框。传了它 → 弹层整棵子树不可获焦
+///   （库内 autofocus 直接失效，键盘全程不落）+ 落定后再还一次焦点兜底。
+///   只有**打开时确实持有焦点**的节点才登记，避免菜单关闭后把键盘无端叫起来。
 /// - [backdrop]：OS4 玻璃采样器（调用方从壳层 `OrbitGlassScope` 取；弹层
 ///   挂在根 Overlay 上，位于 scope 之外，组件内部取不到）。
 OrbitMenuSession showOrbitMenuPopup(
@@ -144,6 +148,9 @@ OrbitMenuSession showOrbitMenuPopup(
   final overlay = Overlay.of(context, rootOverlay: true);
   final done = Completer<void>();
   final bodyKey = GlobalKey<OrbitMenuPopupBodyState>();
+  // 只有打开前**确实持有焦点**的节点才纳入护航：既保证盾牌只在这种场景生效
+  // （无输入框的菜单照旧接管焦点），也避免关闭时把键盘无端叫起来
+  final focused = (restoreFocus?.hasFocus ?? false) ? restoreFocus : null;
   late final OverlayEntry entry;
   late final OrbitMenuSession session;
   var removed = false;
@@ -183,7 +190,7 @@ OrbitMenuSession showOrbitMenuPopup(
       onAction: onAction,
       contentKey: contentKey,
       backdrop: backdrop,
-      restoreFocus: restoreFocus,
+      restoreFocus: focused,
       simplified: simplified,
       onDismiss: () => session.close(),
       onDismissFinished: remove,
@@ -343,12 +350,10 @@ class OrbitMenuPopupBodyState extends State<OrbitMenuPopupBody> {
   /// 焦点归还是否已排期（只排一次；后续行点击重建不再抢焦点）
   bool _focusScheduled = false;
 
-  /// 排期把焦点还给输入框
+  /// 排期把焦点还给输入框（兜底）
   ///
-  /// 库内弹层用 `FocusScope(autofocus)` 接管焦点，会把输入框的键盘顶下去；
-  /// 它的 autofocus 在 overlay 挂载后的 postFrame 才真正生效（早于/晚于
-  /// [onMeasured] 取决于帧序），故在测量回调后**再等两帧**归还——此时它已
-  /// 完成一次抢占，不会再重复。
+  /// 正常路径下焦点从未离开输入框（见 [build] 的焦点护航），这里只是防御：
+  /// 万一库内某个节点仍然抢到了焦点，测量落定后再等两帧还回去。
   void _scheduleFocusRestore() {
     if (_focusScheduled || widget.restoreFocus == null) return;
     _focusScheduled = true;
@@ -359,6 +364,7 @@ class OrbitMenuPopupBodyState extends State<OrbitMenuPopupBody> {
         if (node == null || node.context == null || !node.canRequestFocus) {
           return;
         }
+        if (node.hasFocus) return;
         node.requestFocus();
       });
     });
@@ -497,7 +503,7 @@ class OrbitMenuPopupBodyState extends State<OrbitMenuPopupBody> {
     final transformAnchor = widget.transformAnchor;
     // 玻璃闸门：形变窗口内实色卡面（不采样背景），窗口结束切真玻璃并冻结
     // 库内弹簧尾巴——细则与实测见 `orbit_popup_glass.dart` 文件头
-    return OrbitPopupGlassMotion(
+    final body = OrbitPopupGlassMotion(
       open: _show,
       builder: (context, glass) {
         final visuals = OrbitPopupGlass.visuals(
@@ -543,6 +549,18 @@ class OrbitMenuPopupBodyState extends State<OrbitMenuPopupBody> {
           child: panel,
         );
       },
+    );
+    // 焦点护航（[OrbitMenuPopupBody.restoreFocus] 非空 = 调用方要求键盘全程
+    // 不落）：库内 presenter 自带 `FocusScope(autofocus: true)`，弹层一旦可
+    // 获焦就在首帧抢走输入框焦点，`EditableText` 随即关闭输入连接、输入法
+    // 收起——再等两帧归还就是肉眼可见的「键盘收回再弹出」。把整棵弹层子树
+    // 设成不可获焦，库内 autofocus 在 `_Autofocus.applyIfValid` 里被丢弃，
+    // 焦点自始至终留在输入框上。行是点按交互，语义树不受影响。
+    if (widget.restoreFocus == null) return body;
+    return Focus(
+      canRequestFocus: false,
+      descendantsAreFocusable: false,
+      child: body,
     );
   }
 }

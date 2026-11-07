@@ -17,6 +17,13 @@
 
 ## [Unreleased]
 
+### 修复：移动端快速添加点菜单时输入法「先收回再弹出」（2026-11-07）
+
+点快速添加工具栏任一档（日期／优先级／标签／项目／更多）时，输入法会先收起再升起。根因在库内弹层承载：`GlassPopupPresenter` 自带 `FocusScope(autofocus: true)`，弹层挂载首帧就抢走输入框焦点，`EditableText` 随即关闭输入连接、输入法开始收起；原实现靠测量落定后再等两帧归还焦点，视觉上就是这段抖动。
+
+- **焦点护航**：`showOrbitMenuPopup` 在调用方传入 `restoreFocus`（且打开前**确实持有焦点**）时，把整棵弹层子树包进 `Focus(canRequestFocus: false, descendantsAreFocusable: false)`——库内 autofocus 在 `_Autofocus.applyIfValid` 里因 `canRequestFocus == false` 直接丢弃，焦点自始至终留在输入框上；行仍是点按交互，语义树不受影响。焦点归还（`_scheduleFocusRestore`）退为兜底，且只在真的丢了焦点时才执行，不会在菜单关闭后把键盘无端叫起来；
+- **验证**：`quick_add_sheet_test.dart` 新增逐帧用例（连 pump 12 帧断言 `focusNode.hasFocus` 与 `testTextInput.isVisible` 全程为真；抽掉护航后该用例在第 1 帧即红）。
+
 ### 优化：移动端弹窗菜单不再掉帧——形变期实色卡面 + 冻结弹簧尾巴 + 背景快照降采样（2026-11-07）
 
 今天页头标题切换、清单/详情页 ⋮、快速添加五处、底栏「更多」这些锚定弹层点开时明显掉帧。开销全在库内形变承载上，收口到新的 `orbit_popup_glass.dart`（`OrbitPopupGlass` + `OrbitPopupGlassMotion`），所有锚定弹层共用：
