@@ -28,6 +28,8 @@ import 'package:flutter_miuix/miuix.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimens.dart';
 import '../../../core/theme/app_shapes.dart';
+import 'orbit_popup_glass.dart';
+import 'orbit_sheet_glass_motion.dart';
 
 /// 玻璃背景快照的录制倍率（2026-11-07，性能口径）
 ///
@@ -117,6 +119,7 @@ class OrbitGlassSurface extends StatelessWidget {
     super.key,
     required this.child,
     this.backdrop,
+    this.solid = false,
     this.borderRadius = BorderRadius.zero,
     this.realtimeSigma = 14,
     this.realtimeSurfaceOpacity = 0.72,
@@ -128,6 +131,16 @@ class OrbitGlassSurface extends StatelessWidget {
   /// OS4 玻璃背景采样器（通常传 `OrbitGlassScope.maybeOf(context)`）；
   /// null → 实时模糊路径（无壳、测试裸页、首帧快照未就绪）
   final MiuixLayerBackdrop? backdrop;
+
+  /// 形变期实色档（2026-11-08）
+  ///
+  /// true = **不采样背景**：走 `MiuixGlassPanel` 的「无快照 → 实色填充」分支
+  /// （阴影/圆角/描边照旧），零离屏模糊、零 `toImageSync`。仅用于入场/退场/
+  /// 键盘抬升这类面板 origin/size 逐帧变化的窗口——此时纹理缓存本就会逐帧
+  /// 失效，采样纯属白烧。窗口结束由宿主同帧切回真玻璃。
+  ///
+  /// 默认 false：其余所有消费方行为零变化。
+  final bool solid;
 
   /// 表面圆角（底部弹层给「上圆下直」的 `BorderRadius.vertical`）
   final BorderRadius borderRadius;
@@ -141,38 +154,54 @@ class OrbitGlassSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sampler = backdrop;
-    if (sampler == null) return _realtime(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    if (sampler == null) return _realtime(context, isDark: isDark);
     return ListenableBuilder(
       listenable: sampler,
       builder: (context, _) {
         // 宿主未接线/首帧尚未录完快照时库内会退实色填充，这里先走实时模糊，
         // 快照就绪后自动切到 OS4 玻璃（与页头同一避坑口径）
-        if (sampler.snapshot == null) return _realtime(context);
-        final isDark = Theme.of(context).brightness == Brightness.dark;
-        return MiuixGlassPanel(
-          backdrop: sampler,
-          material: MiuixGlassMaterials.puredThinGlass(isDark),
-          shape: MiuixGlassShape(borderRadius: borderRadius),
-          // 栏体类表面：材质即本体，不叠折射着色；描边/阴影留默认
-          shading: false,
-          child: child,
-        );
+        if (sampler.snapshot == null) return _realtime(context, isDark: isDark);
+        return _panel(isDark, sampler: solid ? null : sampler);
       },
     );
   }
 
+  /// OS4 玻璃面板：`sampler == null` 即形变期实色档
+  ///
+  /// 库内在「无背景快照」分支只画「填色 + 阴影 + 描边」，不跑离屏模糊/混色/
+  /// `toImageSync`。**两档必须是同一个 widget 类型**：换成别的容器会把整个
+  /// 子树重挂（`EditableText` 重建 = 输入法收起，2026-11-08 踩坑）。
+  /// `fill` 只在实色档显式给（与锚定弹层形变期同一档 97% 白/炭黑），
+  /// 真玻璃档留 null 让材质自己决定。
+  Widget _panel(bool isDark, {required MiuixLayerBackdrop? sampler}) =>
+      MiuixGlassPanel(
+        backdrop: sampler,
+        material: MiuixGlassMaterials.puredThinGlass(isDark),
+        fill: sampler == null ? OrbitPopupGlass.fill(isDark) : null,
+        shape: MiuixGlassShape(borderRadius: borderRadius),
+        // 栏体类表面：材质即本体，不叠折射着色；描边/阴影留默认
+        shading: false,
+        child: child,
+      );
+
   /// 实时模糊路径：均匀高斯 + 半透明表面色（无采样快照时的唯一可选做法）
-  Widget _realtime(BuildContext context) {
+  ///
+  /// 形变期（[solid]）不换 widget 类型，只把 sigma 归零、表面色换成实色：
+  /// 同一条树上切参数，子树不重建。
+  Widget _realtime(BuildContext context, {required bool isDark}) {
     final surface = AppColors.ofContext(context).popup;
     return ClipRRect(
       borderRadius: borderRadius,
       child: BackdropFilter(
         filter: ui.ImageFilter.blur(
-          sigmaX: realtimeSigma,
-          sigmaY: realtimeSigma,
+          sigmaX: solid ? 0 : realtimeSigma,
+          sigmaY: solid ? 0 : realtimeSigma,
         ),
         child: ColoredBox(
-          color: surface.withValues(alpha: realtimeSurfaceOpacity),
+          color: solid
+              ? OrbitPopupGlass.fill(isDark)
+              : surface.withValues(alpha: realtimeSurfaceOpacity),
           child: child,
         ),
       ),
@@ -211,30 +240,36 @@ class OrbitGlassSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      // 安全区包在玻璃卡外：卡面整体浮在手势条/导航栏之上，卡内不再多出一截
-      // inset 高的空白（骨架在 floatingCard: false 档不再消费安全区，见
-      // orbit_sheet_scaffold.dart；与确认弹层同口径，2026-11-07）
-      child: SafeArea(
-        top: false,
-        child: Container(
-          margin: const EdgeInsets.only(
-            left: AppDimens.space16,
-            right: AppDimens.space16,
-            bottom: AppDimens.space16,
-          ),
-          child: OrbitGlassSurface(
-            backdrop: backdrop,
-            borderRadius: BorderRadius.circular(radius),
-            child: MediaQuery.removeViewInsets(
-              context: context,
-              removeBottom: true,
-              child: child,
-            ),
+    // 形变期（入场 220ms / 键盘抬升 / 退场 150ms）切实色卡面：见
+    // `orbit_sheet_glass_motion.dart` 文件头（2026-11-08 实测这是全 App
+    // 唯一 raster 超预算的动画场景）
+    return OrbitSheetGlassMotion(builder: _buildBody);
+  }
+
+  Widget _buildBody(BuildContext context, bool solid) => Padding(
+    padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+    // 安全区包在玻璃卡外：卡面整体浮在手势条/导航栏之上，卡内不再多出一截
+    // inset 高的空白（骨架在 floatingCard: false 档不再消费安全区，见
+    // orbit_sheet_scaffold.dart；与确认弹层同口径，2026-11-07）
+    child: SafeArea(
+      top: false,
+      child: Container(
+        margin: const EdgeInsets.only(
+          left: AppDimens.space16,
+          right: AppDimens.space16,
+          bottom: AppDimens.space16,
+        ),
+        child: OrbitGlassSurface(
+          backdrop: backdrop,
+          solid: solid,
+          borderRadius: BorderRadius.circular(radius),
+          child: MediaQuery.removeViewInsets(
+            context: context,
+            removeBottom: true,
+            child: child,
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
 }
