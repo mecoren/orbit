@@ -98,6 +98,11 @@ dev_dependencies:
   # 真机/模拟器 E2E（P2 提醒升级验收：后台闹钟链路）
   integration_test:
     sdk: flutter
+  # `flutter drive --profile` 的驱动侧（帧耗时门禁 perf-metrics/mobile-jank.mjs
+  # 的入口，2026-11-08）：不带它只能 `flutter test`（debug），而
+  # `watchPerformance` 在 debug 下取不到真实帧耗时。
+  flutter_driver:
+    sdk: flutter
   flutter_lints: ^6.0.0
 
 flutter:

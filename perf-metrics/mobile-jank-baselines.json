@@ -1,0 +1,90 @@
+{
+  "device": "android-x64 emulator (127.0.0.1:16384) — 仅作改造前后相对参考，绝对值不可外推真机",
+  "frameBudgetMs": 16.67,
+  "thresholds": {
+    "sheet_open": {
+      "maxMissedBuildRatio": 0.02,
+      "maxP99BuildMs": 16.67
+    },
+    "menu_morph": {
+      "maxMissedBuildRatio": 0.02,
+      "maxP99BuildMs": 16.67
+    },
+    "list_scroll": {
+      "maxMissedBuildRatio": 0.02,
+      "maxP99BuildMs": 16.67
+    },
+    "view_switch": {
+      "maxMissedBuildRatio": 0.02,
+      "maxP99BuildMs": 16.67
+    },
+    "calendar_page": {
+      "maxMissedBuildRatio": 0.02,
+      "maxP99BuildMs": 16.67
+    }
+  },
+  "measured": {
+    "sheet_open": {
+      "frames": 44,
+      "missedBuildFrames": 0,
+      "missedBuildRatio": 0,
+      "missedRasterFrames": 1,
+      "avgBuildMs": 0.56,
+      "p99BuildMs": 3.28,
+      "worstBuildMs": 3.28,
+      "avgRasterMs": 3.3,
+      "p99RasterMs": 20.19,
+      "worstRasterMs": 20.19
+    },
+    "menu_morph": {
+      "frames": 44,
+      "missedBuildFrames": 0,
+      "missedBuildRatio": 0,
+      "missedRasterFrames": 0,
+      "avgBuildMs": 0.48,
+      "p99BuildMs": 6.38,
+      "worstBuildMs": 6.38,
+      "avgRasterMs": 3.09,
+      "p99RasterMs": 12.02,
+      "worstRasterMs": 12.02
+    },
+    "list_scroll": {
+      "frames": 524,
+      "missedBuildFrames": 0,
+      "missedBuildRatio": 0,
+      "missedRasterFrames": 0,
+      "avgBuildMs": 0.8,
+      "p99BuildMs": 3.72,
+      "worstBuildMs": 10.42,
+      "avgRasterMs": 2.22,
+      "p99RasterMs": 4.15,
+      "worstRasterMs": 8.78
+    },
+    "view_switch": {
+      "frames": 97,
+      "missedBuildFrames": 0,
+      "missedBuildRatio": 0,
+      "missedRasterFrames": 0,
+      "avgBuildMs": 0.8,
+      "p99BuildMs": 4.53,
+      "worstBuildMs": 9.96,
+      "avgRasterMs": 3.75,
+      "p99RasterMs": 12.26,
+      "worstRasterMs": 13.17
+    },
+    "calendar_page": {
+      "frames": 81,
+      "missedBuildFrames": 0,
+      "missedBuildRatio": 0,
+      "missedRasterFrames": 0,
+      "avgBuildMs": 0.94,
+      "p99BuildMs": 9.25,
+      "worstBuildMs": 9.71,
+      "avgRasterMs": 2.64,
+      "p99RasterMs": 4.27,
+      "worstRasterMs": 5.9
+    },
+    "measuredAt": "2026-11-08"
+  },
+  "note": "阈值 = 首轮实测 ×1.25（下限 0.02 / 16.67ms）；只对 build 侧设阈值，raster 只记录不拦（模拟器 GPU 不可代表真机）。无设备时脚本 exit 2 SKIP，不得读成通过。"
+}
