@@ -210,6 +210,29 @@ OrbitGlassScope（向下暴露同一个 backdrop）
   `Builder` 下的 context**——`HomeShell.build` 的 context 在 `OrbitGlassScope`
   之上，直接取采样器永远为 null（`home_shell_test` 已锁）。
 
+#### 5.3.1 锚定弹层性能闸门（2026-11-07）
+
+真机反馈「弹窗菜单太卡」（今天页头标题切换、清单/详情 ⋮、快速添加五处、
+底栏「更多」）。两处开销都在库内形变承载上，收口到 `orbit_popup_glass.dart`
+的 `OrbitPopupGlass` + `OrbitPopupGlassMotion`（所有锚定弹层共用，调用点只传
+「是否打开」）：
+
+- **形变期不采样背景**：库内纹理缓存键含面板 `origin/size`，形变期间逐帧变 →
+  每帧 3 次 `toImageSync`（模糊 + 两趟混色）全量重跑。窗口内（320ms）改走
+  库内「无快照」分支的实色圆角（`containerColor`）+ 关描边，卡面观感不变
+  （97% 白底 / 深色 `#2C2C2C`）；
+- **同帧切玻璃 + 冻结弹簧尾巴**：库内弹簧按 `Tolerance(.0015)` 要跑到 ~690ms，
+  卡面 320ms 就已到位（与 `_transformExitCutoff` 同一测量口径）。窗口结束用
+  `TickerMode` 静音承载的 ticker：卡面静止后纹理由此只准备一次并全程命中缓存，
+  剩余 ~370ms 不再逐帧重绘。代价是几何停在弹簧 ~98% 处（≤1.5%，肉眼不可辨）、
+  行按压弹簧被一起静音——故**按下即解冻**（`pointerRouter` 全局路由，卡面在
+  `OverlayPortal` 子树里祖先 `Listener` 收不到事件）。**只冻结开场**：二级面板
+  退场要靠库内 ticker 才移除 `OverlayPortal`，冻结会把它停在屏幕上；
+- **背景快照降采样**：`MiuixLayerBackdropCapture` 每重绘一次就整页
+  `toImageSync`（列表滚动是逐帧），按 DPR 录制 1080×2400 屏一次 2.6MP，而取样端
+  只要 `dpr/4`。壳层与 `OrbitGlassPage` 改按半个 DPR 录制
+  （`orbitBackdropPixelRatio`），快照面积降到 1/4，玻璃观感无差。
+
 ### 5.4 保留的兼容处理（本批仍未替换）
 
 | 项 | 理由 |

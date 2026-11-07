@@ -17,6 +17,15 @@
 
 ## [Unreleased]
 
+### 优化：移动端弹窗菜单不再掉帧——形变期实色卡面 + 冻结弹簧尾巴 + 背景快照降采样（2026-11-07）
+
+今天页头标题切换、清单/详情页 ⋮、快速添加五处、底栏「更多」这些锚定弹层点开时明显掉帧。开销全在库内形变承载上，收口到新的 `orbit_popup_glass.dart`（`OrbitPopupGlass` + `OrbitPopupGlassMotion`），所有锚定弹层共用：
+
+- **形变期不采样背景**：库内玻璃纹理的缓存键含面板 `origin/size`，形变期间逐帧变化 → 每帧 3 次 `toImageSync`（离屏模糊 + 两趟混色）全量重跑。320ms 形变窗口内改走库内「无快照」分支的实色卡面（97% 白底 / 深色 `#2C2C2C`）+ 关描边，观感仍是同一张磨砂白卡；
+- **同帧切玻璃 + 冻结弹簧尾巴**：库内弹簧按 `.0015` 容差要跑到 ~690ms，卡面 320ms 已到位（与退场截断 `_transformExitCutoff` 同一口径）。窗口结束时切回真玻璃并用 `TickerMode` 静音承载 ticker——卡面静止后玻璃纹理只准备一次、全程命中缓存，剩下 ~370ms 不再逐帧重绘。按下弹层任意位置即解冻（`TickerMode` 会连行按压弹簧一起静音，故走 `pointerRouter` 全局路由补回）；只冻结开场，二级面板的退场仍交给库内 ticker；
+- **背景快照降采样**：`MiuixLayerBackdropCapture` 每次重绘都把整页 `toImageSync`（列表滚动是逐帧），按 DPR 录制 1080×2400 屏一次 2.6MP，而取样端只要 `dpr/4`。壳层与 `OrbitGlassPage` 改按半个 DPR 录制（`orbitBackdropPixelRatio`），快照面积降到 1/4，玻璃观感无差。
+- **验证**：`flutter analyze` 0 issue、`flutter test` 1218 绿（`orbit_menu_popup_test` / `orbit_glass_menu_test` 逐例覆盖开合、翻转、二级面板与点外关闭）。细则见 `docs/16` §5.3.1。
+
 ### 修复：移动端确认弹层底部多出一截空白——安全区改包在卡片外（2026-11-07）
 
 真机（含手势条 / 三键导航）下，确认类底部弹层按钮行下方多出一条与系统底部 inset 等高的空白带，卡片整体看着「多出一截」，与输入型抽屉的紧凑收尾不一致。根因是卡片由 `showConfirmBottomSheet` 自绘、骨架却仍按 `floatingCard: false` 在**卡内**消费 `SafeArea`：

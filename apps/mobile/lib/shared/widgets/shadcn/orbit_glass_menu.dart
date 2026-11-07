@@ -5,6 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import 'orbit_dropdown_panel.dart'
     show OrbitPanelItem, orbitPanelMaxWidth, orbitPanelMinWidth;
 import 'orbit_icon_button.dart';
+import 'orbit_popup_glass.dart';
 
 /// OS4 玻璃「按钮 → 菜单」形变弹层（页头右上角 ⋮ 的载体；2026-11-02）
 ///
@@ -109,24 +110,11 @@ class _OrbitGlassMenuState extends State<OrbitGlassMenu> {
   /// 收起后**不清**——退出动画还要按它定位）
   Rect? _secondaryBounds;
 
-  /// 弹层材质：puredThin + blurRadius 32（按亮暗各缓存一份，值相等是
-  /// 库内纹理缓存的性能要件，见 `MiuixGlassMaterial.==` 注释）
-  static final _popupMaterialLight = MiuixGlassMaterials.puredThinGlassLight
-      .copyWith(blurRadius: 32);
-  static final _popupMaterialDark = MiuixGlassMaterials.puredThinGlassDark
-      .copyWith(blurRadius: 32);
-
-  /// 弹层材质档（性能口径，2026-11-02）：
+  /// 后续形变计数：二级面板展开/收回各 +1，供 [OrbitPopupGlassMotion] 解冻
   ///
-  /// 库默认菜单档 `popupViewGlass`（blurRadius 60）在 Flutter 端跑不动——
-  /// `_RenderGlass.paint` 每次重绘都是「离屏模糊 + 两趟混色 + toImageSync」，
-  /// 而纹理缓存键含面板 `origin/size`（`miuix_glass.dart` prepare），形变
-  /// 动画期间二者逐帧变化 → 缓存逐帧全盘失效 → **每帧**重跑 sigma≈27 的
-  /// 高斯离屏模糊，真机上掉帧明显。降为 blurRadius 32（sigma≈14）：观感
-  /// 仍是同一套磨砂玻璃，每帧模糊成本约降 3 倍；动画落定后 origin/size
-  /// 静止，缓存命中，静止期间不再重跑模糊。
-  static MiuixGlassMaterial _popupMaterial(bool isDark) =>
-      isDark ? _popupMaterialDark : _popupMaterialLight;
+  /// 卡面材质档由 [OrbitPopupGlass] 统一维护（puredThin + blur 32；库默认
+  /// `popupViewGlass` 的 blur 60 在形变期每帧重跑高斯模糊，真机掉帧）。
+  int _motion = 0;
 
   @override
   void dispose() {
@@ -143,7 +131,10 @@ class _OrbitGlassMenuState extends State<OrbitGlassMenu> {
       return;
     }
     _groups = widget.groupsBuilder();
-    setState(() => _open = true);
+    setState(() {
+      _open = true;
+      _motion++;
+    });
   }
 
   /// 收起整层（一级 + 二级一起；回调在弹层关闭后落回页面执行）
@@ -167,10 +158,7 @@ class _OrbitGlassMenuState extends State<OrbitGlassMenu> {
   Widget build(BuildContext context) {
     final groups = _groups ?? const <List<OrbitPanelItem>>[];
     final secondary = _secondary;
-    // 材质档按亮暗取（与页头/底栏同判据）；visuals 覆写库默认的
-    // popupViewGlass(60) 档，见 [_popupMaterial] 的性能口径注释
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final visuals = MiuixGlassPopupVisuals(material: _popupMaterial(isDark));
     return Column(
       mainAxisSize: MainAxisSize.min,
       // 触发件可能是页头标题（外层给满宽约束）：按起始边对齐，别把标题居中
@@ -182,49 +170,68 @@ class _OrbitGlassMenuState extends State<OrbitGlassMenu> {
           anchor: _anchor,
           child: widget.triggerBuilder(_toggle),
         ),
-        // 一级菜单：触发件 → 菜单连续形变（simplified = 展开期不叠副本）
-        MiuixGlassTransformPopup(
-          show: _open,
-          anchor: _anchor,
-          anchorContent: widget.anchorContent,
-          simplified: true,
-          stacked: secondary != null,
-          backdrop: widget.backdrop,
-          // 宽度与全站弹出菜单同档（180–240），库内默认 200–288 偏宽
-          sizing: const MiuixGlassPopupSizing(
-            minWidth: orbitPanelMinWidth,
-            maxWidth: orbitPanelMaxWidth,
-          ),
-          visuals: visuals,
-          onDismissRequest: _close,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (var g = 0; g < groups.length; g++) ...[
-                if (g > 0) _groupDivider(context),
-                for (var i = 0; i < groups[g].length; i++)
-                  _menuRow(g, i, groups[g][i]),
+        // 玻璃闸门包住一级 + 二级两件：卡面材质、背景采样与弹簧尾巴统一口径
+        // （形变期实色卡面，窗口结束切真玻璃并冻结——见 orbit_popup_glass.dart）
+        OrbitPopupGlassMotion(
+          open: _open,
+          motionToken: _motion,
+          builder: (context, glass) {
+            final visuals = OrbitPopupGlass.visuals(
+              isDark: isDark,
+              glass: glass,
+            );
+            final backdrop = glass ? widget.backdrop : null;
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 一级菜单：触发件 → 菜单连续形变（simplified = 展开期不叠副本）
+                MiuixGlassTransformPopup(
+                  show: _open,
+                  anchor: _anchor,
+                  anchorContent: widget.anchorContent,
+                  simplified: true,
+                  stacked: secondary != null,
+                  backdrop: backdrop,
+                  // 宽度与全站弹出菜单同档（180–240），库内默认 200–288 偏宽
+                  sizing: const MiuixGlassPopupSizing(
+                    minWidth: orbitPanelMinWidth,
+                    maxWidth: orbitPanelMaxWidth,
+                  ),
+                  visuals: visuals,
+                  onDismissRequest: _close,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (var g = 0; g < groups.length; g++) ...[
+                        if (g > 0) _groupDivider(context),
+                        for (var i = 0; i < groups[g].length; i++)
+                          _menuRow(g, i, groups[g][i]),
+                      ],
+                    ],
+                  ),
+                ),
+                // 二级面板：从锚行堆叠展开（首次展开前不挂载——bounds 尚不存在）
+                if (_secondaryBounds != null)
+                  MiuixGlassSecondaryPopup(
+                    show: secondary != null,
+                    anchorBounds: _secondaryBounds,
+                    materialAnchor: _anchor,
+                    backdrop: backdrop,
+                    sizing: const MiuixGlassPopupSizing(
+                      minWidth: orbitPanelMinWidth,
+                      maxWidth: orbitPanelMaxWidth,
+                    ),
+                    visuals: visuals,
+                    onDismissRequest: () =>
+                        setState(() => _secondary = null),
+                    child: secondary == null
+                        ? const SizedBox.shrink()
+                        : _secondaryPanel(secondary),
+                  ),
               ],
-            ],
-          ),
+            );
+          },
         ),
-        // 二级面板：从锚行堆叠展开（首次展开前不挂载——bounds 尚不存在）
-        if (_secondaryBounds != null)
-          MiuixGlassSecondaryPopup(
-            show: secondary != null,
-            anchorBounds: _secondaryBounds,
-            materialAnchor: _anchor,
-            backdrop: widget.backdrop,
-            sizing: const MiuixGlassPopupSizing(
-              minWidth: orbitPanelMinWidth,
-              maxWidth: orbitPanelMaxWidth,
-            ),
-            visuals: visuals,
-            onDismissRequest: () => setState(() => _secondary = null),
-            child: secondary == null
-                ? const SizedBox.shrink()
-                : _secondaryPanel(secondary),
-          ),
       ],
     );
   }
@@ -260,7 +267,12 @@ class _OrbitGlassMenuState extends State<OrbitGlassMenu> {
           arrowRotation: open ? -90 : 0,
           onPressed: () {
             _secondaryBounds = anchor.bounds ?? _secondaryBounds;
-            setState(() => _secondary = (g, i));
+            setState(() {
+              _secondary = (g, i);
+              // 堆叠展开是弹层已开后的新形变：解冻放行（卡面保持玻璃，
+              // 不闪回实色），见 OrbitPopupGlassMotion.motionToken
+              _motion++;
+            });
           },
         ),
       );
@@ -285,7 +297,12 @@ class _OrbitGlassMenuState extends State<OrbitGlassMenu> {
           text: '返回上级',
           showArrow: true,
           arrowRotation: -90,
-          onPressed: () => setState(() => _secondary = null),
+          onPressed: () => setState(() {
+            _secondary = null;
+            // 收回二级：解冻让二级的退场与一级的堆叠回弹跑完（冻结会把它
+            // 停在屏幕上——退场靠库内 ticker 才移除 OverlayPortal）
+            _motion++;
+          }),
         ),
         for (final child in item.children)
           MiuixGlassPopupItem(

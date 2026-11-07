@@ -13,6 +13,7 @@ import '../../shared/widgets/shadcn/orbit_bottom_nav.dart';
 import '../../shared/widgets/shadcn/orbit_dropdown_panel.dart';
 import '../../shared/widgets/shadcn/orbit_fab.dart';
 import '../../shared/widgets/shadcn/orbit_glass_surface.dart';
+import '../../shared/widgets/shadcn/orbit_popup_glass.dart';
 import '../../shared/widgets/shadcn/orbit_divider.dart';
 import '../todo/form_bottom_sheet.dart';
 import '../todo/logic/quick_add_context.dart';
@@ -70,6 +71,9 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
   /// 「更多」菜单开合（`MiuixGlassTransformPopup.show` 驱动进出场动画）
   bool _moreOpen = false;
+
+  /// 「更多」菜单的形变计数（开场 +1；玻璃闸门据此重开形变窗口）
+  int _moreMotion = 0;
 
   /// 当前停靠的模块分支下标
   late int _branchIndex;
@@ -155,8 +159,12 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         currentTabPos < 0 ? _backTargetBranch(nav, currentModule) : null;
 
     // 页面内容统一包进捕获树：底栏/页头消费同一 backdrop 的玻璃材质
+    //
+    // 录制倍率取半个 DPR（见 `orbitBackdropPixelRatio`）：整页 `toImageSync`
+    // 是逐帧（滚动）与弹层开合时最重的一笔，而玻璃取样端只要 dpr/4。
     final content = MiuixLayerBackdropCapture(
       backdrop: _backdrop,
+      pixelRatio: orbitBackdropPixelRatio(context),
       child: OrbitShellBack(
         targetBranchIndex: backTarget,
         child: showEmbeddedSidebar
@@ -219,7 +227,10 @@ class _HomeShellState extends ConsumerState<HomeShell> {
               moreTabIndex: tabs.length,
               // 形变锚点绑在「更多」图标上；点按只负责开菜单（内容见下方弹层）
               moreAnchor: _moreAnchor,
-              onMoreTap: () => setState(() => _moreOpen = true),
+              onMoreTap: () => setState(() {
+                _moreOpen = true;
+                _moreMotion++;
+              }),
               // 重复点击当前页签回退到该页签根（go_router 惯例：保留栈内其余状态）
               onTap: (index) {
                 final module = tabs[index];
@@ -241,46 +252,48 @@ class _HomeShellState extends ConsumerState<HomeShell> {
           ),
           // 「更多」的 OS4 玻璃形变菜单：从底栏图标连续长出来（与页头 ⋮ 同款）。
           // 弹层挂在本壳 Stack 顶层，`OverlayPortal` 自己再上浮到根 Overlay。
-          MiuixGlassTransformPopup(
-            show: _moreOpen,
-            anchor: _moreAnchor,
-            anchorContent: Icon(
-              OrbitIcons.more,
-              size: AppDimens.iconSizeLg,
-              color: moreSelected
-                  ? OrbitAccents.themeAccent
-                  : colors.secondaryText,
-            ),
-            backdrop: _backdrop,
-            // 材质与 `OrbitGlassMenu` 同档：puredThinGlass + blurRadius 32
-            // （库默认 popupViewGlass 的 60 档在形变期 origin/size 逐帧变、
-            // 纹理缓存逐帧失效，每帧重算 sigma≈27 的离屏模糊会掉帧）
-            visuals: MiuixGlassPopupVisuals(
-              material: MiuixGlassMaterials.puredThinGlass(
-                Theme.of(context).brightness == Brightness.dark,
-              ).copyWith(blurRadius: 32),
-            ),
-            // 默认「底边贴锚点底边」会压在底栏上：往上让一个栏体高度
-            gap: -(OrbitBottomNav.barHeight + OrbitBottomNav.bottomGap),
-            onDismissRequest: _closeMoreMenu,
-            child: OrbitDropdownPanelView(
-              title: '更多',
-              actionLabel: '编辑',
-              onAction: () => context.push('/settings/nav-modules'),
-              onClose: _closeMoreMenu,
-              // 形变弹层外层已带纵向滚动，这里不能再套一层
-              scrollable: false,
-              groups: [
-                [
-                  for (final m in nav.morePanelItems)
-                    OrbitPanelItem(
-                      icon: m.icon,
-                      label: m.label,
-                      onTap: () =>
-                          widget.navigationShell.goBranch(m.branchIndex),
-                    ),
+          // 卡面材质与形变降级统一走 OrbitPopupGlass（见其文件头的性能口径）。
+          OrbitPopupGlassMotion(
+            open: _moreOpen,
+            motionToken: _moreMotion,
+            builder: (context, glass) => MiuixGlassTransformPopup(
+              show: _moreOpen,
+              anchor: _moreAnchor,
+              anchorContent: Icon(
+                OrbitIcons.more,
+                size: AppDimens.iconSizeLg,
+                color: moreSelected
+                    ? OrbitAccents.themeAccent
+                    : colors.secondaryText,
+              ),
+              // 形变期不采样背景（实色卡面），落定后切真玻璃
+              backdrop: glass ? _backdrop : null,
+              visuals: OrbitPopupGlass.visuals(
+                isDark: Theme.of(context).brightness == Brightness.dark,
+                glass: glass,
+              ),
+              // 默认「底边贴锚点底边」会压在底栏上：往上让一个栏体高度
+              gap: -(OrbitBottomNav.barHeight + OrbitBottomNav.bottomGap),
+              onDismissRequest: _closeMoreMenu,
+              child: OrbitDropdownPanelView(
+                title: '更多',
+                actionLabel: '编辑',
+                onAction: () => context.push('/settings/nav-modules'),
+                onClose: _closeMoreMenu,
+                // 形变弹层外层已带纵向滚动，这里不能再套一层
+                scrollable: false,
+                groups: [
+                  [
+                    for (final m in nav.morePanelItems)
+                      OrbitPanelItem(
+                        icon: m.icon,
+                        label: m.label,
+                        onTap: () =>
+                            widget.navigationShell.goBranch(m.branchIndex),
+                      ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ],

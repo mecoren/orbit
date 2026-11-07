@@ -19,6 +19,7 @@
 /// 或自行调大 blurRadius；降采样（dpr/4）由库内 `_RenderGlass.prepare` 负责。
 library;
 
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -27,6 +28,19 @@ import 'package:flutter_miuix/miuix.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimens.dart';
 import '../../../core/theme/app_shapes.dart';
+
+/// 玻璃背景快照的录制倍率（2026-11-07，性能口径）
+///
+/// `MiuixLayerBackdropCapture` 每重绘一次就把**整棵捕获子树**（壳层里就是整页）
+/// `OffsetLayer.toImageSync` 成一张图：列表滚动是逐帧、弹层开场/退场各一次，按
+/// 设备 DPR 录制时 1080×2400 的屏一次就是 2.6MP——这是全项目最重的玻璃开销，
+/// 也是「滚一下掉帧」「点开菜单卡一下」的共同根因。
+///
+/// 而取样端 `_RenderGlass.prepare` 的纹理倍率是 `dpr/4`（clamp 到 ≤1，手机上是
+/// 0.75–0.875），即玻璃真正需要的源分辨率只有 DPR 的 1/4 上下。这里按**半个
+/// DPR**（不小于 1）录制：快照面积降到 1/4，玻璃仍有 2 倍以上余量，观感无差。
+double orbitBackdropPixelRatio(BuildContext context) =>
+    math.max(1, MediaQuery.devicePixelRatioOf(context) / 2);
 
 /// OS4 玻璃采样器的向下传递通道
 ///
@@ -87,7 +101,13 @@ class _OrbitGlassPageState extends State<OrbitGlassPage> {
   @override
   Widget build(BuildContext context) => OrbitGlassScope(
     backdrop: _backdrop,
-    child: MiuixLayerBackdropCapture(backdrop: _backdrop, child: widget.child),
+    child: MiuixLayerBackdropCapture(
+      backdrop: _backdrop,
+      // 半个 DPR 录制：玻璃取样端只要 dpr/4，全分辨率快照纯属浪费（见
+      // [orbitBackdropPixelRatio]）
+      pixelRatio: orbitBackdropPixelRatio(context),
+      child: widget.child,
+    ),
   );
 }
 

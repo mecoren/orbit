@@ -12,6 +12,11 @@
 /// 24 图标位、语义色文案、选中强调色 + 右端对勾、组间 0.5 分隔线），与
 /// 「今天」页头 ⋮ 菜单、下拉偏好行同源。
 ///
+/// **性能口径（2026-11-07）**：卡面材质、背景采样与弹簧尾巴统一由
+/// [OrbitPopupGlassMotion] 管——形变窗口内走实色卡面（不采样背景、不跑离屏
+/// 模糊），窗口结束同帧切真玻璃并冻结库内弹簧尾巴。细则与实测见
+/// `orbit_popup_glass.dart` 文件头。
+///
 /// **承载是 Overlay 直挂，不是路由**：菜单打开期间不重建页面、不新建路由，
 /// 输入框焦点与键盘保持升起（库内 `FocusScope(autofocus)` 会先接管一次，
 /// 组件在测量落定后再等两帧归还，见 `_scheduleFocusRestore`）；关闭先切
@@ -31,6 +36,7 @@ import 'package:flutter_miuix/miuix.dart';
 
 import '../../../core/theme/app_dimens.dart';
 import 'orbit_dropdown_panel.dart';
+import 'orbit_popup_glass.dart';
 
 /// 弹层与触发行之间的呼吸位（并进锚点矩形，与 `showOrbitSelectPopup` 同口径）
 const double _gap = AppDimens.space8;
@@ -334,15 +340,6 @@ class OrbitMenuPopupBodyState extends State<OrbitMenuPopupBody> {
     super.dispose();
   }
 
-  /// 卡面材质（与页头 ⋮ 菜单 / 下拉偏好同档：puredThinGlass + blur 32；
-  /// 按亮暗各缓存一份——值相等是库内纹理缓存的性能要件，动画期逐帧新建
-  /// 材质会让缓存逐帧失效、每帧重跑离屏模糊）
-  static final _materialLight = MiuixGlassMaterials.puredThinGlassLight
-      .copyWith(blurRadius: 32);
-  static final _materialDark = MiuixGlassMaterials.puredThinGlassDark.copyWith(
-    blurRadius: 32,
-  );
-
   /// 焦点归还是否已排期（只排一次；后续行点击重建不再抢焦点）
   bool _focusScheduled = false;
 
@@ -497,46 +494,55 @@ class OrbitMenuPopupBodyState extends State<OrbitMenuPopupBody> {
       onClose: widget.itemDismiss ?? widget.onDismiss,
       groups: groups,
     );
-    final visuals = MiuixGlassPopupVisuals(
-      material: isDark ? _materialDark : _materialLight,
-    );
     final transformAnchor = widget.transformAnchor;
-    if (transformAnchor != null) {
-      // 与底栏「更多」完全同款：卡片从触发件轮廓连续形变长出（按钮内容由
-      // anchorContent 副本承担），sizing/留白取库内菜单档，不另设宽度档。
-      return MiuixGlassTransformPopup(
-        show: _show,
-        anchor: transformAnchor,
-        // builder 优先：每次重建（含 refreshContent）都按调用方当下的值取副本
-        anchorContent:
-            widget.anchorContentBuilder?.call() ??
-            widget.anchorContent ??
-            const SizedBox.shrink(),
-        simplified: widget.simplified,
-        backdrop: widget.backdrop,
-        gap: widget.gap,
-        sizing: _sizing(screen.height * _maxHeightFactor),
-        visuals: visuals,
-        onMeasured: _handleMeasured,
-        onDismissRequest: widget.onDismiss,
-        // 统一走 _finish：退场截断与库内完成幂等互斥，都只收尾一次
-        onDismissFinished: _finish,
-        child: panel,
-      );
-    }
-    return MiuixGlassDropdownPopup(
-      show: _show,
-      anchorBounds: _anchorBounds(screen, groups),
-      backdrop: widget.backdrop,
-      sizing: _sizing(screen.height * _maxHeightFactor),
-      visuals: visuals,
-      // 库内已包 SingleChildScrollView + Padding；行面板自带上下 8 留白，
-      // 这里归零，避免双份内边距把首尾行压窄。
-      contentPadding: EdgeInsets.zero,
-      onMeasured: _handleMeasured,
-      onDismissRequest: widget.onDismiss,
-      onDismissFinished: _finish,
-      child: panel,
+    // 玻璃闸门：形变窗口内实色卡面（不采样背景），窗口结束切真玻璃并冻结
+    // 库内弹簧尾巴——细则与实测见 `orbit_popup_glass.dart` 文件头
+    return OrbitPopupGlassMotion(
+      open: _show,
+      builder: (context, glass) {
+        final visuals = OrbitPopupGlass.visuals(
+          isDark: isDark,
+          glass: glass,
+        );
+        final backdrop = glass ? widget.backdrop : null;
+        if (transformAnchor != null) {
+          // 与底栏「更多」完全同款：卡片从触发件轮廓连续形变长出（按钮内容由
+          // anchorContent 副本承担），sizing/留白取库内菜单档，不另设宽度档。
+          return MiuixGlassTransformPopup(
+            show: _show,
+            anchor: transformAnchor,
+            // builder 优先：每次重建（含 refreshContent）都按调用方当下的值取副本
+            anchorContent:
+                widget.anchorContentBuilder?.call() ??
+                widget.anchorContent ??
+                const SizedBox.shrink(),
+            simplified: widget.simplified,
+            backdrop: backdrop,
+            gap: widget.gap,
+            sizing: _sizing(screen.height * _maxHeightFactor),
+            visuals: visuals,
+            onMeasured: _handleMeasured,
+            onDismissRequest: widget.onDismiss,
+            // 统一走 _finish：退场截断与库内完成幂等互斥，都只收尾一次
+            onDismissFinished: _finish,
+            child: panel,
+          );
+        }
+        return MiuixGlassDropdownPopup(
+          show: _show,
+          anchorBounds: _anchorBounds(screen, groups),
+          backdrop: backdrop,
+          sizing: _sizing(screen.height * _maxHeightFactor),
+          visuals: visuals,
+          // 库内已包 SingleChildScrollView + Padding；行面板自带上下 8 留白，
+          // 这里归零，避免双份内边距把首尾行压窄。
+          contentPadding: EdgeInsets.zero,
+          onMeasured: _handleMeasured,
+          onDismissRequest: widget.onDismiss,
+          onDismissFinished: _finish,
+          child: panel,
+        );
+      },
     );
   }
 }
