@@ -2262,20 +2262,30 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                   ),
                   itemBuilder: (context, index) {
                     final task = manualUndone[index];
-                    // 整行皆可长按拾起（无行尾把手图标）：500ms 长按后退化为
-                    // 普通拖动，滚动与左右滑不受影响
-                    return ReorderableDelayedDragStartListener(
+                    // 行级重绘边界（2026-11-08）：壳层捕获件是页面内容唯一的
+                    // 重绘边界——没有行级边界时，任何一行的删除线/入场/退场
+                    // 动画都会让 markNeedsPaint 一路上抛到捕获节点，整页数百行
+                    // 的 picture 每帧重录；加了边界后动画只重录本行 picture，
+                    // 其余行在布局位移时只动图层偏移。ListView 默认就给 item
+                    // 挂边界（addRepaintBoundaries），ReorderableListView 不挂，
+                    // 这里手工补齐；页头实时模糊不受影响（边界是页头的兄弟
+                    // 子树，非其祖先，见 orbit_progressive_blur 的调用约定）
+                    return RepaintBoundary(
                       key: ValueKey('reorder-task-${task.id}'),
-                      index: index,
-                      // 原始指针监听（不参与手势竞争）只为记位移：列表自身
-                      // 的回调给不出「拾起后动没动」，见 [_pressMoved]
-                      child: Listener(
-                        onPointerDown: _onPressDown,
-                        onPointerMove: _onPressMove,
-                        child: buildTile(
-                          task,
-                          draggable: true,
-                          edge: OrbitCardEdge.of(index, undone.length),
+                      // 整行皆可长按拾起（无行尾把手图标）：500ms 长按后退化为
+                      // 普通拖动，滚动与左右滑不受影响
+                      child: ReorderableDelayedDragStartListener(
+                        index: index,
+                        // 原始指针监听（不参与手势竞争）只为记位移：列表自身
+                        // 的回调给不出「拾起后动没动」，见 [_pressMoved]
+                        child: Listener(
+                          onPointerDown: _onPressDown,
+                          onPointerMove: _onPressMove,
+                          child: buildTile(
+                            task,
+                            draggable: true,
+                            edge: OrbitCardEdge.of(index, undone.length),
+                          ),
                         ),
                       ),
                     );
