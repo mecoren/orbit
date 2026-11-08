@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
+import '../../core/theme/app_motion.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
@@ -334,8 +335,30 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
 }
 
 /// 回收站初次加载骨架：行占位（标题行 + 副标题行），有旧值时不出现
-class _TrashSkeleton extends StatelessWidget {
+class _TrashSkeleton extends StatefulWidget {
   const _TrashSkeleton();
+
+  @override
+  State<_TrashSkeleton> createState() => _TrashSkeletonState();
+}
+
+class _TrashSkeletonState extends State<_TrashSkeleton>
+    with SingleTickerProviderStateMixin {
+  /// 整屏单路呼吸（2026-11-08）：12 块逐块自建 controller 就是 12 路 ticker
+  /// 同时逐帧驱动；共享一路同相位（口径同 `_TaskListSkeleton`）
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: AppMotion.skeletonPulse,
+  )..repeat(reverse: true);
+
+  late final Animation<double> _pulse = Tween<double>(begin: 0.45, end: 1.0)
+      .animate(CurvedAnimation(parent: _ctrl, curve: AppMotion.breathe));
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -357,9 +380,12 @@ class _TrashSkeleton extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                OrbitSkeleton.line(width: 180 - (i % 3) * 30.0),
+                OrbitSkeleton.line(
+                  width: 180 - (i % 3) * 30.0,
+                  pulse: _pulse,
+                ),
                 const SizedBox(height: AppDimens.space8),
-                OrbitSkeleton.line(width: 110),
+                OrbitSkeleton.line(width: 110, pulse: _pulse),
               ],
             ),
           ),

@@ -10,7 +10,8 @@ import '../../../core/theme/app_shapes.dart';
 /// - 颜色取 `surfaceSecondary`（与分层表面同源，亮暗自适应）；
 /// - 呼吸周期与曲线走 [AppMotion.skeletonPulse] / [AppMotion.breathe]
 ///  （视图内禁裸 Duration / Curves）；
-/// - 仅首屏四处使用（详情 / 统计 / 主列表 / 侧栏的初次加载），且只在
+/// - 仅首屏骨架使用（主列表 / 详情 / 统计 / 侧栏 / 四象限 / 回收站 /
+///   更新日志两页的初次加载，2026-11-08 起全部共享单路呼吸），且只在
 ///   "无旧值可守"时出现（有旧值走旧内容，不闪骨架）；次级页与按钮内
 ///   loading 一律保持 spinner，避免整站闪烁感。
 class OrbitSkeleton extends StatefulWidget {

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_dimens.dart';
+import '../../core/theme/app_motion.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/widgets/shadcn/orbit_bottom_nav.dart';
@@ -71,36 +72,13 @@ class MatrixScreen extends ConsumerWidget {
           Positioned.fill(
             child: !boardAsync.hasValue && boardAsync.isLoading
                 // 初次加载骨架：与列表页同款占位（四格等分板在数据前不闪空象限）
-                ? Padding(
+                ? _MatrixSkeleton(
                     padding: EdgeInsets.fromLTRB(
                       AppDimens.space12,
                       topInset + AppDimens.space8,
                       AppDimens.space12,
                       // 悬浮底栏净空 + 呼吸留白
                       OrbitBottomNav.clearanceOf(context) + AppDimens.space16,
-                    ),
-                    child: Column(
-                      children: [
-                        Expanded(
-                          child: Row(
-                            children: [
-                              const Expanded(child: OrbitSkeleton.block()),
-                              const SizedBox(width: AppDimens.cardGap),
-                              const Expanded(child: OrbitSkeleton.block()),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: AppDimens.cardGap),
-                        Expanded(
-                          child: Row(
-                            children: [
-                              const Expanded(child: OrbitSkeleton.block()),
-                              const SizedBox(width: AppDimens.cardGap),
-                              const Expanded(child: OrbitSkeleton.block()),
-                            ],
-                          ),
-                        ),
-                      ],
                     ),
                   )
                 : EisenhowerMatrixBoard(
@@ -143,6 +121,65 @@ class MatrixScreen extends ConsumerWidget {
               title: '四象限',
               // 页签根：无返回键（底部导航承担回退语义）
               showBack: false,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 初次加载骨架（2026-11-08 抽出）：四格占位共享单路呼吸 ticker
+///（口径同任务列表 `_TaskListSkeleton`，4 块不再逐块自建 controller）
+class _MatrixSkeleton extends StatefulWidget {
+  const _MatrixSkeleton({required this.padding});
+
+  final EdgeInsetsGeometry padding;
+
+  @override
+  State<_MatrixSkeleton> createState() => _MatrixSkeletonState();
+}
+
+class _MatrixSkeletonState extends State<_MatrixSkeleton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: AppMotion.skeletonPulse,
+  )..repeat(reverse: true);
+
+  late final Animation<double> _pulse = Tween<double>(begin: 0.45, end: 1.0)
+      .animate(CurvedAnimation(parent: _ctrl, curve: AppMotion.breathe));
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Widget quadrant() => Expanded(child: OrbitSkeleton.block(pulse: _pulse));
+    return Padding(
+      padding: widget.padding,
+      child: Column(
+        children: [
+          Expanded(
+            child: Row(
+              children: [
+                quadrant(),
+                const SizedBox(width: AppDimens.cardGap),
+                quadrant(),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppDimens.cardGap),
+          Expanded(
+            child: Row(
+              children: [
+                quadrant(),
+                const SizedBox(width: AppDimens.cardGap),
+                quadrant(),
+              ],
             ),
           ),
         ],

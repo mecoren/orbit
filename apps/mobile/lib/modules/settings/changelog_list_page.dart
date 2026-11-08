@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/layout/orbit_breakpoints.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
+import '../../core/theme/app_motion.dart';
 import '../../core/theme/icon_map.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
@@ -106,19 +107,7 @@ class _ChangelogListPageState extends ConsumerState<ChangelogListPage> {
     }
     final versions = _versions;
     if (versions == null) {
-      return ListView(
-        padding: _listPadding,
-        physics: const NeverScrollableScrollPhysics(),
-        children: const [
-          OrbitSkeleton.block(height: 64, borderRadius: 12),
-          SizedBox(height: AppDimens.space12),
-          OrbitSkeleton.block(height: 64, borderRadius: 12),
-          SizedBox(height: AppDimens.space12),
-          OrbitSkeleton.block(height: 64, borderRadius: 12),
-          SizedBox(height: AppDimens.space12),
-          OrbitSkeleton.block(height: 64, borderRadius: 12),
-        ],
-      );
+      return const _ChangelogSkeleton();
     }
     if (versions.isEmpty) {
       return ListView(
@@ -142,6 +131,53 @@ class _ChangelogListPageState extends ConsumerState<ChangelogListPage> {
           onTap: () => context.push('/about/changelog/${version.version}'),
         );
       },
+    );
+  }
+}
+
+/// 加载骨架（2026-11-08 抽出）：整屏单路呼吸 ticker，共享同相位
+///（口径同任务列表 `_TaskListSkeleton`）
+class _ChangelogSkeleton extends StatefulWidget {
+  const _ChangelogSkeleton();
+
+  @override
+  State<_ChangelogSkeleton> createState() => _ChangelogSkeletonState();
+}
+
+class _ChangelogSkeletonState extends State<_ChangelogSkeleton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: AppMotion.skeletonPulse,
+  )..repeat(reverse: true);
+
+  late final Animation<double> _pulse = Tween<double>(begin: 0.45, end: 1.0)
+      .animate(CurvedAnimation(parent: _ctrl, curve: AppMotion.breathe));
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      physics: const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.only(
+        top:
+            MediaQuery.of(context).padding.top +
+            OrbitPageHeader.rowHeight +
+            AppDimens.space16,
+        left: AppDimens.space12,
+        right: AppDimens.space12,
+      ),
+      children: [
+        for (var i = 0; i < 4; i++) ...[
+          if (i > 0) const SizedBox(height: AppDimens.space12),
+          OrbitSkeleton.block(height: 64, borderRadius: 12, pulse: _pulse),
+        ],
+      ],
     );
   }
 }

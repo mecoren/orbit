@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
+import '../../core/theme/app_motion.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../shared/utils/hex_color.dart';
@@ -446,14 +447,36 @@ class _DistSection extends StatelessWidget {
 ///
 /// 版式对齐真实内容（横向 space16、三卡等分），加载落定即整块替换为实数；
 /// 年份切换等"有旧值"的重查不走这里（旧内容保留，不闪骨架）。
-class _StatsSkeleton extends StatelessWidget {
+class _StatsSkeleton extends StatefulWidget {
   const _StatsSkeleton();
+
+  @override
+  State<_StatsSkeleton> createState() => _StatsSkeletonState();
+}
+
+class _StatsSkeletonState extends State<_StatsSkeleton>
+    with SingleTickerProviderStateMixin {
+  /// 整屏单路呼吸（2026-11-08）：5 块逐块自建 controller 就是 5 路 ticker
+  /// 同时逐帧驱动；共享一路同相位（口径同 `_TaskListSkeleton`）
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: AppMotion.skeletonPulse,
+  )..repeat(reverse: true);
+
+  late final Animation<double> _pulse = Tween<double>(begin: 0.45, end: 1.0)
+      .animate(CurvedAnimation(parent: _ctrl, curve: AppMotion.breathe));
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     Widget row(double height, {int flex = 1}) => Expanded(
           flex: flex,
-          child: OrbitSkeleton.block(height: height),
+          child: OrbitSkeleton.block(height: height, pulse: _pulse),
         );
     return ListView(
       physics: const NeverScrollableScrollPhysics(),
@@ -475,9 +498,9 @@ class _StatsSkeleton extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppDimens.space12),
-        const OrbitSkeleton.block(height: 64),
+        OrbitSkeleton.block(height: 64, pulse: _pulse),
         const SizedBox(height: AppDimens.space12),
-        const OrbitSkeleton.block(height: 220),
+        OrbitSkeleton.block(height: 220, pulse: _pulse),
       ],
     );
   }

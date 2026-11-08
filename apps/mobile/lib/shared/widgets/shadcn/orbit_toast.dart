@@ -372,7 +372,14 @@ IconData _variantIcon(WaitToastVariant variant) => switch (variant) {
 /// 画阴影（裁剪之外）→ squircle `ClipPath` + `BackdropFilter` 高斯模糊 →
 /// 半透明表面 + 1px 描边 → 内容。无 backdrop 内容可透时退化为半透明实色，
 /// 观感不劣化。
-class _ToastCard extends StatelessWidget {
+///
+/// **入场窗实色降级（2026-11-08）**：宿主的入场动画是 `SizeTransition`——
+/// 卡面可见区域逐帧展开，`BackdropFilter` 区域跟着逐帧变、每帧全量重算高斯。
+/// 库的 builder 不暴露动画状态（卡面在入场期间也不重建），这里用固定时长
+/// 计时器近似入场窗：前 ~360ms 走不透明实色底（观感与 0.90 半透明玻璃几乎
+/// 无差），计时到切毛玻璃一次采样。横滑关闭是用户驱动且区域不变、退场是
+/// 区域收小，两窗保持毛玻璃。
+class _ToastCard extends StatefulWidget {
   const _ToastCard({
     super.key,
     required this.title,
@@ -391,16 +398,43 @@ class _ToastCard extends StatelessWidget {
   final String? actionLabel;
 
   @override
+  State<_ToastCard> createState() => _ToastCardState();
+}
+
+class _ToastCardState extends State<_ToastCard> {
+  /// 入场窗时长：宿主 SizeTransition ~250ms + 余量
+  static const _entranceWindow = Duration(milliseconds: 360);
+
+  /// 入场窗内走实色底（见类注释）
+  bool _solid = true;
+  Timer? _entranceTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _entranceTimer = Timer(_entranceWindow, () {
+      if (mounted) setState(() => _solid = false);
+    });
+  }
+
+  @override
+  void dispose() {
+    _entranceTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final widget = this.widget;
     final colors = AppColors.ofContext(context);
-    final color = _variantColor(variant, colors);
+    final color = _variantColor(widget.variant, colors);
     final radius = AppShapes.radiusLarge;
     final shape = MiuixSquircleBorder(cornerRadius: radius);
 
     Widget content = Material(
       type: MaterialType.transparency,
       child: InkWell(
-        onTap: onTap,
+        onTap: widget.onTap,
         customBorder: shape,
         child: IntrinsicHeight(
           child: Row(
@@ -430,7 +464,7 @@ class _ToastCard extends StatelessWidget {
                       Padding(
                         // 18 图标与 15 字号的标题行视觉居中（光学对齐）
                         padding: const EdgeInsets.only(top: 1),
-                        child: Icon(_variantIcon(variant),
+                        child: Icon(_variantIcon(widget.variant),
                             size: AppDimens.iconSizeSm, color: color),
                       ),
                       const SizedBox(width: AppDimens.space12),
@@ -444,7 +478,7 @@ class _ToastCard extends StatelessWidget {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              title,
+                              widget.title,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
@@ -454,10 +488,10 @@ class _ToastCard extends StatelessWidget {
                                 color: colors.titleText,
                               ),
                             ),
-                            if (description != null) ...[
+                            if (widget.description != null) ...[
                               const SizedBox(height: AppDimens.space2),
                               Text(
-                                description!,
+                                widget.description!,
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
@@ -470,12 +504,13 @@ class _ToastCard extends StatelessWidget {
                           ],
                         ),
                       ),
-                      if (actionLabel != null && onAction != null) ...[
+                      if (widget.actionLabel != null &&
+                          widget.onAction != null) ...[
                         const SizedBox(width: AppDimens.space12),
                         OrbitButton.text(
-                          onPressed: onAction,
+                          onPressed: widget.onAction,
                           compact: true,
-                          child: Text(actionLabel!),
+                          child: Text(widget.actionLabel!),
                         ),
                       ],
                     ],
@@ -489,23 +524,24 @@ class _ToastCard extends StatelessWidget {
     );
 
     // HyperOS 毛玻璃：squircle 裁剪内做背景模糊，表面降半透明透出磨砂内容
+    // （入场窗内换成不透明实色底，见类注释）
+    final surface = ShapeDecoration(
+      // 顶部条：背后是页头标题/统计数字这类高对比文字，半透明 0.82
+      // 会把这些笔画透成噪点，提到 0.90 既保留磨砂观感又不影响读字
+      color: colors.surfaceElevated.withValues(alpha: _solid ? 0.98 : 0.90),
+      shape: MiuixSquircleBorder(
+        cornerRadius: radius,
+        side: BorderSide(color: colors.outline, width: 1),
+      ),
+    );
     content = ClipPath(
       clipper: _SquircleClipper(shape),
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 28, sigmaY: 28),
-        child: DecoratedBox(
-          decoration: ShapeDecoration(
-            // 顶部条：背后是页头标题/统计数字这类高对比文字，半透明 0.82
-            // 会把这些笔画透成噪点，提到 0.90 既保留磨砂观感又不影响读字
-            color: colors.surfaceElevated.withValues(alpha: 0.90),
-            shape: MiuixSquircleBorder(
-              cornerRadius: radius,
-              side: BorderSide(color: colors.outline, width: 1),
+      child: _solid
+          ? DecoratedBox(decoration: surface, child: content)
+          : BackdropFilter(
+              filter: ui.ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+              child: DecoratedBox(decoration: surface, child: content),
             ),
-          ),
-          child: content,
-        ),
-      ),
     );
 
     // 阴影画在裁剪之外（否则被 ClipPath 裁掉），口径同 MiuixSnackbar

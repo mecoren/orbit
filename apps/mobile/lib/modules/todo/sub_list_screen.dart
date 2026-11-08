@@ -2361,16 +2361,24 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                 duration: AppMotion.viewSwitch,
                 switchInCurve: AppMotion.decelerate,
                 switchOutCurve: AppMotion.accelerate,
-                transitionBuilder: (child, animation) => FadeTransition(
-                  opacity: animation,
-                  child: SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(0, 0.03),
-                      end: Offset.zero,
-                    ).animate(animation),
-                    child: child,
-                  ),
-                ),
+                // 退场树冻结 ticker（2026-11-08）：切换的 200ms 内新旧两棵
+                // 全量树并存，旧树里还在跑的 ticker（骨架呼吸、行入场）停摆，
+                // 只留淡出重绘。退场树的 animation 是 reverse、进场树是
+                // forward，按 status 判定即可，无需另开状态。
+                transitionBuilder: (child, animation) {
+                  final outgoing =
+                      animation.status == AnimationStatus.reverse;
+                  return FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0, 0.03),
+                        end: Offset.zero,
+                      ).animate(animation),
+                      child: TickerMode(enabled: !outgoing, child: child),
+                    ),
+                  );
+                },
                 child: KeyedSubtree(
                   key: ValueKey('view-${_viewMode.name}'),
                   // #107 平板：列表限宽（720）水平居中，避免行宽拉到 1000+ 影响

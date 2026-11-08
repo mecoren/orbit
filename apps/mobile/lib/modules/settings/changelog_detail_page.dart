@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/layout/orbit_breakpoints.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
+import '../../core/theme/app_motion.dart';
 import '../../core/theme/app_shapes.dart';
 import '../../core/theme/icon_map.dart';
 import '../../core/theme/orbit_accents.dart';
@@ -114,26 +115,7 @@ class _ChangelogDetailPageState extends ConsumerState<ChangelogDetailPage> {
 
   Widget _buildBody(ChangelogVersionInfo? entry) {
     if (_loading) {
-      return ListView(
-        padding: _listPadding,
-        physics: const NeverScrollableScrollPhysics(),
-        children: const [
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: AppDimens.space12),
-            child: OrbitSkeleton.block(height: 96, borderRadius: 14),
-          ),
-          SizedBox(height: AppDimens.space12),
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: AppDimens.space12),
-            child: OrbitSkeleton.block(height: 144, borderRadius: 14),
-          ),
-          SizedBox(height: AppDimens.space12),
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: AppDimens.space12),
-            child: OrbitSkeleton.block(height: 96, borderRadius: 14),
-          ),
-        ],
-      );
+      return _ChangelogDetailSkeleton(padding: _listPadding);
     }
     if (_failed || entry == null) {
       return ListView(
@@ -246,6 +228,58 @@ class _ChangelogDetailPageState extends ConsumerState<ChangelogDetailPage> {
               ],
           ],
         ),
+      ],
+    );
+  }
+}
+
+/// 加载骨架（2026-11-08 抽出）：整屏单路呼吸 ticker，共享同相位
+///（口径同任务列表 `_TaskListSkeleton`）
+class _ChangelogDetailSkeleton extends StatefulWidget {
+  const _ChangelogDetailSkeleton({required this.padding});
+
+  final EdgeInsetsGeometry padding;
+
+  @override
+  State<_ChangelogDetailSkeleton> createState() =>
+      _ChangelogDetailSkeletonState();
+}
+
+class _ChangelogDetailSkeletonState extends State<_ChangelogDetailSkeleton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: AppMotion.skeletonPulse,
+  )..repeat(reverse: true);
+
+  late final Animation<double> _pulse = Tween<double>(begin: 0.45, end: 1.0)
+      .animate(CurvedAnimation(parent: _ctrl, curve: AppMotion.breathe));
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Widget block(double height) => Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppDimens.space12),
+      child: OrbitSkeleton.block(
+        height: height,
+        borderRadius: 14,
+        pulse: _pulse,
+      ),
+    );
+    return ListView(
+      physics: const NeverScrollableScrollPhysics(),
+      padding: widget.padding,
+      children: [
+        block(96),
+        const SizedBox(height: AppDimens.space12),
+        block(144),
+        const SizedBox(height: AppDimens.space12),
+        block(96),
       ],
     );
   }

@@ -1045,8 +1045,31 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
 ///
 /// 版式对齐真实列表（同款顶边距；行高贴近 ListTile/项目行），加载落定即整块
 /// 替换；任一源有旧值时不出现（sidebarLoading 见 build）。
-class _SidebarSkeleton extends StatelessWidget {
+class _SidebarSkeleton extends StatefulWidget {
   const _SidebarSkeleton();
+
+  @override
+  State<_SidebarSkeleton> createState() => _SidebarSkeletonState();
+}
+
+class _SidebarSkeletonState extends State<_SidebarSkeleton>
+    with SingleTickerProviderStateMixin {
+  /// 整屏单路呼吸（2026-11-08）：28 块（14 行 × 2）逐块自建 controller 就是
+  /// 28 路 ticker 同时逐帧驱动——全站最大的一处；共享一路同相位
+  ///（口径同 `_TaskListSkeleton`）
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: AppMotion.skeletonPulse,
+  )..repeat(reverse: true);
+
+  late final Animation<double> _pulse = Tween<double>(begin: 0.45, end: 1.0)
+      .animate(CurvedAnimation(parent: _ctrl, curve: AppMotion.breathe));
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1057,9 +1080,9 @@ class _SidebarSkeleton extends StatelessWidget {
       ),
       child: Row(
         children: [
-          OrbitSkeleton.circle(size: iconSize),
+          OrbitSkeleton.circle(size: iconSize, pulse: _pulse),
           const SizedBox(width: AppDimens.space12),
-          OrbitSkeleton.line(width: labelWidth),
+          OrbitSkeleton.line(width: labelWidth, pulse: _pulse),
         ],
       ),
     );

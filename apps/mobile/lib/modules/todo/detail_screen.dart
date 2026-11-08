@@ -20,6 +20,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../core/layout/orbit_breakpoints.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
+import '../../core/theme/app_motion.dart';
 import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
@@ -477,8 +478,30 @@ class _ErrorView extends StatelessWidget {
 ///
 /// 版式对齐 `_DetailView`（同款顶边距 + 卡外距 12 + 卡内 16 = 28），
 /// 加载落定即整块替换；`skipLoadingOnReload` 保证重查时旧内容保留，不闪骨架。
-class _DetailSkeleton extends StatelessWidget {
+class _DetailSkeleton extends StatefulWidget {
   const _DetailSkeleton();
+
+  @override
+  State<_DetailSkeleton> createState() => _DetailSkeletonState();
+}
+
+class _DetailSkeletonState extends State<_DetailSkeleton>
+    with SingleTickerProviderStateMixin {
+  /// 整屏单路呼吸（2026-11-08）：5 块逐块自建 controller 就是 5 路 ticker
+  /// 同时逐帧驱动；共享一路同相位（口径同 `_TaskListSkeleton`）
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: AppMotion.skeletonPulse,
+  )..repeat(reverse: true);
+
+  late final Animation<double> _pulse = Tween<double>(begin: 0.45, end: 1.0)
+      .animate(CurvedAnimation(parent: _ctrl, curve: AppMotion.breathe));
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -492,16 +515,16 @@ class _DetailSkeleton extends StatelessWidget {
         left: AppDimens.space28,
         right: AppDimens.space28,
       ),
-      children: const [
-        OrbitSkeleton.block(height: 26, borderRadius: 13),
-        SizedBox(height: AppDimens.space16),
-        OrbitSkeleton.line(width: 200),
-        SizedBox(height: AppDimens.space12),
-        OrbitSkeleton.line(width: 160),
-        SizedBox(height: AppDimens.space12),
-        OrbitSkeleton.line(width: 220),
-        SizedBox(height: AppDimens.space12),
-        OrbitSkeleton.line(width: 140),
+      children: [
+        OrbitSkeleton.block(height: 26, borderRadius: 13, pulse: _pulse),
+        const SizedBox(height: AppDimens.space16),
+        OrbitSkeleton.line(width: 200, pulse: _pulse),
+        const SizedBox(height: AppDimens.space12),
+        OrbitSkeleton.line(width: 160, pulse: _pulse),
+        const SizedBox(height: AppDimens.space12),
+        OrbitSkeleton.line(width: 220, pulse: _pulse),
+        const SizedBox(height: AppDimens.space12),
+        OrbitSkeleton.line(width: 140, pulse: _pulse),
       ],
     );
   }
