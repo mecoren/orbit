@@ -38,10 +38,10 @@ import 'orbit_shell_back.dart';
 ///
 /// **OS4 玻璃接线（2026-10-31）**：底栏换成 `MiuixGlassNavigationBar` 后需要
 /// 「栏体背后的内容」采样快照。按库内约束，**捕获树与玻璃消费方必须是兄弟
-/// 节点**——这里用 `Stack` 把页面内容包进 [MiuixLayerBackdropCapture]，
-/// 底栏与悬浮钮作为 `Scaffold` 的兄弟层挂在捕获树之外，两者共享同一个
-/// [MiuixLayerBackdrop]。反之（捕获树包住玻璃组件）会自采样：栏体把自己
-/// 也拍进背景，越糊越实。
+/// 节点**——这里用 `Stack` 把页面内容包进 [OrbitScrollAwareBackdropCapture]
+/// （滚动期冻结快照的捕获件），底栏与悬浮钮作为 `Scaffold` 的兄弟层挂在捕获树
+/// 之外，两者共享同一个 [MiuixLayerBackdrop]。反之（捕获树包住玻璃组件）会
+/// 自采样：栏体把自己也拍进背景，越糊越实。
 ///
 /// 页头（各页 `OrbitPageHeader`）本身不在本壳的捕获树内（各页自持 Stack），
 /// 故默认仍走实时 `BackdropFilter` 路径；需要 OS4 采样的页头可显式传
@@ -158,13 +158,13 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     final backTarget =
         currentTabPos < 0 ? _backTargetBranch(nav, currentModule) : null;
 
-    // 页面内容统一包进捕获树：底栏/页头消费同一 backdrop 的玻璃材质
-    //
-    // 录制倍率取半个 DPR（见 `orbitBackdropPixelRatio`）：整页 `toImageSync`
-    // 是逐帧（滚动）与弹层开合时最重的一笔，而玻璃取样端只要 dpr/4。
-    final content = MiuixLayerBackdropCapture(
+    // 页面内容统一包进捕获树：底栏/页头消费同一 backdrop 的玻璃材质。
+    // 滚动期冻结快照（2026-11-08）：库内捕获件「子树每次重绘 → 帧末
+    // toImageSync 整页快照」在列表滚动时逐帧重录，是玻璃链路在真机上最大的
+    // 持续开销——改用滚动感知捕获，settle 后补录一次（细则见
+    // `orbit_glass_surface.dart` 的 [OrbitScrollAwareBackdropCapture]）
+    final content = OrbitScrollAwareBackdropCapture(
       backdrop: _backdrop,
-      pixelRatio: orbitBackdropPixelRatio(context),
       child: OrbitShellBack(
         targetBranchIndex: backTarget,
         child: showEmbeddedSidebar

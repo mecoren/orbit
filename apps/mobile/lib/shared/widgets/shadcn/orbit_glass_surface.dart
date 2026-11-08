@@ -19,10 +19,13 @@
 /// 或自行调大 blurRadius；降采样（dpr/4）由库内 `_RenderGlass.prepare` 负责。
 library;
 
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_miuix/miuix.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -103,14 +106,232 @@ class _OrbitGlassPageState extends State<OrbitGlassPage> {
   @override
   Widget build(BuildContext context) => OrbitGlassScope(
     backdrop: _backdrop,
-    child: MiuixLayerBackdropCapture(
+    // 滚动期冻结快照（见 [OrbitScrollAwareBackdropCapture]）
+    child: OrbitScrollAwareBackdropCapture(
       backdrop: _backdrop,
-      // 半个 DPR 录制：玻璃取样端只要 dpr/4，全分辨率快照纯属浪费（见
-      // [orbitBackdropPixelRatio]）
+      child: widget.child,
+    ),
+  );
+}
+
+/// 滚动期冻结的背景捕获（2026-11-08）
+///
+/// 库内 [MiuixLayerBackdropCapture] 的机制是「子树每次重绘 → 帧末
+/// `toImageSync` 整页快照」——列表滚动时逐帧重录，是玻璃链路在真机上最大的
+/// 持续开销（x64 模拟器 GPU 加速量不出来，真机按 dpr/2 录制一次就是百万像素级）。
+/// 本件复刻同一机制并加暂停档：滚动活跃期不再录新快照，消费方（底栏/FAB/
+/// 弹层的玻璃）沿用最后一帧；滚动 settle 后恢复录制并补录一次。玻璃内内容在
+/// 滚动期轻微滞后——玻璃拟态系统的标准权衡（iOS 同款行为），可接受。
+///
+/// **为什么不用 RepaintBoundary 包滚动列表「顺带」挡住重录**：图层脏标记沿
+/// Layer 链向上传播（`Layer.markNeedsAddToScene` 逐级上抛），边界挡不住内容
+/// 层的 `addToScene` 钩子；且页头实时模糊会被隔离边界弄瞎（见
+/// `orbit_progressive_blur.dart` 的调用约定）。
+class OrbitScrollAwareBackdropCapture extends StatefulWidget {
+  const OrbitScrollAwareBackdropCapture({
+    super.key,
+    required this.backdrop,
+    required this.child,
+  });
+
+  /// OS4 玻璃背景采样器（快照录给它）
+  final MiuixLayerBackdrop backdrop;
+
+  /// 被捕获的页面内容（滚动通知从这里冒泡）
+  final Widget child;
+
+  @override
+  State<OrbitScrollAwareBackdropCapture> createState() =>
+      _OrbitScrollAwareBackdropCaptureState();
+}
+
+class _OrbitScrollAwareBackdropCaptureState
+    extends State<OrbitScrollAwareBackdropCapture> {
+  /// 最后一帧滚动通知之后的静默期：静满即认为滚动已 settle
+  ///
+  /// 惯性滚动期间 update 通知逐帧不断，恢复只会发生在真正停手之后。
+  static const _resumeDelay = Duration(milliseconds: 120);
+
+  Timer? _resume;
+  bool _paused = false;
+
+  @override
+  void dispose() {
+    _resume?.cancel();
+    super.dispose();
+  }
+
+  bool _onScroll(ScrollNotification n) {
+    _resume?.cancel();
+    if (!_paused) setState(() => _paused = true);
+    _resume = Timer(_resumeDelay, () {
+      if (mounted) setState(() => _paused = false);
+    });
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) => NotificationListener<ScrollNotification>(
+    onNotification: _onScroll,
+    child: _OrbitLayerBackdropCapture(
+      backdrop: widget.backdrop,
+      paused: _paused,
       pixelRatio: orbitBackdropPixelRatio(context),
       child: widget.child,
     ),
   );
+}
+
+/// 带暂停档的图层背景捕获（[OrbitScrollAwareBackdropCapture] 的承载层）
+///
+/// 机制与 flutter_miuix `miuix_layer_backdrop.dart`（Apache-2.0）逐项同构：
+/// 重绘边界 + 内容层 `addToScene` 钩子 + 帧末 `toImageSync`。差异仅在
+/// [paused] 为 true 时 `_scheduleCapture` 直接短路——快照冻结在最后一帧，
+/// 恢复时本节点重绘一次触发补录。
+class _OrbitLayerBackdropCapture extends SingleChildRenderObjectWidget {
+  const _OrbitLayerBackdropCapture({
+    required this.backdrop,
+    required this.paused,
+    this.pixelRatio,
+    required super.child,
+  });
+
+  final MiuixLayerBackdrop backdrop;
+  final bool paused;
+  final double? pixelRatio;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderOrbitLayerBackdropCapture(
+        initialBackdrop: backdrop,
+        initialDevicePixelRatio:
+            pixelRatio ?? MediaQuery.devicePixelRatioOf(context),
+        initialPaused: paused,
+      );
+
+  @override
+  void updateRenderObject(BuildContext context, RenderObject renderObject) {
+    (renderObject as _RenderOrbitLayerBackdropCapture)
+      ..backdrop = backdrop
+      ..devicePixelRatio = pixelRatio ?? MediaQuery.devicePixelRatioOf(context)
+      ..paused = paused;
+  }
+}
+
+class _CaptureContentLayer extends OffsetLayer {
+  _CaptureContentLayer(this.onContentChanged);
+
+  final VoidCallback onContentChanged;
+
+  @override
+  void addToScene(ui.SceneBuilder builder) {
+    super.addToScene(builder);
+    onContentChanged();
+  }
+}
+
+class _RenderOrbitLayerBackdropCapture extends RenderProxyBox {
+  _RenderOrbitLayerBackdropCapture({
+    required MiuixLayerBackdrop initialBackdrop,
+    required double initialDevicePixelRatio,
+    required bool initialPaused,
+  }) : _backdrop = initialBackdrop,
+       _devicePixelRatio = initialDevicePixelRatio,
+       _paused = initialPaused;
+
+  MiuixLayerBackdrop _backdrop;
+  MiuixLayerBackdrop get backdrop => _backdrop;
+  set backdrop(MiuixLayerBackdrop value) {
+    if (identical(_backdrop, value)) return;
+    _backdrop.unregisterCapture(this);
+    _backdrop = value;
+    if (attached) _backdrop.registerCapture(this);
+    markNeedsPaint();
+  }
+
+  double _devicePixelRatio;
+  double get devicePixelRatio => _devicePixelRatio;
+  set devicePixelRatio(double value) {
+    if (_devicePixelRatio == value) return;
+    _devicePixelRatio = value;
+    markNeedsPaint();
+  }
+
+  bool _paused;
+  bool get paused => _paused;
+  set paused(bool value) {
+    if (_paused == value) return;
+    _paused = value;
+    // 恢复录制：重绘一次触发补录（暂停期内容层钩子被短路，最后一帧的
+    // 子树变化不会再排期）
+    if (!value) markNeedsPaint();
+  }
+
+  @override
+  bool get isRepaintBoundary => true;
+
+  @override
+  void attach(PipelineOwner owner) {
+    super.attach(owner);
+    _backdrop.registerCapture(this);
+  }
+
+  @override
+  void detach() {
+    _backdrop.unregisterCapture(this);
+    super.detach();
+  }
+
+  final _contentLayer = LayerHandle<_CaptureContentLayer>();
+  bool _capturing = false;
+
+  @override
+  void dispose() {
+    _contentLayer.layer = null;
+    super.dispose();
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    _contentLayer.layer ??= _CaptureContentLayer(_scheduleCapture);
+    context.pushLayer(_contentLayer.layer!, super.paint, offset);
+    // 本节点是重绘边界，super.paint 会把子树画进本节点的 OffsetLayer。
+    // 帧结束后异步快照该图层（暂停期短路，见 [_scheduleCapture]）。
+    _scheduleCapture();
+  }
+
+  bool _captureScheduled = false;
+
+  void _scheduleCapture() {
+    if (_paused ||
+        _capturing ||
+        !attached ||
+        _captureScheduled ||
+        !hasSize ||
+        size.isEmpty) {
+      return;
+    }
+    _captureScheduled = true;
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      _captureScheduled = false;
+      if (!attached || !hasSize || size.isEmpty) return;
+      _capture();
+    });
+  }
+
+  void _capture() {
+    final offsetLayer = layer;
+    if (offsetLayer is! OffsetLayer) return;
+    final dpr = _devicePixelRatio;
+    _capturing = true;
+    try {
+      final image = offsetLayer.toImageSync(Offset.zero & size, pixelRatio: dpr);
+      final global = localToGlobal(Offset.zero);
+      _backdrop.updateSnapshot(image, global, dpr);
+    } finally {
+      _capturing = false;
+    }
+  }
 }
 
 /// 圆角玻璃表面（见文件头）
