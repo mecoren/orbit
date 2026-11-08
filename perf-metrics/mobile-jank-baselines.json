@@ -20,69 +20,69 @@
     },
     "calendar_page": {
       "maxMissedBuildRatio": 0.02,
-      "maxP99BuildMs": 16.67
+      "maxP99BuildMs": 18.91
     }
   },
   "measured": {
     "sheet_open": {
-      "frames": 44,
-      "missedBuildFrames": 0,
-      "missedBuildRatio": 0,
-      "missedRasterFrames": 1,
-      "avgBuildMs": 0.56,
-      "p99BuildMs": 3.28,
-      "worstBuildMs": 3.28,
-      "avgRasterMs": 3.3,
-      "p99RasterMs": 20.19,
-      "worstRasterMs": 20.19
-    },
-    "menu_morph": {
-      "frames": 44,
+      "frames": 43,
       "missedBuildFrames": 0,
       "missedBuildRatio": 0,
       "missedRasterFrames": 0,
-      "avgBuildMs": 0.48,
-      "p99BuildMs": 6.38,
-      "worstBuildMs": 6.38,
-      "avgRasterMs": 3.09,
-      "p99RasterMs": 12.02,
-      "worstRasterMs": 12.02
+      "avgBuildMs": 0.5,
+      "p99BuildMs": 2.91,
+      "worstBuildMs": 2.91,
+      "avgRasterMs": 3,
+      "p99RasterMs": 14.5,
+      "worstRasterMs": 14.5
+    },
+    "menu_morph": {
+      "frames": 126,
+      "missedBuildFrames": 0,
+      "missedBuildRatio": 0,
+      "missedRasterFrames": 1,
+      "avgBuildMs": 0.57,
+      "p99BuildMs": 6.43,
+      "worstBuildMs": 13.74,
+      "avgRasterMs": 3.19,
+      "p99RasterMs": 10.96,
+      "worstRasterMs": 19.91
     },
     "list_scroll": {
       "frames": 524,
       "missedBuildFrames": 0,
       "missedBuildRatio": 0,
       "missedRasterFrames": 0,
-      "avgBuildMs": 0.8,
-      "p99BuildMs": 3.72,
-      "worstBuildMs": 10.42,
-      "avgRasterMs": 2.22,
-      "p99RasterMs": 4.15,
-      "worstRasterMs": 8.78
+      "avgBuildMs": 0.79,
+      "p99BuildMs": 3.82,
+      "worstBuildMs": 7.41,
+      "avgRasterMs": 2.11,
+      "p99RasterMs": 4.28,
+      "worstRasterMs": 10.22
     },
     "view_switch": {
       "frames": 97,
       "missedBuildFrames": 0,
       "missedBuildRatio": 0,
       "missedRasterFrames": 0,
-      "avgBuildMs": 0.8,
-      "p99BuildMs": 4.53,
-      "worstBuildMs": 9.96,
-      "avgRasterMs": 3.75,
-      "p99RasterMs": 12.26,
-      "worstRasterMs": 13.17
+      "avgBuildMs": 0.78,
+      "p99BuildMs": 4.08,
+      "worstBuildMs": 8.03,
+      "avgRasterMs": 3.79,
+      "p99RasterMs": 8.4,
+      "worstRasterMs": 12.67
     },
     "calendar_page": {
-      "frames": 81,
-      "missedBuildFrames": 0,
-      "missedBuildRatio": 0,
+      "frames": 83,
+      "missedBuildFrames": 1,
+      "missedBuildRatio": 0.012048192771084338,
       "missedRasterFrames": 0,
-      "avgBuildMs": 0.94,
-      "p99BuildMs": 9.25,
-      "worstBuildMs": 9.71,
-      "avgRasterMs": 2.64,
-      "p99RasterMs": 4.27,
-      "worstRasterMs": 5.9
+      "avgBuildMs": 1.25,
+      "p99BuildMs": 15.13,
+      "worstBuildMs": 19,
+      "avgRasterMs": 2.42,
+      "p99RasterMs": 4.94,
+      "worstRasterMs": 5.98
     },
     "measuredAt": "2026-11-08"
   },

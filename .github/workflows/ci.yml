@@ -163,3 +163,14 @@ jobs:
 
       - name: 单元测试
         run: flutter test
+
+      # 移动端帧耗时门禁（2026-11-08）：有在线设备/模拟器时真卡 5 场景
+      # （sheet_open/menu_morph/list_scroll/view_switch/calendar_page，基线见
+      # perf-metrics/mobile-jank-baselines.json）；GitHub 托管 runner 无 KVM
+      # 起不了模拟器，脚本以 exit 2 自然跳过——continue-on-error 保绿但日志
+      # 可见，自托管 runner 接设备后即自动生效。发版前本地必跑（docs/08）
+      - name: 移动端帧耗时门禁（有设备时生效）
+        if: always()
+        working-directory: ${{ github.workspace }}
+        continue-on-error: true
+        run: node perf-metrics/mobile-jank.mjs --gate

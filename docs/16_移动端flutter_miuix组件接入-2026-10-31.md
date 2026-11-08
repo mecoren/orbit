@@ -238,6 +238,43 @@ OrbitGlassScope（向下暴露同一个 backdrop）
   只要 `dpr/4`。壳层与 `OrbitGlassPage` 改按半个 DPR 录制
   （`orbitBackdropPixelRatio`），快照面积降到 1/4，玻璃观感无差。
 
+#### 5.3.2 动画性能专项（2026-11-08）
+
+目标「每一个动画完全流畅」，五场景帧耗时门禁（`perf-metrics/mobile-jank.mjs`，
+x64 模拟器 profile 档）优化后全绿（build/raster 双侧零丢帧）：
+
+- **二级面板形变窗降实色**：`motionToken` 侧形变（二级面板堆叠展开/收回）此前
+  「只解冻不降材质」，其 origin/size 逐帧变 → 纹理缓存逐帧失效。改为与开场同档
+  实色窗口，窗口结束切回玻璃但**不冻结**（冻结会把二级面板停在屏幕上）。
+  `menu_morph` 场景实测丢帧 2.33%→0%、P99 build 17.25ms→3.12ms；
+- **键盘窗捕获树静止**：键盘动画期 `viewInsets` 逐帧驱动底层 Scaffold
+  （`resizeToAvoidBottomInset` 默认 true）逐帧缩放 → 捕获子树逐帧重录整页快照。
+  壳层 + 8 个壳内分支页 Scaffold 全设 `resizeToAvoidBottomInset: false`
+  （壳内无输入流，键盘场景全在根 Overlay 弹层）。`sheet_open` 实测
+  missedRaster 1→0、worst raster 22.85ms→16.25ms 回到预算内；
+- **滚动期快照冻结**：新原语 `OrbitScrollAwareBackdropCapture`
+  （`orbit_glass_surface.dart`）与库内捕获件同机制 + `paused` 档：滚动通知活跃期
+  不录新快照（玻璃内内容轻微滞后 = 玻璃拟态标准权衡，iOS 同款），静默 120ms
+  settle 后补录一次。RepaintBoundary 隔离方案不可行（图层脏标记沿 Layer 链
+  上抛挡不住内容层钩子，且会弄瞎页头实时模糊）；
+- **行级重绘边界**：壳层捕获件是页面内容唯一的重绘边界——单行动画（删除线/
+  入场/退场）的 `markNeedsPaint` 一路上抛导致整页数百行 picture 每帧重录。主
+  列表行包 `RepaintBoundary`（`ReorderableListView` 不像 `ListView` 默认挂），
+  动画只重录本行；
+- **删除线布局缓存**：`TextPainter.layout + computeLineMetrics` 只依赖文本/
+  布局样式/行数/宽度/缩放/方向，与逐帧插值的颜色无关——结果缓存进 State，
+  260ms 动画每帧只画矩形线；
+- **视图切换退场树冻结**：`AnimatedSwitcher` 的 200ms 双树并存期内旧树包
+  `TickerMode` 停摆（按 `animation.status == reverse` 判定退场树）；
+- **toast 入场窗实色**：宿主入场是 `SizeTransition`（卡面区域逐帧展开，
+  `BackdropFilter` sigma28 逐帧全量重算），库 builder 不暴露动画 → ~360ms
+  计时器近似入场窗走实色底，静止后切毛玻璃一次采样；
+- **骨架屏共享呼吸**：全站骨架屏（主列表/详情/统计/侧栏 28 块为最大/四象限/
+  回收站/更新日志两页）统一整屏单 controller 同相位；
+- **门禁闭环**：`flutter-mobile` job 增 `mobile-jank --gate` 步骤
+  （`continue-on-error`，托管 runner 无 KVM 常年 SKIP、自托管接设备即生效）；
+  发版清单（docs/08 §3.3）补本地必跑；优化后 `--record` 重校阈值收紧护栏。
+
 ### 5.4 保留的兼容处理（本批仍未替换）
 
 | 项 | 理由 |

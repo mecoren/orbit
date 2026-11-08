@@ -17,6 +17,19 @@
 
 ## [Unreleased]
 
+### 优化：移动端动画性能专项——玻璃链路全场景零丢帧（2026-11-08）
+
+以「每一个动画完全流畅」为目标对玻璃/动画链路做专项收口，优化后五场景帧耗时门禁（`mobile-jank`，模拟器 profile 档）build/raster 双侧零丢帧，`--record` 重校阈值收紧防回归护栏：
+
+- **二级玻璃面板形变窗降实色**：二级面板堆叠展开/收回的 `motionToken` 形变此前「只解冻不降材质」，其 origin/size 逐帧变导致玻璃纹理缓存逐帧失效（每帧 3 次 `toImageSync`）。改为与开场同档实色窗口，窗口结束切回玻璃但不冻结（冻结会把二级面板停在屏幕上）。`menu_morph` 场景实测丢帧 2.33%→0%、P99 build 17.25ms→3.12ms（场景同时扩展为覆盖二级面板展开/收回，作防回归锚点）；
+- **键盘窗捕获树静止**：键盘动画期 viewInsets 逐帧驱动底层 Scaffold 逐帧缩放，壳层捕获树逐帧重录整页快照——快速添加起键盘时正是此前实测唯一 raster 超预算场景（worst≈25ms）。壳层 + 8 个壳内分支页 Scaffold 关闭 `resizeToAvoidBottomInset`（壳内无输入流，键盘场景全在根 Overlay 弹层）。`sheet_open` 实测 missedRaster 1→0、worst raster 22.85ms→16.25ms 回到 16.7ms 预算内；
+- **滚动期快照冻结**：新原语 `OrbitScrollAwareBackdropCapture`（与库内捕获件同机制 + 暂停档）——滚动活跃期不录新快照（玻璃内内容轻微滞后是玻璃拟态系统的标准权衡），settle 后静默 120ms 补录一次。壳层与 `OrbitGlassPage` 全部换用；
+- **行级重绘边界**：壳层捕获件是页面内容唯一的重绘边界，单行动画（删除线/入场/退场）会让整页数百行 picture 每帧重录。主列表行包 `RepaintBoundary`（`ReorderableListView` 不像 `ListView` 默认挂），动画只重录本行；页头实时模糊不受影响（边界非其祖先）；
+- **删除线动画布局缓存**：文本布局（`TextPainter.layout + computeLineMetrics`）与逐帧插值的颜色无关，结果缓存进 State，260ms 动画每帧只画矩形线不再重量文本；
+- **视图切换退场树冻结**：`AnimatedSwitcher` 200ms 双树并存期内旧树 `TickerMode` 停摆（骨架呼吸/行入场 ticker 不再空转）；**toast 入场窗实色**：宿主 `SizeTransition` 期间 `BackdropFilter` 区域逐帧变，~360ms 入场窗走实色底、静止后切毛玻璃一次采样；**骨架屏共享呼吸**：全站骨架屏统一整屏单路 ticker（侧栏 28 块为此前最大一处 28 路 controller）；
+- **门禁闭环**：`flutter-mobile` CI job 增 `mobile-jank --gate` 步骤（`continue-on-error`，托管 runner 无 KVM 常年 SKIP、自托管接设备即生效），发版清单（docs/08）补本地必跑；
+- **经评估不改**：下拉刷新（逐帧 setState 只重建十余个轻组件，真实开销是「内容下移避让」的布局语义本身）；36 处非懒加载 `ListView`（长数据列表均已 builder 化，余为短列表/骨架/空态）。
+
 ### 新增：移动端帧耗时门禁 `mobile-jank`（2026-11-08）
 
 移动端此前只有内存门禁（`mobile-mem.mjs`，PSS 口径），「卡不卡」长期靠手感判断。新增 `perf-metrics/mobile-jank.mjs` + `apps/mobile/integration_test/perf_jank_test.dart`（五个动画场景，`SchedulerBinding.addTimingsCallback` 采 `FrameTiming`），经 `flutter drive --profile` 落盘后按基线判阈值：
