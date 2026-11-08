@@ -27,9 +27,13 @@
 ///   故**按下弹层任意位置即解冻**——按压高亮照常，且此时弹簧一步归位；
 /// - 退场立刻解冻（不解冻回收动画不动），卡面回到实色（退场只有 320ms，见
 ///   `_transformExitCutoff`）；
-/// - 只冻结**开场**形变。二级面板这类「弹层已开」的后续形变只解冻、不再冻结：
-///   二级面板的退场（`MiuixGlassSecondaryPopup` 收回到锚行）要靠库内 ticker 才
-///   移除 `OverlayPortal`，冻结会把它停在屏幕上；而它的进场量级本就小一半。
+/// - 只冻结**开场**形变。二级面板这类「弹层已开」的后续形变同样走实色窗口
+///   （2026-11-08：其 origin/size 逐帧变，玻璃纹理缓存逐帧全盘失效——与开场
+///   同一笔每帧 3 次 `toImageSync`，此前「只解冻不降材质」正是 menu_morph
+///   场景超预算帧的来源），窗口结束切回玻璃但**不冻结**：二级面板的退场
+///   （`MiuixGlassSecondaryPopup` 收回到锚行）要靠库内 ticker 才移除
+///   `OverlayPortal`，冻结会把它停在屏幕上；此时卡面几何已贴合，纹理只
+///   准备一次、之后命中缓存，弹簧尾巴的逐帧重绘不再贵。
 ///
 /// **不要**把这里换成固定 `Duration` 的 `AnimatedOpacity` 之类：冻结是「停掉库内
 /// 的 ticker」，不是另造一段动画——另造一段只会在收尾处再补一次全分辨率重绘。
@@ -117,8 +121,9 @@ class OrbitPopupGlassMotion extends StatefulWidget {
 
   /// 每次**弹层已开后的新形变**换一个值（二级面板堆叠展开、返回上级）
   ///
-  /// 只解冻、不再冻结、也不动卡面材质（已落定的玻璃卡不闪回实色）：二级面板的
-  /// 退场靠库内 ticker 才能移除 `OverlayPortal`，冻结会把它停在屏幕上。
+  /// 解冻并重开一个实色形变窗口（二级面板 origin/size 逐帧变，玻璃纹理
+  /// 缓存逐帧失效）；窗口结束切回玻璃但**不冻结**——二级面板的退场靠库内
+  /// ticker 才能移除 `OverlayPortal`，冻结会把它停在屏幕上。
   final Object? motionToken;
 
   /// 承载构建；`glass` = 卡面此刻是否可以采样背景
@@ -165,11 +170,19 @@ class _OrbitPopupGlassMotionState extends State<OrbitPopupGlassMotion> {
     _arm();
   }
 
-  /// 二级面板等后续形变：卡面保持玻璃（不闪回实色），只解冻放行它的动画
+  /// 二级面板等后续形变：解冻放行动画，形变窗口内卡面降实色
+  ///
+  /// 二级面板展开/收回期间其 origin/size 逐帧变化，玻璃纹理缓存逐帧全盘
+  /// 失效（每帧 3 次 `toImageSync`）——与开场同一笔开销，走同一档实色降级。
+  /// 窗口结束切回玻璃但**不冻结**（见文件头：二级退场靠库内 ticker 才移除
+  /// `OverlayPortal`，冻结会把它停在屏幕上）。
   void _thawForSideMotion() {
     _timer?.cancel();
-    _timer = null;
-    _setState(frozen: false);
+    _setState(glass: false, frozen: false);
+    _timer = Timer(OrbitPopupGlass.morphWindow, () {
+      if (!mounted) return;
+      _setState(glass: true);
+    });
   }
 
   /// 收场：取消计时、立即解冻（回收动画要靠库内 ticker）、卡面回实色

@@ -197,6 +197,13 @@ void main() {
     await _measure(tester, 'menu_morph', () async {
       await tester.tap(find.byTooltip('更多操作'));
       await _pumpFor(tester);
+      // 二级面板堆叠展开/收回（视图档）：2026-11-08 起形变窗口内降实色
+      // （此前「只解冻不降材质」，二级面板 origin/size 逐帧变导致玻璃纹理
+      // 缓存逐帧失效）——本段是该回归的防回归锚点
+      await tester.tap(find.text('视图'));
+      await _pumpFor(tester);
+      await tester.tap(find.text('返回上级'));
+      await _pumpFor(tester);
     });
 
     // 再点遮罩收起，让下一用例从干净状态起跑

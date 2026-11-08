@@ -284,8 +284,9 @@ class _OrbitGlassMenuState extends State<OrbitGlassMenu> {
             _secondaryBounds = anchor.bounds ?? _secondaryBounds;
             setState(() {
               _secondary = (g, i);
-              // 堆叠展开是弹层已开后的新形变：解冻放行（卡面保持玻璃，
-              // 不闪回实色），见 OrbitPopupGlassMotion.motionToken
+              // 堆叠展开是弹层已开后的新形变：解冻放行并在形变窗口内
+              // 降实色（二级面板 origin/size 逐帧变，玻璃纹理缓存逐帧失效），
+              // 见 OrbitPopupGlassMotion.motionToken
               _motion++;
             });
           },
@@ -314,7 +315,7 @@ class _OrbitGlassMenuState extends State<OrbitGlassMenu> {
           arrowRotation: -90,
           onPressed: () => setState(() {
             _secondary = null;
-            // 收回二级：解冻让二级的退场与一级的堆叠回弹跑完（冻结会把它
+            // 收回二级：解冻并降实色跑完退场与堆叠回弹（冻结会把二级面板
             // 停在屏幕上——退场靠库内 ticker 才移除 OverlayPortal）
             _motion++;
           }),
