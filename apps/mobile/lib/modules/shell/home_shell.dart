@@ -191,9 +191,10 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       child: Stack(
         children: [
           Scaffold(
-            // 详情见 [OrbitBottomNav]：底栏是悬浮胶囊，内容必须铺到屏幕底边，玻璃才
-            // 采样得到背后的列表/卡片；各页滚动尾部按 `OrbitBottomNav.clearanceOf`
-            // 自带净空，末行不会被栏体扣住。
+            // 键盘避让关闭：壳层 body 即玻璃捕获树，键盘动画期逐帧缩放会让
+            // 捕获树逐帧重录整页快照（toImageSync，全 App 最重一笔）；壳内
+            // 无输入流，键盘场景全在根 Overlay 弹层（快速添加/表单自带避让）
+            resizeToAvoidBottomInset: false,
             extendBody: true,
             body: content,
             // 玻璃作用域之下的 context：本 build 的 context 在 [OrbitGlassScope]

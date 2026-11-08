@@ -74,6 +74,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         kw.isEmpty ? null : ref.watch(searchProvider(kw)).value;
 
     return Scaffold(
+      // 搜索框在页头下方（顶部），键盘盖不住输入框，无需避让；关掉可避免
+      // 键盘动画期壳层捕获树逐帧重录（同其余壳内分支口径，2026-11-08）
+      resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
           Positioned.fill(

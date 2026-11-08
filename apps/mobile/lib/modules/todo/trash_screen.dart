@@ -247,6 +247,9 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
     final destructive = colors.destructive;
 
     return Scaffold(
+      // 壳内分支页不吃键盘避让：键盘场景全在弹层（根 Overlay），body 缩放会
+      // 让壳层捕获树逐帧重录整页快照（toImageSync）——2026-11-08 键盘窗根因
+      resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
           Positioned.fill(
