@@ -21,6 +21,7 @@ import 'package:orbit/shared/widgets/shadcn/orbit_dropdown_preference.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_filter_chip.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_settings_group.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_switch.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_sheets.dart' show holdRemainingKey;
 import 'package:orbit/shared/widgets/shadcn/orbit_text_field.dart';
 import 'support/orbit_test_app.dart';
 
@@ -414,7 +415,7 @@ void main() {
     await tester.tap(find.text('确认升级'));
     await tester.pumpAndSettle();
     // 密码确认后独立再走 5 秒时停（换钥 + 云端全量重传，桌面同口径）
-    expect(find.text('请阅读后果（5s）'), findsOneWidget);
+    expect(find.byKey(holdRemainingKey), findsOneWidget);
     await tester.pump(const Duration(seconds: 5));
     await tester.pump();
     await tester.tap(find.text('确认升级').last);
@@ -437,7 +438,7 @@ void main() {
     await _tapAt(tester, find.text('以本机为准重置云端'));
     await tester.pumpAndSettle();
     // 不可逆操作必须二次确认，且确认钮先走 5 秒时停
-    expect(find.text('请阅读后果（5s）'), findsOneWidget);
+    expect(find.byKey(holdRemainingKey), findsOneWidget);
     await tester.pump(const Duration(seconds: 5));
     await tester.pump();
     expect(find.text('确认重置云端'), findsOneWidget);
@@ -458,9 +459,9 @@ void main() {
 
     await _tapAt(tester, find.text('以本机为准重置云端'));
     await tester.pumpAndSettle();
-    // 确认钮 5 秒时停内禁用并倒数（桌面 DangerousConfirmDialog 同口径）
-    expect(find.text('请阅读后果（5s）'), findsOneWidget);
-    await tester.tap(find.text('请阅读后果（5s）'), warnIfMissed: false);
+    // 确认钮 5 秒时停内禁用，原文案后接「（5s）」括号秒数（桌面同口径冷静期）
+    expect(find.byKey(holdRemainingKey), findsOneWidget);
+    await tester.tap(find.byKey(holdRemainingKey), warnIfMissed: false);
     await tester.pump();
     expect(find.text('以本机为准重置云端'), findsWidgets, reason: '时停中点击不得关层');
     await tester.pump(const Duration(seconds: 5));
@@ -528,7 +529,7 @@ void main() {
     await _tapAt(tester, find.widgetWithText(OrbitButton, '回收孤儿数据桶'));
     await tester.pumpAndSettle();
     // 桌面诊断页该入口走 DangerousConfirmDialog，移动端同口径 5 秒时停
-    expect(find.text('请阅读后果（5s）'), findsOneWidget);
+    expect(find.byKey(holdRemainingKey), findsOneWidget);
     await tester.pump(const Duration(seconds: 5));
     await tester.pump();
     await tester.tap(find.text('回收'));

@@ -81,11 +81,19 @@ const AnimationStyle bottomSheetMotion = AnimationStyle(
   curve: AppMotion.sheetEnter,
 );
 
-/// 确认钮文案：冷静期未走完显示剩余秒数，走完显示正常确认文案。
+/// 冷静期确认文案的 finder（原文案 + 括号秒数，形态回归测试用）
+const ValueKey<String> holdRemainingKey = ValueKey<String>(
+  'orbit-hold-remaining',
+);
+
+/// 冷静期秒数文案（纯函数便于单测）：括号里只放秒数，走完返回空串。
 ///
-/// 与桌面 `DangerousConfirmDialog.formatHoldLabel` 同口径（纯函数便于单测）。
-String formatHoldConfirmLabel(int remaining, String confirmLabel) =>
-    remaining > 0 ? '请阅读后果（${remaining}s）' : confirmLabel;
+/// 确认钮**始终显示调用方原文案**，只在后面接「（Ns）」——不替换文案、
+/// 不另起一行，也不给秒数另设字体/颜色（整段同一个 Text，与按钮文字同源），
+/// 避免半宽按钮里长文案换行把按钮撑高（2026-11-09 真机反馈）。
+/// 冷静期时长仍与桌面 `DangerousConfirmDialog` 同口径。
+String formatHoldRemaining(int remaining) =>
+    remaining > 0 ? '（${remaining}s）' : '';
 
 /// 确认弹层卡片 finder（形态回归测试用；同 `orbitSelectPopupKey` 口径）
 const ValueKey<String> confirmDialogCardKey = ValueKey<String>(
@@ -96,8 +104,8 @@ const ValueKey<String> confirmDialogCardKey = ValueKey<String>(
 /// 点遮罩/下滑关闭/取消都是 `false`
 /// （调用方直接 `if (!await showConfirmBottomSheet(...)) return;` 即可，不必判 null）。
 ///
-/// [holdSeconds] > 0 时开层即进入强制冷静期：确认钮禁用并显示剩余秒数，
-/// 倒计时归零后才可点（对应桌面 `DangerousConfirmDialog` 的 `holdSeconds`）。
+/// [holdSeconds] > 0 时开层即进入强制冷静期：确认钮禁用，原文案后面接「（Ns）」
+/// 括号秒数（同一段文字、同一字体，不另起一行），归零后才可点。
 /// 默认 0 = 立即确认，存量调用行为不变。
 Future<bool> showConfirmBottomSheet(
   BuildContext context, {
@@ -322,8 +330,21 @@ class _ConfirmSheetState extends State<_ConfirmSheet> {
         ),
         cancelLabel: widget.cancelLabel,
         onCancel: widget.onCancel,
-        // 冷静期内确认钮禁用、文案走剩余秒数（取消始终可点）
-        confirmLabel: formatHoldConfirmLabel(_remaining, widget.confirmLabel),
+        // 冷静期内确认钮禁用，原文案后只接「（Ns）」括号秒数：整段同一个 Text、
+        // 同一字体，不另起一行，按钮尺寸不随倒计时变化（取消始终可点）。
+        // scaleDown 兜底：极窄屏放不下时整行等比缩小，不换行撑高按钮。
+        confirmLabel: widget.confirmLabel,
+        confirmChild: _remaining > 0
+            ? FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  '${widget.confirmLabel}${formatHoldRemaining(_remaining)}',
+                  key: holdRemainingKey,
+                  maxLines: 1,
+                  textAlign: TextAlign.center,
+                ),
+              )
+            : null,
         onConfirm: _remaining > 0 ? null : widget.onConfirm,
         destructive: widget.destructive,
       ),

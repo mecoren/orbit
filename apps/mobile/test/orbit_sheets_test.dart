@@ -523,9 +523,9 @@ void main() {
     expect(await cancelled, isFalse);
   });
 
-  // 冷静期口径对齐桌面 DangerousConfirmDialog：确认钮先禁用并倒数，
+  // 冷静期：确认钮只禁用 + 原文案后接「（Ns）」，整段同一字体、按钮尺寸不变；
   // 走完才可点；取消不受限（用户随时能退出）。
-  testWidgets('确认弹层：holdSeconds 冷静期内确认钮禁用，走完才可点', (tester) async {
+  testWidgets('确认弹层：holdSeconds 冷静期内确认钮文案/字体/尺寸不变', (tester) async {
     final ctx = await pumpHost(tester);
 
     final result = showConfirmBottomSheet(
@@ -537,27 +537,46 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('请阅读后果（3s）'), findsOneWidget);
+    // 原文案后只接括号秒数，整段同一个 Text、不另设字体样式
+    expect(find.text('确认生成（3s）'), findsOneWidget);
+    final holdText = tester.widget<Text>(find.byKey(holdRemainingKey));
+    expect(holdText.data, '确认生成（3s）');
+    expect(holdText.style, isNull, reason: '冷静期文案不得另设字体/颜色');
+
+    Size confirmSize() => tester.getSize(
+          find
+              .descendant(
+                of: find.byKey(confirmDialogCardKey),
+                matching: find.byType(MiuixButton),
+              )
+              .last,
+        );
+    final sizeAtStart = confirmSize();
+
     // 冷静期内点确认不生效：抽屉仍在
-    await tester.tap(find.text('请阅读后果（3s）'), warnIfMissed: false);
+    await tester.tap(find.byKey(holdRemainingKey), warnIfMissed: false);
     await tester.pump();
     expect(find.text('再次确认生成'), findsOneWidget);
 
     await tester.pump(const Duration(seconds: 1));
-    expect(find.text('请阅读后果（2s）'), findsOneWidget);
+    expect(find.text('确认生成（2s）'), findsOneWidget);
+    expect(confirmSize(), sizeAtStart, reason: '倒计时不得把按钮撑大');
     await tester.pump(const Duration(seconds: 1));
-    expect(find.text('请阅读后果（1s）'), findsOneWidget);
+    expect(find.text('确认生成（1s）'), findsOneWidget);
+    expect(confirmSize(), sizeAtStart, reason: '倒计时不得把按钮撑大');
     await tester.pump(const Duration(seconds: 1));
+    expect(find.byKey(holdRemainingKey), findsNothing);
     expect(find.text('确认生成'), findsOneWidget);
+    expect(confirmSize(), sizeAtStart, reason: '冷静期结束按钮尺寸仍不变');
 
     await tester.tap(find.text('确认生成'));
     await tester.pumpAndSettle();
     expect(await result, isTrue);
   });
 
-  test('冷静期文案：未走完显示剩余秒数，走完回落确认文案', () {
-    expect(formatHoldConfirmLabel(3, '确认生成'), '请阅读后果（3s）');
-    expect(formatHoldConfirmLabel(1, '确认清除'), '请阅读后果（1s）');
-    expect(formatHoldConfirmLabel(0, '确认清除'), '确认清除');
+  test('冷静期秒数文案：括号里只放秒数，走完隐藏', () {
+    expect(formatHoldRemaining(3), '（3s）');
+    expect(formatHoldRemaining(1), '（1s）');
+    expect(formatHoldRemaining(0), '');
   });
 }

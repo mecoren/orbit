@@ -6,6 +6,7 @@ import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/settings/test_data_page.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_filter_chip.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_sheets.dart' show holdRemainingKey;
 
 import 'support/orbit_test_app.dart';
 
@@ -18,7 +19,7 @@ Widget _wrap(MockOrbitBridge bridge) => ProviderScope(
       child: orbitTestApp(home: const TestDataPage()),
     );
 
-/// 走完 3 秒冷静期：确认钮从「请阅读后果（3s）」回落为正式文案
+/// 走完 3 秒冷静期：确认钮原文案后的「（3s）」括号秒数消失后即可点
 Future<void> _passHold(WidgetTester tester) async {
   await tester.pump(const Duration(seconds: 3));
   await tester.pump();
@@ -73,12 +74,12 @@ void main() {
     await tester.tap(find.text('一键生成'));
     await tester.pumpAndSettle();
     expect(find.text('生成示例数据（第 1 步 / 共 2 步）'), findsOneWidget);
-    expect(find.text('请阅读后果（3s）'), findsOneWidget);
+    expect(find.byKey(holdRemainingKey), findsOneWidget);
     await _passHold(tester);
     await tester.tap(find.text('继续'));
     await tester.pumpAndSettle();
     expect(find.text('再次确认生成（第 2 步 / 共 2 步）'), findsOneWidget);
-    expect(find.text('请阅读后果（3s）'), findsOneWidget);
+    expect(find.byKey(holdRemainingKey), findsOneWidget);
     await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
     expect(find.text('生成结果'), findsNothing, reason: '第二步取消不得写库');

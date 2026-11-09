@@ -37,7 +37,7 @@ const int _dangerousHoldSeconds = 5;
 /// 危险动作口径：导入会清空当前业务表再写入备份内容（事务内原子），因此
 /// 全部恢复路径都必须经过预览确认，且不提供「跳过预览」的快捷入口。
 /// 恢复确认对齐桌面 `DangerousConfirmDialog`：预览段、最后确认段、schema
-/// 强制段各 5 秒时停（确认钮先禁用倒数「请阅读后果（Ns）」）。
+/// 强制段各 5 秒时停（确认钮原文案后接「（Ns）」括号秒数、同一字体）。
 class BackupPage extends ConsumerStatefulWidget {
   const BackupPage({super.key});
 

@@ -42,6 +42,8 @@ const _purgeHoldSeconds = 3;
 ///   + 右列「保留期 / 动作钮」，行高与内边距同任务行）；
 /// - 长按行弹操作菜单（恢复 / 彻底删除红色确认）；侧滑方向同待办列表——
 ///   右滑恢复（蓝）、左滑彻底删除（红）；
+/// - 单条彻底删除：行内红钮 / 左滑 / 长按菜单三条入口同一份确认层，3 秒
+///   时停（`_purgeHoldSeconds`，与「清空」同档），走完才可点；
 /// - 标题栏右侧「清空」按钮：桌面同款**两段式确认**，每段 3 秒时停——第一段
 ///   读后果点「继续」，第二段独立再时停一次，第二击才真正执行；
 /// - 彻底删除/清空可撤销（乐观隐藏 + 5s 窗口延迟提交，purge 物理
@@ -162,6 +164,8 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
     }
   }
 
+  /// 单条彻底删除：与「清空」同档 3 秒时停（确认钮原文案后接「（Ns）」括号
+  /// 秒数、同一字体），之后仍保留 5 秒撤销窗口。
   Future<void> _purgeTask(TodoTask task) async {
     final confirmed = await showConfirmBottomSheet(
       context,
@@ -170,6 +174,7 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
           '删除后 5 秒内可撤销。',
       confirmLabel: '彻底删除',
       destructive: true,
+      holdSeconds: _purgeHoldSeconds,
     );
     if (!confirmed || !mounted) return;
     // bridge 调度时先行捕获——commit 闭包可能在 dispose 兜底路径 fire，

@@ -13,6 +13,7 @@ import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/api/dto.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/todo/trash_screen.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_sheets.dart' show holdRemainingKey;
 import 'support/orbit_test_app.dart';
 
 Widget _wrap(Widget child, MockOrbitBridge bridge) => ProviderScope(
@@ -150,7 +151,8 @@ void main() {
       expect(find.text('清空'), findsOneWidget);
     });
 
-    // ── 可撤销彻底删除（2026-09-09：purge 延迟提交 + toast 撤销按钮）──
+    // ── 可撤销彻底删除（purge 延迟提交 + toast 撤销按钮；2026-11-09 起确认层
+    // 补 3 秒时停，与「清空」同档）──
 
     testWidgets('彻底删除：5s 窗口内点撤销 → 行恢复且库未删', (tester) async {
       final bridge = MockOrbitBridge();
@@ -163,13 +165,20 @@ void main() {
       await tester.pumpWidget(_wrapWithNavKey(const TrashScreen(), bridge));
       await _settlePastMockLatency(tester);
 
-      // 长按行弹操作菜单 → 「彻底删除」→ 确认（确认钮文案与菜单项同名，
-      // 弹窗 content 为含标题的长句用 textContaining 锁定弹窗本体）
+      // 长按行弹操作菜单 → 「彻底删除」→ 3 秒时停后确认（确认钮文案带括号
+      // 秒数，弹窗 content 为含标题的长句用 textContaining 锁定弹窗本体）
       await tester.longPress(find.text(victim.title));
       await tester.pumpAndSettle();
       await tester.tap(find.text('彻底删除').first); // 菜单项
       await tester.pumpAndSettle();
       expect(find.textContaining('确定要彻底删除'), findsOneWidget);
+      expect(find.byKey(holdRemainingKey), findsOneWidget);
+      expect(find.text('彻底删除（3s）'), findsOneWidget, reason: '括号秒数接在原文案后');
+      await tester.tap(find.byKey(holdRemainingKey), warnIfMissed: false);
+      await tester.pump();
+      expect(find.textContaining('确定要彻底删除'), findsOneWidget, reason: '时停未走完不得关层');
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pump();
       await tester.tap(find.text('彻底删除').last); // 确认抽屉的确认钮
       await tester.pumpAndSettle();
 
@@ -204,13 +213,14 @@ void main() {
       await tester.pumpWidget(_wrapWithNavKey(const TrashScreen(), bridge));
       await _settlePastMockLatency(tester);
 
-      // 第一段：读后果 + 3 秒时停（确认钮先禁用并倒数，走完才回落「继续」）
+      // 第一段：读后果 + 3 秒时停（原文案后接「（Ns）」括号秒数，走完才可点）
       await tester.tap(find.text('清空'));
       await tester.pumpAndSettle();
-      expect(find.text('请阅读后果（3s）'), findsOneWidget);
-      await tester.tap(find.text('请阅读后果（3s）'), warnIfMissed: false);
+      expect(find.byKey(holdRemainingKey), findsOneWidget);
+      expect(find.text('继续（3s）'), findsOneWidget, reason: '括号秒数接在原文案后');
+      await tester.tap(find.byKey(holdRemainingKey), warnIfMissed: false);
       await tester.pump();
-      expect(find.text('请阅读后果（3s）'), findsOneWidget, reason: '时停未走完不得关层');
+      expect(find.byKey(holdRemainingKey), findsOneWidget, reason: '时停未走完不得关层');
       await tester.pump(const Duration(seconds: 3));
       await tester.pump();
       expect(find.text('继续'), findsOneWidget);
@@ -219,7 +229,7 @@ void main() {
 
       // 第二段：独立再走一次 3 秒时停，第二击才真正执行
       expect(find.text('再次确认：清空回收站'), findsOneWidget);
-      expect(find.text('请阅读后果（3s）'), findsOneWidget);
+      expect(find.byKey(holdRemainingKey), findsOneWidget);
       await tester.pump(const Duration(seconds: 3));
       await tester.pump();
       expect(find.text('清空回收站'), findsOneWidget);
@@ -260,12 +270,15 @@ void main() {
       await tester.pumpWidget(_wrapWithNavKey(const TrashScreen(), bridge));
       await _settlePastMockLatency(tester);
 
-      // 长按行 → 菜单「彻底删除」→ 确认
+      // 长按行 → 菜单「彻底删除」→ 走完 3 秒时停才确认
       await tester.longPress(find.text(victim.title));
       await tester.pumpAndSettle();
       await tester.tap(find.text('彻底删除').first);
       await tester.pumpAndSettle();
       expect(find.textContaining('确定要彻底删除'), findsOneWidget);
+      expect(find.byKey(holdRemainingKey), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pump();
       await tester.tap(find.text('彻底删除').last);
       await tester.pumpAndSettle();
       final rowTitle2 = find
