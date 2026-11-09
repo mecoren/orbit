@@ -145,7 +145,8 @@ void main() {
       await _settlePastMockLatency(tester);
 
       expect(find.text(victim.title), findsOneWidget);
-      expect(find.textContaining('天后自动清除'), findsOneWidget);
+      expect(find.textContaining('天后'), findsOneWidget);
+      expect(find.textContaining('删除于'), findsOneWidget);
       expect(find.text('清空'), findsOneWidget);
     });
 
@@ -175,7 +176,7 @@ void main() {
       // 乐观隐藏：列表行消失（toast description 里仍有标题副本，故按列表行
       // 样式口径改用 findsNWidgets——ListTile 行的 title 是 15px，toast 描述 12px）
       final rowTitle = find
-          .byWidgetPredicate((w) => w is Text && w.data == victim.title && w.style?.fontSize == 15);
+          .byWidgetPredicate((w) => w is Text && w.data == victim.title && w.style?.fontSize == 16);
       expect(rowTitle, findsNothing);
       expect(find.text('撤销'), findsOneWidget);
 
@@ -232,7 +233,7 @@ void main() {
           (w) =>
               w is Text &&
               w.data == victims.first.title &&
-              w.style?.fontSize == 15,
+              w.style?.fontSize == 16,
         ),
         findsNothing,
       );
@@ -268,7 +269,7 @@ void main() {
       await tester.tap(find.text('彻底删除').last);
       await tester.pumpAndSettle();
       final rowTitle2 = find
-          .byWidgetPredicate((w) => w is Text && w.data == victim.title && w.style?.fontSize == 15);
+          .byWidgetPredicate((w) => w is Text && w.data == victim.title && w.style?.fontSize == 16);
       expect(rowTitle2, findsNothing);
 
       // 推进假时钟过 5s 窗口 → timer fire 触发提交（_commitPurge 内部

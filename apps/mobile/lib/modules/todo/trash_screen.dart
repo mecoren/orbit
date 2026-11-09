@@ -1,24 +1,29 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../core/theme/app_motion.dart';
+import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/widgets/shadcn/orbit_bottom_nav.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_empty_state.dart';
+import '../../shared/widgets/shadcn/orbit_list_card.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_pull_to_refresh.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_row_toggle.dart';
 import '../../shared/widgets/shadcn/orbit_skeleton.dart';
+import '../../shared/widgets/shadcn/orbit_swipe_guard.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../shared/widgets/shadcn/orbit_button.dart';
-import '../../shared/widgets/shadcn/orbit_icon_button.dart';
 import '../shell/orbit_shell_back.dart';
 import 'providers/todo_providers.dart';
 import '../../core/theme/icon_map.dart';
@@ -34,12 +39,15 @@ const _purgeHoldSeconds = 3;
 /// 回收站页 /todo/trash（回收站落地：删除的任务可恢复 + 保留时间可配）
 ///
 /// 列表 = todo_tasks 墓碑行（is_deleted=1，最近删除排最前）。
-/// - 长按行弹操作菜单（恢复 / 彻底删除红色确认）；
+/// - 行版式**对齐待办列表**（[OrbitCardSegment] 卡片分段 + 左列「标题 / 删除日期」
+///   + 右列「保留期 / 动作钮」，行高与内边距同任务行）；
+/// - 长按行弹操作菜单（恢复 / 彻底删除红色确认）；侧滑方向同待办列表——
+///   右滑恢复（蓝）、左滑彻底删除（红）；
 /// - 标题栏右侧「清空」按钮：桌面同款**两段式确认**，每段 3 秒时停——第一段
 ///   读后果点「继续」，第二段独立再时停一次，第二击才真正执行；
 /// - 彻底删除/清空可撤销（乐观隐藏 + 5s 窗口延迟提交，purge 物理
 ///   删除只能在提交前拦截）；
-/// - 行副标题显示保留期倒计时（永久档显示删除日期）；
+/// - 行右列显示保留期倒计时（永久档不显示），左列副标题显示删除日期；
 /// - 自动过期清理由 Rust 守护执行（startTrashScheduler，BootGate 接线）。
 ///
 /// 页头左上返回键回退到**进站前的模块页签**（[OrbitShellBack]）：回收站通常
@@ -234,17 +242,21 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
     );
   }
 
-  /// 保留期倒计时副标题（永久档 → 删除日期；档位内 → N 天后自动清除）
-  String _expiresLabel(TodoTask task, int retentionDays) {
+  /// 左列副标题：删除日期（与待办列表行副标题同档 12px 次要文字色）
+  String _deletedLabel(TodoTask task) => '删除于 ${_formatDate(task.deletedAt ?? 0)}';
+
+  /// 右列保留期标签（对齐待办列表右列日期的短标签口径）：
+  /// 永久档返回 null（无「何时清除」可言）；已过期 → 「即将清除」走危险色，
+  /// 否侧 → 「N 天后」走主题强调色。
+  ({String? label, bool urgent}) _retentionLabel(TodoTask task, int retentionDays) {
+    if (retentionDays == 0) return (label: null, urgent: false);
     final deletedAt = task.deletedAt ?? 0;
-    final dateText = _formatDate(deletedAt);
-    if (retentionDays == 0) return '删除于 $dateText';
     final remain =
         ((deletedAt + retentionDays * _dayMs - DateTime.now().millisecondsSinceEpoch) /
                 _dayMs)
             .ceil();
-    if (remain <= 0) return '即将自动清除';
-    return '$remain 天后自动清除 · 删除于 $dateText';
+    if (remain <= 0) return (label: '即将清除', urgent: true);
+    return (label: '$remain 天后', urgent: false);
   }
 
   String _formatDate(int ms) {
@@ -299,21 +311,29 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
                     displacement: AppDimens.space8,
                     child: ListView.builder(
                       controller: _scrollController,
-                      padding: EdgeInsets.only(
-                        top: MediaQuery.of(context).padding.top +
+                      // 左右 12 留白：卡片是「页面里的一张卡」而非通栏表格
+                      //（与待办列表 cardListPadding 同口径）
+                      padding: EdgeInsets.fromLTRB(
+                        AppDimens.space12,
+                        MediaQuery.of(context).padding.top +
                             OrbitPageHeader.rowHeight +
                             AppDimens.space8,
+                        AppDimens.space12,
                         // 悬浮底栏净空 + 呼吸留白（末条墓碑行不被玻璃栏扣住）
-                        bottom:
-                            OrbitBottomNav.clearanceOf(context) +
+                        OrbitBottomNav.clearanceOf(context) +
                             AppDimens.space16,
                       ),
                       itemCount: visible.length,
                       itemBuilder: (context, index) {
                         final task = visible[index];
+                        final retention = _retentionLabel(task, retentionDays);
                         return _TrashTaskTile(
                           task: task,
-                          subtitle: _expiresLabel(task, retentionDays),
+                          // 同卡内段位：首段圆上角、末段圆下角、段间 1px 分隔线
+                          edge: OrbitCardEdge.of(index, visible.length),
+                          deletedLabel: _deletedLabel(task),
+                          retentionLabel: retention.label,
+                          retentionUrgent: retention.urgent,
                           onLongPress: () => _showTaskActions(task),
                           onRestore: () => _restoreTask(task),
                           onPurge: () => _purgeTask(task),
@@ -385,17 +405,20 @@ class _TrashSkeletonState extends State<_TrashSkeleton>
   Widget build(BuildContext context) {
     return ListView(
       physics: const NeverScrollableScrollPhysics(),
-      padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top +
+      padding: EdgeInsets.fromLTRB(
+        AppDimens.space12,
+        MediaQuery.of(context).padding.top +
             OrbitPageHeader.rowHeight +
             AppDimens.space8,
-        bottom: AppDimens.space16,
+        AppDimens.space12,
+        AppDimens.space16,
       ),
       children: [
         for (var i = 0; i < 6; i++)
           Padding(
+            // 12 卡片留白 + 16 卡片内边距 = 骨架文字起始位与任务行标题对齐
             padding: const EdgeInsets.symmetric(
-              horizontal: AppDimens.space16,
+              horizontal: AppDimens.space12 + AppDimens.space16,
               vertical: AppDimens.space12,
             ),
             child: Column(
@@ -415,18 +438,42 @@ class _TrashSkeletonState extends State<_TrashSkeleton>
   }
 }
 
-/// 回收站行卡片：标题 + 倒计时副标题 + 右侧恢复快捷钮
+/// 回收站行（版式对齐待办列表 [TodoTaskTile]，2026-11-09）
+///
+/// 左列读「是什么 / 什么时候删的」：标题（16px，与任务行同档）+「删除于 日期」；
+/// 右列读「还剩多久 / 能做什么」：保留期短标签（主题蓝，已过期转危险色）压在
+/// 两枚行内动作钮（恢复 / 彻底删除）之上，与任务行右列的「日期 + 状态开关对」
+/// 同一信息层级。
+///
+/// 卡片分段（[OrbitCardSegment]）由列表按 index 传入：首段圆上角、末段圆下角、
+/// 段间 1px `divider`——与待办列表同一张卡的拼法（懒加载列表仍逐行虚拟化）。
+///
+/// 侧滑方向同待办列表：右滑露「恢复」（蓝），左滑露「彻底删除」（红，
+/// 仍需二次确认）；长按仍弹整行操作菜单。
 class _TrashTaskTile extends StatelessWidget {
   const _TrashTaskTile({
     required this.task,
-    required this.subtitle,
+    required this.edge,
+    required this.deletedLabel,
+    required this.retentionLabel,
+    required this.retentionUrgent,
     required this.onLongPress,
     required this.onRestore,
     required this.onPurge,
   });
 
   final TodoTask task;
-  final String subtitle;
+  final OrbitCardEdge edge;
+
+  /// 左列副标题：删除日期
+  final String deletedLabel;
+
+  /// 右列保留期标签；null = 永久保留档（无「何时清除」可言）
+  final String? retentionLabel;
+
+  /// 保留期已到（文案转危险色）
+  final bool retentionUrgent;
+
   final VoidCallback onLongPress;
   final VoidCallback onRestore;
   final VoidCallback onPurge;
@@ -434,34 +481,148 @@ class _TrashTaskTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: AppDimens.space16,
-        vertical: AppDimens.space4,
-      ),
-      onLongPress: onLongPress,
-      title: Text(
-        task.title,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontSize: 15,
-          fontWeight: FontWeight.w500,
-          color: colors.titleText,
+    final muted = colors.deactivatedText;
+    final retention = retentionLabel;
+
+    return OrbitSwipeGuard(
+      // 与行内 Slidable 同 key：列表复用换任务时连 controller 一起重建，
+      // 避免上一行的开合姿态残留到新行
+      key: ValueKey('trash-swipe-guard-${task.id}'),
+      builder: (context, swipeEnabled, slidableController) => Slidable(
+        key: ValueKey('trash-slidable-${task.id}'),
+        controller: slidableController,
+        enabled: swipeEnabled,
+        // 右滑 → 恢复（回收站的主操作，蓝同待办列表「完成」）
+        startActionPane: ActionPane(
+          motion: const BehindMotion(),
+          extentRatio: 0.26,
+          children: [
+            SlidableAction(
+              onPressed: (_) => onRestore(),
+              backgroundColor: OrbitAccents.todoAccent,
+              foregroundColor: Colors.white,
+              icon: OrbitIcons.archiveRestore,
+              label: '恢复',
+              borderRadius: AppShapes.medium,
+            ),
+          ],
         ),
-      ),
-      subtitle: Text(
-        subtitle,
-        style: TextStyle(fontSize: 12, color: colors.secondaryText),
-      ),
-      trailing: OrbitIconButton(
-        icon: Icon(
-          OrbitIcons.archiveRestore,
-          size: AppDimens.iconSizeMd,
-          color: OrbitAccents.themeAccent,
+        // 左滑 → 彻底删除（红同待办列表「删除」，仍需二次确认）
+        endActionPane: ActionPane(
+          motion: const BehindMotion(),
+          extentRatio: 0.26,
+          children: [
+            SlidableAction(
+              onPressed: (_) {
+                HapticFeedback.mediumImpact();
+                onPurge();
+              },
+              backgroundColor: colors.destructive,
+              foregroundColor: Colors.white,
+              icon: OrbitIcons.delete,
+              label: '彻底删除',
+              borderRadius: AppShapes.medium,
+            ),
+          ],
         ),
-        onPressed: onRestore,
-        tooltip: '恢复',
+        child: InkWell(
+          onLongPress: onLongPress,
+          child: OrbitCardSegment(
+            edge: edge,
+            child: Container(
+              // 单行行也有完整热区高度（卡片里行高不随副标题有无跳动）
+              constraints: const BoxConstraints(
+                minHeight: AppDimens.touchTarget,
+              ),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppDimens.space16,
+                vertical: AppDimens.space8,
+              ),
+              child: Row(
+                children: [
+                  // 左列：标题 + 删除日期
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          task.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: colors.titleText,
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            deletedLabel,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: colors.secondaryText,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: AppDimens.space8),
+                  // 右列：保留期标签 + 行内动作钮（右对齐）
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      if (retention != null)
+                        Text(
+                          retention,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: retentionUrgent
+                                ? colors.destructive
+                                : OrbitAccents.themeAccent,
+                          ),
+                        ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            OrbitRowToggle(
+                              icon: OrbitIcons.archiveRestore,
+                              active: true,
+                              activeColor: OrbitAccents.themeAccent,
+                              inactiveColor: muted,
+                              tooltip: '恢复到任务列表',
+                              onTap: onRestore,
+                              iconSize: 14,
+                              hitExtent: 32,
+                            ),
+                            const SizedBox(width: AppDimens.space4),
+                            OrbitRowToggle(
+                              icon: OrbitIcons.delete,
+                              active: true,
+                              activeColor: colors.destructive,
+                              inactiveColor: muted,
+                              tooltip: '彻底删除（5 秒内可撤销）',
+                              onTap: onPurge,
+                              iconSize: 14,
+                              hitExtent: 32,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
