@@ -1,28 +1,40 @@
-import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
+import 'package:flutter/widgets.dart';
 
-/// 页签壳的「上一页」记忆：分支根页返回键的回退目标
+/// 分支根页标记：由 [app_router.dart] 的 `tabRoot` 统一套在八个模块分支根页上。
 ///
-/// [StatefulShellRoute] 给每个功能模块一份**独立导航栈**，分支根页（回收站 /
-/// 统计 / 搜索等经「更多」面板、侧栏或设置页跳进来的模块）就坐在自己栈的栈底
-/// ——`Navigator.maybePop` 无处可退，页头返回键会变成死键。而这类模块的进入
-/// 路径几乎都不在底栏：页签栏此时给不出「回到刚才那一页」的出口（点「更多」
-/// 只开面板、点别的页签是换目的地而非回退）。
+/// [OrbitPageHeader] 借此区分「分支根页」与「栈内推入页」——只有前者在
+/// [OrbitShellBack.hasPrevious] 为真时长出返回箭头，后者继续走 Navigator
+/// 原生 `maybePop`（推入页的上一页就是 go_router 栈里那一页）。
+class OrbitBranchRoot extends InheritedWidget {
+  const OrbitBranchRoot({super.key, required super.child});
+
+  /// 当前 context 是否落在一个模块分支根页内
+  static bool isRoot(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<OrbitBranchRoot>() != null;
+
+  @override
+  bool updateShouldNotify(covariant OrbitBranchRoot oldWidget) => false;
+}
+
+/// 壳层的「上一页」上下文：下发可回退状态与统一返回动作
 ///
-/// 故由 [HomeShell] 在分支切换时记下上一次停靠的模块下标，经本 InheritedWidget
-/// 下发给分支根页；[StatefulNavigationShell.goBranch] 会恢复目标分支原有栈，
-/// 回退后位置与筛选状态都不丢。
+/// [StatefulShellRoute] 给每个模块一份独立导航栈，分支根页坐在自己栈的栈底，
+/// `Navigator.maybePop` 无处可退。系统返回键由 [HomeShell] 的单一 `PopScope`
+/// 兜底；页头返回箭头则由本 InheritedWidget 下发的 [onBack] 驱动，两者共用
+/// `orbit_back_dispatch.dart` 的 [goBack] —— 不会出现两套回退真值。
 class OrbitShellBack extends InheritedWidget {
   const OrbitShellBack({
     super.key,
-    required this.targetBranchIndex,
+    required this.hasPrevious,
+    required this.onBack,
     required super.child,
   });
 
-  /// 返回键目标模块分支下标；null = 无处可退（如冷启动直接落在本模块且它是
-  /// 唯一启用模块、或本模块已占据底栏页签——回退由页签承担），调用方不渲染
-  /// 返回键
-  final int? targetBranchIndex;
+  /// 是否存在上一个操作页面（无则交框架退系统桌面）
+  final bool hasPrevious;
+
+  /// 回到上一个操作页面（壳层 State 上的稳定方法引用）
+  final VoidCallback onBack;
 
   /// 取最近的壳层记忆；不在壳内（单页测试 / 根级推入页）返回 null
   static OrbitShellBack? maybeOf(BuildContext context) =>
@@ -30,21 +42,5 @@ class OrbitShellBack extends InheritedWidget {
 
   @override
   bool updateShouldNotify(OrbitShellBack oldWidget) =>
-      targetBranchIndex != oldWidget.targetBranchIndex;
-}
-
-/// 分支根页的返回动作：切回进站前的模块页签
-///
-/// 无壳上下文（或壳内无处可退）时退回 `Navigator.maybePop`——根级推入页
-/// （详情 / 设置子页）的返回语义照旧。
-void goBackToPreviousModule(BuildContext context) {
-  final target = OrbitShellBack.maybeOf(context)?.targetBranchIndex;
-  final shell = target == null
-      ? null
-      : StatefulNavigationShell.maybeOf(context);
-  if (target == null || shell == null) {
-    Navigator.of(context).maybePop();
-    return;
-  }
-  shell.goBranch(target);
+      hasPrevious != oldWidget.hasPrevious || onBack != oldWidget.onBack;
 }

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/routing/orbit_back_dispatch.dart';
 import '../../core/routing/router_keys.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../data/providers/bridge_provider.dart';
@@ -26,6 +27,7 @@ import '../todo/providers/todo_providers.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../auth/unlock_page.dart';
 import 'db_invalidation.dart';
+import 'nav_modules.dart';
 
 /// 启动门控（对齐原 React 版 App.tsx 门控序列）
 ///
@@ -62,6 +64,12 @@ class _BootGateState extends ConsumerState<BootGate>
 
   StreamSubscription<dynamic>? _dbChangesSub;
   StreamSubscription<dynamic>? _reminderDueSub;
+
+  /// 外部入口（通知 / 小组件）同帧去重：只挡同一帧里重复投递的同一事件。
+  /// 不能拿 `router.push` 的 Future 当门闸——它要等详情被 pop 才完成，
+  /// 会把用户停留在详情期间的后续通知/小组件点击永久吞掉。
+  bool _externalNavThisFrame = false;
+
   ReminderScheduler? _scheduler;
   DigestScheduler? _digest;
   SyncOnChangeScheduler? _syncOnChange;
@@ -209,17 +217,40 @@ class _BootGateState extends ConsumerState<BootGate>
     });
   }
 
+  /// 通知 / 小组件直达任务详情的统一入口
+  ///
+  /// 冷启动时根 Navigator 只有壳层首页，`push` 天然形成「详情 → 首页」基线：
+  /// 首次返回回首页，再返回才交框架退系统桌面。热运行时根栈下方仍是离站
+  /// 前那一页，返回即回到上一个操作页面，无需额外合成历史。
+  Future<void> _pushTaskDetail(int taskId) async {
+    if (!mounted || _externalNavThisFrame) return;
+    final router = rootRouter;
+    if (router == null) return;
+    _externalNavThisFrame = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _externalNavThisFrame = false;
+    });
+    // push 的 Future 在详情被 pop 时才完成；只做入栈、不等它，后续点击才能
+    // 继续叠加详情（返回逐层退），也不会因 location 被替换而永久锁死门闸。
+    unawaited(
+      router.push('/todo/$taskId').then<void>((_) {}).catchError((Object e) {
+        debugPrint('[BootGate] external detail push failed: $e');
+      }),
+    );
+  }
+
   void _goReady() {
     // 本地通知插件初始化 + 权限请求（幂等；拒绝则事件回落 toast，静默降级）
     NotificationService.instance.ensureInitialized();
+    // 页级返回历史基线：冷启动落点即首页。外部直达子页后历史里的 current
+    // 与壳层分支一致，goBack 的校准不会误补一条「访问」。
+    ref
+        .read(orbitNavHistoryProvider.notifier)
+        .ensureBaseline(startupModule.branchIndex);
     // 通知正文点击 → 跳任务详情（服务层经此回调拿到路由，不持有 context）。
     // rootRouter 由 rootNavigatorKey 装配后可用；MaterialApp.router 尚未
     // build 时为 null——冷启动拉起已由下方 consumeLaunchNotification 补位。
-    NotificationService.onNotificationTap = (taskId) async {
-      final router = rootRouter;
-      if (router == null) return;
-      await router.push('/todo/$taskId');
-    };
+    NotificationService.onNotificationTap = _pushTaskDetail;
     // B5 通知「完成」action：前台直调桥完成任务（dbChanges 事件自然
     // 失效业务缓存 + 调度器重排闹钟——完成实例提醒行由引擎软删）。
     // 重复任务推进时前台弹「已生成下一期」提示（后台 isolate 不可达，静默）。
@@ -304,21 +335,22 @@ class _BootGateState extends ConsumerState<BootGate>
     }));
     // 小组件勾选通道挂载 + 首刷快照（#3：通知完成回调同款位置——ready 后
     // 引擎稳定，原生积压队列可冲刷）
-    _widget.attach(onOpenTask: (taskId) async {
-      final router = rootRouter;
-      if (router == null) return;
-      await router.push('/todo/$taskId');
-    });
+    _widget.attach(
+      onOpenTask: (taskId) => unawaited(_pushTaskDetail(taskId)),
+    );
     _widget.refresh();
     _subscribeStreams();
     if (mounted) setState(() => _phase = _BootPhase.ready);
     // 冷启动拉起消费：应用被杀期间点通知 → 等首帧路由装配完成再跳详情
     //（push 早于 MaterialApp.router build 会丢；微任务兜一拍即可）
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      NotificationService.instance.consumeLaunchNotification();
+      if (!mounted) return; // 宿主已销毁：不在失效 context 上续播导航
+      // 三路消费各自幂等（原生取走即清）。通知拉起的详情是最后推入的顶层
+      // 页，返回自然先回到它压栈前那一页，不额外合成历史；分享不跳页。
+      unawaited(NotificationService.instance.consumeLaunchNotification());
       // 分享冷启动一路：onCreate intent 携带 EXTRA_TEXT 已存原生侧，
       // 路由就绪后取走建任务（toast 需 Overlay，早于此无渲染面）
-      ShareReceiver.consume(ref);
+      unawaited(ShareReceiver.consume(ref));
       // 快捷方式冷启动一路：launch intent 的动作 id 已在原生侧；取走后由
       // 侧栏处理器补发（侧栏若已装配则直接执行，否则暂存到其 initState 后补）
       ShortcutReceiver.consume();

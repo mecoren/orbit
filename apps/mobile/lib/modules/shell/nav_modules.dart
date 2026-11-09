@@ -217,13 +217,15 @@ final navModulesProvider =
   NavModulesController.new,
 );
 
-/// 应用启动落点 = 启用序第一个模块的根路由
+/// 应用启动模块（返回历史基线；与 [startupLocation] 同源，偏好只解析一次）
 ///
 /// `appRouter` 是顶层 final（惰性求值一次），而 `LocalPrefs.load()` 在
 /// `main()` 里先于 `runApp` 完成，此处读取时机安全；「今天」被停用时
 /// 冷启动直接落到当前配置的第一个模块，不会落到不可达页签。
-final String startupLocation =
+final OrbitNavModule startupModule =
     NavModulesState.parse(LocalPrefs.getString(navModulesPrefsKey) ?? '')
         .enabled
-        .first
-        .path;
+        .first;
+
+/// 应用启动落点 = 启用序第一个模块的根路由
+final String startupLocation = startupModule.path;

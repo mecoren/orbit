@@ -1,6 +1,7 @@
 // apps/mobile/test/router_transition_test.dart
 // 转场路由冒烟：pageSlideFromRight 构建的页面可正常入栈、动画收敛后渲染目标内容。
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
@@ -21,7 +22,10 @@ void main() {
         ),
       ],
     );
-    await tester.pumpWidget(orbitTestAppRouter(routerConfig: router));
+    // 路由页统一挂 OrbitTransientPopGuard（Riverpod），测试壳须与生产同构
+    await tester.pumpWidget(
+      ProviderScope(child: orbitTestAppRouter(routerConfig: router)),
+    );
     expect(find.text('A 页'), findsOneWidget);
 
     final context = tester.element(find.text('A 页'));

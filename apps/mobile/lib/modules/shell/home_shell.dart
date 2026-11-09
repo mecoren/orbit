@@ -4,6 +4,7 @@ import 'package:flutter_miuix/miuix.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/layout/orbit_breakpoints.dart';
+import '../../core/routing/orbit_back_dispatch.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../core/theme/icon_map.dart';
@@ -75,55 +76,56 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   /// 「更多」菜单的形变计数（开场 +1；玻璃闸门据此重开形变窗口）
   int _moreMotion = 0;
 
-  /// 当前停靠的模块分支下标
-  late int _branchIndex;
-
-  /// 上一次停靠的模块分支下标（分支根页返回键的回退目标，见 [OrbitShellBack]）
-  int? _previousBranchIndex;
+  /// 瞬态层控制器在 initState 缓存：dispose 期 `ref` 已不可读
+  OrbitTransientPopController? _transientPop;
 
   @override
   void initState() {
     super.initState();
-    _branchIndex = widget.navigationShell.currentIndex;
+    _transientPop = ref.read(orbitTransientPopProvider.notifier);
     // 预热 OS4 shader：首帧就绪可避免"第一下看到实色带、再变玻璃"的跳变
     MiuixGlassRendering.load();
   }
 
   @override
-  void didUpdateWidget(covariant HomeShell oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // 分支切换（底栏页签 / 「更多」面板 / 跨模块 go）都经路由重建本壳：
-    // 在这里记下上一次停靠的模块，供分支根页的页头返回键回退
-    final index = widget.navigationShell.currentIndex;
-    if (index == _branchIndex) return;
-    _previousBranchIndex = _branchIndex;
-    _branchIndex = index;
-  }
-
-  @override
   void dispose() {
+    // 菜单开合期宿主被销毁：撤掉登记表里的失效回调
+    _transientPop?.unregister(_closeMoreFromBack);
     _moreAnchor.dispose();
     _backdrop.dispose();
     super.dispose();
   }
 
-  /// 关闭「更多」菜单（点条目/点外部/返回手势都走这里）
-  void _closeMoreMenu() => setState(() => _moreOpen = false);
+  /// 展开「更多」面板：登记瞬态层，让任意路由页上的返回守卫优先关它
+  void _openMoreMenu() {
+    if (_moreOpen) return;
+    setState(() {
+      _moreOpen = true;
+      _moreMotion++;
+    });
+    _transientPop?.register(_closeMoreFromBack);
+  }
 
-  /// 分支根页返回键的目标分支：上一个停靠模块 → 启用序第一个非当前模块
-  /// （冷启动直接落在本模块时无历史可回）；都没有则 null（不渲染返回键）
-  int? _backTargetBranch(NavModulesState nav, OrbitNavModule current) {
-    final previous = _previousBranchIndex;
-    if (previous != null && previous != current.branchIndex) return previous;
-    for (final module in nav.enabled) {
-      if (module != current) return module.branchIndex;
-    }
-    return null;
+  /// 返回守卫的关闭回调：只关最上层瞬态，不改页栈
+  void _closeMoreFromBack() => _closeMoreMenu();
+
+  /// 关闭「更多」菜单（点条目 / 点外部 / 系统返回键都走这里）
+  void _closeMoreMenu() {
+    _transientPop?.unregister(_closeMoreFromBack);
+    if (!_moreOpen) return;
+    setState(() => _moreOpen = false);
+  }
+
+  /// 回到上一个操作页面（页头返回键与系统返回键共用同一分发）
+  void _handleShellBack() {
+    goBack(context, shell: widget.navigationShell);
   }
 
   @override
   Widget build(BuildContext context) {
     final nav = ref.watch(navModulesProvider);
+    // 页级返回历史驱动「返回回上一页」还是「交框架退系统桌面」
+    final hasPrevious = ref.watch(orbitNavHistoryProvider).hasPrevious;
     final tabs = nav.bottomTabs;
     // 「今天」角标 = 今天截止视图的未完成数（0 不显示，见 [OrbitBottomNav]）；
     // 今天模块不在底栏时无角标位。P1 窗口化后改读 SQL 聚合：底栏常驻，
@@ -141,7 +143,17 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     // 之上操作，返回壳前兜底，避免停在「无页签指向」的分支上）
     ref.listen(navModulesProvider, (prev, next) {
       if (!next.enabled.contains(currentModule)) {
-        widget.navigationShell.goBranch(next.enabled.first.branchIndex);
+        final target = next.enabled.first;
+        widget.navigationShell.goBranch(target.branchIndex);
+        // 原分支已停用、历史里的前驱不可达：重置到新落点基线。
+        // 推迟到帧后写 provider，避免在 build 期触发依赖本壳的重建。
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ref
+                .read(orbitNavHistoryProvider.notifier)
+                .resetToBaseline(target.branchIndex);
+          }
+        });
       }
     });
 
@@ -153,11 +165,6 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         OrbitBreakpoints.isExpanded(context) &&
         currentModule != OrbitNavModule.sidebar;
 
-    // 分支根页返回键的目标：只给**不在底栏**的模块配回退（在底栏时页签本身
-    // 就是出口，与日历等页签根语义一致，见 [OrbitShellBack]）
-    final backTarget =
-        currentTabPos < 0 ? _backTargetBranch(nav, currentModule) : null;
-
     // 页面内容统一包进捕获树：底栏/页头消费同一 backdrop 的玻璃材质。
     // 滚动期冻结快照（2026-11-08）：库内捕获件「子树每次重绘 → 帧末
     // toImageSync 整页快照」在列表滚动时逐帧重录，是玻璃链路在真机上最大的
@@ -166,7 +173,8 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     final content = OrbitScrollAwareBackdropCapture(
       backdrop: _backdrop,
       child: OrbitShellBack(
-        targetBranchIndex: backTarget,
+        hasPrevious: hasPrevious,
+        onBack: _handleShellBack,
         child: showEmbeddedSidebar
             ? Row(
                 children: [
@@ -196,7 +204,24 @@ class _HomeShellState extends ConsumerState<HomeShell> {
             // 无输入流，键盘场景全在根 Overlay 弹层（快速添加/表单自带避让）
             resizeToAvoidBottomInset: false,
             extendBody: true,
-            body: content,
+            // 壳层的**页级**返回决策点（链路见 orbit_back_dispatch.dart 头）：
+            // 有页级历史时 canPop=false，doNotPop 消费返回并回上一模块；
+            // 无历史时 canPop=true，根路由 bubble → 框架 SystemNavigator.pop()
+            // 退系统桌面。分支内 / 根级 push 页由 go_router 原生栈先消费；
+            // Overlay 菜单由各路由页的 OrbitTransientPopGuard 先关，本层的
+            // `_moreOpen` 分支只是「没有页级守卫可达」时的兜底。
+            body: PopScope(
+              canPop: !_moreOpen && !hasPrevious,
+              onPopInvokedWithResult: (didPop, _) {
+                if (didPop) return;
+                if (_moreOpen) {
+                  _closeMoreMenu();
+                  return;
+                }
+                _handleShellBack();
+              },
+              child: content,
+            ),
             // 玻璃作用域之下的 context：本 build 的 context 在 [OrbitGlassScope]
             // **之上**，直接用它取采样器永远为 null（快速添加面板会退实时模糊）
             floatingActionButton: Builder(
@@ -228,15 +253,14 @@ class _HomeShellState extends ConsumerState<HomeShell> {
               moreTabIndex: tabs.length,
               // 形变锚点绑在「更多」图标上；点按只负责开菜单（内容见下方弹层）
               moreAnchor: _moreAnchor,
-              onMoreTap: () => setState(() {
-                _moreOpen = true;
-                _moreMotion++;
-              }),
-              // 重复点击当前页签回退到该页签根（go_router 惯例：保留栈内其余状态）
+              onMoreTap: _openMoreMenu,
+              // 切模块统一写页级历史；重复点当前页签仍回该页签根（既有惯例）
               onTap: (index) {
                 final module = tabs[index];
-                widget.navigationShell.goBranch(
-                  module.branchIndex,
+                goToModule(
+                  context,
+                  module,
+                  shell: widget.navigationShell,
                   initialLocation:
                       module.branchIndex == widget.navigationShell.currentIndex,
                 );
@@ -279,7 +303,12 @@ class _HomeShellState extends ConsumerState<HomeShell> {
               child: OrbitDropdownPanelView(
                 title: '更多',
                 actionLabel: '编辑',
-                onAction: () => context.push('/settings/nav-modules'),
+                onAction: () {
+                  // 推入全屏页前先收面板：返回时不应还挂着一层隐形瞬态，
+                  // 否则首次返回会被误判成「关菜单」而不是回上一页
+                  _closeMoreMenu();
+                  context.push('/settings/nav-modules');
+                },
                 onClose: _closeMoreMenu,
                 // 形变弹层外层已带纵向滚动，这里不能再套一层
                 scrollable: false,
@@ -289,8 +318,10 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                       OrbitPanelItem(
                         icon: m.icon,
                         label: m.label,
-                        onTap: () =>
-                            widget.navigationShell.goBranch(m.branchIndex),
+                        onTap: () {
+                          _closeMoreMenu();
+                          goToModule(context, m, shell: widget.navigationShell);
+                        },
                       ),
                   ],
                 ],

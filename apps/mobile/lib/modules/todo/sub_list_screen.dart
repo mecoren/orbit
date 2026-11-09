@@ -9,6 +9,7 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/layout/orbit_breakpoints.dart';
+import '../../core/routing/orbit_back_dispatch.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../core/theme/app_motion.dart';
@@ -93,7 +94,7 @@ class SubListScreen extends ConsumerStatefulWidget {
   /// 路由 query 参数解析结果（view/projectId/ungrouped 三选一）
   final TaskFilterInput query;
 
-  /// 页头返回键（页签根页关闭——底部导航承担回退语义）
+  /// 页头返回键（分支根页关闭——有页级历史时由 OrbitPageHeader 自动长出）
   final bool showBack;
 
   /// 页头标题覆盖（null 用入口语义名：项目名 / 未分组 / 视图名）
@@ -134,6 +135,9 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   /// 让整页背景快照逐帧重录（真机「视图选择弹窗掉帧」的主因）。
   final _viewMenuAnchor = MiuixGlassPopupAnchor();
   OrbitMenuSession? _viewMenuSession;
+
+  /// 瞬态层控制器在 initState 缓存：dispose / 异步回收期 `ref` 已不可读
+  OrbitTransientPopController? _transientPop;
 
   // 排序档位（#26：会话内存态，退出即回 manual；#37 manual 档下整行
   // 长按拾起拖动重排 + midpoint 落库）
@@ -358,10 +362,16 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     );
   }
 
+  /// 返回守卫的关闭回调：只收视图菜单，不改页栈
+  void _closeViewMenuFromBack() {
+    _transientPop?.unregister(_closeViewMenuFromBack);
+    _viewMenuSession?.close();
+  }
+
   /// 打开视图菜单：条目在每次重建时按当下选中档重取（单选点行即关）
   void _openViewMenu(BuildContext context, Widget anchorContent) {
     if (_viewMenuSession?.isOpen ?? false) return;
-    _viewMenuSession = showOrbitMenuPopup(
+    final session = showOrbitMenuPopup(
       context,
       transformAnchor: _viewMenuAnchor,
       anchorContent: anchorContent,
@@ -373,6 +383,15 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
       contentPadding: EdgeInsets.zero,
       groupsBuilder: _quickViewGroups,
     );
+    _viewMenuSession = session;
+    // Overlay 菜单无 PopEntry：登记到瞬态层，返回时由当前路由页的守卫
+    // 优先关菜单（页头标题菜单挂在启动首页，最容易被误判成「退桌面」）。
+    _transientPop?.register(_closeViewMenuFromBack);
+    unawaited(session.closed.then((_) {
+      // 宿主/ProviderScope 可能已在弹层回收前销毁：此时登记自然失效
+      if (!mounted) return;
+      _transientPop?.unregister(_closeViewMenuFromBack);
+    }));
   }
 
   /// 视图菜单的条目（八档单选，当前档打勾；图标与清单页快捷行同源
@@ -396,6 +415,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   @override
   void initState() {
     super.initState();
+    _transientPop = ref.read(orbitTransientPopProvider.notifier);
     _viewMode = loadViewModeForProject(widget.query.projectId);
     // 视图菜单的选中档：本机偏好记住上次选的那一档（只对今天页签根生效；
     // 项目 / 未分组的标题不挂菜单，恒等于路由 query）。`today` 即路由本位，
@@ -417,6 +437,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   @override
   void dispose() {
     QuickAddContext.set(null);
+    _transientPop?.unregister(_closeViewMenuFromBack);
     _nowTimer?.cancel();
     // 宿主销毁时立刻撤掉 Overlay 会话，不在已卸载锚点上续播回收动画
     _viewMenuSession?.dispose();

@@ -6,6 +6,7 @@ import '../../../core/theme/app_dimens.dart';
 import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/icon_map.dart';
 import '../../../core/theme/orbit_accents.dart';
+import '../../../modules/shell/orbit_shell_back.dart';
 import 'orbit_progressive_blur.dart';
 import 'orbit_icon_button.dart';
 
@@ -223,6 +224,7 @@ class OrbitPageHeader extends StatelessWidget implements PreferredSizeWidget {
         onPressed: onMenuTap,
       );
     } else if (showBack) {
+      // 栈内推入页 / 根级推入页：go_router 原生 pop 就是「上一页」
       slot = OrbitIconButton(
         tooltip: '返回',
         icon: Icon(
@@ -233,7 +235,37 @@ class OrbitPageHeader extends StatelessWidget implements PreferredSizeWidget {
         onPressed: onBack ?? () => Navigator.of(context).maybePop(),
       );
     } else {
-      slot = leading;
+      // 分支根页没有可 pop 的栈页：有页级历史时改走壳层统一回退。
+      final shellBack = OrbitBranchRoot.isRoot(context)
+          ? OrbitShellBack.maybeOf(context)
+          : null;
+      if (shellBack != null && shellBack.hasPrevious) {
+        final arrow = OrbitIconButton(
+          tooltip: '返回',
+          icon: Icon(
+            OrbitIcons.back,
+            size: AppDimens.iconSizeLg,
+            color: colors.titleText,
+          ),
+          onPressed: shellBack.onBack,
+        );
+        // 清单分支根另有云同步状态钮：返回箭头与它并排，不能挤进 44dp
+        // 方形图标槽（OS4 形态），也不能因自定义 leading 而漏掉返回入口。
+        final custom = leading;
+        if (custom != null) {
+          return Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              arrow,
+              const SizedBox(width: AppDimens.space8),
+              custom,
+            ],
+          );
+        }
+        slot = arrow;
+      } else {
+        slot = leading;
+      }
     }
     return _iconSlot(slot);
   }

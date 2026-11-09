@@ -119,9 +119,24 @@ void main() {
       () => bridge.todoTaskList(const ListFilter()),
     );
     expect(after!.length, before!.length + 1);
-    // pushReplacement 落到副本详情：页头/标题区带「（副本）」标题
+    // push 落到副本详情：页头/标题区带「（副本）」标题（原详情仍在栈里）
     expect(find.textContaining('（副本）'), findsWidgets);
 
+    await drainToastTimers(tester);
+  });
+
+  testWidgets('复制后按返回回到复制前的原详情页（不跳过那一页）', (tester) async {
+    await _openDetail(tester, bridge);
+    await _pickAction(tester, '复制任务');
+    await _settle(tester);
+    expect(find.textContaining('（副本）'), findsWidgets);
+
+    await tester.tap(find.byTooltip('返回'));
+    await _settle(tester);
+
+    // 上一个操作页面是原任务详情，而不是详情下面的列表占位页
+    expect(find.byType(DetailScreen), findsOneWidget);
+    expect(find.text('列表页'), findsNothing);
     await drainToastTimers(tester);
   });
 

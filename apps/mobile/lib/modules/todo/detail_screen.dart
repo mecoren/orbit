@@ -328,7 +328,10 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
   Future<void> _toggleFavorite(TodoTask task) =>
       _patchTask({'is_favorite': task.isStarred ? 0 : 1});
 
-  /// 复制任务：克隆后 toast + 原页替换为新副本详情（对齐桌面复制后选中切到副本）
+  /// 复制任务：克隆后 toast + 推入新副本详情（对齐桌面复制后选中切到副本）
+  ///
+  /// 用 `push` 而非 `pushReplacement`：复制前的原详情是「上一个操作页面」，
+  /// 返回必须回到它；替换会把这一页从栈里抹掉，退回更下一层的列表。
   Future<void> _duplicateTask(TodoTask task) async {
     try {
       final copy = await ref
@@ -337,7 +340,7 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
       if (!mounted) return;
       WaitToast.success('已复制为「${copy.title}」');
       ref.invalidate(todoTasksProvider);
-      context.pushReplacement('/todo/${copy.id}');
+      context.push('/todo/${copy.id}');
     } catch (_) {
       if (mounted) WaitToast.destructive('复制失败');
     }

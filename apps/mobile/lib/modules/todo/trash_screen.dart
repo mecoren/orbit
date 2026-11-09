@@ -24,7 +24,6 @@ import '../../shared/widgets/shadcn/orbit_skeleton.dart';
 import '../../shared/widgets/shadcn/orbit_swipe_guard.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../shared/widgets/shadcn/orbit_button.dart';
-import '../shell/orbit_shell_back.dart';
 import 'providers/todo_providers.dart';
 import '../../core/theme/icon_map.dart';
 
@@ -50,9 +49,9 @@ const _purgeHoldSeconds = 3;
 /// - 行右列显示保留期倒计时（永久档不显示），左列副标题显示删除日期；
 /// - 自动过期清理由 Rust 守护执行（startTrashScheduler，BootGate 接线）。
 ///
-/// 页头左上返回键回退到**进站前的模块页签**（[OrbitShellBack]）：回收站通常
-/// 经「更多」面板 / 侧栏行 / 设置行进来，都不在底栏，页签栏给不出回退出路；
-/// 冷启动直接落在本页且无历史时按钮不渲染。
+/// 页头左上返回键回退到**进站前的模块页签**（OrbitBranchRoot +
+/// OrbitShellBack）：回收站通常经「更多」面板 / 侧栏行 / 设置行进来，都不在
+/// 底栏，页签栏给不出回退出路；冷启动直接落在本页且无历史时按钮不渲染。
 class TrashScreen extends ConsumerStatefulWidget {
   const TrashScreen({super.key});
 
@@ -348,9 +347,8 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
             right: 0,
             child: OrbitPageHeader(
               title: '回收站',
-              // 壳内给得出回退目标才出返回键（见类文档；单页测试无壳时不出）
-              showBack: OrbitShellBack.maybeOf(context)?.targetBranchIndex != null,
-              onBack: () => goBackToPreviousModule(context),
+              // 分支根页：有页级历史时由 OrbitPageHeader 自动长出返回箭头
+              showBack: false,
               actions: [
                 if (visible.isNotEmpty)
                   OrbitButton.text(

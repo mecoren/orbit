@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/routing/orbit_back_dispatch.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../core/theme/app_motion.dart';
@@ -30,6 +31,7 @@ import 'logic/project_actions.dart';
 import 'logic/project_palette.dart';
 import 'logic/project_tree.dart';
 import 'logic/task_logic.dart';
+import '../shell/nav_modules.dart';
 import 'providers/task_window_provider.dart';
 import 'providers/todo_providers.dart';
 import 'quick_add_sheet.dart' show showQuickAddSheet;
@@ -89,12 +91,14 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
   /// 快捷方式动作落点（原生只给动作 id，语义在此收口；
   /// 新建走与列表页同一快速添加面板）
   void _handleQuickAction(QuickAction action) {
+    // 快捷方式由原生 intent 暂存后补发，宿主可能已 dispose
+    if (!mounted) return;
     switch (action) {
       case QuickAction.newTask:
         showQuickAddSheet(context);
-      // 「今天」已升级为底部页签：快捷方式直达页签根
+      // 「今天」已升级为底部页签：快捷方式直达页签根，且记入页级历史
       case QuickAction.today:
-        context.go('/today');
+        goToModule(context, OrbitNavModule.today);
       case QuickAction.search:
         _openSearch();
     }
@@ -143,11 +147,11 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
   void _openView(QuickViewKey key) =>
       context.push('/todo/tasks?view=${key.name}');
 
-  // 搜索/回收站/设置均为可配置模块（分支）：go 切分支而非推入，
-  // 底栏常驻、返回走页签（推入会叠一整层壳，go_router 分支路由语义）
-  void _openSearch() => context.go('/todo/search');
+  // 搜索/回收站/设置均为可配置模块（分支）：切分支而非推入，
+  // 底栏常驻；统一经 goToModule 写页级历史，返回才能回到进站前那页
+  void _openSearch() => goToModule(context, OrbitNavModule.search);
 
-  void _openTrash() => context.go('/todo/trash');
+  void _openTrash() => goToModule(context, OrbitNavModule.trash);
 
   void _openProject(TodoProject p) =>
       context.push('/todo/tasks?projectId=${p.id}');
@@ -688,7 +692,8 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                       OrbitIcons.settings,
                       size: AppDimens.iconSizeMd,
                     ),
-                    onPressed: () => context.go('/settings'),
+                    onPressed: () =>
+                        goToModule(context, OrbitNavModule.settings),
                   ),
                 ],
               ),

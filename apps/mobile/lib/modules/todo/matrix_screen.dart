@@ -119,7 +119,7 @@ class MatrixScreen extends ConsumerWidget {
             right: 0,
             child: OrbitPageHeader(
               title: '四象限',
-              // 页签根：无返回键（底部导航承担回退语义）
+              // 分支根：有页级历史时由 OrbitPageHeader 自动长出返回箭头
               showBack: false,
             ),
           ),

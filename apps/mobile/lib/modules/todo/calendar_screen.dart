@@ -790,7 +790,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             left: 0,
             right: 0,
             child: OrbitPageHeader(
-              // 页签根：无返回键（底部导航承担回退语义）；「日历」文字标题已收敛——
+              // 分支根：有页级历史时自动长出返回箭头；「日历」文字标题已收敛——
               // 月份导航（< 年月 >，点标题进年视图）走标题槽，回到今天 /
               // 议程切换 / 节假日更新走动作槽（竞品同款一屏操作）
               showBack: false,

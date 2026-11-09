@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/routing/orbit_back_dispatch.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../core/theme/app_shapes.dart';
@@ -30,6 +31,7 @@ import 'logic/project_palette.dart';
 import 'logic/project_review.dart';
 import 'logic/project_tree.dart';
 import 'logic/view_mode.dart';
+import '../shell/nav_modules.dart';
 import 'providers/todo_providers.dart';
 import '../../shared/widgets/shadcn/orbit_glass_surface.dart'
     show OrbitGlassScope;
@@ -185,8 +187,15 @@ class _ProjectEditPageState extends ConsumerState<ProjectEditPage> {
   Future<void> _delete(TodoProject project, int undoneCount) async {
     final deleted =
         await deleteProject(ref, context, project, undoneCount);
-    // 删掉的项目没有可返回的列表页：直接回侧栏（被删项目仍在栈上会留下空列表）
-    if (deleted && mounted) context.go('/todo');
+    // 删掉的项目没有可返回的列表页：回侧栏分支根（被删项目仍在栈上会留下
+    // 空列表）。走 goToModule 而非 context.go：同分支去重不写历史，只弹栈。
+    if (deleted && mounted) {
+      goToModule(
+        context,
+        OrbitNavModule.sidebar,
+        initialLocation: true,
+      );
+    }
   }
 
   Future<void> _pickCustomColor() async {

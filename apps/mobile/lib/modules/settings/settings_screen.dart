@@ -10,6 +10,7 @@ import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../core/routing/orbit_back_dispatch.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../core/theme/app_shapes.dart';
@@ -34,6 +35,7 @@ import '../../shared/widgets/shadcn/orbit_button.dart';
 import '../../shared/widgets/shadcn/orbit_progress_bar.dart';
 import '../../shared/widgets/shadcn/orbit_choice_grid.dart';
 import '../shell/db_invalidation.dart';
+import '../shell/nav_modules.dart';
 import '../todo/logic/task_logic.dart' show formatDateTime;
 import '../todo/providers/todo_providers.dart';
 import '../../core/theme/icon_map.dart';
@@ -1132,7 +1134,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   _arrowRow(
                     context,
                     '查看回收站',
-                    onClick: () => context.go('/todo/trash'),
+                    onClick: () => goToModule(context, OrbitNavModule.trash),
                   ),
                   const _RowDivider(),
                   MiuixBasicComponent(

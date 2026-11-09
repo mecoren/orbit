@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../theme/app_motion.dart';
+import 'orbit_back_dispatch.dart';
 import 'router_keys.dart';
+import '../../modules/shell/orbit_shell_back.dart';
 import '../../shared/widgets/shadcn/orbit_glass_surface.dart';
 import '../../modules/settings/about_page.dart';
 import '../../modules/settings/appearance_page.dart';
@@ -78,7 +80,9 @@ CustomTransitionPage<void> pageSlideFromRight(
   bool glassPage = true,
 }) => CustomTransitionPage<void>(
   key: key,
-  child: glassPage ? OrbitGlassPage(child: child) : child,
+  child: OrbitTransientPopGuard(
+    child: glassPage ? OrbitGlassPage(child: child) : child,
+  ),
   transitionDuration: AppMotion.pageEnter,
   reverseTransitionDuration: AppMotion.pageExit,
   transitionsBuilder: (context, animation, secondaryAnimation, child) {
@@ -95,8 +99,16 @@ CustomTransitionPage<void> pageSlideFromRight(
 );
 
 /// 页签根页：无转场直切（go_router pageKey 复用，切换不重播动画）
+///
+/// 统一套 [OrbitBranchRoot]，让 [OrbitPageHeader] 识别「这是模块分支根页」，
+/// 在存在上一个操作页面时长出返回箭头；栈内推入页不套这层，仍走原生 pop。
 NoTransitionPage<void> tabRoot(Widget child, {LocalKey? key}) =>
-    NoTransitionPage<void>(key: key, child: child);
+    NoTransitionPage<void>(
+      key: key,
+      child: OrbitTransientPopGuard(
+        child: OrbitBranchRoot(child: child),
+      ),
+    );
 
 /// 「今天」页签：今日截止视图（无返回键，页头带日期副标）。
 ///
@@ -240,8 +252,8 @@ final appRouter = GoRouter(
           routes: [
             GoRoute(
               path: '/todo/trash',
-              // 页头返回键由壳层「上一页」记忆驱动（OrbitShellBack）：
-              // 回退到进站前的模块页签，不是页签根语义的空返回
+              // 分支根页：有页级历史时长出返回箭头（OrbitBranchRoot +
+              // OrbitShellBack），回退到进站前的模块页签
               pageBuilder: (context, state) =>
                   tabRoot(const TrashScreen(), key: state.pageKey),
             ),

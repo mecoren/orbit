@@ -4,6 +4,7 @@
 // 3. onNotificationTap 注入契约：BootGate 注入的回调 push '/todo/:id'
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:orbit/services/notification_service.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_toast.dart';
 import 'support/orbit_test_app.dart';
@@ -72,6 +73,39 @@ void main() {
       final path = '/todo/$pushedTaskId';
       final parsed = int.tryParse(path.split('/').last);
       expect(parsed, pushedTaskId);
+    });
+
+    testWidgets('冷启动从通知直达详情：首次返回回到启动首页', (tester) async {
+      // BootGate._pushTaskDetail 用根级 push 而非 go/replace：壳层首页天然
+      // 留在栈底，合成「详情 → 首页」的返回基线，再按一次才交框架退桌面。
+      // 这里用最小路由表锁定该契约，避免日后被改成替换式导航。
+      final router = GoRouter(
+        initialLocation: '/',
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (_, _) => const Scaffold(body: Text('启动首页')),
+          ),
+          GoRoute(
+            path: '/todo/:id',
+            builder: (_, state) => Scaffold(
+              body: Text('详情${state.pathParameters['id']}'),
+            ),
+          ),
+        ],
+      );
+      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      await tester.pumpAndSettle();
+      expect(find.text('启动首页'), findsOneWidget);
+
+      router.push('/todo/5');
+      await tester.pumpAndSettle();
+      expect(find.text('详情5'), findsOneWidget);
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.text('详情5'), findsNothing);
+      expect(find.text('启动首页'), findsOneWidget);
     });
   });
 }
