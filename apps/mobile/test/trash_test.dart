@@ -8,11 +8,13 @@
 // - TrashScreen 渲染：空态文案 / 墓碑行 + 保留期倒计时副标题 / 标题栏「清空」。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/api/dto.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/todo/trash_screen.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_list_card.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_sheets.dart' show holdRemainingKey;
 import 'support/orbit_test_app.dart';
 
@@ -149,6 +151,35 @@ void main() {
       expect(find.textContaining('天后'), findsOneWidget);
       expect(find.textContaining('删除于'), findsOneWidget);
       expect(find.text('清空'), findsOneWidget);
+    });
+
+    // 2026-11-09 真机反馈：动作按钮四角全圆时贴行内侧凹出月牙缝，
+    // 面板与行看着像两块断开的卡；与待办列表共用 swipeActionRadius 口径。
+    testWidgets('侧滑动作面板：贴行内侧为直边', (tester) async {
+      final bridge = MockOrbitBridge();
+      final tasksFuture = bridge.todoTaskList(const ListFilter(pageSize: 1000));
+      await tester.pump(const Duration(milliseconds: 300));
+      final tasks = await tasksFuture;
+      await _bridgeCall(tester, bridge.todoTaskDelete(tasks.first.id));
+
+      await tester.pumpWidget(_wrap(const TrashScreen(), bridge));
+      await _settlePastMockLatency(tester);
+
+      // 左滑露「彻底删除」（end 面板，内侧 = 左沿）
+      await tester.drag(find.byType(Slidable), const Offset(-100, 0));
+      await tester.pump(const Duration(milliseconds: 400));
+
+      final action = tester.widget<SlidableAction>(find.byType(SlidableAction));
+      expect(action.label, '彻底删除');
+      expect(action.borderRadius.topLeft.x, 0);
+      expect(action.borderRadius.bottomLeft.x, 0);
+
+      // 行卡右沿（接缝侧）同步抹平，否则首段圆角平移过来仍会凹出月牙缝
+      final segment = tester.widget<OrbitCardSegment>(
+        find.byType(OrbitCardSegment).first,
+      );
+      expect(segment.squareRight, isTrue);
+      expect(segment.squareLeft, isFalse);
     });
 
     // ── 可撤销彻底删除（purge 延迟提交 + toast 撤销按钮；2026-11-09 起确认层

@@ -8,7 +8,6 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../core/theme/app_motion.dart';
-import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
@@ -506,7 +505,8 @@ class _TrashTaskTile extends StatelessWidget {
               foregroundColor: Colors.white,
               icon: OrbitIcons.archiveRestore,
               label: '恢复',
-              borderRadius: AppShapes.medium,
+              // 贴行的内侧直边：面板与行连成一张卡，不留圆角月牙缝
+              borderRadius: edge.swipeActionRadius(startPane: true),
             ),
           ],
         ),
@@ -524,14 +524,15 @@ class _TrashTaskTile extends StatelessWidget {
               foregroundColor: Colors.white,
               icon: OrbitIcons.delete,
               label: '彻底删除',
-              borderRadius: AppShapes.medium,
+              borderRadius: edge.swipeActionRadius(startPane: false),
             ),
           ],
         ),
         child: InkWell(
           onLongPress: onLongPress,
-          child: OrbitCardSegment(
+          child: OrbitSwipeCardSegment(
             edge: edge,
+            paneType: slidableController.actionPaneType,
             child: Container(
               // 单行行也有完整热区高度（卡片里行高不随副标题有无跳动）
               constraints: const BoxConstraints(

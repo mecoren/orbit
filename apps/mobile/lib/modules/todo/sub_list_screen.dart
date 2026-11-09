@@ -3292,7 +3292,8 @@ class TodoTaskTile extends StatelessWidget {
                     foregroundColor: Colors.white,
                     icon: OrbitIcons.delete,
                     label: '删除',
-                    borderRadius: AppShapes.medium,
+                    // 贴行的内侧直边：面板与行连成一张卡，不留圆角月牙缝
+                    borderRadius: edge.swipeActionRadius(startPane: false),
                   ),
                 ],
               ),
@@ -3310,15 +3311,16 @@ class TodoTaskTile extends StatelessWidget {
               foregroundColor: Colors.white,
               icon: task.isDone ? OrbitIcons.undo : OrbitIcons.check,
               label: task.isDone ? '恢复' : '完成',
-              borderRadius: AppShapes.medium,
+              borderRadius: edge.swipeActionRadius(startPane: true),
             ),
           ],
         ),
         child: InkWell(
           onTap: onOpen,
           onLongPress: onLongPress,
-          child: OrbitCardSegment(
+          child: OrbitSwipeCardSegment(
             edge: edge,
+            paneType: slidableController.actionPaneType,
             child: Container(
               // 单行行也有完整热区高度（卡片里行高不随元信息有无跳动）
               constraints: const BoxConstraints(

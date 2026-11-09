@@ -21,6 +21,50 @@ enum OrbitCardEdge {
     if (index >= count - 1) return OrbitCardEdge.last;
     return OrbitCardEdge.middle;
   }
+
+  /// 卡面四角半径（纯函数）：段位决定上下，侧滑抹平侧决定左右。
+  ///
+  /// `squareLeft/squareRight` 供侧滑时把接缝侧两角抹成 0——行卡圆角会随行
+  /// 平移到接缝处，不抹平就会与动作面板的直边之间凹出月牙缝（见
+  /// [OrbitCardEdgeSwipeActionRadius]）。抽成纯函数便于 painter 与测试共用。
+  ({double topLeft, double topRight, double bottomLeft, double bottomRight})
+      cornerRadii(
+    double radius, {
+    bool squareLeft = false,
+    bool squareRight = false,
+  }) {
+    final hasTop = this == OrbitCardEdge.first || this == OrbitCardEdge.single;
+    final hasBottom = this == OrbitCardEdge.last || this == OrbitCardEdge.single;
+    return (
+      topLeft: hasTop && !squareLeft ? radius : 0.0,
+      topRight: hasTop && !squareRight ? radius : 0.0,
+      bottomLeft: hasBottom && !squareLeft ? radius : 0.0,
+      bottomRight: hasBottom && !squareRight ? radius : 0.0,
+    );
+  }
+}
+
+/// 侧滑动作面板的圆角口径（2026-11-09 真机反馈）
+///
+/// `SlidableAction` 的 `borderRadius` 会套在整个动作按钮的 `shape` 上；四角全圆
+/// 时**贴行的内侧**也圆进去，与行的直边之间露出一条月牙状页面底色，看着像
+/// 两块断开的卡片。口径：内侧一律直边，外侧只在该段本身有外缘圆角时跟随
+/// （首段上、末段下、单段上下），动作面板与行拼起来仍是同一张卡。
+extension OrbitCardEdgeSwipeActionRadius on OrbitCardEdge {
+  /// [startPane] = 右滑露出的 `startActionPane`（面板靠左，内侧是右沿）；
+  /// false = 左滑露出的 `endActionPane`（面板靠右，内侧是左沿）。
+  BorderRadius swipeActionRadius({required bool startPane}) {
+    final hasTop = this == OrbitCardEdge.first || this == OrbitCardEdge.single;
+    final hasBottom =
+        this == OrbitCardEdge.last || this == OrbitCardEdge.single;
+    final radius = Radius.circular(AppShapes.radiusMedium);
+    return BorderRadius.only(
+      topLeft: startPane && hasTop ? radius : Radius.zero,
+      bottomLeft: startPane && hasBottom ? radius : Radius.zero,
+      topRight: !startPane && hasTop ? radius : Radius.zero,
+      bottomRight: !startPane && hasBottom ? radius : Radius.zero,
+    );
+  }
 }
 
 /// 列表卡片分段（设计系统 v3 原语层）
@@ -43,6 +87,8 @@ class OrbitCardSegment extends StatelessWidget {
     required this.edge,
     required this.child,
     this.radius = AppShapes.radiusMedium,
+    this.squareLeft = false,
+    this.squareRight = false,
   });
 
   final OrbitCardEdge edge;
@@ -50,6 +96,12 @@ class OrbitCardSegment extends StatelessWidget {
 
   /// 外缘圆角（默认与 [OrbitCard] 的 medium 同值）
   final double radius;
+
+  /// 侧滑时把左侧两角抹平（接缝侧），见 [OrbitCardEdge.swipeActionRadius]。
+  /// 行卡的外缘圆角会随行一起平移，落在与动作面板相接的一侧就会凹出月牙缝；
+  /// 面板打开时由 `OrbitSwipeCardSegment` 按方位置位，收起后恢复整卡圆角。
+  final bool squareLeft;
+  final bool squareRight;
 
   @override
   Widget build(BuildContext context) {
@@ -62,6 +114,8 @@ class OrbitCardSegment extends StatelessWidget {
         outline: colors.outline,
         divider: colors.divider,
         radius: radius,
+        squareLeft: squareLeft,
+        squareRight: squareRight,
       ),
       child: child,
     );
@@ -75,6 +129,8 @@ class _SegmentBorderPainter extends CustomPainter {
     required this.outline,
     required this.divider,
     required this.radius,
+    required this.squareLeft,
+    required this.squareRight,
   });
 
   final OrbitCardEdge edge;
@@ -82,6 +138,8 @@ class _SegmentBorderPainter extends CustomPainter {
   final Color outline;
   final Color divider;
   final double radius;
+  final bool squareLeft;
+  final bool squareRight;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -92,15 +150,25 @@ class _SegmentBorderPainter extends CustomPainter {
     final hasBottom =
         edge == OrbitCardEdge.last || edge == OrbitCardEdge.single;
     final r = math.min(radius, math.min(w, h) / 2);
+    // 四角半径逐角决定：侧滑时贴动作面板的一侧抹成 0，接缝才是直边
+    final corners = edge.cornerRadii(
+      r,
+      squareLeft: squareLeft,
+      squareRight: squareRight,
+    );
+    final topLeft = corners.topLeft;
+    final topRight = corners.topRight;
+    final bottomLeft = corners.bottomLeft;
+    final bottomRight = corners.bottomRight;
 
     // 卡面：整段填充，只在外缘切圆角
     canvas.drawRRect(
       RRect.fromRectAndCorners(
         Rect.fromLTWH(0, 0, w, h),
-        topLeft: hasTop ? Radius.circular(r) : Radius.zero,
-        topRight: hasTop ? Radius.circular(r) : Radius.zero,
-        bottomLeft: hasBottom ? Radius.circular(r) : Radius.zero,
-        bottomRight: hasBottom ? Radius.circular(r) : Radius.zero,
+        topLeft: Radius.circular(topLeft),
+        topRight: Radius.circular(topRight),
+        bottomLeft: Radius.circular(bottomLeft),
+        bottomRight: Radius.circular(bottomRight),
       ),
       Paint()..color = fill,
     );
@@ -111,8 +179,11 @@ class _SegmentBorderPainter extends CustomPainter {
     final right = w - inset;
     final top = inset;
     final bottom = h - inset;
-    final rr = math.max(0.0, r - inset);
-    final corner = Radius.circular(rr);
+    double cornerOf(double value) => math.max(0.0, value - inset);
+    final tl = cornerOf(topLeft);
+    final tr = cornerOf(topRight);
+    final bl = cornerOf(bottomLeft);
+    final br = cornerOf(bottomRight);
     final stroke = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1
@@ -120,9 +191,12 @@ class _SegmentBorderPainter extends CustomPainter {
 
     if (edge == OrbitCardEdge.single) {
       canvas.drawRRect(
-        RRect.fromRectAndRadius(
+        RRect.fromRectAndCorners(
           Rect.fromLTRB(left, top, right, bottom),
-          corner,
+          topLeft: Radius.circular(tl),
+          topRight: Radius.circular(tr),
+          bottomLeft: Radius.circular(bl),
+          bottomRight: Radius.circular(br),
         ),
         stroke,
       );
@@ -132,26 +206,45 @@ class _SegmentBorderPainter extends CustomPainter {
     final path = Path();
     if (hasTop) {
       // 左下开口 → 左竖线 → 上圆角 → 顶边 → 上圆角 → 右竖线
-      path
-        ..moveTo(left, bottom)
-        ..lineTo(left, top + rr)
-        ..arcToPoint(Offset(left + rr, top),
-            radius: corner, clockwise: true)
-        ..lineTo(right - rr, top)
-        ..arcToPoint(Offset(right, top + rr),
-            radius: corner, clockwise: true)
-        ..lineTo(right, bottom);
+      //（圆角半径为 0 时直接走直线，接缝侧不画弧）
+      path.moveTo(left, bottom);
+      if (tl > 0) {
+        path
+          ..lineTo(left, top + tl)
+          ..arcToPoint(Offset(left + tl, top),
+              radius: Radius.circular(tl), clockwise: true);
+      } else {
+        path.lineTo(left, top);
+      }
+      if (tr > 0) {
+        path
+          ..lineTo(right - tr, top)
+          ..arcToPoint(Offset(right, top + tr),
+              radius: Radius.circular(tr), clockwise: true);
+      } else {
+        path.lineTo(right, top);
+      }
+      path.lineTo(right, bottom);
     } else if (hasBottom) {
       // 上开口 → 左竖线 → 下圆角 → 底边 → 下圆角 → 右竖线
-      path
-        ..moveTo(left, top)
-        ..lineTo(left, bottom - rr)
-        ..arcToPoint(Offset(left + rr, bottom),
-            radius: corner, clockwise: false)
-        ..lineTo(right - rr, bottom)
-        ..arcToPoint(Offset(right, bottom - rr),
-            radius: corner, clockwise: false)
-        ..lineTo(right, top);
+      path.moveTo(left, top);
+      if (bl > 0) {
+        path
+          ..lineTo(left, bottom - bl)
+          ..arcToPoint(Offset(left + bl, bottom),
+              radius: Radius.circular(bl), clockwise: false);
+      } else {
+        path.lineTo(left, bottom);
+      }
+      if (br > 0) {
+        path
+          ..lineTo(right - br, bottom)
+          ..arcToPoint(Offset(right, bottom - br),
+              radius: Radius.circular(br), clockwise: false);
+      } else {
+        path.lineTo(right, bottom);
+      }
+      path.lineTo(right, top);
     } else {
       // 中段：仅左右描边
       path
@@ -180,5 +273,7 @@ class _SegmentBorderPainter extends CustomPainter {
       old.fill != fill ||
       old.outline != outline ||
       old.divider != divider ||
-      old.radius != radius;
+      old.radius != radius ||
+      old.squareLeft != squareLeft ||
+      old.squareRight != squareRight;
 }

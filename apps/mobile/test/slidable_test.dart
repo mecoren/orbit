@@ -6,6 +6,7 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/data/api/dto.dart';
 import 'package:orbit/modules/todo/sub_list_screen.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_list_card.dart';
 import 'support/orbit_test_app.dart';
 
 Widget _harness(TodoTask task) => orbitTestApp(
@@ -14,6 +15,24 @@ Widget _harness(TodoTask task) => orbitTestApp(
       children: [
         TodoTaskTile(
           task: task,
+          onToggleDone: () {},
+          onLongPress: () {},
+          onOpen: () {},
+          onDelete: () {},
+        ),
+      ],
+    ),
+  ),
+);
+
+/// 卡片段位版：验证横滑时行卡接缝侧的圆角会被抹平
+Widget _edgeHarness(OrbitCardEdge edge) => orbitTestApp(
+  home: Scaffold(
+    body: ListView(
+      children: [
+        TodoTaskTile(
+          task: _task(done: 0),
+          edge: edge,
           onToggleDone: () {},
           onLongPress: () {},
           onOpen: () {},
@@ -87,6 +106,11 @@ void main() {
 
     await _openPane(tester, const Offset(80, 0));
     expect(find.text('完成'), findsOneWidget);
+
+    // 贴行的内侧（start 面板右沿）必须直边：四角全圆会凹出月牙缝
+    final action = tester.widget<SlidableAction>(find.byType(SlidableAction));
+    expect(action.borderRadius.topRight.x, 0);
+    expect(action.borderRadius.bottomRight.x, 0);
   });
 
   testWidgets('侧滑：左滑（endActionPane）露「删除」动作', (tester) async {
@@ -94,6 +118,11 @@ void main() {
 
     await _openPane(tester, const Offset(-80, 0));
     expect(find.text('删除'), findsOneWidget);
+
+    // 贴行的内侧（end 面板左沿）必须直边（2026-11-09 回收站同款反馈）
+    final action = tester.widget<SlidableAction>(find.byType(SlidableAction));
+    expect(action.borderRadius.topLeft.x, 0);
+    expect(action.borderRadius.bottomLeft.x, 0);
   });
 
   testWidgets('侧滑：已完成任务右滑动作变「恢复」', (tester) async {
@@ -101,6 +130,36 @@ void main() {
 
     await _openPane(tester, const Offset(80, 0));
     expect(find.text('恢复'), findsOneWidget);
+  });
+
+  // 2026-11-09 真机反馈第二轮：动作按钮改直边后仍有月牙缝——行卡自身的
+  // 外缘圆角会随行平移到接缝处。面板打开时接缝侧两角必须同步抹平。
+  testWidgets('接缝：右滑露 start 面板 → 行左沿改直边', (tester) async {
+    await tester.pumpWidget(_edgeHarness(OrbitCardEdge.first));
+    OrbitCardSegment segment() =>
+        tester.widget<OrbitCardSegment>(find.byType(OrbitCardSegment));
+    expect(segment().squareLeft, isFalse);
+    expect(segment().squareRight, isFalse);
+
+    await _openPane(tester, const Offset(80, 0));
+    expect(segment().squareLeft, isTrue, reason: '行左沿 = 接缝，必须直边');
+    expect(segment().squareRight, isFalse);
+
+    final action = tester.widget<SlidableAction>(find.byType(SlidableAction));
+    expect(action.borderRadius.topRight.x, 0, reason: '按钮内侧同样直边');
+  });
+
+  testWidgets('接缝：左滑露 end 面板 → 行右沿改直边', (tester) async {
+    await tester.pumpWidget(_edgeHarness(OrbitCardEdge.last));
+
+    await _openPane(tester, const Offset(-80, 0));
+    final segment =
+        tester.widget<OrbitCardSegment>(find.byType(OrbitCardSegment));
+    expect(segment.squareRight, isTrue, reason: '行右沿 = 接缝，必须直边');
+    expect(segment.squareLeft, isFalse);
+
+    final action = tester.widget<SlidableAction>(find.byType(SlidableAction));
+    expect(action.borderRadius.topLeft.x, 0);
   });
 
   // 方向锁（2026-11-06）：上下滚动时手指的横向抖动不得夺走手势

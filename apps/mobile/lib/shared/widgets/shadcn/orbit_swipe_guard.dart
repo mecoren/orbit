@@ -1,7 +1,10 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
+
+import 'orbit_list_card.dart';
 
 /// 侧滑手势的方向锁（2026-11-06）
 ///
@@ -123,4 +126,38 @@ class _OrbitSwipeGuardState extends State<OrbitSwipeGuard>
       child: widget.builder(context, !_blocked, _slidable),
     );
   }
+}
+
+/// 侧滑行的卡片分段（2026-11-09 真机反馈：动作按钮改直边后接缝仍有月牙缝）
+///
+/// 行卡圆角按整卡首/末段画在**行的左右外缘**；横滑时行整体平移，这些圆角
+/// 会跟着挪到与动作面板相接的接缝处，凹出一块月牙形页面底色。这里监听
+/// [SlidableController.actionPaneType]，面板打开时只把接缝侧的两角抹平
+/// （`OrbitCardSegment` 的 `square*`），收起后恢复整卡圆角；外侧圆角仍由
+/// `OrbitCardEdge.swipeActionRadius` 交给动作按钮承接。
+class OrbitSwipeCardSegment extends StatelessWidget {
+  const OrbitSwipeCardSegment({
+    super.key,
+    required this.edge,
+    required this.paneType,
+    required this.child,
+  });
+
+  final OrbitCardEdge edge;
+
+  /// 传 `SlidableController.actionPaneType`，与守卫里的 controller 同源
+  final ValueListenable<ActionPaneType> paneType;
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder<ActionPaneType>(
+        valueListenable: paneType,
+        builder: (context, pane, _) => OrbitCardSegment(
+          edge: edge,
+          squareLeft: pane == ActionPaneType.start,
+          squareRight: pane == ActionPaneType.end,
+          child: child,
+        ),
+      );
 }
