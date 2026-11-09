@@ -11,6 +11,9 @@ import 'package:orbit/data/api/dto.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/todo/detail_screen.dart';
+import 'package:orbit/modules/todo/logic/task_logic.dart';
+import 'package:orbit/shared/utils/hex_color.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_checkbox.dart';
 import 'support/orbit_test_app.dart';
 
 late GoRouter _router;
@@ -92,6 +95,22 @@ void main() {
     await _settle(tester);
     final after = await tester.runAsync(() => bridge.todoTaskGetDetail(5));
     expect(after!.myDayDate, isNull);
+  });
+
+  // 2026-11-09：详情标题勾选框的描边要与列表行同口径（优先级 1–5 取语义色），
+  // 不能退回默认中性灰。种子任务 5 的 priority = 3。
+  testWidgets('详情标题勾选框描边取任务优先级色', (tester) async {
+    await tester.pumpWidget(_wrap(bridge));
+    await _settle(tester);
+    _router.push('/todo/5');
+    await _settle(tester);
+
+    final expected = hexToColor(priorityRingHex(3)!);
+    final borders = tester
+        .widgetList<OrbitCheckbox>(find.byType(OrbitCheckbox))
+        .map((b) => b.borderColor)
+        .toList();
+    expect(borders, contains(expected));
   });
 
   testWidgets('页头 ⋮ → 收藏 toggle → is_favorite 翻转', (tester) async {

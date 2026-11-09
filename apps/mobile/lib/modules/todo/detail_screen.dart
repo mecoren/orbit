@@ -692,6 +692,8 @@ class _TitleSectionState extends State<_TitleSection> {
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
     final task = widget.detail;
+    // 描边与列表行同口径：优先级 1–5 取语义色，P0「无」回落中性灰
+    final ringHex = task.isDone ? null : priorityRingHex(task.priority);
     return _groupCard([
       Padding(
         padding: const EdgeInsets.all(AppDimens.cardPadding),
@@ -704,6 +706,7 @@ class _TitleSectionState extends State<_TitleSection> {
           OrbitCheckbox(
             checked: task.isDone,
             size: AppDimens.iconSizeXl,
+            borderColor: ringHex == null ? null : hexToColor(ringHex),
             onToggle: () => widget.onToggleDone(task),
           ),
           const SizedBox(width: AppDimens.space12),
@@ -1499,7 +1502,7 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
                 children: [
                   Row(
                     children: [
-                      // 22px 圆 checkbox（check 14，docs/05 §四）
+                      // 22px 方角 checkbox（4px 圆角，与桌面端同源，docs/05 §四）
                       OrbitCheckbox(
                         checked: node.subtask.isDone,
                         size: AppDimens.subtaskCheckboxSize,

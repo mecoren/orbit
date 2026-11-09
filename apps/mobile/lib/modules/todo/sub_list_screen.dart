@@ -2962,7 +2962,7 @@ class _RowExit extends StatelessWidget {
 
 /// 任务行（docs/05 §4.5，2026-09-23 版式改写）
 ///
-/// 版式：24px 圆 checkbox +「标题 /（标签 + 项目名）」左列 +「截止日期 /
+/// 版式：22px 方角 checkbox +「标题 /（标签 + 项目名）」左列 +「截止日期 /
 /// 元信息图标」右列（右对齐）。
 /// - **优先级落在勾选框描边上**（高/紧急/立即 = 橙红圆环，P0「无」回落中性灰，
 ///   见 `task_logic.priorityRingHex`）——同一信息不再于副标题重复一枚 8px 色点；
@@ -3338,7 +3338,7 @@ class TodoTaskTile extends StatelessWidget {
                   : null,
               child: Row(
                 children: [
-                  // 24px 方角 checkbox：描边承载优先级语义（完成态不再保留色环）
+                  // 22px 方角 checkbox：描边承载优先级语义（完成态不再保留色环）
                   OrbitCheckbox(
                     checked: done,
                     onToggle: onToggleDone,

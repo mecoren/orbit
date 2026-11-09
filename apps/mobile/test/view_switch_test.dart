@@ -53,7 +53,15 @@ void main() {
 
   testWidgets('接线存在：列表区由 AnimatedSwitcher 承载', (tester) async {
     await _pumpList(tester, MockOrbitBridge());
-    expect(find.byType(AnimatedSwitcher), findsOneWidget);
+    // 行内勾选框也有自己的 AnimatedSwitcher（白勾淡入淡出），这里按视图
+    // 子树的 key 收窄到「承载视图切换」的那一层
+    expect(
+      find.ancestor(
+        of: find.byKey(const ValueKey('view-list')),
+        matching: find.byType(AnimatedSwitcher),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('切到看板：过渡起播后出现 KanbanBoard，收敛后稳定', (tester) async {

@@ -29,7 +29,7 @@
 | flutter_miuix 组件 | 本项目原语 | 页面调用点 | 换承载后得到什么 |
 |---|---|---|---|
 | `MiuixCard`（squircle） | `OrbitCard` / `SectionCard` | 18 处 | 超椭圆圆角（`MiuixSquircleBorder`），描边用同一条超椭圆路径自绘（`_CardOutlinePainter`），填充/无阴影口径不变 |
-| `MiuixCheckbox` | `OrbitCheckbox` | 13 处 | 圆形勾选框 + 描画式对勾（`trim` 逐帧生长）+ 按压下沉 0.85；**完成态填充仍为弱化灰**（已完成行整行置灰口径）、优先级色环由本组件自绘（库内无描边参数） |
+| `MiuixCheckbox` | `OrbitCheckbox` | 13 处 | 圆形勾选框 + 描画式对勾（`trim` 逐帧生长）+ 按压下沉 0.85；**完成态填充仍为弱化灰**（已完成行整行置灰口径）、优先级色环由本组件自绘（库内无描边参数）。**2026-11-09 已改回自绘方角**（4px 圆角 + 2px 描边 + 白勾，与桌面端同源，不再使用 `MiuixCheckbox`） |
 | `MiuixInfiniteProgressIndicator` | `OrbitSpinner` | 21 处 | HyperOS 系统加载态（细环 + 绕行点，800ms 周期固定） |
 | `MiuixLinearProgressIndicator` | `OrbitProgressBar`（新增） | 5 处 | 圆头胶囊进度（不再需要外层 `ClipRRect`），确定/不定态同一组件 |
 | `MiuixButton`（squircle） | `OrbitButton`（新增） | 80 处 | 超椭圆按钮 + 弹簧按压遮罩；`primary/secondary/outline/text` 四档对应 Material 三件套 + destructive 语义 |
@@ -102,12 +102,12 @@ OrbitGlassScope（向下暴露同一个 backdrop）
 | 解锁页 | squircle 主按钮 + 描边按钮正常 |
 | 首页（今天） | OS4 玻璃底栏（滑动指示器胶囊、选中态强调色）+ 玻璃页头 + squircle「新建任务」 |
 | 清单页 | 分段卡片（首/中/末段圆角拼接）+ 玻璃页头（内容滚过时磨砂可见） |
-| 任务列表（300 条示例数据） | 圆形勾选框（空心环 + 优先级红/橙/蓝/灰配色）+ 角标 90 |
+| 任务列表（300 条示例数据） | 方角勾选框（空心框 + 优先级红/橙/蓝/灰配色；2026-11-09 与桌面端对齐）+ 角标 90 |
 | 勾选交互 | 计数 90→89、今日已完成 1→2、底栏角标同步（写路径 + 失效链正常） |
 | 详情页 | squircle 卡片、圆头进度条（子任务 1/2）、已完成灰填充勾选框 |
 | 优先级抽屉 | 选项行/色点/当前值对勾齐全，点选即关 |
-| 日历页 | squircle 选中日块、农历/休班徽标、圆形勾选框 |
-| 四象限 | 四张 squircle 卡片 + 圆形勾选框 + 分隔线 |
+| 日历页 | squircle 选中日块、农历/休班徽标、方角勾选框 |
+| 四象限 | 四张 squircle 卡片 + 方角勾选框 + 分隔线 |
 | 统计页 | 热力图、条形图、squircle 卡片正常 |
 | 「更多」面板 | 玻璃浮层锚在「更多」页签上方，条目/编辑入口齐全 |
 | 暗色主题 | 深色玻璃底栏/页头、角标与文字对比度正常 |
@@ -124,13 +124,13 @@ OrbitGlassScope（向下暴露同一个 backdrop）
 
 ## 四、已知取舍（改前必读）
 
-1. **勾选框形态**：方角 → 圆形（HyperOS 语言）。若产品要回方角，改
-   `orbit_checkbox.dart` 的 `_CheckboxRingPainter` + 库内 `MiuixCheckbox` 的
-   `borderRadius`（库内写死圆形，需上游支持）。
+1. **勾选框形态（2026-11-09 已回退）**：2026-10-31 曾改成 HyperOS 圆形；
+   因与桌面端方角勾选框不一致，现改回**自绘方角**（4px 圆角 + 2px 描边 +
+   白勾，`orbit_checkbox.dart`），不再依赖 `MiuixCheckbox`。
 2. **底栏文字**：仍是纯图标（`MiuixGlassNavigationItem` 只传 `contentDescription`），
    未取 HyperOS 的 iconAndText 形态（`home_shell_test` 锁定「今天」只出现在页头）。
-3. **触感**：`MiuixCheckbox` 内部每次切换都发 `lightImpact`，本层不再补
-   `selectionClick`（叠加会变成两下震感）；取消完成时同样震一下属上游行为。
+3. **触感**：勾选确认走 `HapticFeedback.selectionClick()`（未选→已选），
+   取消完成不震（docs/05 §9.1）；不再有库内 `lightImpact` 叠震。
 4. **shader 降级**：无 runtime shader 的设备上，OS4 玻璃退化为「模糊 + 原生混色」，
    不是实色；`MiuixGlassRendering.loadError` 可查原因。
 

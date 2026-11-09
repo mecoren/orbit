@@ -1,7 +1,6 @@
 // 已完成行整行置灰回归：标题 / 日期 / 元信息 / 勾选框统一弱化灰，
 // 不再保留主题蓝、逾期红、星标黄、优先级色环。
 import 'package:flutter/material.dart';
-import 'package:flutter_miuix/miuix.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/core/theme/app_colors.dart';
 import 'package:orbit/core/theme/icon_map.dart';
@@ -76,11 +75,14 @@ void main() {
     expect(strike.doneColor, muted);
 
     // 勾选框填充走弱化灰，且不保留优先级色环
-    final box = tester.widget<MiuixCheckbox>(find.descendant(
-      of: find.byType(OrbitCheckbox),
-      matching: find.byType(MiuixCheckbox),
-    ));
-    expect(box.colors?.checkedBackgroundColor, muted);
+    final decoration = tester
+        .widget<AnimatedContainer>(find.descendant(
+          of: find.byType(OrbitCheckbox),
+          matching: find.byType(AnimatedContainer),
+        ))
+        .decoration! as BoxDecoration;
+    expect(decoration.color, muted);
+    expect((decoration.border! as Border).top.color, muted);
 
     // 星标不再是黄色
     final star = tester.widget<Icon>(find.byIcon(OrbitIcons.star));
