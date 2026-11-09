@@ -17,6 +17,24 @@
 
 ## [Unreleased]
 
+### 优化：开源组件按端收窄来源（2026-11-09）
+
+「关于 → 开源组件」不再把三类来源一股脑摊给两端：各端只列与本端技术栈相关的直接依赖，清单数据源仍是 `orbit-core` 同一份。
+
+- **桌面**：来源筛选由下拉改 `Tabs`（全部 / 前端 / Rust），Flutter 条目在列表与计数中一并隐藏；
+- **移动**：隐藏前端条目，来源档位收窄为 全部来源 / Rust / Flutter；
+- **验证**：`pnpm typecheck`、`vitest oss-components-model`、`playwright oss-components.spec.ts`、`flutter analyze`、开源组件相关 `flutter test` 全绿。
+
+### 新增：开源组件引用界面双端统一（2026-11-09）
+
+「关于」页此前只有桌面端硬编码的组件清单（Tabs + Accordion），移动端仅系统许可证页。本轮按 wait-home 的开源组件引用界面重做，版式走 Orbit 自身组件：
+
+- **数据同源**：清单收口到 `orbit-core` 的 `models::oss_components`（npm 24 + Rust 27 + Flutter 21 条直接依赖），桌面 Tauri `oss_components` 与移动 FRB 同名只读命令转发；补 `oss_components_api` 单测（名称唯一、三类来源齐全、字段/链接校验、默认顺序）；
+- **桌面**：`/about`「开源组件」改为列表 + 来源筛选（全部/前端/Rust/Flutter）+ 排序（默认/名称 A→Z/名称 Z→A/按来源）+ 原地详情（信息行/仓库/主页外链），删除 `about-page.tsx` 硬编码 `OSS_FRONTEND`/`OSS_RUST` 与 Tabs/Accordion 双形态；筛选排序抽 `oss-components-model.ts` 纯函数并补 vitest，新增 Playwright 冒烟；
+- **移动**：关于页「开源许可」分组新增「开源组件」入口，新增 `/about/oss-components` 列表与 `/about/oss-components/detail?name=…` 详情；来源筛选/排序用 `OrbitDropdownPreference` 就地玻璃菜单，列表 `OrbitCardSegment`，详情 `OrbitGroupCard` + `InfoTile` + `OrbitArrowTile` 外链；详情用查询参数避开 `@scope/pkg` 斜杠包名；补筛选排序纯函数单测、页面回归与返回链路用例；
+- **移动端许可页**：「查看开源许可」不再进 Flutter 系统 `LicensePage`，改为自绘包名列表 + 许可全文详情（`LicenseRegistry` 聚合，分段卡/页头/空态与开源组件页同款）；补聚合纯函数与两级页面测试；
+- **验证**：`cargo check -p orbit-flutter`、桌面 `cargo check`、`pnpm typecheck`、`pnpm test`（784 绿）、`flutter analyze`、开源组件相关 `flutter test`、`pnpm exec playwright test e2e/oss-components.spec.ts`、`bridge-parity` / `mobile-bridge-audit` 通过。
+
 ### 修复：移动端时停不再改写确认钮文案（2026-11-09）
 
 冷静期此前把确认钮文案替换成「请阅读后果（Ns）」，半宽按钮里长文案换行把按钮撑高、归零又缩回。改为确认钮原文案后只接「（Ns）」括号秒数：整段同一个 Text、同一字体，不替换文案、不另起一行，不再显示「请阅读后果」；极窄屏整行等比缩小，不换行撑高按钮。`orbit_sheets_test` 补按钮文案/字体/尺寸恒定回归断言。桌面 `DangerousConfirmDialog` 按钮宽度不随文案变化，保持原口径。另按真机反馈补上回收站单条彻底删除（行内红钮 / 左滑 / 长按菜单三条入口）的一段 3 秒时停；桌面单条仍是「普通确认 + 5 秒撤销」口径。

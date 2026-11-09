@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -8799118;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 993631387;
 
 // Section: executor
 
@@ -3149,6 +3149,39 @@ fn wire__crate__api__state__orbit_state_initialized_impl(
                 transform_result_sse::<_, ()>((move || {
                     let output_ok =
                         Result::<_, ()>::Ok(crate::api::state::orbit_state_initialized())?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__oss_components__oss_components_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "oss_components",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok =
+                        Result::<_, ()>::Ok(crate::api::oss_components::oss_components())?;
                     Ok(output_ok)
                 })())
             }
@@ -8569,6 +8602,20 @@ impl SseDecode for Vec<crate::api::notification_log::NotificationLogRow> {
     }
 }
 
+impl SseDecode for Vec<crate::api::oss_components::OssComponentDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::oss_components::OssComponentDto>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<crate::api::planner::PlanSlot> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -9234,6 +9281,28 @@ impl SseDecode for crate::api::dto::OrphanChunkGcResult {
         return crate::api::dto::OrphanChunkGcResult {
             deleted_buckets: var_deletedBuckets,
             errors: var_errors,
+        };
+    }
+}
+
+impl SseDecode for crate::api::oss_components::OssComponentDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_name = <String>::sse_decode(deserializer);
+        let mut var_version = <String>::sse_decode(deserializer);
+        let mut var_source = <String>::sse_decode(deserializer);
+        let mut var_description = <String>::sse_decode(deserializer);
+        let mut var_license = <String>::sse_decode(deserializer);
+        let mut var_repository = <Option<String>>::sse_decode(deserializer);
+        let mut var_homepage = <Option<String>>::sse_decode(deserializer);
+        return crate::api::oss_components::OssComponentDto {
+            name: var_name,
+            version: var_version,
+            source: var_source,
+            description: var_description,
+            license: var_license,
+            repository: var_repository,
+            homepage: var_homepage,
         };
     }
 }
@@ -10853,343 +10922,346 @@ fn pde_ffi_dispatcher_primary_impl(
         86 => {
             wire__crate__api__state__orbit_state_initialized_impl(port, ptr, rust_vec_len, data_len)
         }
-        87 => wire__crate__api__auth__ping_impl(port, ptr, rust_vec_len, data_len),
-        88 => wire__crate__api__plaintext_export__plaintext_export_csv_impl(
+        87 => {
+            wire__crate__api__oss_components__oss_components_impl(port, ptr, rust_vec_len, data_len)
+        }
+        88 => wire__crate__api__auth__ping_impl(port, ptr, rust_vec_len, data_len),
+        89 => wire__crate__api__plaintext_export__plaintext_export_csv_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        89 => wire__crate__api__plaintext_export__plaintext_export_json_impl(
+        90 => wire__crate__api__plaintext_export__plaintext_export_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        90 => wire__crate__api__saved_filter__saved_filter_create_impl(
+        91 => wire__crate__api__saved_filter__saved_filter_create_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        91 => wire__crate__api__saved_filter__saved_filter_delete_impl(
+        92 => wire__crate__api__saved_filter__saved_filter_delete_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        92 => wire__crate__api__saved_filter__saved_filter_update_impl(
+        93 => wire__crate__api__saved_filter__saved_filter_update_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        93 => wire__crate__api__saved_filter__saved_filters_list_impl(
+        94 => wire__crate__api__saved_filter__saved_filters_list_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        94 => wire__crate__api__full_sync_backup__start_backup_scheduler_impl(
+        95 => wire__crate__api__full_sync_backup__start_backup_scheduler_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        95 => wire__crate__api__holiday__start_holiday_scheduler_impl(
+        96 => wire__crate__api__holiday__start_holiday_scheduler_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        96 => {
+        97 => {
             wire__crate__api__events__start_reminder_poller_impl(port, ptr, rust_vec_len, data_len)
         }
-        97 => {
+        98 => {
             wire__crate__api__trash__start_trash_scheduler_impl(port, ptr, rust_vec_len, data_len)
         }
-        98 => wire__crate__api__stats__stats_aggregate_impl(port, ptr, rust_vec_len, data_len),
-        99 => {
+        99 => wire__crate__api__stats__stats_aggregate_impl(port, ptr, rust_vec_len, data_len),
+        100 => {
             wire__crate__api__events__subscribe_db_changes_impl(port, ptr, rust_vec_len, data_len)
         }
-        100 => wire__crate__api__holiday__subscribe_holiday_progress_impl(
+        101 => wire__crate__api__holiday__subscribe_holiday_progress_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        101 => {
+        102 => {
             wire__crate__api__sync__subscribe_sync_progress_impl(port, ptr, rust_vec_len, data_len)
         }
-        102 => wire__crate__api__sync__sync_config_get_impl(port, ptr, rust_vec_len, data_len),
-        103 => wire__crate__api__sync__sync_config_save_impl(port, ptr, rust_vec_len, data_len),
-        104 => wire__crate__api__sync_conflict__sync_conflict_clear_impl(
+        103 => wire__crate__api__sync__sync_config_get_impl(port, ptr, rust_vec_len, data_len),
+        104 => wire__crate__api__sync__sync_config_save_impl(port, ptr, rust_vec_len, data_len),
+        105 => wire__crate__api__sync_conflict__sync_conflict_clear_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        105 => wire__crate__api__sync_conflict__sync_conflict_count_impl(
+        106 => wire__crate__api__sync_conflict__sync_conflict_count_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        106 => wire__crate__api__sync_conflict__sync_conflict_dismiss_impl(
+        107 => wire__crate__api__sync_conflict__sync_conflict_dismiss_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        107 => wire__crate__api__sync_conflict__sync_conflict_list_impl(
+        108 => wire__crate__api__sync_conflict__sync_conflict_list_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        108 => wire__crate__api__sync_conflict__sync_conflict_restore_impl(
+        109 => wire__crate__api__sync_conflict__sync_conflict_restore_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        109 => wire__crate__api__sync__sync_crypto_change_password_impl(
+        110 => wire__crate__api__sync__sync_crypto_change_password_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        110 => wire__crate__api__sync__sync_crypto_export_bundle_impl(
+        111 => wire__crate__api__sync__sync_crypto_export_bundle_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        111 => wire__crate__api__sync__sync_crypto_forget_session_impl(
+        112 => wire__crate__api__sync__sync_crypto_forget_session_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        112 => wire__crate__api__sync__sync_crypto_import_bundle_impl(
+        113 => wire__crate__api__sync__sync_crypto_import_bundle_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        113 => wire__crate__api__sync__sync_crypto_init_impl(port, ptr, rust_vec_len, data_len),
-        114 => wire__crate__api__sync__sync_crypto_lock_impl(port, ptr, rust_vec_len, data_len),
-        115 => {
+        114 => wire__crate__api__sync__sync_crypto_init_impl(port, ptr, rust_vec_len, data_len),
+        115 => wire__crate__api__sync__sync_crypto_lock_impl(port, ptr, rust_vec_len, data_len),
+        116 => {
             wire__crate__api__sync__sync_crypto_meta_version_impl(port, ptr, rust_vec_len, data_len)
         }
-        116 => wire__crate__api__sync__sync_crypto_restore_session_impl(
+        117 => wire__crate__api__sync__sync_crypto_restore_session_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        117 => wire__crate__api__sync__sync_crypto_status_impl(port, ptr, rust_vec_len, data_len),
-        118 => wire__crate__api__sync__sync_crypto_unlock_impl(port, ptr, rust_vec_len, data_len),
-        119 => {
+        118 => wire__crate__api__sync__sync_crypto_status_impl(port, ptr, rust_vec_len, data_len),
+        119 => wire__crate__api__sync__sync_crypto_unlock_impl(port, ptr, rust_vec_len, data_len),
+        120 => {
             wire__crate__api__sync__sync_crypto_upgrade_v2_impl(port, ptr, rust_vec_len, data_len)
         }
-        120 => wire__crate__api__sync__sync_disconnect_impl(port, ptr, rust_vec_len, data_len),
-        121 => wire__crate__api__sync__sync_test_connection_impl(port, ptr, rust_vec_len, data_len),
-        122 => wire__crate__api__activity_log__task_activity_list_impl(
+        121 => wire__crate__api__sync__sync_disconnect_impl(port, ptr, rust_vec_len, data_len),
+        122 => wire__crate__api__sync__sync_test_connection_impl(port, ptr, rust_vec_len, data_len),
+        123 => wire__crate__api__activity_log__task_activity_list_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        123 => wire__crate__api__asset__task_attachment_add_impl(port, ptr, rust_vec_len, data_len),
-        124 => wire__crate__api__asset__task_attachment_add_path_impl(
+        124 => wire__crate__api__asset__task_attachment_add_impl(port, ptr, rust_vec_len, data_len),
+        125 => wire__crate__api__asset__task_attachment_add_path_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        125 => {
+        126 => {
             wire__crate__api__todo__task_attachment_flags_impl(port, ptr, rust_vec_len, data_len)
         }
-        126 => {
+        127 => {
             wire__crate__api__asset__task_attachment_read_impl(port, ptr, rust_vec_len, data_len)
         }
-        127 => {
+        128 => {
             wire__crate__api__asset__task_attachment_remove_impl(port, ptr, rust_vec_len, data_len)
         }
-        128 => {
+        129 => {
             wire__crate__api__asset__task_attachments_list_impl(port, ptr, rust_vec_len, data_len)
         }
-        129 => {
+        130 => {
             wire__crate__api__todo__task_dependency_flags_impl(port, ptr, rust_vec_len, data_len)
         }
-        130 => {
+        131 => {
             wire__crate__api__todo__task_description_flags_impl(port, ptr, rust_vec_len, data_len)
         }
-        131 => {
+        132 => {
             wire__crate__api__todo__task_labels_projection_impl(port, ptr, rust_vec_len, data_len)
         }
-        132 => {
+        133 => {
             wire__crate__api__todo__task_open_subtask_flags_impl(port, ptr, rust_vec_len, data_len)
         }
-        133 => wire__crate__api__todo__task_reminders_projection_impl(
+        134 => wire__crate__api__todo__task_reminders_projection_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        134 => wire__crate__api__template__template_create_impl(port, ptr, rust_vec_len, data_len),
-        135 => wire__crate__api__template__template_delete_impl(port, ptr, rust_vec_len, data_len),
-        136 => wire__crate__api__template__template_update_impl(port, ptr, rust_vec_len, data_len),
-        137 => wire__crate__api__template__templates_list_impl(port, ptr, rust_vec_len, data_len),
-        138 => wire__crate__api__todo__todo_comments_create_impl(port, ptr, rust_vec_len, data_len),
-        139 => wire__crate__api__todo__todo_comments_delete_impl(port, ptr, rust_vec_len, data_len),
-        140 => wire__crate__api__todo__todo_comments_get_impl(port, ptr, rust_vec_len, data_len),
-        141 => wire__crate__api__todo__todo_comments_list_impl(port, ptr, rust_vec_len, data_len),
-        142 => wire__crate__api__todo__todo_labels_create_impl(port, ptr, rust_vec_len, data_len),
-        143 => wire__crate__api__todo__todo_labels_delete_impl(port, ptr, rust_vec_len, data_len),
-        144 => wire__crate__api__todo__todo_labels_get_impl(port, ptr, rust_vec_len, data_len),
-        145 => wire__crate__api__todo__todo_labels_list_impl(port, ptr, rust_vec_len, data_len),
-        146 => wire__crate__api__todo__todo_labels_update_impl(port, ptr, rust_vec_len, data_len),
-        147 => wire__crate__api__todo__todo_project_mark_reviewed_impl(
+        135 => wire__crate__api__template__template_create_impl(port, ptr, rust_vec_len, data_len),
+        136 => wire__crate__api__template__template_delete_impl(port, ptr, rust_vec_len, data_len),
+        137 => wire__crate__api__template__template_update_impl(port, ptr, rust_vec_len, data_len),
+        138 => wire__crate__api__template__templates_list_impl(port, ptr, rust_vec_len, data_len),
+        139 => wire__crate__api__todo__todo_comments_create_impl(port, ptr, rust_vec_len, data_len),
+        140 => wire__crate__api__todo__todo_comments_delete_impl(port, ptr, rust_vec_len, data_len),
+        141 => wire__crate__api__todo__todo_comments_get_impl(port, ptr, rust_vec_len, data_len),
+        142 => wire__crate__api__todo__todo_comments_list_impl(port, ptr, rust_vec_len, data_len),
+        143 => wire__crate__api__todo__todo_labels_create_impl(port, ptr, rust_vec_len, data_len),
+        144 => wire__crate__api__todo__todo_labels_delete_impl(port, ptr, rust_vec_len, data_len),
+        145 => wire__crate__api__todo__todo_labels_get_impl(port, ptr, rust_vec_len, data_len),
+        146 => wire__crate__api__todo__todo_labels_list_impl(port, ptr, rust_vec_len, data_len),
+        147 => wire__crate__api__todo__todo_labels_update_impl(port, ptr, rust_vec_len, data_len),
+        148 => wire__crate__api__todo__todo_project_mark_reviewed_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        148 => wire__crate__api__todo__todo_project_set_review_interval_impl(
+        149 => wire__crate__api__todo__todo_project_set_review_interval_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        149 => wire__crate__api__todo__todo_project_snooze_review_impl(
+        150 => wire__crate__api__todo__todo_project_snooze_review_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        150 => wire__crate__api__todo__todo_projects_create_impl(port, ptr, rust_vec_len, data_len),
-        151 => wire__crate__api__todo__todo_projects_delete_impl(port, ptr, rust_vec_len, data_len),
-        152 => wire__crate__api__todo__todo_projects_due_for_review_impl(
+        151 => wire__crate__api__todo__todo_projects_create_impl(port, ptr, rust_vec_len, data_len),
+        152 => wire__crate__api__todo__todo_projects_delete_impl(port, ptr, rust_vec_len, data_len),
+        153 => wire__crate__api__todo__todo_projects_due_for_review_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        153 => wire__crate__api__todo__todo_projects_get_impl(port, ptr, rust_vec_len, data_len),
-        154 => wire__crate__api__todo__todo_projects_get_by_uuid_impl(
+        154 => wire__crate__api__todo__todo_projects_get_impl(port, ptr, rust_vec_len, data_len),
+        155 => wire__crate__api__todo__todo_projects_get_by_uuid_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        155 => wire__crate__api__todo__todo_projects_list_impl(port, ptr, rust_vec_len, data_len),
-        156 => wire__crate__api__todo__todo_projects_list_archived_impl(
+        156 => wire__crate__api__todo__todo_projects_list_impl(port, ptr, rust_vec_len, data_len),
+        157 => wire__crate__api__todo__todo_projects_list_archived_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        157 => wire__crate__api__todo__todo_projects_update_impl(port, ptr, rust_vec_len, data_len),
-        158 => wire__crate__api__todo__todo_projects_update_sort_order_impl(
+        158 => wire__crate__api__todo__todo_projects_update_impl(port, ptr, rust_vec_len, data_len),
+        159 => wire__crate__api__todo__todo_projects_update_sort_order_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        159 => {
+        160 => {
             wire__crate__api__todo__todo_reminders_create_impl(port, ptr, rust_vec_len, data_len)
         }
-        160 => {
+        161 => {
             wire__crate__api__todo__todo_reminders_delete_impl(port, ptr, rust_vec_len, data_len)
         }
-        161 => wire__crate__api__todo__todo_reminders_get_impl(port, ptr, rust_vec_len, data_len),
-        162 => wire__crate__api__todo__todo_reminders_list_impl(port, ptr, rust_vec_len, data_len),
-        163 => wire__crate__api__todo__todo_subtasks_create_impl(port, ptr, rust_vec_len, data_len),
-        164 => wire__crate__api__todo__todo_subtasks_delete_impl(port, ptr, rust_vec_len, data_len),
-        165 => wire__crate__api__todo__todo_subtasks_get_impl(port, ptr, rust_vec_len, data_len),
-        166 => wire__crate__api__todo__todo_subtasks_list_impl(port, ptr, rust_vec_len, data_len),
-        167 => {
+        162 => wire__crate__api__todo__todo_reminders_get_impl(port, ptr, rust_vec_len, data_len),
+        163 => wire__crate__api__todo__todo_reminders_list_impl(port, ptr, rust_vec_len, data_len),
+        164 => wire__crate__api__todo__todo_subtasks_create_impl(port, ptr, rust_vec_len, data_len),
+        165 => wire__crate__api__todo__todo_subtasks_delete_impl(port, ptr, rust_vec_len, data_len),
+        166 => wire__crate__api__todo__todo_subtasks_get_impl(port, ptr, rust_vec_len, data_len),
+        167 => wire__crate__api__todo__todo_subtasks_list_impl(port, ptr, rust_vec_len, data_len),
+        168 => {
             wire__crate__api__todo__todo_subtasks_promote_impl(port, ptr, rust_vec_len, data_len)
         }
-        168 => wire__crate__api__todo__todo_subtasks_toggle_done_impl(
+        169 => wire__crate__api__todo__todo_subtasks_toggle_done_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        169 => wire__crate__api__todo__todo_subtasks_update_impl(port, ptr, rust_vec_len, data_len),
-        170 => {
+        170 => wire__crate__api__todo__todo_subtasks_update_impl(port, ptr, rust_vec_len, data_len),
+        171 => {
             wire__crate__api__todo__todo_task_labels_create_impl(port, ptr, rust_vec_len, data_len)
         }
-        171 => {
+        172 => {
             wire__crate__api__todo__todo_task_labels_delete_impl(port, ptr, rust_vec_len, data_len)
         }
-        172 => wire__crate__api__todo__todo_task_labels_get_impl(port, ptr, rust_vec_len, data_len),
-        173 => {
+        173 => wire__crate__api__todo__todo_task_labels_get_impl(port, ptr, rust_vec_len, data_len),
+        174 => {
             wire__crate__api__todo__todo_task_labels_list_impl(port, ptr, rust_vec_len, data_len)
         }
-        174 => wire__crate__api__todo__todo_task_overview_impl(port, ptr, rust_vec_len, data_len),
-        175 => wire__crate__api__todo__todo_task_relations_create_impl(
+        175 => wire__crate__api__todo__todo_task_overview_impl(port, ptr, rust_vec_len, data_len),
+        176 => wire__crate__api__todo__todo_task_relations_create_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        176 => wire__crate__api__todo__todo_task_relations_delete_impl(
+        177 => wire__crate__api__todo__todo_task_relations_delete_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        177 => {
+        178 => {
             wire__crate__api__todo__todo_task_relations_get_impl(port, ptr, rust_vec_len, data_len)
         }
-        178 => {
+        179 => {
             wire__crate__api__todo__todo_task_relations_list_impl(port, ptr, rust_vec_len, data_len)
         }
-        179 => wire__crate__api__todo__todo_tasks_board_impl(port, ptr, rust_vec_len, data_len),
-        180 => wire__crate__api__todo__todo_tasks_complete_impl(port, ptr, rust_vec_len, data_len),
-        181 => wire__crate__api__todo__todo_tasks_create_impl(port, ptr, rust_vec_len, data_len),
-        182 => wire__crate__api__todo__todo_tasks_delete_impl(port, ptr, rust_vec_len, data_len),
-        183 => wire__crate__api__todo__todo_tasks_duplicate_impl(port, ptr, rust_vec_len, data_len),
-        184 => wire__crate__api__todo__todo_tasks_get_impl(port, ptr, rust_vec_len, data_len),
-        185 => {
+        180 => wire__crate__api__todo__todo_tasks_board_impl(port, ptr, rust_vec_len, data_len),
+        181 => wire__crate__api__todo__todo_tasks_complete_impl(port, ptr, rust_vec_len, data_len),
+        182 => wire__crate__api__todo__todo_tasks_create_impl(port, ptr, rust_vec_len, data_len),
+        183 => wire__crate__api__todo__todo_tasks_delete_impl(port, ptr, rust_vec_len, data_len),
+        184 => wire__crate__api__todo__todo_tasks_duplicate_impl(port, ptr, rust_vec_len, data_len),
+        185 => wire__crate__api__todo__todo_tasks_get_impl(port, ptr, rust_vec_len, data_len),
+        186 => {
             wire__crate__api__todo__todo_tasks_get_by_uuid_impl(port, ptr, rust_vec_len, data_len)
         }
-        186 => {
+        187 => {
             wire__crate__api__todo__todo_tasks_get_detail_impl(port, ptr, rust_vec_len, data_len)
         }
-        187 => wire__crate__api__todo__todo_tasks_list_impl(port, ptr, rust_vec_len, data_len),
-        188 => wire__crate__api__todo__todo_tasks_page_impl(port, ptr, rust_vec_len, data_len),
-        189 => wire__crate__api__todo__todo_tasks_recalc_percent_impl(
+        188 => wire__crate__api__todo__todo_tasks_list_impl(port, ptr, rust_vec_len, data_len),
+        189 => wire__crate__api__todo__todo_tasks_page_impl(port, ptr, rust_vec_len, data_len),
+        190 => wire__crate__api__todo__todo_tasks_recalc_percent_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        190 => wire__crate__api__todo__todo_tasks_update_impl(port, ptr, rust_vec_len, data_len),
-        191 => wire__crate__api__todo__todo_tasks_update_position_impl(
+        191 => wire__crate__api__todo__todo_tasks_update_impl(port, ptr, rust_vec_len, data_len),
+        192 => wire__crate__api__todo__todo_tasks_update_position_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        192 => wire__crate__api__trash__trash_meta_impl(port, ptr, rust_vec_len, data_len),
-        193 => wire__crate__api__trash__trash_purge_all_impl(port, ptr, rust_vec_len, data_len),
-        194 => wire__crate__api__trash__trash_purge_expired_impl(port, ptr, rust_vec_len, data_len),
-        195 => wire__crate__api__trash__trash_set_retention_days_impl(
+        193 => wire__crate__api__trash__trash_meta_impl(port, ptr, rust_vec_len, data_len),
+        194 => wire__crate__api__trash__trash_purge_all_impl(port, ptr, rust_vec_len, data_len),
+        195 => wire__crate__api__trash__trash_purge_expired_impl(port, ptr, rust_vec_len, data_len),
+        196 => wire__crate__api__trash__trash_set_retention_days_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        196 => wire__crate__api__trash__trash_task_purge_impl(port, ptr, rust_vec_len, data_len),
-        197 => wire__crate__api__trash__trash_task_restore_impl(port, ptr, rust_vec_len, data_len),
-        198 => wire__crate__api__trash__trash_tasks_list_impl(port, ptr, rust_vec_len, data_len),
-        199 => wire__crate__api__widget__widget_todo_query_impl(port, ptr, rust_vec_len, data_len),
-        200 => wire__crate__api__widget__widget_todo_toggle_impl(port, ptr, rust_vec_len, data_len),
+        197 => wire__crate__api__trash__trash_task_purge_impl(port, ptr, rust_vec_len, data_len),
+        198 => wire__crate__api__trash__trash_task_restore_impl(port, ptr, rust_vec_len, data_len),
+        199 => wire__crate__api__trash__trash_tasks_list_impl(port, ptr, rust_vec_len, data_len),
+        200 => wire__crate__api__widget__widget_todo_query_impl(port, ptr, rust_vec_len, data_len),
+        201 => wire__crate__api__widget__widget_todo_toggle_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -12420,6 +12492,32 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::dto::OrphanChunkGcResult>
     for crate::api::dto::OrphanChunkGcResult
 {
     fn into_into_dart(self) -> crate::api::dto::OrphanChunkGcResult {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::oss_components::OssComponentDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.name.into_into_dart().into_dart(),
+            self.version.into_into_dart().into_dart(),
+            self.source.into_into_dart().into_dart(),
+            self.description.into_into_dart().into_dart(),
+            self.license.into_into_dart().into_dart(),
+            self.repository.into_into_dart().into_dart(),
+            self.homepage.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::oss_components::OssComponentDto
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::oss_components::OssComponentDto>
+    for crate::api::oss_components::OssComponentDto
+{
+    fn into_into_dart(self) -> crate::api::oss_components::OssComponentDto {
         self
     }
 }
@@ -14802,6 +14900,16 @@ impl SseEncode for Vec<crate::api::notification_log::NotificationLogRow> {
     }
 }
 
+impl SseEncode for Vec<crate::api::oss_components::OssComponentDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::oss_components::OssComponentDto>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<crate::api::planner::PlanSlot> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -15320,6 +15428,19 @@ impl SseEncode for crate::api::dto::OrphanChunkGcResult {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i64>::sse_encode(self.deleted_buckets, serializer);
         <Vec<String>>::sse_encode(self.errors, serializer);
+    }
+}
+
+impl SseEncode for crate::api::oss_components::OssComponentDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.name, serializer);
+        <String>::sse_encode(self.version, serializer);
+        <String>::sse_encode(self.source, serializer);
+        <String>::sse_encode(self.description, serializer);
+        <String>::sse_encode(self.license, serializer);
+        <Option<String>>::sse_encode(self.repository, serializer);
+        <Option<String>>::sse_encode(self.homepage, serializer);
     }
 }
 

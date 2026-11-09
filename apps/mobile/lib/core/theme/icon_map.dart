@@ -54,6 +54,7 @@ abstract final class OrbitIcons {
   static const IconData openExternal = LucideIcons.externalLink;
   static const IconData drag = LucideIcons.gripVertical;
   static const IconData sort = LucideIcons.arrowUpDown;
+
   /// 层级下沉（项目从上一层移入上一项之下；横向拖动改层级的菜单等价入口）
   static const IconData indentIncrease = LucideIcons.indentIncrease;
 
@@ -64,6 +65,9 @@ abstract final class OrbitIcons {
   static const IconData filter = LucideIcons.filter;
   static const IconData filterList = LucideIcons.listFilter;
   static const IconData settings = LucideIcons.settings;
+
+  /// 开源组件 / 代码依赖
+  static const IconData code = LucideIcons.code;
 
   // ── 状态与反馈 ──
 
@@ -181,8 +185,8 @@ abstract final class OrbitIcons {
 /// 一小时后 / 今晚 / 明天各有专属图标，其余（下周及未知档）回落日历钟。
 /// 收在图标域而不是逻辑层：返回值是图标取值，与 [OrbitIcons] 同类。
 IconData dueQuickIcon(String key) => switch (key) {
-      'in1h' => OrbitIcons.clock,
-      'tonight' => OrbitIcons.moon,
-      'tomorrow' => OrbitIcons.sunrise,
-      _ => OrbitIcons.calendarClock,
-    };
+  'in1h' => OrbitIcons.clock,
+  'tonight' => OrbitIcons.moon,
+  'tomorrow' => OrbitIcons.sunrise,
+  _ => OrbitIcons.calendarClock,
+};

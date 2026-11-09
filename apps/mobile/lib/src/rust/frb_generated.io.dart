@@ -19,6 +19,7 @@ import 'api/holiday.dart';
 import 'api/ics_export.dart';
 import 'api/maintenance.dart';
 import 'api/notification_log.dart';
+import 'api/oss_components.dart';
 import 'api/plaintext_export.dart';
 import 'api/planner.dart';
 import 'api/saved_filter.dart';
@@ -390,6 +391,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<NotificationLogRow> dco_decode_list_notification_log_row(dynamic raw);
 
   @protected
+  List<OssComponentDto> dco_decode_list_oss_component_dto(dynamic raw);
+
+  @protected
   List<PlanSlot> dco_decode_list_plan_slot(dynamic raw);
 
   @protected
@@ -555,6 +559,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   OrphanChunkGcResult dco_decode_orphan_chunk_gc_result(dynamic raw);
+
+  @protected
+  OssComponentDto dco_decode_oss_component_dto(dynamic raw);
 
   @protected
   PlaintextExportView dco_decode_plaintext_export_view(dynamic raw);
@@ -1197,6 +1204,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<OssComponentDto> sse_decode_list_oss_component_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<PlanSlot> sse_decode_list_plan_slot(SseDeserializer deserializer);
 
   @protected
@@ -1422,6 +1434,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   OrphanChunkGcResult sse_decode_orphan_chunk_gc_result(
     SseDeserializer deserializer,
   );
+
+  @protected
+  OssComponentDto sse_decode_oss_component_dto(SseDeserializer deserializer);
 
   @protected
   PlaintextExportView sse_decode_plaintext_export_view(
@@ -2216,6 +2231,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_oss_component_dto(
+    List<OssComponentDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_plan_slot(List<PlanSlot> self, SseSerializer serializer);
 
   @protected
@@ -2503,6 +2524,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_orphan_chunk_gc_result(
     OrphanChunkGcResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_oss_component_dto(
+    OssComponentDto self,
     SseSerializer serializer,
   );
 

@@ -27,6 +27,7 @@ import '../../src/rust/api/todo.dart' as gen_todo;
 import '../../src/rust/api/planner.dart' as gen_planner;
 import '../../src/rust/api/trash.dart' as gen_trash;
 import '../../src/rust/api/changelog.dart' as gen_changelog;
+import '../../src/rust/api/oss_components.dart' as gen_oss;
 import '../../src/rust/api/update.dart' as gen_update;
 import '../../src/rust/api/digest.dart' as gen_digest;
 import '../../src/rust/api/full_sync_backup.dart' as gen_backup;
@@ -1960,6 +1961,24 @@ class RustOrbitBridge implements OrbitBridge {
                   ),
                 )
                 .toList(),
+          ),
+        )
+        .toList();
+  }
+
+  @override
+  Future<List<OssComponentInfo>> ossComponents() async {
+    final components = await gen_oss.ossComponents();
+    return components
+        .map(
+          (component) => OssComponentInfo(
+            name: component.name,
+            version: component.version,
+            source: component.source,
+            description: component.description,
+            license: component.license,
+            repository: component.repository,
+            homepage: component.homepage,
           ),
         )
         .toList();

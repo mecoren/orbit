@@ -21,7 +21,9 @@ use tauri::Manager;
 
 #[cfg(desktop)]
 use commands::data_dir;
-use commands::{business_cmd, changelog_cmd, crypto_cmd, db_cmd, mica_cmd, todo_cmd};
+use commands::{
+    business_cmd, changelog_cmd, crypto_cmd, db_cmd, mica_cmd, oss_components_cmd, todo_cmd,
+};
 use sqlx::SqlitePool;
 
 /// 应用全局状态：持有数据库连接池供所有 command 共享
@@ -414,6 +416,8 @@ pub fn run() {
             business_cmd::business_count,
             // 应用内更新日志（数据在 core，双端同名；只读、无 DB）
             changelog_cmd::changelog_versions,
+            // 开源组件引用清单（数据在 core，双端同名；只读、无 DB）
+            oss_components_cmd::oss_components,
             // todo_cmd 复杂查询（7 组）
             todo_cmd::todo_tasks_get_detail,
             todo_cmd::todo_subtasks_toggle_done,

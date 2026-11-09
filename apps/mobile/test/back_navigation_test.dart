@@ -281,6 +281,39 @@ void main() {
     expect(find.text('解锁页'), findsOneWidget);
   });
 
+  testWidgets('关于 → 开源组件列表 → 详情：返回逐层回关于页', (tester) async {
+    await _pump(tester, _bridge());
+
+    appRouter.push('/about');
+    await tester.pumpAndSettle();
+    expect(find.text('关于'), findsOneWidget);
+
+    appRouter.push('/about/oss-components');
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pumpAndSettle();
+    expect(find.text('开源组件'), findsOneWidget);
+
+    appRouter.push(
+      '/about/oss-components/detail?name=${Uri.encodeQueryComponent('@scope/demo')}',
+    );
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pumpAndSettle();
+    expect(find.text('组件详情'), findsOneWidget);
+
+    await _back(tester); // 详情 → 列表
+    expect(find.text('开源组件'), findsOneWidget);
+    expect(find.text('组件详情'), findsNothing);
+
+    await _back(tester); // 列表 → 关于
+    expect(find.text('关于'), findsOneWidget);
+
+    await _back(tester); // 关于 → 启动首页
+    expect(find.text('今天'), findsOneWidget);
+    expect(popToDesktop, 0);
+  });
+
   testWidgets('外部直达子页（通知/小组件冷启动）：返回回首页，再返回退桌面', (tester) async {
     final bridge = _bridge();
     await _pump(tester, bridge);

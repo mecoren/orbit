@@ -45,6 +45,9 @@ class OrbitSettingsGroup extends StatelessWidget {
     this.trailing,
     required Widget this.child,
     this.padding = const EdgeInsets.fromLTRB(16, 12, 16, 16),
+    this.outerPadding = const EdgeInsets.symmetric(
+      horizontal: AppDimens.space12,
+    ),
   }) : children = null;
 
   /// 行式构造：内容零内边距，行件自带 [kSettingsRowMargin]
@@ -54,6 +57,9 @@ class OrbitSettingsGroup extends StatelessWidget {
     this.subtitle,
     this.trailing,
     required List<Widget> this.children,
+    this.outerPadding = const EdgeInsets.symmetric(
+      horizontal: AppDimens.space12,
+    ),
   }) : child = null,
        padding = EdgeInsets.zero;
 
@@ -75,6 +81,12 @@ class OrbitSettingsGroup extends StatelessWidget {
   /// 内容区内边距（行式构造恒为零）
   final EdgeInsetsGeometry padding;
 
+  /// 卡片外部留白（默认 12，与页面级水平留白同值）
+  ///
+  /// 页面自身已按 12 给列表留边时传 [EdgeInsets.zero]，否则会与本组件
+  /// 的默认外边距叠成 24，卡片比同页列表窄一圈。
+  final EdgeInsetsGeometry outerPadding;
+
   @override
   Widget build(BuildContext context) {
     final content =
@@ -89,13 +101,14 @@ class OrbitSettingsGroup extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (title != null) _SettingsGroupTitle(
-          title: title!,
-          subtitle: subtitle,
-          trailing: trailing,
-        ),
+        if (title != null)
+          _SettingsGroupTitle(
+            title: title!,
+            subtitle: subtitle,
+            trailing: trailing,
+          ),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppDimens.space12),
+          padding: outerPadding,
           child: MiuixCard(
             child: Padding(padding: padding, child: content),
           ),
@@ -191,8 +204,10 @@ class OrbitSettingsDivider extends StatelessWidget {
   const OrbitSettingsDivider({super.key});
 
   @override
-  Widget build(BuildContext context) =>
-      const Padding(padding: EdgeInsets.only(left: 56), child: MiuixHorizontalDivider());
+  Widget build(BuildContext context) => const Padding(
+    padding: EdgeInsets.only(left: 56),
+    child: MiuixHorizontalDivider(),
+  );
 }
 
 /// 卡内说明段（卡片顶部描述文字，水平 16 与行内边距同线）
@@ -251,10 +266,8 @@ class OrbitSettingsActions extends StatelessWidget {
   final Widget child;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-    child: child,
-  );
+  Widget build(BuildContext context) =>
+      Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 16), child: child);
 }
 
 /// 跳转/取值行（标题 + 可选摘要在左，尾随值 + 箭头在右）

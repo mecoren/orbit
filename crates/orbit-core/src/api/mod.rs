@@ -21,6 +21,7 @@ pub mod ics_export_api;
 pub mod ics_import_api;
 pub mod import_api;
 pub mod notification_log_api;
+pub mod oss_components_api;
 pub mod plaintext_export_api;
 pub mod project_review_api;
 pub mod saved_filter_api;

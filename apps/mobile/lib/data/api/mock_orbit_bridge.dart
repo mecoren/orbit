@@ -3948,6 +3948,62 @@ class MockOrbitBridge implements OrbitBridge {
   );
 
   @override
+  Future<List<OssComponentInfo>> ossComponents() => _delay(
+    () => const [
+      OssComponentInfo(
+        name: 'react',
+        version: '^19.0.0',
+        source: 'frontend',
+        description: '用于构建用户界面的声明式库',
+        license: 'MIT',
+        repository: 'https://github.com/facebook/react',
+        homepage: 'https://react.dev',
+      ),
+      OssComponentInfo(
+        name: '@scope/demo',
+        version: '1.2.3',
+        source: 'frontend',
+        description: '含斜杠的 scoped 包名（查询参数回归）',
+        license: 'MIT',
+        repository: 'https://github.com/example/demo',
+      ),
+      OssComponentInfo(
+        name: 'tauri',
+        version: '2',
+        source: 'rust',
+        description: '构建跨平台应用的 Rust 框架',
+        license: 'Apache-2.0 / MIT',
+        repository: 'https://github.com/tauri-apps/tauri',
+        homepage: 'https://tauri.app',
+      ),
+      OssComponentInfo(
+        name: 'sqlx',
+        version: '0.8',
+        source: 'rust',
+        description: '异步 Rust SQL 工具包',
+        license: 'MIT / Apache-2.0',
+        repository: 'https://github.com/launchbadge/sqlx',
+      ),
+      OssComponentInfo(
+        name: 'flutter_miuix',
+        version: '1.3.0',
+        source: 'flutter',
+        description: 'HyperOS 风格组件主体（含 OS4 玻璃）',
+        license: 'Apache-2.0',
+        homepage: 'https://pub.dev/packages/flutter_miuix',
+      ),
+      OssComponentInfo(
+        name: 'go_router',
+        version: '^17.3.0',
+        source: 'flutter',
+        description: '声明式路由与页签分支栈',
+        license: 'BSD-3-Clause',
+        repository: 'https://github.com/flutter/packages',
+      ),
+    ],
+  );
+
+  @override
   Future<UpdateInfo> checkLatestRelease() => _delay(
     () => const UpdateInfo(
       // mock 固定返回「无新版本」，避免测试/纯 UI 开发时弹无关弹层

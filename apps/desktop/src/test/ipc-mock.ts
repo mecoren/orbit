@@ -972,6 +972,60 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       changes: [{ category: "feature", description: "同上" }],
     },
   ],
+  // 开源组件清单（真实数据在 orbit-core；mock 覆盖三类来源与含斜杠包名，
+  // 供 e2e 断言筛选、排序与详情）
+  oss_components: () => [
+    {
+      name: "react",
+      version: "^19.0.0",
+      source: "frontend",
+      description: "用于构建用户界面的声明式库",
+      license: "MIT",
+      repository: "https://github.com/facebook/react",
+      homepage: "https://react.dev",
+    },
+    {
+      name: "@scope/demo",
+      version: "1.2.3",
+      source: "frontend",
+      description: "含斜杠的 scoped 包名（路径/查询参数回归）",
+      license: "MIT",
+      repository: "https://github.com/example/demo",
+    },
+    {
+      name: "tauri",
+      version: "2",
+      source: "rust",
+      description: "构建跨平台应用的 Rust 框架",
+      license: "Apache-2.0 / MIT",
+      repository: "https://github.com/tauri-apps/tauri",
+      homepage: "https://tauri.app",
+    },
+    {
+      name: "sqlx",
+      version: "0.8",
+      source: "rust",
+      description: "异步 Rust SQL 工具包",
+      license: "MIT / Apache-2.0",
+      repository: "https://github.com/launchbadge/sqlx",
+    },
+    {
+      name: "flutter_miuix",
+      version: "1.3.0",
+      source: "flutter",
+      description: "HyperOS 风格组件主体（含 OS4 玻璃）",
+      license: "Apache-2.0",
+      homepage: "https://pub.dev/packages/flutter_miuix",
+    },
+    {
+      name: "go_router",
+      version: "^17.3.0",
+      source: "flutter",
+      description: "声明式路由与页签分支栈",
+      license: "BSD-3-Clause",
+      repository: "https://github.com/flutter/packages",
+    },
+  ],
 
   // ---- projects ----
   // 对齐 Rust business_api::list_todo_projects：排除已归档（is_archived=1），

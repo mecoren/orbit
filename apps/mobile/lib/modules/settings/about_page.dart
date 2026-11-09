@@ -166,6 +166,15 @@ class _AboutPageState extends ConsumerState<AboutPage> {
                 ),
                 const SizedBox(height: AppDimens.cardGap),
                 OrbitSettingsGroup(
+                  title: '开源组件',
+                  padding: EdgeInsets.zero,
+                  child: OrbitArrowTile(
+                    title: '查看开源组件',
+                    onClick: () => context.push('/about/oss-components'),
+                  ),
+                ),
+                const SizedBox(height: AppDimens.cardGap),
+                OrbitSettingsGroup(
                   title: '开源许可',
                   child: SizedBox(
                     width: double.infinity,

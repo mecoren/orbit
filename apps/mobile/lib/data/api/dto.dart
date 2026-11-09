@@ -1748,6 +1748,34 @@ class ChangelogVersionInfo {
   });
 }
 
+/// 开源组件（FRB oss_components.rs 镜像）
+class OssComponentInfo {
+  final String name;
+
+  final String version;
+
+  /// 来源串值：frontend / rust / flutter（壳层映射中文标签）
+  final String source;
+
+  final String description;
+
+  final String license;
+
+  final String? repository;
+
+  final String? homepage;
+
+  const OssComponentInfo({
+    required this.name,
+    required this.version,
+    required this.source,
+    required this.description,
+    required this.license,
+    this.repository,
+    this.homepage,
+  });
+}
+
 /// TTL 清理统计（回收站「立即清理」；FRB trash.rs 镜像）
 class TrashPurgeStats {
   /// 物理删除的墓碑行数

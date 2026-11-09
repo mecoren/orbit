@@ -894,6 +894,9 @@ abstract class OrbitBridge {
   /// 应用内更新日志（新版本在前；数据源在 orbit-core，与桌面同一份）
   Future<List<ChangelogVersionInfo>> changelogVersions();
 
+  /// 开源组件引用清单（数据源在 orbit-core，与桌面同一份）
+  Future<List<OssComponentInfo>> ossComponents();
+
   /// 回收站元数据（保留档位 + 上次自动清理时间）
   Future<TrashMeta> trashMeta();
 

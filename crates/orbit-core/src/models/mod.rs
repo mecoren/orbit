@@ -5,4 +5,5 @@
 pub mod business;
 pub mod cfg_option;
 pub mod changelog;
+pub mod oss_components;
 pub mod sync_config;

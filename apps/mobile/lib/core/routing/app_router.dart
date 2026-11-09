@@ -12,6 +12,8 @@ import '../../modules/settings/backup_page.dart';
 import '../../modules/settings/changelog_detail_page.dart';
 import '../../modules/settings/changelog_list_page.dart';
 import '../../modules/settings/holiday_cache_page.dart';
+import '../../modules/settings/oss_component_detail_page.dart';
+import '../../modules/settings/oss_components_page.dart';
 import '../../modules/settings/label_manager_page.dart';
 import '../../modules/settings/nav_modules_page.dart';
 import '../../modules/settings/diagnostics_page.dart';
@@ -372,6 +374,20 @@ final appRouter = GoRouter(
       path: '/about/changelog/:version',
       pageBuilder: (context, state) => pageSlideFromRight(
         ChangelogDetailPage(version: state.pathParameters['version'] ?? ''),
+        key: state.pageKey,
+      ),
+    ),
+    // 开源组件：关于页一行入口 → 组件列表（来源筛选/排序）→ 组件详情。
+    // 详情用查询参数传名称：`@scope/pkg` 含斜杠，塞进路径段会破坏匹配。
+    GoRoute(
+      path: '/about/oss-components',
+      pageBuilder: (context, state) =>
+          pageSlideFromRight(const OssComponentsPage(), key: state.pageKey),
+    ),
+    GoRoute(
+      path: '/about/oss-components/detail',
+      pageBuilder: (context, state) => pageSlideFromRight(
+        OssComponentDetailPage(name: state.uri.queryParameters['name'] ?? ''),
         key: state.pageKey,
       ),
     ),

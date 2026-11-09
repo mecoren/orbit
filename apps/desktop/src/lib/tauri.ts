@@ -1914,3 +1914,23 @@ export interface ChangelogVersion {
 /** 全部已发布版本的更新日志（新版本在前；只读静态数据，不读 DB） */
 export const changelogVersions = () =>
   invoke<ChangelogVersion[]>("changelog_versions");
+
+// ========== 开源组件引用清单（数据源在 orbit-core，双端共用） ==========
+
+/** 组件来源（串值与 Rust `OssComponentSource` 的 serde snake_case 一致） */
+export type OssComponentSource = "frontend" | "rust" | "flutter";
+
+/** 单个开源组件（镜像 orbit_core::models::oss_components::OssComponent） */
+export interface OssComponent {
+  name: string;
+  version: string;
+  source: OssComponentSource;
+  description: string;
+  license: string;
+  repository?: string;
+  homepage?: string;
+}
+
+/** 全部开源组件（只读静态数据；默认顺序 = 前端 → Rust → Flutter） */
+export const ossComponents = () =>
+  invoke<OssComponent[]>("oss_components");

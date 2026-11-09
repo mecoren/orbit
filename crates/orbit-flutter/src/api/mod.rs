@@ -29,6 +29,7 @@
 //! - [ics_export]：ICS 日历导出（VTODO 日历，#4）
 //! - [sync_conflict]：冲突败方副本（查看 / 恢复 / 忽略 / 清空，03 文档 §八）
 //! - [changelog]：应用内更新日志（数据在 orbit-core，移动端只镜像 DTO）
+//! - [oss_components]：开源组件引用清单（数据在 orbit-core，移动端只镜像 DTO）
 //! - [update]：检查更新（只在用户点击时拉一次 GitHub Releases 清单，#107）
 //! - [activity_log]：任务活动历史（详情抽屉/页「历史」区块只读查询）
 //! - [events]：下行事件流 + 提醒轮询守护
@@ -51,6 +52,7 @@ pub mod ics_export;
 pub mod logging;
 pub mod maintenance;
 pub mod notification_log;
+pub mod oss_components;
 pub mod plaintext_export;
 pub mod planner;
 pub mod saved_filter;

@@ -26,6 +26,7 @@ pub mod activity_log_cmd;
 pub mod notification_log_cmd;
 pub mod planner_cmd;
 pub mod notification_scheduler;
+pub mod oss_components_cmd;
 pub mod perf_cmd;
 pub mod plaintext_export_cmd;
 pub mod saved_filter_cmd;
