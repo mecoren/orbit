@@ -114,14 +114,16 @@ class _OrbitGlassPageState extends State<OrbitGlassPage> {
   );
 }
 
-/// 滚动期冻结的背景捕获（2026-11-08）
+/// 动画窗口期冻结的背景捕获（2026-11-08 滚动 / 11-09 键盘）
 ///
 /// 库内 [MiuixLayerBackdropCapture] 的机制是「子树每次重绘 → 帧末
-/// `toImageSync` 整页快照」——列表滚动时逐帧重录，是玻璃链路在真机上最大的
-/// 持续开销（x64 模拟器 GPU 加速量不出来，真机按 dpr/2 录制一次就是百万像素级）。
-/// 本件复刻同一机制并加暂停档：滚动活跃期不再录新快照，消费方（底栏/FAB/
-/// 弹层的玻璃）沿用最后一帧；滚动 settle 后恢复录制并补录一次。玻璃内内容在
-/// 滚动期轻微滞后——玻璃拟态系统的标准权衡（iOS 同款行为），可接受。
+/// `toImageSync` 整页快照」——列表滚动、**键盘抬升**时逐帧重录，是玻璃链路
+/// 在真机上最大的持续开销（x64 模拟器无软键盘动画，帧耗时门禁量不到后者；
+/// 真机按 dpr/2 录制一次就是百万像素级，键盘动画约 20 帧就是 20 次）。
+/// 本件复刻同一机制并加暂停档：滚动活跃期或键盘动画期不再录新快照，消费方
+/// （底栏/FAB/弹层的玻璃）沿用最后一帧；静默后恢复录制并补录一次。玻璃内
+/// 内容在动画期轻微滞后——玻璃拟态系统的标准权衡（iOS 同款行为），可接受；
+/// 且键盘动画期弹层本就走形变窗实色档，不采样背景，冻结零观感损失。
 ///
 /// **为什么不用 RepaintBoundary 包滚动列表「顺带」挡住重录**：图层脏标记沿
 /// Layer 链向上传播（`Layer.markNeedsAddToScene` 逐级上抛），边界挡不住内容
@@ -147,13 +149,20 @@ class OrbitScrollAwareBackdropCapture extends StatefulWidget {
 
 class _OrbitScrollAwareBackdropCaptureState
     extends State<OrbitScrollAwareBackdropCapture> {
-  /// 最后一帧滚动通知之后的静默期：静满即认为滚动已 settle
+  /// 最后一帧滚动/键盘变化之后的静默期：静满即认为动画已 settle
   ///
-  /// 惯性滚动期间 update 通知逐帧不断，恢复只会发生在真正停手之后。
+  /// 惯性滚动期间 update 通知逐帧不断、输入法动画逐帧改 `viewInsets`，恢复
+  /// 只会发生在真正停手之后。
   static const _resumeDelay = Duration(milliseconds: 120);
 
   Timer? _resume;
   bool _paused = false;
+
+  /// 上一帧的「键盘底沿 + 可用高度」（null = 首帧尚未记录）
+  ///
+  /// 同时看两项：Android `adjustResize` 键盘动画既改 `viewInsets` 也逐帧压缩
+  /// 窗口高度，只盯一项会在部分机型漏掉动画窗口。
+  (double, double)? _lastMetrics;
 
   @override
   void dispose() {
@@ -161,25 +170,45 @@ class _OrbitScrollAwareBackdropCaptureState
     super.dispose();
   }
 
-  bool _onScroll(ScrollNotification n) {
+  /// 每次变化都把恢复计时器推后，静默满 [_resumeDelay] 才补录一次
+  void _armResume() {
     _resume?.cancel();
-    if (!_paused) setState(() => _paused = true);
     _resume = Timer(_resumeDelay, () {
       if (mounted) setState(() => _paused = false);
     });
+  }
+
+  bool _onScroll(ScrollNotification n) {
+    if (!_paused) setState(() => _paused = true);
+    _armResume();
     return false;
   }
 
   @override
-  Widget build(BuildContext context) => NotificationListener<ScrollNotification>(
-    onNotification: _onScroll,
-    child: _OrbitLayerBackdropCapture(
-      backdrop: widget.backdrop,
-      paused: _paused,
-      pixelRatio: orbitBackdropPixelRatio(context),
-      child: widget.child,
-    ),
-  );
+  Widget build(BuildContext context) {
+    // 键盘动画窗口：逐帧改 viewInsets/size 时直接在本帧切暂停档（不 setState，
+    // 否则 build 期间再排一帧，反而每帧多一次重建）。子树内容在键盘期不变，
+    // 冻结快照不影响观感；弹层在捕获树之外，仍拿真实 viewInsets 做避让。
+    final metrics = (
+      MediaQuery.viewInsetsOf(context).bottom,
+      MediaQuery.sizeOf(context).height,
+    );
+    final previous = _lastMetrics;
+    _lastMetrics = metrics;
+    if (previous != null && metrics != previous) {
+      _paused = true;
+      _armResume();
+    }
+    return NotificationListener<ScrollNotification>(
+      onNotification: _onScroll,
+      child: _OrbitLayerBackdropCapture(
+        backdrop: widget.backdrop,
+        paused: _paused,
+        pixelRatio: orbitBackdropPixelRatio(context),
+        child: widget.child,
+      ),
+    );
+  }
 }
 
 /// 带暂停档的图层背景捕获（[OrbitScrollAwareBackdropCapture] 的承载层）
@@ -441,8 +470,11 @@ class OrbitGlassSurface extends StatelessWidget {
 /// - 键盘避让放在玻璃**之外**（玻璃只覆盖面板本体，键盘高度不进模糊纹理，
 ///   否则模糊面积近乎翻倍），骨架自带的 `viewInsets` 避让在这里被清零，
 ///   不会算两遍；
-/// - 玻璃弹层里的 `OrbitSheetScaffold` 应传 `floatingCard: false`，避免双层卡面。
-class OrbitGlassSheet extends StatelessWidget {
+/// - 玻璃弹层里的 `OrbitSheetScaffold` 应传 `floatingCard: false`，避免双层卡面；
+/// - 卡面 widget 树按配置缓存：`showModalBottomSheet` 的 route 会在键盘动画
+///   期逐帧重建 builder（2026-11-09 实测每帧一次），缓存后每帧只更新底部
+///   padding，玻璃面板/输入框/工具栏整段不重建。
+class OrbitGlassSheet extends StatefulWidget {
   const OrbitGlassSheet({
     super.key,
     required this.child,
@@ -460,6 +492,19 @@ class OrbitGlassSheet extends StatelessWidget {
   final double radius;
 
   @override
+  State<OrbitGlassSheet> createState() => _OrbitGlassSheetState();
+}
+
+class _OrbitGlassSheetState extends State<OrbitGlassSheet> {
+  /// 卡面缓存：route builder 每帧给出新的 [OrbitGlassSheet] 实例，只有配置或
+  /// 材质档真的变了才重造 widget 树，其余帧返回同一实例让 Element 复用子树。
+  Widget? _cached;
+  bool? _cachedSolid;
+  MiuixLayerBackdrop? _cachedBackdrop;
+  double? _cachedRadius;
+  Widget? _cachedChild;
+
+  @override
   Widget build(BuildContext context) {
     // 形变期（入场 220ms / 键盘抬升 / 退场 150ms）切实色卡面：见
     // `orbit_sheet_glass_motion.dart` 文件头（2026-11-08 实测这是全 App
@@ -467,30 +512,60 @@ class OrbitGlassSheet extends StatelessWidget {
     return OrbitSheetGlassMotion(builder: _buildBody);
   }
 
-  Widget _buildBody(BuildContext context, bool solid) => Padding(
-    padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-    // 安全区包在玻璃卡外：卡面整体浮在手势条/导航栏之上，卡内不再多出一截
-    // inset 高的空白（骨架在 floatingCard: false 档不再消费安全区，见
-    // orbit_sheet_scaffold.dart；与确认弹层同口径，2026-11-07）
-    child: SafeArea(
-      top: false,
-      child: Container(
-        margin: const EdgeInsets.only(
-          left: AppDimens.space16,
-          right: AppDimens.space16,
-          bottom: AppDimens.space16,
-        ),
-        child: OrbitGlassSurface(
-          backdrop: backdrop,
-          solid: solid,
-          borderRadius: BorderRadius.circular(radius),
-          child: MediaQuery.removeViewInsets(
-            context: context,
-            removeBottom: true,
-            child: child,
+  Widget _buildBody(BuildContext context, bool solid) {
+    if (_cached == null ||
+        _cachedSolid != solid ||
+        !identical(_cachedBackdrop, widget.backdrop) ||
+        _cachedRadius != widget.radius ||
+        !identical(_cachedChild, widget.child)) {
+      _cached = _KeyboardLift(
+        // 安全区包在玻璃卡外：卡面整体浮在手势条/导航栏之上，卡内不再多出一截
+        // inset 高的空白（骨架在 floatingCard: false 档不再消费安全区，见
+        // orbit_sheet_scaffold.dart；与确认弹层同口径，2026-11-07）
+        child: SafeArea(
+          top: false,
+          child: Container(
+            margin: const EdgeInsets.only(
+              left: AppDimens.space16,
+              right: AppDimens.space16,
+              bottom: AppDimens.space16,
+            ),
+            child: OrbitGlassSurface(
+              backdrop: widget.backdrop,
+              solid: solid,
+              borderRadius: BorderRadius.circular(widget.radius),
+              child: MediaQuery.removeViewInsets(
+                context: context,
+                removeBottom: true,
+                child: widget.child,
+              ),
+            ),
           ),
         ),
-      ),
-    ),
+      );
+      _cachedSolid = solid;
+      _cachedBackdrop = widget.backdrop;
+      _cachedRadius = widget.radius;
+      _cachedChild = widget.child;
+    }
+    return _cached!;
+  }
+}
+
+/// 键盘抬升只改这一层底部 padding（2026-11-09）
+///
+/// `viewInsets` 在输入法动画里逐帧变化，订阅必须**下沉到叶子**：否则整棵
+/// 卡面（玻璃面板 + 输入框 + 工具栏）每帧重建。这里每帧只重建一个 `Padding`，
+/// [child] 是 [OrbitGlassSheet] 缓存下来的同一实例，子树整段复用；玻璃面板
+/// 的 origin 仍在逐帧变，但形变窗内它走实色档、不采样背景。
+class _KeyboardLift extends StatelessWidget {
+  const _KeyboardLift({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+    child: child,
   );
 }

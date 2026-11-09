@@ -17,6 +17,15 @@
 
 ## [Unreleased]
 
+### 优化：移动端点「新增待办」起输入法不再掉帧（2026-11-09）
+
+真机反馈：点 FAB 弹出快速添加面板、输入法随之升起这段动画仍会卡。模拟器 x64 没有软键盘动画，`mobile-jank` 的 `sheet_open` 场景量不到这条路径；改用逐帧 `viewInsets` 的探针实测，10 帧键盘动画里**背景快照重录 10 次、玻璃表面/`MiuixGlassPanel` 各重建 10 次**（`toImageSync` 整页 + 每次通知所有玻璃消费方重建），是这笔开销的真身：
+
+- **捕获树加键盘窗口**：`OrbitScrollAwareBackdropCapture` 此前只冻结滚动期，现同时盯 `viewInsets.bottom` 与可用高度（Android `adjustResize` 键盘动画会逐帧压缩窗口），动画期不录新快照、静默 120ms 后补录一次；键盘期弹层本就走形变窗实色档不采样背景，冻结零观感损失；
+- **键盘避让只改叶子**：`OrbitGlassSheet` 把 `Padding(viewInsets)` 下沉到 `_KeyboardLift`，并按配置缓存整张卡面；`OrbitSheetGlassMotion` 的 builder 结果按 `solid` 缓存，键盘动画期每帧只重建一层 `Padding`；
+- **route builder 返回稳定实例**：`showQuickAddSheet` / `showMoreActionsSheet` 的 `showModalBottomSheet` builder 在键盘动画期逐帧重跑，此前每帧 new 一棵 `_QuickAddSheet`，上层缓存全部失效；改为预构造一次、每帧返回同一 widget 实例；
+- **复测与守卫**：同一探针 10 帧 → 快照重录 0 次（落定补录 1 次）、玻璃卡面重建 1 次（仅切入实色档的材质切换）、面板内容 0 次。新增 `test/shared/orbit_keyboard_glass_test.dart` 钉住「动画期零重录 / 落定补录一次」与「真实快速添加面板键盘期卡面零重建、输入法焦点一帧不丢、仍可输入」；`flutter analyze` 0 issue、`flutter test` 1239 绿。帧耗时基线未重录（模拟器无 IME 动画，数字不可比），口径见 `docs/09` §8.7。
+
 ### 优化：移动端动画性能专项——玻璃链路全场景零丢帧（2026-11-08）
 
 以「每一个动画完全流畅」为目标对玻璃/动画链路做专项收口，优化后五场景帧耗时门禁（`mobile-jank`，模拟器 profile 档）build/raster 双侧零丢帧，`--record` 重校阈值收紧防回归护栏：

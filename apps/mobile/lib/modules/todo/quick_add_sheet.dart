@@ -97,6 +97,17 @@ Future<void> showQuickAddSheet(
   // 面板退回实时模糊）。面板挂在根 Navigator 的 Overlay 上、位于捕获树之外，
   // 不会把自己拍进背景（自采样会让面板越糊越实）。
   final backdrop = OrbitGlassScope.maybeOf(context);
+  // `ModalBottomSheetRoute` 依赖 MediaQuery，输入法动画逐帧改 viewInsets 时
+  // builder 会逐帧重跑（2026-11-09 实测每帧一次）。必须返回**同一个**面板
+  // 实例：否则 `_QuickAddSheet` 的 widget 配置每帧都变，整棵面板（玻璃壳 +
+  // 输入框 + 工具栏）跟着逐帧重建，就是「点新增待办、输入法弹出时卡」的
+  // 另一半根因。键盘抬升只由 `OrbitGlassSheet` 的叶子 padding 承接。
+  final sheet = _QuickAddSheet(
+    defaultProjectId: defaultProjectId,
+    quickView: quickView,
+    initialDueDate: initialDueDate,
+    backdrop: backdrop,
+  );
   return showModalBottomSheet<void>(
     context: context,
     useRootNavigator: true,
@@ -109,12 +120,7 @@ Future<void> showQuickAddSheet(
     barrierColor: Colors.black.withValues(alpha: 0.32),
     shape: bottomSheetTopShape,
     sheetAnimationStyle: bottomSheetMotion,
-    builder: (_) => _QuickAddSheet(
-      defaultProjectId: defaultProjectId,
-      quickView: quickView,
-      initialDueDate: initialDueDate,
-      backdrop: backdrop,
-    ),
+    builder: (_) => sheet,
   );
 }
 

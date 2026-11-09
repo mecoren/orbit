@@ -195,6 +195,10 @@ Future<void> showMoreActionsSheet(
   required List<OrbitPanelItem> actions,
 }) async {
   final backdrop = OrbitGlassScope.maybeOf(context);
+  // 与 `showQuickAddSheet` 同口径：route builder 在键盘动画期逐帧重跑，返回
+  // 同一实例才不会每帧重建整张玻璃卡面（sheetContext 只在首帧取，路由生命
+  // 周期内有效）。
+  Widget? sheet;
   await showModalBottomSheet<void>(
     context: context,
     useRootNavigator: true,
@@ -204,7 +208,7 @@ Future<void> showMoreActionsSheet(
     barrierColor: Colors.black.withValues(alpha: 0.32),
     shape: bottomSheetTopShape,
     sheetAnimationStyle: bottomSheetMotion,
-    builder: (sheetContext) => OrbitGlassSheet(
+    builder: (sheetContext) => sheet ??= OrbitGlassSheet(
       backdrop: backdrop,
       child: _ActionsSheet(
         title: title,

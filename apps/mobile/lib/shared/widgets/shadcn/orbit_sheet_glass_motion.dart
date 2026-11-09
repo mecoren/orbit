@@ -19,6 +19,11 @@
 /// 2. 键盘每次变化的 [OrbitPopupGlass.morphWindow]（`viewInsets.bottom` 变化）；
 /// 3. 路由反向（退场，150ms）—— 退场立刻回实色，不等计时器。
 ///
+/// 键盘动画会逐帧走到 [didChangeDependencies]，故 builder 结果按 `solid`
+/// 缓存：窗口内每帧返回**同一个 widget 实例**，玻璃面板和输入框子树不重建；
+/// 只让宿主里订阅 `viewInsets` 的那一层底部 padding 逐帧改高度（见
+/// `orbit_glass_surface.dart` 的 `_KeyboardLift`）。
+///
 /// **不要**把 `TickerMode` 加进来：那会冻住弹层自身的入场/退场。
 library;
 
@@ -61,10 +66,23 @@ class _OrbitSheetGlassMotionState extends State<OrbitSheetGlassMotion> {
   /// 路由动画：反向（退场）时立刻回实色
   Animation<double>? _routeAnimation;
 
+  /// 卡面 widget 缓存：键盘动画逐帧改 `viewInsets` 时，builder 只在材质档
+  /// 切换时重跑，其余帧复用同一实例（`Element.updateChild` 会短路整棵子树）
+  Widget? _cached;
+  bool? _cachedSolid;
+
   @override
   void initState() {
     super.initState();
     _arm();
+  }
+
+  @override
+  void didUpdateWidget(OrbitSheetGlassMotion oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 宿主换了 builder（配置/主题变化）：缓存作废，但只在宿体重建时发生，
+    // 不是键盘动画的每一帧。
+    if (!identical(oldWidget.builder, widget.builder)) _cached = null;
   }
 
   @override
@@ -114,5 +132,11 @@ class _OrbitSheetGlassMotionState extends State<OrbitSheetGlassMotion> {
   }
 
   @override
-  Widget build(BuildContext context) => widget.builder(context, _solid);
+  Widget build(BuildContext context) {
+    if (_cached == null || _cachedSolid != _solid) {
+      _cached = widget.builder(context, _solid);
+      _cachedSolid = _solid;
+    }
+    return _cached!;
+  }
 }
