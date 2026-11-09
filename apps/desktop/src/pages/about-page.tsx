@@ -3,13 +3,15 @@
  *
  * 左导航：应用信息 / 更新日志 / 开源许可 / 开源组件。
  * - 应用信息：图标 + 名称 + 版本徽标 + 信息行（版本号取构建期注入，数据库模式实时读取）
- * - 更新日志：changelog_versions 命令（数据源在 orbit-core，双端共用）+ Accordion
+ * - 更新日志：changelog_versions 命令（数据源在 orbit-core，双端共用）+ 列表与原地详情
  * - 开源许可：名称 / 许可证 / 主页 行列表
- * - 开源组件：前端依赖（npm）/ Rust 依赖（crates.io）双 Tab Accordion
+ * - 开源组件：来源 Tab + 排序 + 列表与原地详情（版式与更新日志同源）
  */
 import { useEffect, useState } from "react";
 import {
+  ArrowLeft,
   BookOpen,
+  ChevronRight,
   Code,
   Info,
   ScrollText,
@@ -19,13 +21,8 @@ import {
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
+import { ComponentsSection } from "@/pages/about/components-section";
+import { InfoRow } from "@/pages/about/info-row";
 import {
   changelogVersions,
   masterAuthHas,
@@ -108,6 +105,7 @@ const CHANGE_CATEGORY_STYLE: Record<
 function ChangelogSection() {
   const [versions, setVersions] = useState<ChangelogVersion[] | null>(null);
   const [failed, setFailed] = useState(false);
+  const [selectedVersion, setSelectedVersion] = useState<string | null>(null);
 
   // 数据源在 orbit-core（只读静态数据）：桌面壳不再内联日志，双端同一份
   useEffect(() => {
@@ -135,45 +133,130 @@ function ChangelogSection() {
     );
   }
 
+  const selected = selectedVersion
+    ? versions.find((version) => version.version === selectedVersion)
+    : undefined;
+
+  if (selected) {
+    return (
+      <ChangelogDetail
+        version={selected}
+        onBack={() => setSelectedVersion(null)}
+      />
+    );
+  }
+
   return (
     <div className="space-y-4">
-      <h2 className="text-base font-semibold">更新日志</h2>
-      <p className="text-sm text-muted-foreground">
-        版本迭代记录（共 {versions.length} 个版本）
-      </p>
+      <div>
+        <h2 className="text-base font-semibold">更新日志</h2>
+        <p className="mt-0.5 text-sm text-muted-foreground">
+          版本迭代记录（共 {versions.length} 个版本）
+        </p>
+      </div>
 
-      <Accordion type="single" defaultValue={versions[0]?.version} collapsible>
-        {versions.map((log) => (
-          <AccordionItem key={log.version} value={log.version}>
-            <AccordionTrigger>
-              <span className="flex items-baseline gap-2">
-                <span className="font-medium">v{log.version}</span>
-                <Badge variant="outline" className="px-1.5 text-[10px]">
-                  {log.date}
-                </Badge>
+      {versions.length === 0 ? (
+        <p className="py-12 text-center text-sm text-muted-foreground">
+          暂无更新日志。
+        </p>
+      ) : (
+        <div className="divide-y overflow-hidden rounded-lg border">
+          {versions.map((log) => (
+            <button
+              key={log.version}
+              type="button"
+              onClick={() => setSelectedVersion(log.version)}
+              className="flex min-h-14 w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-accent/50 focus-visible:bg-accent/50 focus-visible:outline-none"
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium">
+                  v{log.version}
+                </span>
+                {log.summary && (
+                  <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                    {log.summary}
+                  </span>
+                )}
               </span>
-              <span className="block max-w-md truncate text-xs font-normal text-muted-foreground">
-                {log.summary}
-              </span>
-            </AccordionTrigger>
-            <AccordionContent>
-              <ul className="space-y-2 pl-1">
-                {log.changes.map((change, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm">
-                    <Badge
-                      variant={CHANGE_CATEGORY_STYLE[change.category].variant}
-                      className="mt-0.5 shrink-0 px-1.5 text-[10px]"
-                    >
-                      {CHANGE_CATEGORY_STYLE[change.category].label}
-                    </Badge>
-                    <span>{change.description}</span>
-                  </li>
-                ))}
-              </ul>
-            </AccordionContent>
-          </AccordionItem>
-        ))}
-      </Accordion>
+              <Badge variant="outline" className="shrink-0 text-[10px]">
+                {log.date}
+              </Badge>
+              <Badge variant="secondary" className="shrink-0 text-[10px]">
+                {log.changes.length} 项
+              </Badge>
+              <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ================= 更新日志详情 ================= */
+
+function ChangelogDetail({
+  version,
+  onBack,
+}: {
+  version: ChangelogVersion;
+  onBack: () => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={onBack}
+        className="-ml-2 gap-1.5 text-muted-foreground"
+      >
+        <ArrowLeft className="size-4" />
+        返回版本列表
+      </Button>
+
+      <div>
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="text-lg font-semibold">v{version.version}</h2>
+          <Badge variant="outline" className="text-[10px]">
+            {version.date}
+          </Badge>
+          <Badge variant="secondary" className="text-[10px]">
+            {version.changes.length} 项更新
+          </Badge>
+        </div>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {version.summary || "本版本未提供摘要。"}
+        </p>
+      </div>
+
+      <div className="divide-y rounded-lg border">
+        <InfoRow label="版本" value={`v${version.version}`} />
+        <InfoRow label="发布日期" value={version.date} />
+        <InfoRow label="变更条目" value={`${version.changes.length} 项`} />
+      </div>
+
+      {version.changes.length === 0 ? (
+        <p className="py-6 text-center text-sm text-muted-foreground">
+          本版本未逐条记录变更。
+        </p>
+      ) : (
+        <div className="divide-y overflow-hidden rounded-lg border">
+          {version.changes.map((change, index) => (
+            <div
+              key={index}
+              className="flex items-start gap-2 px-4 py-3 text-sm"
+            >
+              <Badge
+                variant={CHANGE_CATEGORY_STYLE[change.category].variant}
+                className="mt-0.5 shrink-0 px-1.5 text-[10px]"
+              >
+                {CHANGE_CATEGORY_STYLE[change.category].label}
+              </Badge>
+              <span>{change.description}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -242,157 +325,6 @@ function LicensesSection() {
           </div>
         ))}
       </div>
-    </div>
-  );
-}
-
-/* ================= 开源组件 ================= */
-
-type ComponentSource = "frontend" | "rust";
-
-interface OpenSourceComponent {
-  name: string;
-  version: string;
-  source: ComponentSource;
-  description: string;
-  license: string;
-  repository?: string;
-  homepage?: string;
-}
-
-const OSS_FRONTEND: OpenSourceComponent[] = [
-  { name: "react", version: "^19.0.0", source: "frontend", description: "用于构建用户界面的声明式库", license: "MIT", repository: "https://github.com/facebook/react", homepage: "https://react.dev" },
-  { name: "react-dom", version: "^19.0.0", source: "frontend", description: "React 的 DOM 渲染器", license: "MIT", repository: "https://github.com/facebook/react", homepage: "https://react.dev" },
-  { name: "react-router", version: "^7.18.1", source: "frontend", description: "React 应用路由方案", license: "MIT", repository: "https://github.com/remix-run/react-router", homepage: "https://reactrouter.com" },
-  { name: "@tanstack/react-query", version: "^5.0.0", source: "frontend", description: "异步状态管理与数据请求缓存", license: "MIT", repository: "https://github.com/TanStack/query", homepage: "https://tanstack.com/query" },
-  { name: "zustand", version: "^5.0.0", source: "frontend", description: "轻量级 React 状态管理", license: "MIT", repository: "https://github.com/pmndrs/zustand" },
-  { name: "@dnd-kit/core", version: "^6.3.1", source: "frontend", description: "现代化拖拽工具包核心", license: "MIT", repository: "https://github.com/clauderic/dnd-kit" },
-  { name: "@dnd-kit/sortable", version: "^10.0.0", source: "frontend", description: "dnd-kit 列表排序预设", license: "MIT", repository: "https://github.com/clauderic/dnd-kit" },
-  { name: "@dnd-kit/utilities", version: "^3.2.2", source: "frontend", description: "dnd-kit 工具函数（transform 等）", license: "MIT", repository: "https://github.com/clauderic/dnd-kit" },
-  { name: "tailwindcss", version: "^4.3.0", source: "frontend", description: "原子化 CSS 框架 v4", license: "MIT", repository: "https://github.com/tailwindlabs/tailwindcss", homepage: "https://tailwindcss.com" },
-  { name: "lucide-react", version: "^0.460.0", source: "frontend", description: "简洁一致的开源图标库", license: "ISC", repository: "https://github.com/lucide-icons/lucide", homepage: "https://lucide.dev" },
-  { name: "cmdk", version: "^1.1.1", source: "frontend", description: "命令面板原语（⌘K 快速入口）", license: "MIT", repository: "https://github.com/pacocoursey/cmdk", homepage: "https://cmdk.paco.me" },
-  { name: "sonner", version: "^2.0.7", source: "frontend", description: "Toast 通知组件", license: "MIT", repository: "https://github.com/emilkowalski/sonner" },
-  { name: "date-fns", version: "^4.4.0", source: "frontend", description: "现代 JavaScript 日期工具库", license: "MIT", repository: "https://github.com/date-fns/date-fns", homepage: "https://date-fns.org" },
-  { name: "class-variance-authority", version: "^0.7.0", source: "frontend", description: "组件变体样式管理（cva）", license: "Apache-2.0", repository: "https://github.com/joe-bell/cva" },
-  { name: "clsx", version: "^2.1.1", source: "frontend", description: "className 条件拼接工具", license: "MIT", repository: "https://github.com/lukeed/clsx" },
-  { name: "tailwind-merge", version: "^2.5.0", source: "frontend", description: "Tailwind 类名冲突合并", license: "MIT", repository: "https://github.com/dcastil/tailwind-merge" },
-  { name: "@tauri-apps/api", version: "^2.0.0", source: "frontend", description: "Tauri 前端 API（invoke / event）", license: "MIT / Apache-2.0", repository: "https://github.com/tauri-apps/tauri", homepage: "https://tauri.app" },
-  { name: "@tauri-apps/plugin-autostart", version: "^2.0.0", source: "frontend", description: "Tauri 开机自启动插件（前端绑定）", license: "MIT / Apache-2.0", repository: "https://github.com/tauri-apps/plugins-workspace" },
-  { name: "@radix-ui/react-dialog", version: "^1.1.19", source: "frontend", description: "无障碍对话框原语", license: "MIT", repository: "https://github.com/radix-ui/primitives", homepage: "https://www.radix-ui.com" },
-  { name: "@radix-ui/react-dropdown-menu", version: "^2.1.20", source: "frontend", description: "无障碍下拉菜单原语", license: "MIT", repository: "https://github.com/radix-ui/primitives", homepage: "https://www.radix-ui.com" },
-  { name: "@radix-ui/react-select", version: "^2.3.3", source: "frontend", description: "无障碍下拉选择原语", license: "MIT", repository: "https://github.com/radix-ui/primitives", homepage: "https://www.radix-ui.com" },
-  { name: "@radix-ui/react-tabs", version: "^1.1.17", source: "frontend", description: "无障碍标签页原语", license: "MIT", repository: "https://github.com/radix-ui/primitives", homepage: "https://www.radix-ui.com" },
-  { name: "@tauri-apps/plugin-notification", version: "^2.0.0", source: "frontend", description: "Tauri 系统通知插件（前端绑定）", license: "MIT / Apache-2.0", repository: "https://github.com/tauri-apps/plugins-workspace" },
-  { name: "@tauri-apps/plugin-dialog", version: "^2.7.1", source: "frontend", description: "Tauri 原生对话框插件（前端绑定）", license: "MIT / Apache-2.0", repository: "https://github.com/tauri-apps/plugins-workspace" },
-];
-
-const OSS_RUST: OpenSourceComponent[] = [
-  { name: "tauri", version: "2", source: "rust", description: "构建跨平台应用的 Rust 框架", license: "Apache-2.0 / MIT", repository: "https://github.com/tauri-apps/tauri", homepage: "https://tauri.app" },
-  { name: "tauri-plugin-autostart", version: "2", source: "rust", description: "开机自启动（系统启动项注册）", license: "Apache-2.0 / MIT", repository: "https://github.com/tauri-apps/plugins-workspace" },
-  { name: "sqlx", version: "0.8", source: "rust", description: "异步 Rust SQL 工具包", license: "MIT / Apache-2.0", repository: "https://github.com/launchbadge/sqlx", homepage: "https://github.com/launchbadge/sqlx" },
-  { name: "libsqlite3-sys", version: "0.30", source: "rust", description: "SQLite/SQLCipher 绑定（bundled 编译）", license: "MIT", repository: "https://github.com/rusqlite/rusqlite" },
-  { name: "tokio", version: "1.45", source: "rust", description: "Rust 异步运行时", license: "MIT", repository: "https://github.com/tokio-rs/tokio", homepage: "https://tokio.rs" },
-  { name: "serde", version: "1", source: "rust", description: "Rust 序列化 / 反序列化框架", license: "MIT / Apache-2.0", repository: "https://github.com/serde-rs/serde", homepage: "https://serde.rs" },
-  { name: "serde_json", version: "1", source: "rust", description: "JSON 序列化支持", license: "MIT / Apache-2.0", repository: "https://github.com/serde-rs/json" },
-  { name: "chrono", version: "0.4", source: "rust", description: "日期与时间处理库", license: "MIT / Apache-2.0", repository: "https://github.com/chronotope/chrono" },
-  { name: "uuid", version: "1", source: "rust", description: "UUID 生成与解析（v4）", license: "MIT / Apache-2.0", repository: "https://github.com/uuid-rs/uuid" },
-  { name: "reqwest", version: "0.12", source: "rust", description: "HTTP 客户端（WebDAV/S3 同步通道）", license: "MIT / Apache-2.0", repository: "https://github.com/seanmonstar/reqwest" },
-  { name: "aes-gcm", version: "0.10", source: "rust", description: "AES-256-GCM 认证加密", license: "MIT / Apache-2.0", repository: "https://github.com/RustCrypto/AEADs" },
-  { name: "pbkdf2", version: "0.12", source: "rust", description: "PBKDF2 密钥派生函数", license: "MIT / Apache-2.0", repository: "https://github.com/RustCrypto/password-hashes" },
-  { name: "hmac", version: "0.12", source: "rust", description: "HMAC 消息认证码", license: "MIT / Apache-2.0", repository: "https://github.com/RustCrypto/MACs" },
-  { name: "sha2", version: "0.10", source: "rust", description: "SHA-2 哈希算法族", license: "MIT / Apache-2.0", repository: "https://github.com/RustCrypto/hashes" },
-  { name: "subtle", version: "2", source: "rust", description: "常数时间比较（防时序攻击）", license: "BSD-3-Clause", repository: "https://github.com/dalek-cryptography/subtle" },
-  { name: "rand", version: "0.8", source: "rust", description: "随机数生成", license: "MIT / Apache-2.0", repository: "https://github.com/rust-random/rand" },
-  { name: "base64", version: "0.22", source: "rust", description: "Base64 编解码", license: "MIT / Apache-2.0", repository: "https://github.com/marshallpierce/rust-base64" },
-  { name: "zip", version: "2", source: "rust", description: "ZIP 归档读写（同步包打包）", license: "MIT", repository: "https://github.com/zip-rs/zip2" },
-  { name: "zstd", version: "0.13", source: "rust", description: "Zstandard 压缩", license: "MIT", repository: "https://github.com/gyscos/zstd-rs" },
-  { name: "quick-xml", version: "0.36", source: "rust", description: "XML 解析（WebDAV 响应处理）", license: "MIT", repository: "https://github.com/tafia/quick-xml" },
-  { name: "thiserror", version: "2", source: "rust", description: "错误类型派生宏", license: "MIT / Apache-2.0", repository: "https://github.com/dtolnay/thiserror" },
-  { name: "anyhow", version: "1", source: "rust", description: "灵活的错误处理工具", license: "MIT / Apache-2.0", repository: "https://github.com/dtolnay/anyhow" },
-  { name: "once_cell", version: "1", source: "rust", description: "惰性初始化原语", license: "MIT / Apache-2.0", repository: "https://github.com/matklad/once_cell" },
-  { name: "windows", version: "0.61", source: "rust", description: "Windows API 绑定（Mica 云母材质）", license: "MIT / Apache-2.0", repository: "https://github.com/microsoft/windows-rs" },
-  { name: "raw-window-handle", version: "0.6", source: "rust", description: "窗口句柄互操作抽象", license: "MIT / Apache-2.0 / Zlib", repository: "https://github.com/rust-windowing/raw-window-handle" },
-  { name: "dirs", version: "6", source: "rust", description: "平台标准目录定位", license: "MIT / Apache-2.0", repository: "https://github.com/soc/dirs-rs" },
-  { name: "whoami", version: "1.5", source: "rust", description: "当前用户 / 设备名获取", license: "MIT / Apache-2.0", repository: "https://github.com/ardaku/whoami" },
-];
-
-function ComponentsSection() {
-  return (
-    <div className="space-y-4">
-      <h2 className="text-base font-semibold">开源组件</h2>
-      <p className="text-sm text-muted-foreground">
-        前端 {OSS_FRONTEND.length} 个 + Rust {OSS_RUST.length} 个，共{" "}
-        {OSS_FRONTEND.length + OSS_RUST.length} 个依赖
-      </p>
-
-      <Tabs defaultValue="frontend">
-        <TabsList>
-          <TabsTrigger value="frontend">前端依赖（npm）</TabsTrigger>
-          <TabsTrigger value="rust">Rust 依赖（crates.io）</TabsTrigger>
-        </TabsList>
-
-        {(
-          [
-            { key: "frontend", data: OSS_FRONTEND },
-            { key: "rust", data: OSS_RUST },
-          ] as const
-        ).map(({ key, data }) => (
-          <TabsContent key={key} value={key}>
-            <Accordion type="single" collapsible className="rounded-lg border px-4">
-              {data.map((comp) => (
-                <AccordionItem key={`${key}-${comp.name}`} value={comp.name}>
-                  <AccordionTrigger className="hover:no-underline">
-                    <span className="min-w-0 flex-1 pr-3">
-                      <span className="block truncate text-sm font-medium">{comp.name}</span>
-                      <span className="block truncate text-xs font-normal text-muted-foreground">
-                        {comp.description}
-                      </span>
-                    </span>
-                    <span className="flex shrink-0 items-center gap-1.5">
-                      <Badge variant="outline" className="text-[10px]">
-                        v{comp.version}
-                      </Badge>
-                      <Badge variant="secondary" className="text-[10px]">
-                        {comp.license}
-                      </Badge>
-                    </span>
-                  </AccordionTrigger>
-                  <AccordionContent className="space-y-1.5 text-xs text-muted-foreground">
-                    {comp.repository && (
-                      <p>
-                        仓库：
-                        <a
-                          href={comp.repository}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="ml-1 text-primary hover:underline"
-                        >
-                          {comp.repository}
-                        </a>
-                      </p>
-                    )}
-                    {comp.homepage && (
-                      <p>
-                        主页：
-                        <a
-                          href={comp.homepage}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="ml-1 text-primary hover:underline"
-                        >
-                          {comp.homepage}
-                        </a>
-                      </p>
-                    )}
-                    <p>许可证:{comp.license}</p>
-                  </AccordionContent>
-                </AccordionItem>
-              ))}
-            </Accordion>
-          </TabsContent>
-        ))}
-      </Tabs>
     </div>
   );
 }
