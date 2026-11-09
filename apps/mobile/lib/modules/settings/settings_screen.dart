@@ -67,6 +67,9 @@ import '../../services/digest_scheduler.dart';
 /// 行内边距（原语 [kSettingsRowMargin] 同值 16×14）
 const EdgeInsets _rowMargin = kSettingsRowMargin;
 
+/// 批量物理删除两段确认的时停秒数（与桌面 trash-page `PURGE_HOLD_SECONDS` 同口径）
+const int _purgeHoldSeconds = 3;
+
 /// 分组卡（行式内容；卡外分组标题由调用方另置）
 Widget _sectionCard(List<Widget> children) =>
     OrbitSettingsGroup.rows(children: children);
@@ -301,15 +304,31 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   /// 立即清理过期回收站任务（#107）：等价于后台守护的一轮，不等 60s tick。
   /// core 会跳过「删除尚未 push 到云端」的墓碑，返回 true 的 guarded 数要如实提示。
+  ///
+  /// 批量物理删除走桌面同款两段式确认（trash-page「清理过期」）：两段各 3 秒
+  /// 时停，第一段读后果、第二段独立再等满 3 秒才可点，第二击才真正执行。
   Future<void> _purgeExpiredTrash() async {
+    final retentionDays = ref.read(trashMetaProvider).value?.retentionDays ?? 30;
+    final read = await showConfirmBottomSheet(
+      context,
+      title: '清理过期任务',
+      message: '立即执行一次保留期清理（等价于后台守护每 60 秒的一轮）。'
+          '只物理删除已超过 $retentionDays 天保留期的任务，删除尚未同步到云端的会跳过。'
+          '确认后还需再确认一次才会真正执行。',
+      confirmLabel: '继续',
+      destructive: true,
+      holdSeconds: _purgeHoldSeconds,
+    );
+    if (!read || !mounted) return;
+
     final ok = await showConfirmBottomSheet(
       context,
-      title: '立即清理过期任务',
-      message:
-          '只物理删除已超过保留期的回收站任务；删除尚未同步到云端的会跳过。'
-          '保留期内的任务不会被提前清除。',
+      title: '再次确认：清理过期任务',
+      message: '确认后将物理删除已超过 $retentionDays 天保留期的任务'
+          '（删除尚未同步到云端的会跳过），该操作不可撤销。',
       confirmLabel: '立即清理',
       destructive: true,
+      holdSeconds: _purgeHoldSeconds,
     );
     if (!ok || !mounted) return;
     try {

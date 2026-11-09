@@ -412,6 +412,12 @@ void main() {
         find.widgetWithText(OrbitTextField, '当前同步密码'), '123456');
     await tester.pump();
     await tester.tap(find.text('确认升级'));
+    await tester.pumpAndSettle();
+    // 密码确认后独立再走 5 秒时停（换钥 + 云端全量重传，桌面同口径）
+    expect(find.text('请阅读后果（5s）'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pump();
+    await tester.tap(find.text('确认升级').last);
     await _flush(tester);
 
     expect(bridge.store.syncKeyVersion, 'v2');
@@ -430,7 +436,10 @@ void main() {
 
     await _tapAt(tester, find.text('以本机为准重置云端'));
     await tester.pumpAndSettle();
-    // 不可逆操作必须二次确认（确认钮在抽屉内，取 last）
+    // 不可逆操作必须二次确认，且确认钮先走 5 秒时停
+    expect(find.text('请阅读后果（5s）'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pump();
     expect(find.text('确认重置云端'), findsOneWidget);
     await tester.tap(find.text('确认重置云端').last);
     await _flush(tester);
@@ -439,7 +448,7 @@ void main() {
     await drainToastTimers(tester);
   });
 
-  testWidgets('密钥治理：未解锁时重置云端 → 报错不静默', (tester) async {
+  testWidgets('密钥治理：未解锁时重置云端 → 报错不静默（5 秒时停后才可点）', (tester) async {
     final bridge = MockOrbitBridge()
       ..store.syncPasswordSet = true
       ..store.syncUnlocked = false
@@ -449,6 +458,13 @@ void main() {
 
     await _tapAt(tester, find.text('以本机为准重置云端'));
     await tester.pumpAndSettle();
+    // 确认钮 5 秒时停内禁用并倒数（桌面 DangerousConfirmDialog 同口径）
+    expect(find.text('请阅读后果（5s）'), findsOneWidget);
+    await tester.tap(find.text('请阅读后果（5s）'), warnIfMissed: false);
+    await tester.pump();
+    expect(find.text('以本机为准重置云端'), findsWidgets, reason: '时停中点击不得关层');
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pump();
     await tester.tap(find.text('确认重置云端').last);
     await _flush(tester);
 
@@ -501,7 +517,7 @@ void main() {
     await drainToastTimers(tester);
   });
 
-  testWidgets('云端存储：回收孤儿数据桶 → mock 恒 0，提示没有可回收项', (tester) async {
+  testWidgets('云端存储：回收孤儿数据桶 → 5 秒时停后执行，mock 恒 0 提示无回收项', (tester) async {
     final bridge = MockOrbitBridge()
       ..store.syncPasswordSet = true
       ..store.syncUnlocked = true
@@ -510,6 +526,12 @@ void main() {
     await _flush(tester);
 
     await _tapAt(tester, find.widgetWithText(OrbitButton, '回收孤儿数据桶'));
+    await tester.pumpAndSettle();
+    // 桌面诊断页该入口走 DangerousConfirmDialog，移动端同口径 5 秒时停
+    expect(find.text('请阅读后果（5s）'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pump();
+    await tester.tap(find.text('回收'));
     await _flush(tester);
 
     expect(find.text('没有可回收的孤儿数据桶'), findsOneWidget);

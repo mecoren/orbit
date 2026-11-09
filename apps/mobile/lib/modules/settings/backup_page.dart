@@ -20,6 +20,9 @@ import '../../shared/widgets/shadcn/orbit_icon_button.dart';
 import '../todo/logic/task_logic.dart' show formatDateTime;
 import '../../core/theme/icon_map.dart';
 
+/// 危险操作强制冷静期（与桌面 `DANGEROUS_HOLD_SECONDS` 同口径）
+const int _dangerousHoldSeconds = 5;
+
 /// 备份与恢复页 /settings/backup（数据安全兜底）
 ///
 /// 桌面端「同步与备份」分区的 BackupCard + AutoBackupCard 在移动端的等价物：
@@ -33,6 +36,8 @@ import '../../core/theme/icon_map.dart';
 ///
 /// 危险动作口径：导入会清空当前业务表再写入备份内容（事务内原子），因此
 /// 全部恢复路径都必须经过预览确认，且不提供「跳过预览」的快捷入口。
+/// 恢复确认对齐桌面 `DangerousConfirmDialog`：预览段、最后确认段、schema
+/// 强制段各 5 秒时停（确认钮先禁用倒数「请阅读后果（Ns）」）。
 class BackupPage extends ConsumerStatefulWidget {
   const BackupPage({super.key});
 
@@ -225,7 +230,8 @@ class _BackupPageState extends ConsumerState<BackupPage> {
     );
   }
 
-  /// 两段式恢复确认：预览信息 → 确认覆盖；schema 不一致再追加一次强制确认。
+  /// 三段式恢复确认（对齐桌面）：预览信息（5s 时停）→ 最后确认（独立再
+  /// 5s 时停）→ schema 不一致再追加一次强制确认（同样 5s 时停）。
   Future<void> _confirmAndRestore({
     required BackupPreview preview,
     required String sourceLabel,
@@ -233,25 +239,39 @@ class _BackupPageState extends ConsumerState<BackupPage> {
   }) async {
     final ok = await showConfirmBottomSheet(
       context,
-      title: '恢复此备份？',
+      title: '从备份恢复全部数据',
       // 预览体（备份时间/来源设备/任务抽样/schema 比对）整体进抽屉，
       // 超高时由抽屉内部滚动，不再自带 SingleChildScrollView
       content: _PreviewBody(preview: preview, sourceLabel: sourceLabel),
-      confirmLabel: '覆盖恢复',
+      confirmLabel: '确认恢复',
       destructive: true,
+      holdSeconds: _dangerousHoldSeconds,
     );
     if (!ok || !mounted) return;
+
+    final finalOk = await showConfirmBottomSheet(
+      context,
+      title: '最后确认：立即覆盖恢复',
+      message:
+          '最后一次确认：将用备份「$sourceLabel」的内容立即覆盖当前全部待办数据，'
+          '未备份的内容将永久丢失且不可撤销。确认选对了备份来源再点，点取消可中止。',
+      confirmLabel: '确认并恢复',
+      destructive: true,
+      holdSeconds: _dangerousHoldSeconds,
+    );
+    if (!finalOk || !mounted) return;
 
     if (preview.schemaMismatch) {
       final forced = await showConfirmBottomSheet(
         context,
-        title: '版本不一致',
+        title: '版本不一致仍要恢复',
         message:
             '备份的数据结构版本为 ${preview.manifest.schemaVersion}，'
             '本机为 ${preview.currentSchemaVersion}。'
             '强行恢复可能丢失本机新增字段的数据，且不可撤销。',
         confirmLabel: '仍然恢复',
         destructive: true,
+        holdSeconds: _dangerousHoldSeconds,
       );
       if (!forced || !mounted) return;
     }

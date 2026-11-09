@@ -188,6 +188,66 @@ void main() {
       await drainToastTimers(tester);
     });
 
+    // ── 清空回收站：桌面同款两段式 + 每段 3 秒时停（PURGE_HOLD_SECONDS）──
+
+    testWidgets('清空回收站：两段确认各 3 秒时停，第二段走完才真删', (tester) async {
+      final bridge = MockOrbitBridge();
+      final tasksFuture = bridge.todoTaskList(const ListFilter(pageSize: 1000));
+      await tester.pump(const Duration(milliseconds: 300));
+      final tasks = await tasksFuture;
+      final victims = tasks.take(2).toList();
+      for (final t in victims) {
+        await _bridgeCall(tester, bridge.todoTaskDelete(t.id));
+      }
+
+      await tester.pumpWidget(_wrapWithNavKey(const TrashScreen(), bridge));
+      await _settlePastMockLatency(tester);
+
+      // 第一段：读后果 + 3 秒时停（确认钮先禁用并倒数，走完才回落「继续」）
+      await tester.tap(find.text('清空'));
+      await tester.pumpAndSettle();
+      expect(find.text('请阅读后果（3s）'), findsOneWidget);
+      await tester.tap(find.text('请阅读后果（3s）'), warnIfMissed: false);
+      await tester.pump();
+      expect(find.text('请阅读后果（3s）'), findsOneWidget, reason: '时停未走完不得关层');
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pump();
+      expect(find.text('继续'), findsOneWidget);
+      await tester.tap(find.text('继续'));
+      await tester.pumpAndSettle();
+
+      // 第二段：独立再走一次 3 秒时停，第二击才真正执行
+      expect(find.text('再次确认：清空回收站'), findsOneWidget);
+      expect(find.text('请阅读后果（3s）'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pump();
+      expect(find.text('清空回收站'), findsOneWidget);
+      await tester.tap(find.text('清空回收站'));
+      await tester.pumpAndSettle();
+
+      // 第二击后才进入 5s 撤销窗口（乐观隐藏 + toast）
+      expect(find.text('撤销'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (w) =>
+              w is Text &&
+              w.data == victims.first.title &&
+              w.style?.fontSize == 15,
+        ),
+        findsNothing,
+      );
+
+      // 5s 窗口过后真提交（purge 物理删除）
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+      final trashed = await _bridgeCallT(tester, bridge.trashTasksList());
+      expect(trashed.isEmpty, isTrue);
+      await drainToastTimers(tester);
+    });
+
     testWidgets('彻底删除：不点撤销 → 5s 窗口过后真提交（物理删除）', (tester) async {
       final bridge = MockOrbitBridge();
       final tasksFuture = bridge.todoTaskList(const ListFilter(pageSize: 1000));

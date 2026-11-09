@@ -16,6 +16,9 @@ import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../shared/widgets/shadcn/orbit_button.dart';
 import 'diagnostics_page.dart' show formatBytes;
 
+/// 危险操作强制冷静期（与桌面 `DANGEROUS_HOLD_SECONDS` 同口径）
+const int _dangerousHoldSeconds = 5;
+
 /// 存储清理页 /settings/storage（#107）
 ///
 /// 解决「桌面临时清理对话框有、移动端只能在数据库维护里看一个汇总数」的
@@ -24,7 +27,8 @@ import 'diagnostics_page.dart' show formatBytes;
 ///
 /// 口径与桌面 `UnusedAttachmentsDialog` 一致：
 /// - 只删本地文件 + 账本行，云端保留；未上传云端的行额外提示「删除后不可找回」；
-/// - 不做五秒撤销（物理删文件不可逆），改为删除前确认抽屉列数量与体积。
+/// - 不做五秒撤销（物理删文件不可逆），改为删除前确认抽屉列数量与体积，
+///   且确认钮走桌面同款 5 秒时停（`DangerousConfirmDialog` 口径）。
 class StorageCleanupPage extends ConsumerStatefulWidget {
   const StorageCleanupPage({super.key});
 
@@ -75,12 +79,14 @@ class _StorageCleanupPageState extends ConsumerState<StorageCleanupPage> {
     final sizes = formatBytes(_selectedBytes);
     final ok = await showConfirmBottomSheet(
       context,
-      title: '删除未使用附件',
+      title: '永久删除未使用附件',
       message:
           '将删除 $count 个本地附件文件（共 $sizes）。云端对象不受影响，'
           '其他设备仍可重新拉取；未上传云端的条目删除后不可找回。',
       confirmLabel: '删除',
       destructive: true,
+      // 物理删文件不可逆：确认钮 5 秒时停（桌面 UnusedAttachmentsDialog 同口径）
+      holdSeconds: _dangerousHoldSeconds,
     );
     if (!ok || !mounted) return;
     setState(() => _busy = true);

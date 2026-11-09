@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -29,6 +30,9 @@ import '../../shared/widgets/shadcn/orbit_button.dart';
 import '../../shared/widgets/shadcn/orbit_divider.dart';
 import '../todo/providers/todo_providers.dart';
 import '../../core/theme/icon_map.dart';
+
+/// 危险操作强制冷静期（与桌面 `DANGEROUS_HOLD_SECONDS` 同口径）
+const int _dangerousHoldSeconds = 5;
 
 /// 云同步配置页 /settings/sync（设置页「云同步设置」入口）
 ///
@@ -667,6 +671,19 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
         WaitToast.destructive('两次输入的新密码不一致');
         return;
       }
+      // 换钥 + 云端全量重传不可撤销：密码填完后独立再走 5 秒时停
+      // （桌面同步密码卡的 DangerousConfirmDialog 同口径）
+      final ok = await showConfirmBottomSheet(
+        context,
+        title: '修改同步密码',
+        message: '修改密码将更换数据密钥并用新密钥全量重传云端数据：'
+            '传完之前请勿在其他设备同步，其他设备此后须用新密码。'
+            '若旧设备仍用旧密码同步，可能造成云端数据混乱。',
+        confirmLabel: '确认修改',
+        destructive: true,
+        holdSeconds: _dangerousHoldSeconds,
+      );
+      if (!ok || !mounted) return;
       setState(() => _busy = true);
       await ref
           .read(orbitBridgeProvider)
@@ -739,6 +756,17 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
       );
       if (values == null || !mounted) return;
       final pw = values.first;
+      // 升级即换钥全量重传：密码确认后独立再走 5 秒时停（桌面同口径）
+      final ok = await showConfirmBottomSheet(
+        context,
+        title: '升级密钥方案到 v2',
+        message: '升级后同一同步密码在任何设备都派生同一把数据密钥，不再需要密钥包分发。'
+            '升级会立即用新密钥全量重传云端数据，期间请勿在其他设备同步。此操作不可撤销。',
+        confirmLabel: '确认升级',
+        destructive: true,
+        holdSeconds: _dangerousHoldSeconds,
+      );
+      if (!ok || !mounted) return;
       setState(() => _busy = true);
       await ref.read(orbitBridgeProvider).syncCryptoUpgradeV2(pw);
       WaitToast.success('已升级 v2 并完成云端重传。其他设备输入相同密码即可同步');
@@ -751,7 +779,8 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
   }
 
   /// 以本机为准重置云端（危险）：当前 Data Key 全量重加密**覆盖**云端。
-  /// 本机没有的记录与附件会永久丢失（桌面 sync-recovery-page 的兜底路径）
+  /// 本机没有的记录与附件会永久丢失（桌面 sync-recovery-page 的兜底路径）。
+  /// 确认钮 5 秒时停内禁用（与桌面同口径）。
   Future<void> _rekeyCloud() async {
     if (_busy) return;
     final ok = await showConfirmBottomSheet(
@@ -763,6 +792,7 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
           '此操作不可撤销，请确认云端数据已无需保留。',
       confirmLabel: '确认重置云端',
       destructive: true,
+      holdSeconds: _dangerousHoldSeconds,
     );
     if (!ok || !mounted) return;
     setState(() => _busy = true);
@@ -812,6 +842,20 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
       final bundle = SyncCryptoBundle.fromJson(j);
       // readAsString 是 async gap，弹抽屉前页面可能已销毁
       if (!mounted) return;
+      // 本机已存在密钥时导入会覆盖本机现有密钥（桌面 sync-recovery-page
+      // 的 forceConfirmOpen 同口径）：问密码之前先读后果并等满 5 秒
+      if (_status?.hasPassword == true) {
+        final force = await showConfirmBottomSheet(
+          context,
+          title: '本机已存在同步密钥',
+          message: '导入密钥包会覆盖本机现有的同步密钥，之后需用该密钥包的密码解锁。'
+              '若本机数据尚未同步到云端，建议先完成一次同步。此操作不可撤销。',
+          confirmLabel: '仍然导入',
+          destructive: true,
+          holdSeconds: _dangerousHoldSeconds,
+        );
+        if (!force || !mounted) return;
+      }
       final values = await showPasswordSheet(
         context,
         title: '输入该密钥包的同步密码',
@@ -1432,7 +1476,6 @@ class _CloudCleanupCardState extends ConsumerState<_CloudCleanupCard> {
   Future<void> _openList(CloudUnusedScanResult result) async {
     final colors = AppColors.ofContext(context);
     final selected = <String>{};
-    var busy = false;
 
     await showModalBottomSheet<void>(
       context: context,
@@ -1483,17 +1526,15 @@ class _CloudCleanupCardState extends ConsumerState<_CloudCleanupCard> {
                     Row(
                       children: [
                         OrbitButton.text(
-                          onPressed: busy
-                              ? null
-                              : () => setSheetState(() {
-                                  if (allSelected) {
-                                    selected.clear();
-                                  } else {
-                                    selected
-                                      ..clear()
-                                      ..addAll(result.items.map((i) => i.hash));
-                                  }
-                                }),
+                          onPressed: () => setSheetState(() {
+                            if (allSelected) {
+                              selected.clear();
+                            } else {
+                              selected
+                                ..clear()
+                                ..addAll(result.items.map((i) => i.hash));
+                            }
+                          }),
                           child: Text(allSelected ? '取消全选' : '全选'),
                         ),
                         const Spacer(),
@@ -1521,15 +1562,13 @@ class _CloudCleanupCardState extends ConsumerState<_CloudCleanupCard> {
                             contentPadding: EdgeInsets.zero,
                             leading: OrbitCheckbox(
                               checked: checked,
-                              onToggle: busy
-                                  ? () {}
-                                  : () => setSheetState(() {
-                                      if (checked) {
-                                        selected.remove(item.hash);
-                                      } else {
-                                        selected.add(item.hash);
-                                      }
-                                    }),
+                              onToggle: () => setSheetState(() {
+                                if (checked) {
+                                  selected.remove(item.hash);
+                                } else {
+                                  selected.add(item.hash);
+                                }
+                              }),
                             ),
                             title: Text(
                               item.label,
@@ -1557,55 +1596,27 @@ class _CloudCleanupCardState extends ConsumerState<_CloudCleanupCard> {
                     Row(
                       children: [
                         OrbitButton.outline(
-                          onPressed: busy
-                              ? null
-                              : () => Navigator.pop(sheetContext),
+                          onPressed: () => Navigator.pop(sheetContext),
                           child: const Text('取消'),
                         ),
                         const SizedBox(width: AppDimens.space12),
                         Expanded(
                           child: OrbitButton.primary(
-                            onPressed: busy || selected.isEmpty
+                            // 两步式（桌面 CloudUnusedAttachmentsDialog 同口径）：
+                            // 先关列表层，再对选中集合走 5 秒时停确认——底部表单
+                            // 里不叠第二层确认抽屉
+                            onPressed: selected.isEmpty
                                 ? null
-                                : () async {
-                                    setSheetState(() => busy = true);
-                                    try {
-                                      final r = await ref
-                                          .read(orbitBridgeProvider)
-                                          .cloudUnusedAttachmentsDelete(
-                                            hashes: selected.toList(),
-                                            expectedEpoch: result.epoch,
-                                          );
-                                      if (!sheetContext.mounted) return;
-                                      Navigator.pop(sheetContext);
-                                      if (r.staleManifest) {
-                                        WaitToast.success('云端刚有新的同步活动，已重新扫描');
-                                        await _scan();
-                                        return;
-                                      }
-                                      if (r.deletedAssets == 0) {
-                                        WaitToast.success('没有可清理的云端附件');
-                                      } else if (r.errors.isNotEmpty) {
-                                        WaitToast.destructive(
-                                          '已清理 ${r.deletedAssets} 个（部分失败：${r.errors.first}）',
-                                        );
-                                      } else {
-                                        WaitToast.success(
-                                          '已清理 ${r.deletedAssets} 个云端附件（${r.deletedObjects} 个对象）',
-                                        );
-                                      }
-                                    } catch (e) {
-                                      setSheetState(() => busy = false);
-                                      WaitToast.destructive(
-                                        '清理失败：${_errMsg(e)}',
-                                      );
-                                    }
+                                : () {
+                                    final hashes = selected.toList();
+                                    Navigator.pop(sheetContext);
+                                    unawaited(
+                                      _deleteCloudUnused(hashes, result.epoch),
+                                    );
                                   },
-                            child: busy
-                                ? const OrbitSpinner(size: 16)
-                                : Text(
-                                    '删除选中${selected.isEmpty ? '' : ' (${selected.length})'}',
-                                  ),
+                            child: Text(
+                              '删除选中${selected.isEmpty ? '' : ' (${selected.length})'}',
+                            ),
                           ),
                         ),
                       ],
@@ -1620,12 +1631,63 @@ class _CloudCleanupCardState extends ConsumerState<_CloudCleanupCard> {
     );
   }
 
+  /// 删除选中的云端孤儿附件：列表层关闭后走 5 秒时停确认，再调桥执行。
+  /// 文案须写清「云端密文对象被删」「其他设备有本地副本会自动重传」
+  /// 「都无副本即永久丢失」（桌面 `CloudUnusedAttachmentsDialog` 同口径）。
+  Future<void> _deleteCloudUnused(List<String> hashes, int epoch) async {
+    final ok = await showConfirmBottomSheet(
+      context,
+      title: '永久删除云端附件',
+      message: '将从云端删除 ${hashes.length} 个附件对象，不可恢复。'
+          '其他设备若仍持有本地副本，会在下次同步时自动重新上传；'
+          '所有设备都没有本地副本的附件将永久丢失。',
+      confirmLabel: '删除',
+      destructive: true,
+      holdSeconds: _dangerousHoldSeconds,
+    );
+    if (!ok || !mounted) return;
+    try {
+      final r = await ref
+          .read(orbitBridgeProvider)
+          .cloudUnusedAttachmentsDelete(hashes: hashes, expectedEpoch: epoch);
+      if (!mounted) return;
+      if (r.staleManifest) {
+        WaitToast.success('云端刚有新的同步活动，已重新扫描');
+        await _scan();
+        return;
+      }
+      if (r.deletedAssets == 0) {
+        WaitToast.success('没有可清理的云端附件');
+      } else if (r.errors.isNotEmpty) {
+        WaitToast.destructive(
+          '已清理 ${r.deletedAssets} 个（部分失败：${r.errors.first}）',
+        );
+      } else {
+        WaitToast.success(
+          '已清理 ${r.deletedAssets} 个云端附件（${r.deletedObjects} 个对象）',
+        );
+      }
+    } catch (e) {
+      if (mounted) WaitToast.destructive('清理失败：${_errMsg(e)}');
+    }
+  }
+
   /// 孤儿数据分桶回收（#96 尾款；桌面同款在诊断页「云端存储」卡第二行）
   ///
-  /// 破坏性但**无需二次确认**：删除的桶按定义不可达（清单不再引用），且 core 侧
-  /// 另有 24h 保留窗口与「服务端不回 mtime 一律跳过」两道兜底。桌面入口同样
-  /// 是一键执行 + 结果 toast，移动端保持同口径（多一层确认只会让排障变慢）。
+  /// 删除的桶按定义不可达（清单不再引用），且 core 侧另有 24h 保留窗口与
+  /// 「服务端不回 mtime 一律跳过」两道兜底；但桌面入口仍走
+  /// `DangerousConfirmDialog` 五秒时停，移动端对齐同一口径。
   Future<void> _chunkGc() async {
+    final ok = await showConfirmBottomSheet(
+      context,
+      title: '回收孤儿数据分桶',
+      message: '将删除云端 tables/ 下「同步清单已不再引用、且写入超过 24 小时」的分桶对象。'
+          '清单仍在引用的数据与全部附件对象不受影响。',
+      confirmLabel: '回收',
+      destructive: true,
+      holdSeconds: _dangerousHoldSeconds,
+    );
+    if (!ok || !mounted) return;
     setState(() => _chunkGcBusy = true);
     try {
       final r = await ref.read(orbitBridgeProvider).cloudOrphanChunksGc();

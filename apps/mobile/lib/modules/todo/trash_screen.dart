@@ -27,11 +27,16 @@ import '../../core/theme/icon_map.dart';
 /// 点撤销即取消提交）
 const _undoWindowMs = 5000;
 
+/// 清空回收站两段确认的时停秒数（与桌面 trash-page `PURGE_HOLD_SECONDS` 同口径：
+/// 批量物理删除一次可清掉整站墓碑，每段各 3 秒冷静期，比全局危险操作 5s 略短）
+const _purgeHoldSeconds = 3;
+
 /// 回收站页 /todo/trash（回收站落地：删除的任务可恢复 + 保留时间可配）
 ///
 /// 列表 = todo_tasks 墓碑行（is_deleted=1，最近删除排最前）。
 /// - 长按行弹操作菜单（恢复 / 彻底删除红色确认）；
-/// - 标题栏右侧「清空」按钮（计数确认）；
+/// - 标题栏右侧「清空」按钮：桌面同款**两段式确认**，每段 3 秒时停——第一段
+///   读后果点「继续」，第二段独立再时停一次，第二击才真正执行；
 /// - 彻底删除/清空可撤销（乐观隐藏 + 5s 窗口延迟提交，purge 物理
 ///   删除只能在提交前拦截）；
 /// - 行副标题显示保留期倒计时（永久档显示删除日期）；
@@ -171,13 +176,29 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
     );
   }
 
+  /// 清空回收站：桌面同款两段式确认，两段各 3 秒时停（`_purgeHoldSeconds`）。
+  /// 第一段读后果点「继续」，第二段独立再等满 3 秒才出现可点的「清空回收站」，
+  /// 第二击才真正执行（仍保留之后 5 秒撤销窗口）。
   Future<void> _purgeAll(int count, List<int> ids) async {
-    final confirmed = await showConfirmBottomSheet(
+    final read = await showConfirmBottomSheet(
       context,
       title: '清空回收站',
-      message: '确定要清空回收站中的 $count 个任务吗？删除后 5 秒内可整批撤销。',
-      confirmLabel: '清空',
+      message: '确定要清空回收站中的 $count 个任务吗？任务及其子任务、评论、提醒将一并被清除。'
+          '确认后还需再确认一次才会真正执行。',
+      confirmLabel: '继续',
       destructive: true,
+      holdSeconds: _purgeHoldSeconds,
+    );
+    if (!read || !mounted) return;
+
+    final confirmed = await showConfirmBottomSheet(
+      context,
+      title: '再次确认：清空回收站',
+      message: '即将永久删除 $count 个任务及其子任务、评论、提醒。'
+          '执行后仅剩 5 秒撤销窗口（轻提示上点撤销可整批恢复）。',
+      confirmLabel: '清空回收站',
+      destructive: true,
+      holdSeconds: _purgeHoldSeconds,
     );
     if (!confirmed || !mounted) return;
     // 同 _purgeTask：bridge 先行捕获，dispose 兜底 fire 时不再碰 ref
