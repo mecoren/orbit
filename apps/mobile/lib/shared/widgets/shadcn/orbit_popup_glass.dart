@@ -37,6 +37,14 @@
 ///
 /// **不要**把这里换成固定 `Duration` 的 `AnimatedOpacity` 之类：冻结是「停掉库内
 /// 的 ticker」，不是另造一段动画——另造一段只会在收尾处再补一次全分辨率重绘。
+///
+/// **形变窗还要冻结背景捕获（2026-11-09）**：页头实时 `BackdropFilter` 位于
+/// 捕获子树内，根 Overlay 弹层逐帧动画（以及落定后玻璃 panel 订阅快照通知）
+/// 会让它每帧重绘，整页 `toImageSync` 跟着逐帧重录——与弹层宿主挂在页面树
+/// 还是 Overlay 无关。故开场/后续形变期间由本件把 `orbitCapturePauses` +1，
+/// `OrbitScrollAwareBackdropCapture` 订阅该计数：窗口内不录新快照，落定或收场
+/// 时 -1 并补录一次。与滚动/键盘窗口同一「冻结 + settle 补录」口径；常驻动画
+/// 则由 `orbit_capture_pause.dart` 的 `OrbitCapturePause` 持有同一计数。
 library;
 
 import 'dart:async';
@@ -45,6 +53,12 @@ import 'package:flutter/gestures.dart'
     show GestureBinding, PointerDownEvent, PointerEvent;
 import 'package:flutter/material.dart';
 import 'package:flutter_miuix/miuix.dart';
+
+import 'orbit_capture_pause.dart';
+
+/// 库内弹簧按 `.0015` 容差约 690ms 收尾；卡面 320ms 已贴合，但玻璃 panel
+/// 与页头实时模糊之间的快照通知还会再持续约 20 帧，故冻结窗取满弹簧尾巴。
+const Duration _capturePauseWindow = Duration(milliseconds: 690);
 
 /// 弹层卡面的材质与形变期降级档（唯一口径，勿在调用点各调一套）
 class OrbitPopupGlass {
@@ -145,6 +159,10 @@ class _OrbitPopupGlassMotionState extends State<OrbitPopupGlassMotion> {
 
   Timer? _timer;
 
+  /// 形变窗的背景捕获暂停令牌（见文件头）
+  Timer? _captureTimer;
+  bool _capturePaused = false;
+
   @override
   void initState() {
     super.initState();
@@ -163,10 +181,11 @@ class _OrbitPopupGlassMotionState extends State<OrbitPopupGlassMotion> {
     }
   }
 
-  /// 开场：实色卡面 + 解冻，窗口到点切玻璃并冻结
+  /// 开场：实色卡面 + 解冻，冻结背景捕获，窗口到点切玻璃并冻结
   void _beginEntrance() {
     _timer?.cancel();
     _setState(glass: false, frozen: false);
+    _pauseCaptureForMorph();
     _arm();
   }
 
@@ -179,6 +198,7 @@ class _OrbitPopupGlassMotionState extends State<OrbitPopupGlassMotion> {
   void _thawForSideMotion() {
     _timer?.cancel();
     _setState(glass: false, frozen: false);
+    _pauseCaptureForMorph();
     _timer = Timer(OrbitPopupGlass.morphWindow, () {
       if (!mounted) return;
       _setState(glass: true);
@@ -189,7 +209,28 @@ class _OrbitPopupGlassMotionState extends State<OrbitPopupGlassMotion> {
   void _endMotion() {
     _timer?.cancel();
     _timer = null;
+    _releaseCapturePause();
     _setState(glass: false, frozen: false);
+  }
+
+  /// 形变窗内暂停整页背景捕获；计数而非布尔，避免多层弹层互相提前放行
+  void _pauseCaptureForMorph() {
+    _captureTimer?.cancel();
+    if (!_capturePaused) {
+      _capturePaused = true;
+      orbitCapturePauses.value++;
+    }
+    _captureTimer = Timer(_capturePauseWindow, _releaseCapturePause);
+  }
+
+  /// 落定/收场/销毁时放行并补录一次（渲染对象在 resumed 档会 markNeedsPaint）
+  void _releaseCapturePause() {
+    _captureTimer?.cancel();
+    _captureTimer = null;
+    if (!_capturePaused) return;
+    _capturePaused = false;
+    final current = orbitCapturePauses.value;
+    if (current > 0) orbitCapturePauses.value = current - 1;
   }
 
   void _arm() {
@@ -235,6 +276,7 @@ class _OrbitPopupGlassMotionState extends State<OrbitPopupGlassMotion> {
   @override
   void dispose() {
     _timer?.cancel();
+    _releaseCapturePause();
     _frozen = false;
     _syncPointerRoute();
     super.dispose();

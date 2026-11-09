@@ -21,6 +21,10 @@ import '../../shared/widgets/shadcn/orbit_strikethrough.dart';
 import '../../shared/widgets/shadcn/orbit_checkbox.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_glass_menu.dart';
+import '../../shared/widgets/shadcn/orbit_dropdown_panel.dart'
+    show orbitPanelMaxWidth, orbitPanelMinWidth;
+import '../../shared/widgets/shadcn/orbit_menu_popup.dart'
+    show OrbitMenuSession, showOrbitMenuPopup;
 import '../../shared/widgets/shadcn/orbit_empty_state.dart';
 import '../../shared/widgets/shadcn/orbit_list_card.dart';
 import '../../shared/widgets/shadcn/orbit_row_toggle.dart';
@@ -122,6 +126,14 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   // "attached to multiple scroll views" 断言——分体即各自最多一挂载。
   final _reorderScrollController = ScrollController();
   final _listScrollController = ScrollController();
+
+  /// 视图菜单的形变锚点与 Overlay 会话（2026-11-09）
+  ///
+  /// 宿主必须挂在根 Overlay：页面树在 `OrbitScrollAwareBackdropCapture`
+  /// 捕获子树内，页面树内直驱的 `MiuixGlassTransformPopup` 每帧重建都会
+  /// 让整页背景快照逐帧重录（真机「视图选择弹窗掉帧」的主因）。
+  final _viewMenuAnchor = MiuixGlassPopupAnchor();
+  OrbitMenuSession? _viewMenuSession;
 
   // 排序档位（#26：会话内存态，退出即回 manual；#37 manual 档下整行
   // 长按拾起拖动重排 + midpoint 落库）
@@ -292,7 +304,9 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
 
   /// 页头标题（今天页签根：标题即**视图菜单**的玻璃形变触发件——点标题在
   /// 标题旁长出菜单，切到哪标题就叫哪；尾随下箭头明示可点）。
-  /// 菜单的无障碍名统一为「视图菜单」（界面文案仍显示当前档名）
+  /// 菜单的无障碍名统一为「视图菜单」（界面文案仍显示当前档名）。
+  /// 2026-11-09 起改走 [showOrbitMenuPopup] 的 Overlay 直挂：页面树在背景
+  /// 捕获子树内，宿主留在这里会让整页快照在形变期逐帧重录（真机掉帧）。
   Widget _headerTitle(String title, AppColorSet colors) {
     if (!_isTodayTab) {
       return Text(
@@ -330,16 +344,34 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
         ),
       ],
     );
-    return OrbitGlassMenu(
-      groupsBuilder: _quickViewGroups,
-      semanticsLabel: '视图菜单',
-      backdrop: OrbitGlassScope.maybeOf(context),
-      anchorContent: content(),
-      triggerBuilder: (onTap) => InkWell(
-        borderRadius: AppShapes.small,
-        onTap: onTap,
-        child: content(),
+    return Semantics(
+      button: true,
+      label: '视图菜单',
+      child: MiuixGlassAnchor(
+        anchor: _viewMenuAnchor,
+        child: InkWell(
+          borderRadius: AppShapes.small,
+          onTap: () => _openViewMenu(context, content()),
+          child: content(),
+        ),
       ),
+    );
+  }
+
+  /// 打开视图菜单：条目在每次重建时按当下选中档重取（单选点行即关）
+  void _openViewMenu(BuildContext context, Widget anchorContent) {
+    if (_viewMenuSession?.isOpen ?? false) return;
+    _viewMenuSession = showOrbitMenuPopup(
+      context,
+      transformAnchor: _viewMenuAnchor,
+      anchorContent: anchorContent,
+      simplified: true,
+      backdrop: OrbitGlassScope.maybeOf(context),
+      minWidth: orbitPanelMinWidth,
+      maxWidth: orbitPanelMaxWidth,
+      // `OrbitDropdownPanelView` 自带上下 8 留白，这里去掉库内那一份
+      contentPadding: EdgeInsets.zero,
+      groupsBuilder: _quickViewGroups,
     );
   }
 
@@ -386,6 +418,9 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   void dispose() {
     QuickAddContext.set(null);
     _nowTimer?.cancel();
+    // 宿主销毁时立刻撤掉 Overlay 会话，不在已卸载锚点上续播回收动画
+    _viewMenuSession?.dispose();
+    _viewMenuAnchor.dispose();
     _reorderScrollController.dispose();
     _listScrollController.dispose();
     // 退场窗内直接离屏：补一次失效，避免主列表缓存残留已删行

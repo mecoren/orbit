@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_shapes.dart';
+import 'orbit_capture_pause.dart';
 
 /// 骨架占位块（首屏加载态专用，设计系统 v3 原语层）
 ///
@@ -99,14 +100,17 @@ class _OrbitSkeletonState extends State<OrbitSkeleton>
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
-    return FadeTransition(
-      opacity: widget.pulse ?? _ownPulse!,
-      child: Container(
-        width: widget.width,
-        height: widget.height,
-        decoration: BoxDecoration(
-          color: colors.surfaceSecondary,
-          borderRadius: BorderRadius.circular(widget.borderRadius),
+    // 呼吸是常驻逐帧动画：挂载期冻结整页背景捕获，加载结束自动放行补录。
+    return OrbitCapturePause(
+      child: FadeTransition(
+        opacity: widget.pulse ?? _ownPulse!,
+        child: Container(
+          width: widget.width,
+          height: widget.height,
+          decoration: BoxDecoration(
+            color: colors.surfaceSecondary,
+            borderRadius: BorderRadius.circular(widget.borderRadius),
+          ),
         ),
       ),
     );

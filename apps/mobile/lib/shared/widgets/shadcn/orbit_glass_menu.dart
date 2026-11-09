@@ -64,8 +64,12 @@ class OrbitGlassMenuButton extends StatelessWidget {
 }
 
 /// 任意触发控件版的玻璃形变菜单（2026-11-03，页头标题「今天 ▾」的**视图菜单**
-/// 切换器）：与 [OrbitGlassMenuButton] 同一套承载、材质与二级面板口径，
-/// 差别只在触发件由调用方给——非图标按钮（标题文字 + 箭头）也能长出菜单。
+/// 切换器曾由此承载）：与 [OrbitGlassMenuButton] 同一套承载、材质与二级面板
+/// 口径，差别只在触发件由调用方给——非图标按钮（标题文字 + 箭头）也能长出菜单。
+///
+/// **2026-11-09 起视图菜单改走 `showOrbitMenuPopup` 的 Overlay 直挂**：本件
+/// 留在页面树内，库内形变承载逐帧重建会让背景捕获树重录整页快照（真机掉帧）；
+/// 本件仅在需要 `MiuixGlassSecondaryPopup` 堆叠二级面板的 ⋮ 菜单继续使用。
 class OrbitGlassMenu extends StatefulWidget {
   const OrbitGlassMenu({
     super.key,

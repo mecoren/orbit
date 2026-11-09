@@ -275,6 +275,22 @@ x64 模拟器 profile 档）优化后全绿（build/raster 双侧零丢帧）：
   （`continue-on-error`，托管 runner 无 KVM 常年 SKIP、自托管接设备即生效）；
   发版清单（docs/08 §3.3）补本地必跑；优化后 `--record` 重校阈值收紧护栏。
 
+#### 5.3.3 视图选择弹窗形变窗冻结背景捕获（2026-11-09）
+
+真机反馈「今天 ▾」视图选择弹窗点开时掉帧。逐帧探针（40 帧 × 16ms）实测：整页背景快照在 640ms 入场窗里重录 **40 次**（每次 `toImageSync` 都是百万像素级）。根因不是玻璃纹理缓存，而是**捕获树内的页头实时 `BackdropFilter`**：根 Overlay 弹层逐帧动画、以及落定后玻璃 panel 订阅快照通知，都会让页头磨砂层逐帧重绘，捕获树的内容层钩子随之每帧重录整页。把弹层宿主从页面树挪到根 Overlay 后仍是 40 次；换成没有页头磨砂层的简单宿主只有 2 次，确认与宿主位置无关、与捕获树是否被带飞有关。
+
+- **形变窗冻结捕获**：`OrbitPopupGlassMotion` 开场/后续形变把全局 `orbitCapturePauses` +1，冻结窗取库内弹簧尾巴 690ms；`OrbitScrollAwareBackdropCapture` 在渲染对象层直接订阅该计数（不触发 widget 重建，避开 build 期 `setState`），窗口内短路 `_scheduleCapture`，落定 / 收场 / 销毁 -1 并 `markNeedsPaint` 补录一次。与 §5.3.2 的滚动期、键盘期冻结并成第三档同口径窗口；
+- **视图菜单改 Overlay 直挂**：`SubListScreen` 的「今天 ▾」从页面树内的 `OrbitGlassMenu` 改走 `showOrbitMenuPopup(transformAnchor, simplified: true)`，顺带拿到 320ms 退场截断与宿主销毁时的会话清理；`showOrbitMenuPopup` 增 `contentPadding` 覆写，传 `EdgeInsets.zero` 抵消 `OrbitDropdownPanelView` 自带 8 留白与库内默认 8 的双份内边距。`OrbitGlassMenu` 保留给需要 `MiuixGlassSecondaryPopup` 堆叠二级面板的 ⋮ 菜单；
+- **守卫**：新增 `test/shared/orbit_view_menu_capture_test.dart`，用 `MiuixLayerBackdrop` 监听器数重录次数（修复前 40、修复后 2），预加载 OS4 shader 排除异步装载噪声；`flutter analyze` 0 issue、`flutter test` 1243 绿。帧耗时基线未重录（本次是快照次数契约，profile 真机数字须另跑 `mobile-jank --record`），口径见 `docs/09` §8.6。
+
+#### 5.3.4 常驻加载动画同样冻结背景捕获（2026-11-09）
+
+修完弹层后做全仓动画路径审计：同样在捕获子树内的**无界逐帧重绘**会走同一条内容层钩子，而三档窗口（滚动 / 键盘 / 弹层形变）都拦不住它们——加载态没有滚动通知、没有键盘、没有弹层。40 帧探针实测：骨架呼吸 **40 次**、`OrbitSpinner` **40 次**、下拉刷新 refreshing 绕行点 **40 次**；对照组静止页 / 底部弹层入场 / toast 入场 / 页面树 ⋮ 菜单（已走 §5.3.3 闸门）均为 **0 次**，说明这类问题只落在「常驻 ticker」上。
+
+- **抽公共原语**：`orbit_capture_pause.dart` 收口全局计数 `orbitCapturePauses`（原 `orbitPopupCapturePauses` 改名，语义扩为「动画期暂停」）与 `OrbitCapturePause` —— `[active]` 为真时持有一个令牌，卸载/转 false 释放并补录一次。计数变化只在渲染对象层改 bool，可在 build 阶段安全通知；
+- **三处接入**：`OrbitSkeleton`（呼吸）、`OrbitSpinner`（绕行）、`OrbitPullToRefresh`（下拉手势 / 收圆 / refreshing 整段非 idle 交互）分别按挂载期或 `_phase != idle` 持有令牌。全仓无限进度指示器只有 `OrbitSpinner` 一处源头，无漏网；加载态内容是静态占位，冻结零观感损失；
+- **守卫**：新增 `test/shared/orbit_ambient_capture_test.dart`，三场景各 40 帧探针（修复前 40 → 修复后 0）；`flutter analyze` 0 issue、`flutter test` 1243 绿。未逐项探针化的短动画（`AnimatedSwitcher` 视图切换、页面转场、页头进度线、删除线、拖拽 spring）仍无冻结，但探针里的同类短动画（底部弹层 / toast）为 0，若要收紧需真机 profile 逐项量化后再动。
+
 ### 5.4 保留的兼容处理（本批仍未替换）
 
 | 项 | 理由 |

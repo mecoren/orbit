@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_miuix/miuix.dart';
 
 import '../../../core/theme/orbit_accents.dart';
+import 'orbit_capture_pause.dart';
 
 // ── 几何比例（HyperOS `InfiniteProgressIndicator` 同源口径）──
 // 全部按边长比例表达，任意 [OrbitSpinner.size] 下观感一致；禁止改成裸数字
@@ -68,15 +69,18 @@ class OrbitSpinner extends StatelessWidget {
       strokeWidth: size * _kSpinnerStrokeRatio,
       orbitingDotSize: size * _kSpinnerDotRatio,
     );
+    // 绕行点是常驻逐帧动画：挂载期冻结整页背景捕获，加载结束自动放行补录。
     final label = semanticLabel;
-    if (label == null) return child;
+    if (label == null) return OrbitCapturePause(child: child);
     // 库内已包 `Semantics(label: '进度')`：调用方给了更具体的文案时，用
     // [ExcludeSemantics] 把内层丢掉再挂自己的标签，避免读屏把「进度」与
     // 调用方文案播报两遍（合并成「正在加载\n进度」同样别扭）。
-    return Semantics(
-      label: label,
-      liveRegion: true,
-      child: ExcludeSemantics(child: child),
+    return OrbitCapturePause(
+      child: Semantics(
+        label: label,
+        liveRegion: true,
+        child: ExcludeSemantics(child: child),
+      ),
     );
   }
 }

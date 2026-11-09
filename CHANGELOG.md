@@ -17,6 +17,22 @@
 
 ## [Unreleased]
 
+### 优化：移动端常驻加载动画不再逐帧重录整页背景（2026-11-09）
+
+修完视图弹窗后做全仓动画路径审计：捕获子树内的**无界逐帧重绘**走同一条内容层钩子，而滚动 / 键盘 / 弹层形变三档窗口都拦不住它——加载态没有滚动通知、没有键盘、没有弹层。40 帧探针实测骨架呼吸、常驻 `OrbitSpinner`、下拉刷新 refreshing 绕行点各 **40 次**整页快照；对照组静止页、底部弹层入场、toast 入场、页面树 ⋮ 菜单均为 **0 次**。
+
+- **抽公共原语**：`orbit_capture_pause.dart` 收口全局计数 `orbitCapturePauses`（原 `orbitPopupCapturePauses` 改名，语义扩为「动画期暂停」）与 `OrbitCapturePause`，挂载/活动期持有令牌、释放时补录一次；计数变化只在渲染对象层改 bool，可在 build 阶段安全通知；
+- **三处接入**：`OrbitSkeleton`、`OrbitSpinner`、`OrbitPullToRefresh`（整段非 idle 交互）分别持有令牌；全仓无限进度指示器只有 `OrbitSpinner` 一处源头，无漏网。加载态是静态占位，冻结零观感损失；
+- **验证**：新增 `test/shared/orbit_ambient_capture_test.dart`（三场景修复前 40 → 修复后 0）；`flutter analyze` 0 issue、`flutter test` 1243 绿。未逐项探针化的短动画（视图切换 / 页面转场 / 进度线 / 删除线 / 拖拽 spring）仍无冻结，探针里的同类短动画为 0，收紧前需真机 profile。细则见 `docs/16` §5.3.4。
+
+### 优化：移动端「今天 ▾」视图选择弹窗不再掉帧（2026-11-09）
+
+真机反馈点页头标题切快捷视图时弹窗卡顿。逐帧探针实测 640ms 入场窗里整页背景快照重录 **40 次**：页头实时 `BackdropFilter` 位于 `OrbitScrollAwareBackdropCapture` 捕获树内，根 Overlay 弹层的形变帧与落定后的玻璃快照通知会带它逐帧重绘，内容层钩子随之每帧 `toImageSync` 整页；把弹层宿主挪到 Overlay 后仍是 40 次，确认根因在捕获树而非宿主位置。
+
+- **第三档冻结窗**：`OrbitPopupGlassMotion` 开场/后续形变把 `orbitCapturePauses` +1（690ms 弹簧尾巴窗），`OrbitScrollAwareBackdropCapture` 在渲染对象层订阅计数、窗口内不录新快照，落定/收场/销毁 -1 并补录一次；与滚动期、键盘期冻结同口径，不触发 widget 重建；
+- **视图菜单 Overlay 直挂**：`SubListScreen` 的「今天 ▾」从页面树 `OrbitGlassMenu` 改走 `showOrbitMenuPopup(transformAnchor, simplified: true)`，兼得 320ms 退场截断与宿主销毁清理；`showOrbitMenuPopup` 增 `contentPadding` 覆写避免双份内边距。`OrbitGlassMenu` 仍服务于需要堆叠二级面板的 ⋮ 菜单；
+- **验证**：新增 `test/shared/orbit_view_menu_capture_test.dart`（修复前 40 次 → 修复后 2 次快照）；`flutter analyze` 0 issue、`flutter test` 1243 绿。细则见 `docs/16` §5.3.3。
+
 ### 优化：移动端点「新增待办」起输入法不再掉帧（2026-11-09）
 
 真机反馈：点 FAB 弹出快速添加面板、输入法随之升起这段动画仍会卡。模拟器 x64 没有软键盘动画，`mobile-jank` 的 `sheet_open` 场景量不到这条路径；改用逐帧 `viewInsets` 的探针实测，10 帧键盘动画里**背景快照重录 10 次、玻璃表面/`MiuixGlassPanel` 各重建 10 次**（`toImageSync` 整页 + 每次通知所有玻璃消费方重建），是这笔开销的真身：

@@ -126,6 +126,9 @@ class OrbitMenuSession {
 ///   只有**打开时确实持有焦点**的节点才登记，避免菜单关闭后把键盘无端叫起来。
 /// - [backdrop]：OS4 玻璃采样器（调用方从壳层 `OrbitGlassScope` 取；弹层
 ///   挂在根 Overlay 上，位于 scope 之外，组件内部取不到）。
+/// - [contentPadding]：库内行容器的内边距；null = 两种承载各自的默认档
+///   （transform 8、dropdown 0）。`OrbitDropdownPanelView` 自带上下 8 留白，
+///   从页面树宿主迁入的菜单传 `EdgeInsets.zero` 即可避免双份内边距。
 OrbitMenuSession showOrbitMenuPopup(
   BuildContext context, {
   Rect? anchor,
@@ -141,6 +144,7 @@ OrbitMenuSession showOrbitMenuPopup(
   String? actionLabel,
   VoidCallback? onAction,
   Key? contentKey,
+  EdgeInsets? contentPadding,
   MiuixLayerBackdrop? backdrop,
   FocusNode? restoreFocus,
   bool simplified = false,
@@ -189,6 +193,7 @@ OrbitMenuSession showOrbitMenuPopup(
       actionLabel: actionLabel,
       onAction: onAction,
       contentKey: contentKey,
+      contentPadding: contentPadding,
       backdrop: backdrop,
       restoreFocus: focused,
       simplified: simplified,
@@ -230,6 +235,7 @@ class OrbitMenuPopupBody extends StatefulWidget {
     this.actionLabel,
     this.onAction,
     this.contentKey,
+    this.contentPadding,
     this.backdrop,
     this.restoreFocus,
     this.itemDismiss,
@@ -247,9 +253,9 @@ class OrbitMenuPopupBody extends StatefulWidget {
   ///
   /// 库内语义（`popup_presenter.dart`）：true 时展开期不叠 [anchorContent]
   /// 副本、卡片直接从轮廓长出；false（默认）会叠一份副本并模糊渐隐。
-  /// 页头「今天 ▾」菜单用 true（`OrbitGlassMenu`）；底栏「更多」/快速添加/
-  /// 下拉偏好行沿用默认 false——它们要让触发件内容（按钮文字、尾随值）
-  /// 连续长成卡片，而不是凭空出现。
+  /// 页头「今天 ▾」视图菜单用 true（`showOrbitMenuPopup(simplified: true)`，
+  /// 2026-11-09 起）；底栏「更多」/快速添加/下拉偏好行沿用默认 false——
+  /// 它们要让触发件内容（按钮文字、尾随值）连续长成卡片，而不是凭空出现。
   final bool simplified;
 
   /// 形变期触发件副本（按钮内容被隐藏后由它按按钮矩形缩放显示）
@@ -277,6 +283,9 @@ class OrbitMenuPopupBody extends StatefulWidget {
   final String? actionLabel;
   final VoidCallback? onAction;
   final Key? contentKey;
+
+  /// 库内行容器的内边距；null = transform 承载 8 / dropdown 承载 0
+  final EdgeInsets? contentPadding;
   final MiuixLayerBackdrop? backdrop;
   final FocusNode? restoreFocus;
 
@@ -527,6 +536,10 @@ class OrbitMenuPopupBodyState extends State<OrbitMenuPopupBody> {
             gap: widget.gap,
             sizing: _sizing(screen.height * _maxHeightFactor),
             visuals: visuals,
+            // 行面板自带上下 8 留白：默认沿用库内 8（历史口径），调用方显式
+            // 传 0 时只留行面板那一份，避免从页面树宿主迁入后多出 8px。
+            contentPadding:
+                widget.contentPadding ?? const EdgeInsets.symmetric(vertical: 8),
             onMeasured: _handleMeasured,
             onDismissRequest: widget.onDismiss,
             // 统一走 _finish：退场截断与库内完成幂等互斥，都只收尾一次
@@ -541,8 +554,8 @@ class OrbitMenuPopupBodyState extends State<OrbitMenuPopupBody> {
           sizing: _sizing(screen.height * _maxHeightFactor),
           visuals: visuals,
           // 库内已包 SingleChildScrollView + Padding；行面板自带上下 8 留白，
-          // 这里归零，避免双份内边距把首尾行压窄。
-          contentPadding: EdgeInsets.zero,
+          // 默认归零，避免双份内边距把首尾行压窄。
+          contentPadding: widget.contentPadding ?? EdgeInsets.zero,
           onMeasured: _handleMeasured,
           onDismissRequest: widget.onDismiss,
           onDismissFinished: _finish,

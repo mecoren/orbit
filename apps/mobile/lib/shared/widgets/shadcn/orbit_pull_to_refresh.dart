@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../../../core/theme/app_dimens.dart';
 import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/orbit_accents.dart';
+import 'orbit_capture_pause.dart';
 
 /// 下拉刷新（原语层：自绘手势状态机 + 「弧 → 拉长圆 → 收圆转点」指示器）
 ///
@@ -441,8 +442,12 @@ class _OrbitPullToRefreshState extends State<OrbitPullToRefresh>
     final text = _refreshText;
     final textAlpha = _refreshTextAlpha;
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
+    // 下拉手势、收圆与 refreshing 绕行点都是逐帧动画；整段交互期冻结整页
+    // 背景捕获，回 idle 放行并补录一次（与 OrbitSpinner / OrbitSkeleton 同源）。
+    return OrbitCapturePause(
+      active: _phase != _PullPhase.idle,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
         final height = constraints.maxHeight.isFinite
             ? constraints.maxHeight
             : MediaQuery.sizeOf(context).height;
@@ -548,7 +553,8 @@ class _OrbitPullToRefreshState extends State<OrbitPullToRefresh>
             ),
           ),
         );
-      },
+        },
+      ),
     );
   }
 }

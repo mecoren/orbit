@@ -31,6 +31,7 @@ import 'package:flutter_miuix/miuix.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimens.dart';
 import '../../../core/theme/app_shapes.dart';
+import 'orbit_capture_pause.dart';
 import 'orbit_popup_glass.dart';
 import 'orbit_sheet_glass_motion.dart';
 
@@ -120,10 +121,11 @@ class _OrbitGlassPageState extends State<OrbitGlassPage> {
 /// `toImageSync` 整页快照」——列表滚动、**键盘抬升**时逐帧重录，是玻璃链路
 /// 在真机上最大的持续开销（x64 模拟器无软键盘动画，帧耗时门禁量不到后者；
 /// 真机按 dpr/2 录制一次就是百万像素级，键盘动画约 20 帧就是 20 次）。
-/// 本件复刻同一机制并加暂停档：滚动活跃期或键盘动画期不再录新快照，消费方
-/// （底栏/FAB/弹层的玻璃）沿用最后一帧；静默后恢复录制并补录一次。玻璃内
-/// 内容在动画期轻微滞后——玻璃拟态系统的标准权衡（iOS 同款行为），可接受；
-/// 且键盘动画期弹层本就走形变窗实色档，不采样背景，冻结零观感损失。
+/// 本件复刻同一机制并加暂停档：滚动活跃期、键盘动画期、锚定弹层形变窗与
+/// 常驻加载动画（`orbitCapturePauses`）不再录新快照，消费方（底栏/FAB/弹层
+/// 的玻璃）沿用最后一帧；静默后恢复录制并补录一次。玻璃内内容在动画期轻微滞后——
+/// 玻璃拟态系统的标准权衡（iOS 同款行为），可接受；且键盘/形变期间弹层本就
+/// 走实色档，不采样背景，冻结零观感损失。
 ///
 /// **为什么不用 RepaintBoundary 包滚动列表「顺带」挡住重录**：图层脏标记沿
 /// Layer 链向上传播（`Layer.markNeedsAddToScene` 逐级上抛），边界挡不住内容
@@ -287,13 +289,30 @@ class _RenderOrbitLayerBackdropCapture extends RenderProxyBox {
   }
 
   bool _paused;
+
+  /// 全局动画暂停档（`OrbitPopupGlassMotion` / `OrbitCapturePause` 共同驱动）
+  ///
+  /// 直接在渲染对象层订阅：计数在 build 阶段就会变化，走 widget 重建会命中
+  /// 「build 期间 setState」；这里只改一个 bool，恢复时 `markNeedsPaint` 即可。
+  bool _animationPaused = orbitCapturePauses.value > 0;
+  bool _listening = false;
+
+  bool get _effectivePaused => _paused || _animationPaused;
+
   bool get paused => _paused;
   set paused(bool value) {
     if (_paused == value) return;
     _paused = value;
     // 恢复录制：重绘一次触发补录（暂停期内容层钩子被短路，最后一帧的
     // 子树变化不会再排期）
-    if (!value) markNeedsPaint();
+    if (!_effectivePaused) markNeedsPaint();
+  }
+
+  void _onCapturePausesChanged() {
+    final next = orbitCapturePauses.value > 0;
+    if (_animationPaused == next) return;
+    _animationPaused = next;
+    if (!_effectivePaused) markNeedsPaint();
   }
 
   @override
@@ -303,10 +322,17 @@ class _RenderOrbitLayerBackdropCapture extends RenderProxyBox {
   void attach(PipelineOwner owner) {
     super.attach(owner);
     _backdrop.registerCapture(this);
+    _animationPaused = orbitCapturePauses.value > 0;
+    orbitCapturePauses.addListener(_onCapturePausesChanged);
+    _listening = true;
   }
 
   @override
   void detach() {
+    if (_listening) {
+      orbitCapturePauses.removeListener(_onCapturePausesChanged);
+      _listening = false;
+    }
     _backdrop.unregisterCapture(this);
     super.detach();
   }
@@ -316,6 +342,10 @@ class _RenderOrbitLayerBackdropCapture extends RenderProxyBox {
 
   @override
   void dispose() {
+    if (_listening) {
+      orbitCapturePauses.removeListener(_onCapturePausesChanged);
+      _listening = false;
+    }
     _contentLayer.layer = null;
     super.dispose();
   }
@@ -332,7 +362,7 @@ class _RenderOrbitLayerBackdropCapture extends RenderProxyBox {
   bool _captureScheduled = false;
 
   void _scheduleCapture() {
-    if (_paused ||
+    if (_effectivePaused ||
         _capturing ||
         !attached ||
         _captureScheduled ||
