@@ -24,9 +24,9 @@ import 'package:orbit/shared/widgets/shadcn/orbit_fab.dart';
 import 'support/orbit_test_app.dart';
 
 Widget _wrap(MockOrbitBridge bridge) => ProviderScope(
-      overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
-      child: orbitTestAppRouter(routerConfig: appRouter),
-    );
+  overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
+  child: orbitTestAppRouter(routerConfig: appRouter),
+);
 
 MockOrbitBridge _bridge() => MockOrbitBridge();
 
@@ -46,9 +46,9 @@ Future<void> _back(WidgetTester tester) async {
 }
 
 Finder _navIcon(IconData icon) => find.descendant(
-      of: find.byType(OrbitBottomNav),
-      matching: find.byIcon(icon),
-    );
+  of: find.byType(OrbitBottomNav),
+  matching: find.byIcon(icon),
+);
 
 Future<void> _tapTab(WidgetTester tester, IconData icon) async {
   await tester.tap(_navIcon(icon));
@@ -56,9 +56,7 @@ Future<void> _tapTab(WidgetTester tester, IconData icon) async {
 }
 
 bool _moreMenuOpen(WidgetTester tester) => tester
-    .widgetList<MiuixGlassTransformPopup>(
-      find.byType(MiuixGlassTransformPopup),
-    )
+    .widgetList<MiuixGlassTransformPopup>(find.byType(MiuixGlassTransformPopup))
     .any((popup) => popup.show);
 
 void main() {
