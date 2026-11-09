@@ -144,7 +144,8 @@ class _AboutPageState extends ConsumerState<AboutPage> {
                       ),
                     ),
                     const SizedBox(height: AppDimens.space4),
-                    OrbitButton.icon(variant: OrbitButtonVariant.text, 
+                    OrbitButton.icon(
+                      variant: OrbitButtonVariant.text,
                       onPressed: _checking ? null : _checkUpdate,
                       icon: _checking
                           ? const OrbitSpinner(size: 14)
@@ -176,13 +177,10 @@ class _AboutPageState extends ConsumerState<AboutPage> {
                 const SizedBox(height: AppDimens.cardGap),
                 OrbitSettingsGroup(
                   title: '开源许可',
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: OrbitButton.icon(variant: OrbitButtonVariant.outline, 
-                      onPressed: () => showLicensePage(context: context),
-                      icon: const Icon(OrbitIcons.fileText, size: 18),
-                      label: const Text('查看开源许可'),
-                    ),
+                  padding: EdgeInsets.zero,
+                  child: OrbitArrowTile(
+                    title: '查看开源许可',
+                    onClick: () => context.push('/about/licenses'),
                   ),
                 ),
                 Padding(
@@ -211,4 +209,3 @@ class _AboutPageState extends ConsumerState<AboutPage> {
     );
   }
 }
-

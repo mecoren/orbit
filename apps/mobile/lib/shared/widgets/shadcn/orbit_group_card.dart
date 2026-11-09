@@ -15,15 +15,27 @@ import '../../../core/theme/app_dimens.dart';
 ///
 /// 卡外小标题直接用库内 `MiuixSmallTitle`（28×8 内边距，与卡内标题同线）。
 class OrbitGroupCard extends StatelessWidget {
-  const OrbitGroupCard({super.key, required this.children});
+  const OrbitGroupCard({
+    super.key,
+    required this.children,
+    this.outerPadding = const EdgeInsets.symmetric(
+      horizontal: AppDimens.space12,
+    ),
+  });
 
   /// 卡内行（通常为 `Miuix*` 行原语 / 自绘只读行；行间自行插入
   /// [OrbitGroupDivider]）
   final List<Widget> children;
 
+  /// 卡片外部留白（默认 12，与页面级水平留白同值）
+  ///
+  /// 页面已按 12 给列表留边时传 [EdgeInsets.zero]，避免与本组件的默认
+  /// 外边距叠成 24，卡片比同页列表窄一圈。
+  final EdgeInsetsGeometry outerPadding;
+
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: AppDimens.space12),
+    padding: outerPadding,
     child: MiuixCard(
       child: Column(
         mainAxisSize: MainAxisSize.min,

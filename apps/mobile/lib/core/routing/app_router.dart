@@ -12,6 +12,8 @@ import '../../modules/settings/backup_page.dart';
 import '../../modules/settings/changelog_detail_page.dart';
 import '../../modules/settings/changelog_list_page.dart';
 import '../../modules/settings/holiday_cache_page.dart';
+import '../../modules/settings/license_detail_page.dart';
+import '../../modules/settings/license_list_page.dart';
 import '../../modules/settings/oss_component_detail_page.dart';
 import '../../modules/settings/oss_components_page.dart';
 import '../../modules/settings/label_manager_page.dart';
@@ -94,7 +96,10 @@ CustomTransitionPage<void> pageSlideFromRight(
       reverseCurve: AppMotion.pageOutCubic,
     );
     return SlideTransition(
-      position: Tween(begin: const Offset(1, 0), end: Offset.zero).animate(curved),
+      position: Tween(
+        begin: const Offset(1, 0),
+        end: Offset.zero,
+      ).animate(curved),
       child: child,
     );
   },
@@ -107,9 +112,7 @@ CustomTransitionPage<void> pageSlideFromRight(
 NoTransitionPage<void> tabRoot(Widget child, {LocalKey? key}) =>
     NoTransitionPage<void>(
       key: key,
-      child: OrbitTransientPopGuard(
-        child: OrbitBranchRoot(child: child),
-      ),
+      child: OrbitTransientPopGuard(child: OrbitBranchRoot(child: child)),
     );
 
 /// 「今天」页签：今日截止视图（无返回键，页头带日期副标）。
@@ -388,6 +391,19 @@ final appRouter = GoRouter(
       path: '/about/oss-components/detail',
       pageBuilder: (context, state) => pageSlideFromRight(
         OssComponentDetailPage(name: state.uri.queryParameters['name'] ?? ''),
+        key: state.pageKey,
+      ),
+    ),
+    // 开源许可：关于页一行入口 → 包名列表 → 许可全文（LicenseRegistry）
+    GoRoute(
+      path: '/about/licenses',
+      pageBuilder: (context, state) =>
+          pageSlideFromRight(const LicenseListPage(), key: state.pageKey),
+    ),
+    GoRoute(
+      path: '/about/licenses/detail',
+      pageBuilder: (context, state) => pageSlideFromRight(
+        LicenseDetailPage(name: state.uri.queryParameters['name'] ?? ''),
         key: state.pageKey,
       ),
     ),
