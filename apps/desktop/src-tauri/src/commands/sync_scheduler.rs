@@ -11,7 +11,7 @@
 //! - 触发即调 cloud_sync_api::sync_now(Background)；进度经 TauriProgressSender
 //!   emit("sync-progress") 推送；key_mismatch 时 emit("sync-key-mismatch") 引导恢复页
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU8, Ordering};
 
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -27,6 +27,20 @@ use crate::commands::sync_runtime;
 const TICK_SECS: u64 = 60;
 
 static SCHEDULER_STARTED: AtomicBool = AtomicBool::new(false);
+
+/// 自动同步失败退避（2026-11-10 实测整改）
+///
+/// 失败时 `sync_configs.last_synced_at` 按设计不推进（保留下轮快速重试窗口），
+/// 代价是确定性错误（如服务端方言不支持的 400）会让 60s tick 每轮重跑、
+/// 半小时刷出 20+ 条同因 `failed`。这里按进程内连续失败次数做指数退避，
+/// 上限 15 分钟；手动同步成功后 `last_synced_at` 推进即自动解除退避，
+/// 不会把「用户修好配置」卡在长等待里。
+static NEXT_ATTEMPT_MS: AtomicI64 = AtomicI64::new(0);
+static CONSECUTIVE_FAILURES: AtomicU8 = AtomicU8::new(0);
+static LAST_SEEN_SYNC_MS: AtomicI64 = AtomicI64::new(0);
+
+/// 退避上限：15 分钟
+const BACKOFF_MAX_MS: i64 = 15 * 60 * 1000;
 
 /// 启动定时同步守护（幂等；lib.rs setup 阶段调用）
 pub fn sync_scheduler_start(app: AppHandle) {
@@ -157,6 +171,15 @@ async fn tick(app: &AppHandle) {
     // 每启必同步已消除）；last 为 NULL（从未同步过）时立即满足触发首轮
     let now_ms = chrono::Utc::now().timestamp_millis();
     let last = record.last_synced_at.unwrap_or(0);
+    // 手动同步成功 → 账本时间戳推进 → 立即清零退避，用户修好配置不用等
+    if last > LAST_SEEN_SYNC_MS.load(Ordering::Relaxed) {
+        LAST_SEEN_SYNC_MS.store(last, Ordering::Relaxed);
+        CONSECUTIVE_FAILURES.store(0, Ordering::Relaxed);
+        NEXT_ATTEMPT_MS.store(0, Ordering::Relaxed);
+    }
+    if NEXT_ATTEMPT_MS.load(Ordering::Relaxed) > now_ms {
+        return;
+    }
     if last != 0 && now_ms.saturating_sub(last) < (record.sync_interval as i64) * 60_000 {
         return;
     }
@@ -189,11 +212,29 @@ async fn tick(app: &AppHandle) {
     .await;
     // F24：last_synced_at 回写已收口到 core 引擎漏斗（record_incremental_history），
     // 壳层不再各自推进账本——未来的壳也不可能再忘记这个判据
-    if let Err(e) = result {
-        // F35：同 sync-on-change，日志落 app_log.log
-        log::warn!("[sync-scheduler] 自动同步失败: {e}");
-        if e.is_key_mismatch_error() {
-            let _ = app.emit("sync-key-mismatch", ());
+    match result {
+        Ok(_) => {
+            CONSECUTIVE_FAILURES.store(0, Ordering::Relaxed);
+            NEXT_ATTEMPT_MS.store(0, Ordering::Relaxed);
+        }
+        Err(e) => {
+            // F35：同 sync-on-change，日志落 app_log.log
+            log::warn!("[sync-scheduler] 自动同步失败: {e}");
+            let failures = CONSECUTIVE_FAILURES
+                .load(Ordering::Relaxed)
+                .saturating_add(1);
+            CONSECUTIVE_FAILURES.store(failures, Ordering::Relaxed);
+            // 60s → 120s → 240s → 480s → 900s 封顶
+            let shift = (failures.saturating_sub(1) as u32).min(4);
+            let backoff_ms = ((TICK_SECS * 1000) << shift).min(BACKOFF_MAX_MS as u64) as i64;
+            NEXT_ATTEMPT_MS.store(now_ms.saturating_add(backoff_ms), Ordering::Relaxed);
+            log::info!(
+                "[sync-scheduler] 连续失败 {failures} 次，下轮自动同步退避 {}s",
+                backoff_ms / 1000
+            );
+            if e.is_key_mismatch_error() {
+                let _ = app.emit("sync-key-mismatch", ());
+            }
         }
     }
 }
