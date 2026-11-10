@@ -96,7 +96,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
     switch (action) {
       case QuickAction.newTask:
         showQuickAddSheet(context);
-      // 「今天」已升级为底部页签：快捷方式直达页签根，且记入页级历史
+      // 「视图」已升级为底部页签：快捷方式直达页签根，且记入页级历史
       case QuickAction.today:
         goToModule(context, OrbitNavModule.today);
       case QuickAction.search:

@@ -35,7 +35,7 @@ import 'orbit_shell_back.dart';
 /// 目的地面板（标题行带「编辑」入口进功能模块配置页），点面板外关闭，面板
 /// 条目点击 = 切到对应模块分支。「新建」上收右下悬浮钮（[OrbitFab]）：落点
 /// 跟随当前列表页（[QuickAddContext] 登记的筛选入参），长按直达模板新建；
-/// 「今天」页签挂今日未完成计数角标（不在底栏时不挂）。
+/// 「视图」页签挂「今天」视图的未完成计数角标（不在底栏时不挂）。
 ///
 /// **OS4 玻璃接线（2026-10-31）**：底栏换成 `MiuixGlassNavigationBar` 后需要
 /// 「栏体背后的内容」采样快照。按库内约束，**捕获树与玻璃消费方必须是兄弟
@@ -127,8 +127,8 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     // 页级返回历史驱动「返回回上一页」还是「交框架退系统桌面」
     final hasPrevious = ref.watch(orbitNavHistoryProvider).hasPrevious;
     final tabs = nav.bottomTabs;
-    // 「今天」角标 = 今天截止视图的未完成数（0 不显示，见 [OrbitBottomNav]）；
-    // 今天模块不在底栏时无角标位。P1 窗口化后改读 SQL 聚合：底栏常驻，
+    // 「视图」页签角标 = 今天截止视图的未完成数（0 不显示，见 [OrbitBottomNav]）；
+    // 视图模块不在底栏时无角标位。P1 窗口化后改读 SQL 聚合：底栏常驻，
     // 不能再为一个小角标在内存里留一份万行任务数组。
     final counts =
         ref.watch(sidebarCountsProvider).value ??

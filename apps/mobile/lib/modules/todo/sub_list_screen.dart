@@ -75,11 +75,11 @@ import 'weekly_review_sheet.dart';
 /// 任务子列表 /todo/tasks（docs/05 §4.2 + 移动端任务书）
 ///
 /// 入口三参数互斥：projectId > ungrouped > view（task_logic 同款优先级）。
-/// 「今天」页签与页签栈内入栈共用本屏：页签根传 `showBack: false` 并以
+/// 「视图」页签与页签栈内入栈共用本屏：页签根传 `showBack: false` 并以
 /// `titleOverride` 换页头文案（页头自动带日期副标）；页签根的标题是快捷视图
 /// 切换器（点标题长出 OS4 玻璃形变菜单，在我的一天/今天/近7天/全部任务/
 /// 已完成/收藏/无日期之间切换，标题与列表同步换成该视图——切到哪就叫哪，
-/// 会话态不持久化）；
+/// 选中档按本机偏好记忆，退出重进仍停在这一档）；
 /// 列表消费共享 filterTasks/sortTasks；空态文案按入口映射；Tile 长按弹操作菜单
 /// （编辑 / 星标切换 / 删除确认）；manual 档长按整行拾起拖动重排
 /// （#37，position midpoint 落库与桌面同口径；原地松手仍是操作菜单）。
@@ -258,12 +258,12 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   /// 批量动作进行中（防重复触发；批量期间串行写库）
   bool _batchBusy = false;
 
-  /// 今天页签「视图菜单」的选中档覆写（null = 跟随路由 query，即「今天」本位）。
+  /// 「视图」页签「视图菜单」的选中档覆写（null = 跟随路由 query，即「今天」本位）。
   /// 选中档按本机偏好持久化（`logic/quick_view_prefs.dart`）——退出重进仍停在
   /// 上一档，不再回到「今天」
   QuickViewKey? _viewOverride;
 
-  /// 生效中的筛选（今天页签切换视图后即覆写值；其余入口恒等于路由 query）
+  /// 生效中的筛选（「视图」页签切换视图后即覆写值；其余入口恒等于路由 query）
   TaskFilterInput get _effectiveQuery => _viewOverride == null
       ? widget.query
       : TaskFilterInput(quickView: _viewOverride);
@@ -289,7 +289,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     );
   }
 
-  /// 是否今天页签根（快捷视图切换入口只在此出现：页签栈内入栈的今天视图
+  /// 是否「视图」页签根（快捷视图切换入口只在此出现：页签栈内入栈的今天视图
   /// 与项目/未分组列表不挂切换器，标题即入口语义不容二义）
   bool get _isTodayTab =>
       widget.query.quickView == QuickViewKey.today && !widget.showBack;
@@ -417,7 +417,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     super.initState();
     _transientPop = ref.read(orbitTransientPopProvider.notifier);
     _viewMode = loadViewModeForProject(widget.query.projectId);
-    // 视图菜单的选中档：本机偏好记住上次选的那一档（只对今天页签根生效；
+    // 视图菜单的选中档：本机偏好记住上次选的那一档（只对「视图」页签根生效；
     // 项目 / 未分组的标题不挂菜单，恒等于路由 query）。`today` 即路由本位，
     // 覆写置 null，与「切回今天」同一条语义
     if (_isTodayTab) {
@@ -1935,7 +1935,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     // Logbook 分组（done 视图）：按完成日倒序，组内完成时刻倒序
     final doneGroups = isLogbook ? groupDoneByDay(visible) : <DoneDayGroup>[];
 
-    // 动态标题：今天页签的视图覆写优先（切到哪就叫哪），其次页头覆盖文案
+    // 动态标题：「视图」页签的视图覆写优先（切到哪就叫哪），其次页头覆盖文案
     // （页签根），否则按入口取项目名 / 未分组 / 视图名
     final title =
         _viewOverride?.label ??

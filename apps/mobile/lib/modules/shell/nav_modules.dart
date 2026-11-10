@@ -8,11 +8,15 @@ import '../../services/local_prefs.dart';
 
 /// 底部导航可配置模块池（对齐竞品「功能模块」：模块可启用/停用/排序）
 ///
+/// **枚举成员名 = 落盘 id**（[NavModulesState.toJson] 写 `m.name`），**不随展示
+/// 名走**：首个成员 `today` 的展示名是「视图」——页签根实际是快捷视图切换器
+/// （今天 / 近7天 / 全部任务 …），路由仍为 `/today`，存量偏好与分支序都不失配。
+///
 /// **枚举序 = 路由分支序**：`app_router.dart` 的 `StatefulShellRoute.branches`
 /// 必须按本枚举顺序声明（`goBranch` 按下标寻分支，见 [branchIndex]），两端
 /// 改动必须同步，`nav_modules_test.dart` 有序数不变量测试兜底。
 enum OrbitNavModule {
-  today('今天', OrbitIcons.sun, '聚焦今日待办。', '/today'),
+  today('视图', OrbitIcons.views, '在多个视图间切换任务列表。', '/today'),
   sidebar('清单', OrbitIcons.list, '用清单和项目管理任务。', '/todo'),
   calendar('日历', OrbitIcons.calendarDays, '在月历与年视图中规划任务。', '/todo/calendar'),
   matrix('四象限', OrbitIcons.grid, '关注重要且紧急的事情。', '/todo/matrix'),
@@ -72,7 +76,7 @@ class NavModulesState {
       enabled.skip(bottomTabLimit).toList(growable: false);
 
   /// 默认配置：**八模块全启用**（存量升级口径）——底栏 = 启用序前 4 个
-  /// （今天/清单/日历/四象限），「更多」面板 = 其余 4 个（统计/搜索/回收站/
+  /// （视图/清单/日历/四象限），「更多」面板 = 其余 4 个（统计/搜索/回收站/
   /// 设置），与可配置前的固定导航完全一致；停用区空。
   static NavModulesState fallback() {
     const enabled = [
@@ -220,7 +224,7 @@ final navModulesProvider =
 /// 应用启动模块（返回历史基线；与 [startupLocation] 同源，偏好只解析一次）
 ///
 /// `appRouter` 是顶层 final（惰性求值一次），而 `LocalPrefs.load()` 在
-/// `main()` 里先于 `runApp` 完成，此处读取时机安全；「今天」被停用时
+/// `main()` 里先于 `runApp` 完成，此处读取时机安全；「视图」被停用时
 /// 冷启动直接落到当前配置的第一个模块，不会落到不可达页签。
 final OrbitNavModule startupModule =
     NavModulesState.parse(LocalPrefs.getString(navModulesPrefsKey) ?? '')

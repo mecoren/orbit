@@ -102,7 +102,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(MatrixScreen), findsOneWidget);
 
-    await tester.tap(_navIcon(OrbitIcons.sun));
+    await tester.tap(_navIcon(OrbitIcons.views));
     await tester.pumpAndSettle();
     expect(find.text(todayHeaderLabel(DateTime.now())), findsOneWidget);
   });
@@ -224,7 +224,7 @@ void main() {
     // 滚到可见再断言（外层 ListView 显式指定，内层段列表不可滚会歧义）
     final pageScroll = find.byType(Scrollable).first;
     // 首屏：已启用段 4 行齐出
-    for (final label in ['今天', '清单', '日历', '四象限']) {
+    for (final label in ['视图', '清单', '日历', '四象限']) {
       expect(find.text(label), findsOneWidget);
     }
     await tester.scrollUntilVisible(
@@ -252,11 +252,11 @@ void main() {
     await tester.tap(find.text('编辑'));
     await tester.pumpAndSettle();
 
-    // 预览 = 底栏落位：今天/清单/日历/四象限 + 更多（纯图标）
+    // 预览 = 底栏落位：视图/清单/日历/四象限 + 更多（纯图标）
     final preview = find.byKey(const ValueKey('nav-preview'));
     expect(preview, findsOneWidget);
     for (final icon in [
-      OrbitIcons.sun,
+      OrbitIcons.views,
       OrbitIcons.list,
       OrbitIcons.calendarDays,
       OrbitIcons.grid,
@@ -290,7 +290,7 @@ void main() {
     await tester.tap(find.text('编辑'));
     await tester.pumpAndSettle();
 
-    // 默认启用序 [今天, 清单, 日历, 四象限]：第 4 枚停用钮停用四象限
+    // 默认启用序 [视图, 清单, 日历, 四象限]：第 4 枚停用钮停用四象限
     await tester.tap(find.byTooltip('停用').at(3));
     await tester.pumpAndSettle();
     // 移入未启用段（段在首屏下，懒构建，需滚到可见再断言）
@@ -309,7 +309,7 @@ void main() {
     expect(find.text('今天'), findsOneWidget); // 仅页头（底栏纯图标）
   });
 
-  testWidgets('「今天」页签角标：有今天截止未完成任务时显示计数', (tester) async {
+  testWidgets('「视图」页签角标：有今天截止未完成任务时显示计数', (tester) async {
     final bridge = _seededBridge();
     // 造一条今天截止的未完成任务（截止 = 当前时刻，落在今天日界内）
     final now = bridge.store.now();
@@ -339,7 +339,7 @@ void main() {
     };
     await _pump(tester, bridge);
 
-    // 角标挂在「今天」页签图标右上：底部导航内的计数文本与页面页头计数并存。
+    // 角标挂在「视图」页签图标右上：底部导航内的计数文本与页面页头计数并存。
     // today 视图含逾期（截止 < 明日零点即计入，与 computeSidebarCounts 同口径）
     final endOfToday = DateTime.fromMillisecondsSinceEpoch(
       now,
@@ -372,7 +372,7 @@ void main() {
     addTearDown(tester.view.reset);
 
     await _pump(tester, _seededBridge());
-    expect(find.byType(SidebarScreen), findsOneWidget); // 今天页签：常驻一份
+    expect(find.byType(SidebarScreen), findsOneWidget); // 视图页签：常驻一份
 
     await tester.tap(_navIcon(OrbitIcons.list));
     await tester.pumpAndSettle();

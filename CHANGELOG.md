@@ -17,6 +17,37 @@
 
 ## [Unreleased]
 
+### 修复：首次全量恢复丢失软删行、统计跨端不可比、冲突计数与留档不一致（2026-11-10）
+
+端到端测试（`docs/同步功能{协议}端到端测试报告-2026-11-09.md`）实测三项，逐项修复：
+
+- **P0 软删行换机消失**：墓碑原先只带 `uuid + deleted_at`，全新设备首次全量 pull 时本地没有行可「打标记」，799 条软删任务在另一端整行缺失（`todo_tasks` 40,000 vs 39,201、回收站 799 vs 0）。`TombstoneEntry` 增加可选 `payload`（软删行整行快照 + `_fk` 父行 uuid），push 侧 `load_table_tombstones` 写出、pull 侧 `apply_tombstones_in_tx` 在本地缺行时物化 `is_deleted=1` 行（`updated_at` 保留源端原值）；旧墓碑（无 payload）对「必填列全带默认值」的父表建最小占位行兜底，子表记 warn。顺带修复「数据桶存活行与本端墓碑同轮到达 → 墓碑被合并前快照跳过导致复活」的竞态（裁决移进 UPDATE 的 WHERE）。
+- **P1 统计跨端不可比**：`stats_aggregate.by_project[].project_id` 透出本地自增 id，换机/重同步后项目 id 重排，同一份数据三端结果不同。改为 `project_uuid`（core `ProjectDistRow`、FRB DTO、桌面 `StatsProjectRow`、移动 `dto.dart` 与 mock 桥同步；桌面统计页 key / 未分组判据改 uuid）。
+- **P2 冲突计数与留档不一致**：`SyncResult.conflicts` 旧口径把「他端顺延更新」和「删除 vs 编辑复活裁决」都计入，出现「toast 说 1 条冲突、`sync_conflicts` 表 0 行」。改为只统计**真并发**且败方副本成功落库的裁决，与 `sync_conflicts` 一一对应。
+- **P2 新设备错密引导**：从未成功同步过的设备解不开云端清单时，旧实现返回 `KeyMismatch`（跳恢复页、引导「以本机为准覆盖云端」，会删掉云端正确数据）。现按密码错误归类（`password` tag，跳解锁页重输云端密码）；已同步过的设备仍返回 `KeyMismatch` 走恢复流程。
+
+验证：`cargo test -p orbit-core --lib cloud_sync::` 241 通过（新增空库物化 / 最小占位 / 子表跳过 / 同轮竞态 / 错密分流 6 组用例）；`cargo test -p orbit-core --lib api::stats_api` 9 通过；桌面 `pnpm typecheck` + `pnpm test` 785 通过；`flutter analyze` 无 error；`pnpm frb` 生成物只含 `project_uuid` 字段变更；修复后 WebDAV 与 S3 两轮端到端重跑，阶段 4 六项判据全部通过（`all_pass=true`），S3 阶段 5 四项全部通过。
+
+### 变更：移动端「今天」模块更名「视图」（2026-11-10）
+
+底部首枚页签的页签根实际是快捷视图切换器（我的一天 / 今天 / 近7天 / 全部任务 …），旧名「今天」只覆盖默认档。功能模块配置页与底栏（读屏语义）/「更多」面板的展示名统一改为「视图」，图标由太阳换为层叠视图（`OrbitIcons.views` = `layers`），简介改为「在多个视图间切换任务列表。」；落盘 id（`today`）、路由 `/today` 与分支序保持不变，存量模块配置不失配。页头仍按当前选中视图显示档名（默认「今天」）。
+
+### 修复：阿里云 OSS 条件 PUT 必失败，S3 整轮 push 不可用（2026-11-10）
+
+S3 端到端实测：三端「测试连接」全绿，但「立即同步」必失败——`sync_history` 连续报 `HTTP 400 NotImplemented: A header you provided implies functionality that is not implemented.`。孤立请求头探针定位到 OSS 对 PUT 的 `If-Match` / `If-None-Match: *` 一律拒绝（基线 PUT 200，加这两个头 400；空 `x-amz-security-token`、`Expect` 均 200），而清单 CAS 正依赖这两个头，因此云端清单从未建立、`pulled/pushed` 恒为 0。
+
+- `S3Adapter` 按 `infer_service` 识别 OSS 方言：`Absent` 改用 `x-oss-forbid-overwrite: true`（服务端原子判存在，409 `FileAlreadyExists` 折成 `PreconditionFailed`）；`Match(token)` 改用 HEAD 读 ETag 比对后普通 PUT，竞态窗口由 `push::verify_manifest_write` 写后回读 + CAS 重试兜底；`None` 普通 PUT。AWS S3 / MinIO / WebDAV 的条件写路径**未改动**；
+- 新增 5 组回归用例：方言判定、Absent 不带 `If-*`、409 折叠、陈旧令牌只发 HEAD、有效令牌 PUT 不带 `If-Match`；
+- **验证**：`cargo test -p orbit-core --lib` 952 通过；`sync_fault_matrix` + `sync_cancel` 14 通过（含 `cas_conditional_headers_reach_the_wire_s3/webdav`）；桌面壳 `cargo check` 通过；真实 OSS 活体探针走生产 `upload_conditional` 得 `absent_first=Ok / absent_second=PreconditionFailed / match_stale=PreconditionFailed / match_valid=Ok`。
+
+### 优化：种子生成器补齐全量同步压测画像（2026-11-10）
+
+旧 `seed_demo_db` 实测只有 85,247 行，且 `todo_task_relations` / `todo_saved_filters` / `todo_templates` 三表为空。新增 `--profile sync-e2e`（默认仍是 `demo` 轻量档）与 `--relations` / `--saved-filters` / `--templates` 参数，补 Markdown 描述、长文本/换行/emoji 评论、优先级 0–3、持续提醒。实测 11 张表合计 214,109 行：子任务 58,628、标签关联 78,287、评论 19,201、提醒 14,601、关系 3,000、筛选器/模板各 20、墓碑 799。
+
+### 优化：自动同步确定性失败加指数退避（2026-11-10）
+
+桌面 60s tick 在 `last_synced_at` 不推进的设计下，同因失败会每轮重跑（实测 33 分钟 25 条 `failed`）。改为按连续失败次数退避 60s→120s→240s→480s→900s 封顶；手动同步成功后账本时间戳推进即自动解除退避，不会把「用户修好配置」卡在长等待里。
+
 ### 修复：Endpoint 首字符带不可见字符导致「设置对了却连不上」（2026-11-10）
 
 上一条把残缺 Endpoint 拦在配置期后，真机立刻暴露真凶：字段里看着完全正确的 `https://oss-cn-shenzhen.aliyuncs.com/` 仍被判「仅支持 http:// 或 https://，当前是 https://」——首字符其实是**肉眼不可见的 `U+FEFF`（BOM）**，从网页/文档粘贴时自带，`trim()` 去不掉（它不是 `char::is_whitespace`）。

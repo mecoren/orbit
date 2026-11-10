@@ -116,6 +116,10 @@ abstract final class OrbitIcons {
 
   static const IconData inbox = LucideIcons.inbox;
   static const IconData list = LucideIcons.list;
+
+  /// 预设视图集合（底部导航「视图」模块：今天 / 近7天 / 全部任务等切换入口）
+  static const IconData views = LucideIcons.layers;
+
   static const IconData listChecks = LucideIcons.listChecks;
   static const IconData kanban = LucideIcons.squareKanban;
   static const IconData table = LucideIcons.table;

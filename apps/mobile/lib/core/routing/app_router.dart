@@ -129,7 +129,7 @@ NoTransitionPage<void> tabRoot(
       ),
     );
 
-/// 「今天」页签：今日截止视图（无返回键，页头带日期副标）。
+/// 「视图」页签：任务视图切换器（默认落「今天」视图，无返回键，页头带日期副标）。
 ///
 /// 页头标题同时是**视图菜单**的触发件：实际显示的档名由
 /// `SubListScreen._viewOverride` 决定（本机偏好记住上次选的档），
@@ -152,7 +152,7 @@ final appRouter = GoRouter(
       builder: (context, state, navigationShell) =>
           HomeShell(navigationShell: navigationShell),
       branches: [
-        // ── 今天 ──
+        // ── 视图（默认落今天视图；路由沿用 /today）──
         StatefulShellBranch(
           routes: [
             GoRoute(
