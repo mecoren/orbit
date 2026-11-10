@@ -41,11 +41,17 @@
 //! cargo run --release -p orbit-core --example seed_demo_db -- \
 //!   --out target/seed/orbit.db --rows 3000
 //!
-//! # 同步端到端测试档：8 项目 / 4 万主任务 / 历史 1999–2018 / 300 附件
+//! # 同步端到端测试档：8 项目 / 4 万主任务 / 历史 1999–2018 / 300 附件 / 约 15 万行
 //! cargo run --release -p orbit-core --example seed_demo_db -- \
-//!   --out target/seed/orbit.db --rows 40000 --projects 8 \
+//!   --out target/seed/orbit.db --profile sync-e2e --rows 40000 --projects 8 \
 //!   --history 1999:2018 --labels 40 --attachments 300 --big-attachments 2
 //! ```
+//!
+//! `--profile demo`（默认）保留原来的轻量首屏画像；`--profile sync-e2e` 把
+//! 派生表铺到同步压测档：子任务 0–3 条/任务、标签关联 0–4 条/任务、
+//! 每 2 条任务 1 条评论、每 8 条任务 3 条提醒，并补齐任务关系 / 保存的筛选器 /
+//! 任务模板三张原本为空的表。派生表数量可用 `--relations` /
+//! `--saved-filters` / `--templates` 覆盖。
 //!
 //! 真机替换流程（**先备份原库**；<serial> 形如 `127.0.0.1:16384`）：
 //! ```text
@@ -89,6 +95,22 @@ struct Args {
     big_attachments: usize,
     /// 附件二进制输出目录
     attachments_out: PathBuf,
+    /// 数据画像档
+    profile: Profile,
+    /// sync-e2e 档：任务关系数
+    relations: usize,
+    /// sync-e2e 档：保存的筛选器数
+    saved_filters: usize,
+    /// sync-e2e 档：任务模板数
+    templates: usize,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Profile {
+    /// 轻量首屏（旧默认口径）
+    Demo,
+    /// 约 15 万行的同步压测画像
+    SyncE2e,
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -131,6 +153,14 @@ fn parse_args() -> Result<Args, String> {
         attachments: num("attachments", "0")?,
         big_attachments: num("big-attachments", "0")?,
         attachments_out,
+        profile: match get("profile", "demo").as_str() {
+            "demo" => Profile::Demo,
+            "sync-e2e" => Profile::SyncE2e,
+            other => return Err(format!("--profile 只支持 demo / sync-e2e，收到 {other}")),
+        },
+        relations: num("relations", "3000")?,
+        saved_filters: num("saved-filters", "20")?,
+        templates: num("templates", "20")?,
     })
 }
 
@@ -296,6 +326,12 @@ const COMMENT_BODIES: &[&str] = &[
     "这里需要再确认一次口径",
     "先按当前方案推进，下周复盘",
     "附：原始文件已放到共享目录",
+    // 同步压测档用：长文本 / 换行 / emoji，验加密分桶后逐字节还原
+    "复盘结论（长文本）：本轮把待办按项目、优先级、到期日三层拆开后重新排期，\
+     跨项目的阻塞关系单独登记，避免日历视图把同一天误判成冲突；下次迭代继续观察提醒触发窗口。\n\
+     负责人：A / B\n状态：待复核 🚧",
+    "多行备注：\n第一行：确认需求\n第二行：确认排期 ✅\n第三行：确认验收口径 📌",
+    "emoji 边界：中文 🇨🇳 / 组合 👨‍👩‍👧‍👦 / 数字键帽 1️⃣ / 结尾空行\n\n",
 ];
 
 #[tokio::main]
@@ -352,6 +388,8 @@ async fn run(args: &Args) -> Result<(), String> {
 
     let projects = build_projects(args.projects, args.history.0, args.history.1);
     let labels = build_labels(args.labels);
+    // sync-e2e 档：派生表按「每行任务」铺开，而不是 demo 档的稀疏抽样
+    let dense = args.profile == Profile::SyncE2e;
 
     // ── 项目（历史 + 父清单 + 子清单 + 归档）──
     let mut project_ids: Vec<i64> = Vec::with_capacity(projects.len());
@@ -412,7 +450,12 @@ async fn run(args: &Args) -> Result<(), String> {
     for i in 0..args.rows {
         let head = TITLE_HEADS[i % TITLE_HEADS.len()];
         let title = format!("{head} #{i:04}");
-        let description = if i % 3 == 0 {
+        let description = if dense && i % 5 == 0 {
+            Some(format!(
+                "## 任务说明 #{i}\n\n- **Markdown** 描述，唯一标记 `QP{i}`\n\
+                 - 待核对：跨端同步后换行与列表是否原样保留 📝\n- [ ] 验收项\n- [x] 已确认\n"
+            ))
+        } else if i % 3 == 0 {
             Some(format!(
                 "自动生成的任务描述 #{i}：用于验证列裁剪与关键词搜索（含唯一标记 QP{i}）。"
             ))
@@ -454,7 +497,12 @@ async fn run(args: &Args) -> Result<(), String> {
             repeat_month_mode,
             repeat_nth_week,
         ) = repeat_profile(i, now_ms, day);
-        let priority = (i % 6) as i32;
+        // 压测档锁在 0–3 四档（业务枚举全覆盖）；demo 档沿用 0–5
+        let priority = if dense {
+            (i % 4) as i32
+        } else {
+            (i % 6) as i32
+        };
         let is_favorite = i32::from(i % 11 == 0);
         // 历史任务不进「我的一天」（否则今日视图会被历史项目刷满）
         let my_day_date = if !is_history && i % 13 == 0 {
@@ -528,39 +576,48 @@ async fn run(args: &Args) -> Result<(), String> {
         }
         alive_task_ids.push(task_id);
 
-        // 子任务：每 4 条 2–3 个，部分完成
-        if i % 4 == 0 {
-            for s in 0..(2 + i % 2) {
-                let s_done = s == 0 && i % 8 == 0;
-                sqlx::query(
-                    "INSERT INTO todo_subtasks (uuid, task_id, title, done, done_at, position, is_deleted, \
-                        created_at, updated_at, version) \
-                     VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, 1)",
-                )
-                .bind(format!("seed-sub-{i:05}-{s}"))
-                .bind(task_id)
-                .bind(format!("子步骤 {s}：{head}"))
-                .bind(i32::from(s_done))
-                .bind(if s_done { Some(now_ms) } else { None })
-                .bind(s as f64)
-                .bind(now_ms)
-                .bind(now_ms)
-                .execute(&mut *tx)
-                .await
-                .map_err(|e| format!("子任务 {i}/{s}: {e}"))?;
-                counters.subtasks += 1;
-            }
+        // 子任务：demo 每 4 条 2–3 个；压测档 0–3 个/任务（均值 1.5 → 约 6 万）
+        let subtask_count = if dense {
+            (mix64((i as u64) ^ 0x1111_1111) % 4) as usize
+        } else if i % 4 == 0 {
+            2 + i % 2
+        } else {
+            0
+        };
+        for s in 0..subtask_count {
+            let s_done = s == 0 && i % 8 == 0;
+            sqlx::query(
+                "INSERT INTO todo_subtasks (uuid, task_id, title, done, done_at, position, is_deleted, \
+                    created_at, updated_at, version) \
+                 VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, 1)",
+            )
+            .bind(format!("seed-sub-{i:05}-{s}"))
+            .bind(task_id)
+            .bind(format!("子步骤 {s}：{head}"))
+            .bind(i32::from(s_done))
+            .bind(if s_done { Some(now_ms) } else { None })
+            .bind(s as f64)
+            .bind(now_ms)
+            .bind(now_ms)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| format!("子任务 {i}/{s}: {e}"))?;
+            counters.subtasks += 1;
         }
 
-        // 提醒：每 9 条 1 条（未来 1–3 天，避免落进已过期窗口）
-        if i % 9 == 0 {
+        // 提醒：demo 每 9 条 1 条；压测档每 8 条 3 条（约 1.5 万）
+        // is_constant 覆盖「响到完成为止」的持续提醒分支
+        let has_reminder = if dense { i % 8 < 3 } else { i % 9 == 0 };
+        if has_reminder {
             sqlx::query(
-                "INSERT INTO todo_reminders (uuid, task_id, remind_at, is_deleted, created_at, updated_at, version) \
-                 VALUES (?, ?, ?, 0, ?, ?, 1)",
+                "INSERT INTO todo_reminders (uuid, task_id, remind_at, is_constant, is_deleted, \
+                    created_at, updated_at, version) \
+                 VALUES (?, ?, ?, ?, 0, ?, ?, 1)",
             )
             .bind(format!("seed-rem-{i:05}"))
             .bind(task_id)
             .bind(now_ms + ((i as i64 % 3) + 1) * day)
+            .bind(i32::from(i % 17 == 0))
             .bind(now_ms)
             .bind(now_ms)
             .execute(&mut *tx)
@@ -569,15 +626,17 @@ async fn run(args: &Args) -> Result<(), String> {
             counters.reminders += 1;
         }
 
-        // 评论：每 20 条 1 条
-        if i % 20 == 0 {
+        // 评论：demo 每 20 条 1 条；压测档每 2 条 1 条（约 2 万）
+        let has_comment = if dense { i % 2 == 0 } else { i % 20 == 0 };
+        if has_comment {
+            let body_idx = if dense { i / 2 } else { i / 20 };
             sqlx::query(
                 "INSERT INTO todo_comments (uuid, task_id, content, is_deleted, created_at, updated_at, version) \
                  VALUES (?, ?, ?, 0, ?, ?, 1)",
             )
             .bind(format!("seed-cmt-{i:05}"))
             .bind(task_id)
-            .bind(COMMENT_BODIES[(i / 20) % COMMENT_BODIES.len()])
+            .bind(COMMENT_BODIES[body_idx % COMMENT_BODIES.len()])
             .bind(now_ms)
             .bind(now_ms)
             .execute(&mut *tx)
@@ -586,25 +645,30 @@ async fn run(args: &Args) -> Result<(), String> {
             counters.comments += 1;
         }
 
-        // 标签：每 3 条挂 1–2 个
-        if i % 3 == 0 {
-            let n = 1 + i % 2;
-            for t in 0..n {
-                let label_id = label_ids[(i + t) % label_ids.len()];
-                sqlx::query(
-                    "INSERT INTO todo_task_labels (uuid, task_id, label_id, is_deleted, created_at, updated_at, version) \
-                     VALUES (?, ?, ?, 0, ?, ?, 1)",
-                )
-                .bind(format!("seed-tl-{i:05}-{t}"))
-                .bind(task_id)
-                .bind(label_id)
-                .bind(now_ms)
-                .bind(now_ms)
-                .execute(&mut *tx)
-                .await
-                .map_err(|e| format!("标签关联 {i}/{t}: {e}"))?;
-                counters.task_labels += 1;
-            }
+        // 标签：demo 每 3 条挂 1–2 个；压测档 0–4 个/任务（均值 2 → 约 8 万）
+        // 步长 7 与常见标签数互质，保证同一任务内不重复挂同一个标签
+        let label_count = if dense {
+            (mix64((i as u64) ^ 0x2222_2222) % 5) as usize
+        } else if i % 3 == 0 {
+            1 + i % 2
+        } else {
+            0
+        };
+        for t in 0..label_count {
+            let label_id = label_ids[(i + t * 7) % label_ids.len()];
+            sqlx::query(
+                "INSERT INTO todo_task_labels (uuid, task_id, label_id, is_deleted, created_at, updated_at, version) \
+                 VALUES (?, ?, ?, 0, ?, ?, 1)",
+            )
+            .bind(format!("seed-tl-{i:05}-{t}"))
+            .bind(task_id)
+            .bind(label_id)
+            .bind(now_ms)
+            .bind(now_ms)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| format!("标签关联 {i}/{t}: {e}"))?;
+            counters.task_labels += 1;
         }
     }
 
@@ -656,6 +720,86 @@ async fn run(args: &Args) -> Result<(), String> {
         }
     }
 
+    // ── 压测档补齐三张原本为空的可同步表 ──
+    if dense {
+        // 任务关系：blocks / relates_to 各半，跨项目复用同一批活任务
+        if alive_task_ids.len() >= 2 {
+            for r in 0..args.relations {
+                let a = alive_task_ids[(mix64(r as u64) as usize) % alive_task_ids.len()];
+                let b = alive_task_ids
+                    [(mix64((r as u64) ^ 0xBEEF_BEEF) as usize) % alive_task_ids.len()];
+                if a == b {
+                    continue;
+                }
+                let relation_type = if r % 2 == 0 { "blocks" } else { "relates_to" };
+                sqlx::query(
+                    "INSERT INTO todo_task_relations \
+                       (uuid, task_id, other_task_id, relation_type, is_deleted, \
+                        created_at, updated_at, version) \
+                     VALUES (?, ?, ?, ?, 0, ?, ?, 1)",
+                )
+                .bind(format!("seed-rel-{r:06}"))
+                .bind(a)
+                .bind(b)
+                .bind(relation_type)
+                .bind(now_ms)
+                .bind(now_ms)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| format!("任务关系 {r}: {e}"))?;
+                counters.relations += 1;
+            }
+        }
+
+        for f in 0..args.saved_filters {
+            let conditions = format!(
+                "{{\"priority_min\":{},\"due_overdue\":{},\"favorite_only\":{}}}",
+                f % 4,
+                f % 2 == 0,
+                f % 3 == 0
+            );
+            sqlx::query(
+                "INSERT INTO todo_saved_filters \
+                   (uuid, name, conditions, sort_order, is_deleted, created_at, updated_at, version) \
+                 VALUES (?, ?, ?, ?, 0, ?, ?, 1)",
+            )
+            .bind(format!("seed-filter-{f:03}"))
+            .bind(format!("保存的筛选器 {f:02}"))
+            .bind(conditions)
+            .bind(f as i32)
+            .bind(now_ms)
+            .bind(now_ms)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| format!("筛选器 {f}: {e}"))?;
+            counters.saved_filters += 1;
+        }
+
+        for t in 0..args.templates {
+            let payload = format!(
+                "{{\"title\":\"模板 {t:02}\",\"notes\":\"跨端同步校验 📝\\n第二行\",\
+                 \"priority\":{},\"due_offset_days\":{},\"subtasks\":[\"步骤一\",\"步骤二\"]}}",
+                t % 4,
+                t % 7
+            );
+            sqlx::query(
+                "INSERT INTO todo_templates \
+                   (uuid, name, payload, sort_order, is_deleted, created_at, updated_at, version) \
+                 VALUES (?, ?, ?, ?, 0, ?, ?, 1)",
+            )
+            .bind(format!("seed-tpl-{t:03}"))
+            .bind(format!("任务模板 {t:02}"))
+            .bind(payload)
+            .bind(t as i32)
+            .bind(now_ms)
+            .bind(now_ms)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| format!("模板 {t}: {e}"))?;
+            counters.templates += 1;
+        }
+    }
+
     tx.commit().await.map_err(|e| e.to_string())?;
     drop(conn);
     // WAL 收回到主文件：push 到设备时只需传一个 .db
@@ -667,8 +811,10 @@ async fn run(args: &Args) -> Result<(), String> {
 
     let bytes = std::fs::metadata(&args.out).map(|m| m.len()).unwrap_or(0);
     println!(
-        "SEED_OK out={} bytes={} projects={} labels={} tasks={} subtasks={} reminders={} \
-         comments={} task_labels={} trashed={} attachments={} attachment_links={} attachments_dir={}",
+        "SEED_OK profile={} out={} bytes={} projects={} labels={} tasks={} subtasks={} reminders={} \
+         comments={} task_labels={} relations={} saved_filters={} templates={} trashed={} \
+         attachments={} attachment_links={} attachments_dir={}",
+        if dense { "sync-e2e" } else { "demo" },
         args.out.display(),
         bytes,
         projects.len(),
@@ -678,6 +824,9 @@ async fn run(args: &Args) -> Result<(), String> {
         counters.reminders,
         counters.comments,
         counters.task_labels,
+        counters.relations,
+        counters.saved_filters,
+        counters.templates,
         counters.trashed,
         counters.attachments,
         counters.attachment_links,
@@ -696,6 +845,9 @@ struct Counters {
     trashed: usize,
     attachments: usize,
     attachment_links: usize,
+    relations: usize,
+    saved_filters: usize,
+    templates: usize,
 }
 
 /// 任务时间档：历史项目落在 `--history` 区间；近期项目每 3 条有 1 条落在
