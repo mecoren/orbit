@@ -107,12 +107,26 @@ CustomTransitionPage<void> pageSlideFromRight(
 
 /// 页签根页：无转场直切（go_router pageKey 复用，切换不重播动画）
 ///
-/// 统一套 [OrbitBranchRoot]，让 [OrbitPageHeader] 识别「这是模块分支根页」，
-/// 在存在上一个操作页面时长出返回箭头；栈内推入页不套这层，仍走原生 pop。
-NoTransitionPage<void> tabRoot(Widget child, {LocalKey? key}) =>
+/// 统一套 [OrbitBranchRoot]，让 [OrbitPageHeader] 识别「这是模块分支根页」；
+/// 栈内推入页不套这层，仍走原生 pop。
+///
+/// [showBackOnHistory] 只关**页头左侧返回箭头**，不动返回能力：底栏页签是
+/// 平级导航，七个模块首页传 false（左上角只留各页自己的 leading/标题），
+/// 系统返回键 / 返回手势仍由 [goBack] 逐层回退；回收站等非常驻模块保持
+/// 默认 true。
+NoTransitionPage<void> tabRoot(
+  Widget child, {
+  LocalKey? key,
+  bool showBackOnHistory = true,
+}) =>
     NoTransitionPage<void>(
       key: key,
-      child: OrbitTransientPopGuard(child: OrbitBranchRoot(child: child)),
+      child: OrbitTransientPopGuard(
+        child: OrbitBranchRoot(
+          showBackOnHistory: showBackOnHistory,
+          child: child,
+        ),
+      ),
     );
 
 /// 「今天」页签：今日截止视图（无返回键，页头带日期副标）。
@@ -143,7 +157,8 @@ final appRouter = GoRouter(
           routes: [
             GoRoute(
               path: '/today',
-              pageBuilder: (context, state) => tabRoot(_todayTab()),
+              pageBuilder: (context, state) =>
+                  tabRoot(_todayTab(), showBackOnHistory: false),
             ),
           ],
         ),
@@ -152,8 +167,11 @@ final appRouter = GoRouter(
           routes: [
             GoRoute(
               path: '/todo',
-              pageBuilder: (context, state) =>
-                  tabRoot(const SidebarScreen(), key: state.pageKey),
+              pageBuilder: (context, state) => tabRoot(
+                const SidebarScreen(),
+                key: state.pageKey,
+                showBackOnHistory: false,
+              ),
             ),
             GoRoute(
               path: '/todo/tasks',
@@ -213,8 +231,11 @@ final appRouter = GoRouter(
           routes: [
             GoRoute(
               path: '/todo/calendar',
-              pageBuilder: (context, state) =>
-                  tabRoot(const CalendarScreen(), key: state.pageKey),
+              pageBuilder: (context, state) => tabRoot(
+                const CalendarScreen(),
+                key: state.pageKey,
+                showBackOnHistory: false,
+              ),
             ),
           ],
         ),
@@ -223,8 +244,11 @@ final appRouter = GoRouter(
           routes: [
             GoRoute(
               path: '/todo/matrix',
-              pageBuilder: (context, state) =>
-                  tabRoot(const MatrixScreen(), key: state.pageKey),
+              pageBuilder: (context, state) => tabRoot(
+                const MatrixScreen(),
+                key: state.pageKey,
+                showBackOnHistory: false,
+              ),
             ),
           ],
         ),
@@ -236,6 +260,7 @@ final appRouter = GoRouter(
               pageBuilder: (context, state) => tabRoot(
                 const StatsScreen(showBack: false),
                 key: state.pageKey,
+                showBackOnHistory: false,
               ),
             ),
           ],
@@ -248,6 +273,7 @@ final appRouter = GoRouter(
               pageBuilder: (context, state) => tabRoot(
                 const SearchScreen(showBack: false),
                 key: state.pageKey,
+                showBackOnHistory: false,
               ),
             ),
           ],
@@ -272,6 +298,7 @@ final appRouter = GoRouter(
               pageBuilder: (context, state) => tabRoot(
                 const SettingsScreen(showBack: false),
                 key: state.pageKey,
+                showBackOnHistory: false,
               ),
             ),
           ],

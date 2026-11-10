@@ -3,17 +3,34 @@ import 'package:flutter/widgets.dart';
 /// 分支根页标记：由 [app_router.dart] 的 `tabRoot` 统一套在八个模块分支根页上。
 ///
 /// [OrbitPageHeader] 借此区分「分支根页」与「栈内推入页」——只有前者在
-/// [OrbitShellBack.hasPrevious] 为真时长出返回箭头，后者继续走 Navigator
-/// 原生 `maybePop`（推入页的上一页就是 go_router 栈里那一页）。
+/// [OrbitShellBack.hasPrevious] 为真且 [showBackOnHistory] 为 true 时长出
+/// 返回箭头，后者继续走 Navigator 原生 `maybePop`（推入页的上一页就是
+/// go_router 栈里那一页）。
 class OrbitBranchRoot extends InheritedWidget {
-  const OrbitBranchRoot({super.key, required super.child});
+  const OrbitBranchRoot({
+    super.key,
+    this.showBackOnHistory = true,
+    required super.child,
+  });
+
+  /// 有页级历史时是否在页头左上角长出返回箭头。
+  ///
+  /// 页签根（底栏模块首页）传 false：**返回能力仍在**（系统返回键 / 返回手势
+  /// 由 [orbit_back_dispatch.dart] 与 HomeShell 的单一 PopScope 承担），只是
+  /// 页头不再摆返回按钮——底栏页签本身就是平级导航，左上角箭头语义冗余。
+  /// 「更多」面板里的回收站等非常驻模块仍保留箭头（默认 true）。
+  final bool showBackOnHistory;
+
+  /// 当前 context 所在的分支根（不在分支根内返回 null）
+  static OrbitBranchRoot? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<OrbitBranchRoot>();
 
   /// 当前 context 是否落在一个模块分支根页内
-  static bool isRoot(BuildContext context) =>
-      context.dependOnInheritedWidgetOfExactType<OrbitBranchRoot>() != null;
+  static bool isRoot(BuildContext context) => maybeOf(context) != null;
 
   @override
-  bool updateShouldNotify(covariant OrbitBranchRoot oldWidget) => false;
+  bool updateShouldNotify(covariant OrbitBranchRoot oldWidget) =>
+      showBackOnHistory != oldWidget.showBackOnHistory;
 }
 
 /// 壳层的「上一页」上下文：下发可回退状态与统一返回动作

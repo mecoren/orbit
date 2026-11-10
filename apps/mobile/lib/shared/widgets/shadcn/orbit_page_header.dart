@@ -235,8 +235,11 @@ class OrbitPageHeader extends StatelessWidget implements PreferredSizeWidget {
         onPressed: onBack ?? () => Navigator.of(context).maybePop(),
       );
     } else {
-      // 分支根页没有可 pop 的栈页：有页级历史时改走壳层统一回退。
-      final shellBack = OrbitBranchRoot.isRoot(context)
+      // 分支根页没有可 pop 的栈页：有页级历史且该分支允许长箭头时，改走
+      // 壳层统一回退。页签根（底栏模块首页）标记为不长箭头——返回能力由
+      // HomeShell 的单一 PopScope 承担，页头只剩各页自己的 leading 插槽。
+      final branchRoot = OrbitBranchRoot.maybeOf(context);
+      final shellBack = branchRoot != null && branchRoot.showBackOnHistory
           ? OrbitShellBack.maybeOf(context)
           : null;
       if (shellBack != null && shellBack.hasPrevious) {

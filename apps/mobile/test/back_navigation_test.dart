@@ -21,6 +21,7 @@ import 'package:orbit/services/local_prefs.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_bottom_nav.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_dropdown_panel.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_fab.dart';
+import 'package:orbit/shared/widgets/sync_status_button.dart';
 import 'support/orbit_test_app.dart';
 
 Widget _wrap(MockOrbitBridge bridge) => ProviderScope(
@@ -114,7 +115,7 @@ void main() {
     expect(popToDesktop, 1);
   });
 
-  testWidgets('分支根页按历史长出返回箭头，点击回进站前的模块', (tester) async {
+  testWidgets('页签根不摆返回箭头，系统返回仍回到进站前的模块', (tester) async {
     await _pump(tester, _bridge());
     // 冷启动无历史：启动首页不渲染返回箭头
     expect(find.byTooltip('返回'), findsNothing);
@@ -132,9 +133,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('总任务'), findsOneWidget);
 
-    expect(find.byTooltip('返回'), findsOneWidget);
-    await tester.tap(find.byTooltip('返回'));
-    await tester.pumpAndSettle();
+    // 底栏页签是平级导航：页头左上角不摆返回钮，返回能力归系统返回
+    expect(find.byTooltip('返回'), findsNothing);
+    await _back(tester);
 
     expect(find.byType(SidebarScreen), findsOneWidget);
     expect(popToDesktop, 0);
@@ -213,14 +214,16 @@ void main() {
     expect(popToDesktop, 0);
   });
 
-  testWidgets('清单分支根（带自定义 leading）仍显示返回箭头', (tester) async {
+  testWidgets('清单页签根（带自定义 leading）不摆返回箭头，云同步钮独占左槽',
+      (tester) async {
     await _pump(tester, _bridge());
     expect(find.byTooltip('返回'), findsNothing);
 
     await _tapTab(tester, OrbitIcons.list);
     expect(find.byType(SidebarScreen), findsOneWidget);
-    // 清单页头左侧是云同步状态钮，不能因此吞掉返回入口
-    expect(find.byTooltip('返回'), findsOneWidget);
+    // 页签根不再长返回箭头；自定义 leading（云同步状态钮）独占左槽
+    expect(find.byTooltip('返回'), findsNothing);
+    expect(find.byType(SyncStatusButton), findsOneWidget);
   });
 
   testWidgets('分支内 push 页 + 「更多」菜单：首次返回只关菜单、不 pop 子页', (tester) async {
