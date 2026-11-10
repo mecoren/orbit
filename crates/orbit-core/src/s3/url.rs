@@ -43,18 +43,74 @@ pub fn uri_encode(s: &str, encode_slash: bool) -> String {
     out
 }
 
-/// 规范化 endpoint：补全 scheme、去掉末尾斜杠
+/// 规范化 endpoint：补全 scheme、统一小写 scheme、去掉末尾斜杠
 ///
 /// 与 Dart `S3SyncAdapter._normalizeEndpoint` 行为一致。
+///
+/// scheme 判定**大小写不敏感**（2026-11-10）：移动端输入法/剪贴板常给出
+/// `HTTPS://host`，大小写敏感的 `starts_with` 会把它当无 scheme 输入再补一个
+/// `https://`，拼出 `https://HTTPS://host`——`Url::parse` 取 authority 里的
+/// 字面量 `HTTPS:` 当主机名，最终请求打到 `https://<bucket>.https/` 这种
+/// 不存在的主机，报错与真实配置毫无关系。
 pub fn normalize_endpoint(endpoint: &str) -> String {
     let mut s = endpoint.trim().to_string();
-    if !s.starts_with("http://") && !s.starts_with("https://") {
+    let has_scheme = s
+        .get(..8)
+        .map(|p| p.eq_ignore_ascii_case("https://"))
+        .unwrap_or(false)
+        || s.get(..7)
+            .map(|p| p.eq_ignore_ascii_case("http://"))
+            .unwrap_or(false);
+    if !has_scheme {
         s = format!("https://{}", s);
+    }
+    if let Some(pos) = s.find("://") {
+        let scheme = s[..pos].to_ascii_lowercase();
+        s = format!("{}{}", scheme, &s[pos..]);
     }
     if s.ends_with('/') {
         s.pop();
     }
     s
+}
+
+/// endpoint 结构自检：`None` = 可用，`Some(原因)` = 配置期就该拦下
+///
+/// 只要 `build_url` 拿不到「带 scheme + 带主机名」的 endpoint，
+/// virtual-hosted-style 拼接就会把残缺片段当主机名：Endpoint 只填到
+/// `https://`（或 `https`、`HTTPS://`）时实际请求的是
+/// `https://<bucket>.https/?list-type=2`（2026-11-10 移动端实测报错
+/// 「error sending request for url (https://wait-test.https/?li…)」），
+/// 用户拿着一个完全正确的 OSS 地址却看到「网络错误」。
+/// 故在校验层（`engine::validate_config`）与构造层（`engine::create_adapter`）
+/// 统一拦截，报可读的配置错误。
+pub fn endpoint_problem(endpoint: &str) -> Option<String> {
+    let trimmed = endpoint.trim();
+    // 显式写了非 http(s) 协议：`normalize_endpoint` 会再补一个 `https://`，
+    // 拼出的主机名与用户意图无关，必须按协议拦下
+    if let Some(pos) = trimmed.find("://") {
+        let scheme = trimmed[..pos].to_ascii_lowercase();
+        if !matches!(scheme.as_str(), "http" | "https") {
+            return Some(format!("仅支持 http:// 或 https://，当前是 {scheme}://"));
+        }
+    }
+    let normalized = normalize_endpoint(trimmed);
+    let parsed = match url::Url::parse(&normalized) {
+        Ok(u) => u,
+        Err(e) => return Some(format!("不是有效的 URL（{e}）")),
+    };
+    // 残缺输入 `https` 会被补成 `https://https`，主机名恰好是字面量
+    // "https"——真实主机名不会长这样，按「没填主机」处理
+    let host_ok = parsed
+        .host_str()
+        .map(|h| {
+            !h.is_empty() && !h.eq_ignore_ascii_case("http") && !h.eq_ignore_ascii_case("https")
+        })
+        .unwrap_or(false);
+    if !host_ok {
+        return Some("缺少主机名（应形如 https://oss-cn-shenzhen.aliyuncs.com）".to_string());
+    }
+    None
 }
 
 /// 判断是否应使用 path-style（Path-Style）访问
@@ -349,5 +405,70 @@ mod tests {
             url,
             "https://minio.example.com/b/tables/todo/1.orsync?uploadId=a%2Bb%2Fc%3D"
         );
+    }
+
+    // ========================================================================
+    // endpoint 残缺输入（2026-11-10 移动端实测）
+    //
+    // Endpoint 只填到 `https://`（或遗留大写 scheme）时，virtual-hosted-style
+    // 拼接把残缺片段当主机名，请求打到 `https://<bucket>.https/`，
+    // 用户看到的是与配置无关的「网络错误」。
+    // ========================================================================
+
+    #[test]
+    fn normalize_endpoint_scheme_is_case_insensitive() {
+        // 大写 scheme 不得被再补一个 https://（会拼出 https://HTTPS://host）
+        assert_eq!(
+            normalize_endpoint("HTTPS://oss-cn-shenzhen.aliyuncs.com/"),
+            "https://oss-cn-shenzhen.aliyuncs.com"
+        );
+        assert_eq!(
+            normalize_endpoint("Http://192.168.1.10:9000"),
+            "http://192.168.1.10:9000"
+        );
+        // 无 scheme 仍按原约定补 https://
+        assert_eq!(
+            normalize_endpoint("minio.example.com:9000"),
+            "https://minio.example.com:9000"
+        );
+    }
+
+    #[test]
+    fn build_url_degenerate_endpoint_fabricates_scheme_host() {
+        // 记录历史行为（回归锚点）：残缺 endpoint 会产出 `<bucket>.https`，
+        // 真实链路已由 endpoint_problem 在配置期拦下，此处仅锁死不再恶化
+        let url = build_url("https://", "wait-test", "", false, &[]);
+        assert_eq!(url, "https://wait-test.https");
+    }
+
+    #[test]
+    fn endpoint_problem_accepts_real_endpoints() {
+        for ok in [
+            "https://oss-cn-shenzhen.aliyuncs.com",
+            "https://oss-cn-shenzhen.aliyuncs.com/",
+            "HTTPS://oss-cn-shenzhen.aliyuncs.com/",
+            "http://192.168.1.10:9000",
+            "minio.example.com:9000",
+        ] {
+            assert_eq!(endpoint_problem(ok), None, "应判为可用: {ok}");
+        }
+    }
+
+    #[test]
+    fn endpoint_problem_rejects_truncated_and_non_http() {
+        for (bad, hint) in [
+            ("", "不是有效的 URL"),
+            ("   ", "不是有效的 URL"),
+            ("https", "缺少主机名"),
+            ("https://", "不是有效的 URL"),
+            ("HTTPS://", "不是有效的 URL"),
+            ("ftp://oss-cn-shenzhen.aliyuncs.com", "仅支持 http://"),
+        ] {
+            let problem = endpoint_problem(bad).expect("残缺 endpoint 必须被拦下");
+            assert!(
+                problem.contains(hint),
+                "原因应含「{hint}」，实际: {problem}（输入: {bad}）"
+            );
+        }
     }
 }

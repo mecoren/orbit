@@ -7,7 +7,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::s3::url::infer_use_path_style;
+use crate::s3::url::{endpoint_problem, infer_use_path_style};
 use crate::sync::error::SyncError;
 use crate::sync_adapters::s3_adapter::{S3Adapter, S3Config};
 use crate::sync_adapters::traits::SyncAdapter;
@@ -42,6 +42,15 @@ pub struct SyncConfig {
 
 /// 创建同步适配器
 pub fn create_adapter(config: &SyncConfig) -> Result<Box<dyn SyncAdapter>, SyncError> {
+    // 兜底：`create_adapter` 也是备份/GC 等不经 `validate_config` 的入口，
+    // 残缺 endpoint 必须在构造期拦下，不能让它拼出 `<bucket>.https` 这类
+    // 不存在的主机再报「网络错误」（详见 `s3::url::endpoint_problem` 注释）
+    if let Some(problem) = endpoint_problem(&config.endpoint) {
+        return Err(SyncError::Config {
+            field: "endpoint".to_string(),
+            message: problem,
+        });
+    }
     match config.adapter_type.as_str() {
         "s3" => {
             let s3_config = S3Config {
@@ -83,6 +92,15 @@ pub fn validate_config(config: &SyncConfig) -> Result<(), SyncError> {
         return Err(SyncError::Config {
             field: "endpoint".to_string(),
             message: "endpoint 不能为空".to_string(),
+        });
+    }
+    // 结构自检（2026-11-10）：只填到 `https://` / `https` 这类残缺输入会被
+    // virtual-hosted-style 拼成 `https://<bucket>.https/`，报错是「网络错误」
+    // ——与真实配置毫无关系。配置期拦下并给出正确形态示例。
+    if let Some(problem) = endpoint_problem(&config.endpoint) {
+        return Err(SyncError::Config {
+            field: "endpoint".to_string(),
+            message: format!("endpoint 无效：{problem}"),
         });
     }
     if config.device_id.is_empty() {
@@ -218,5 +236,65 @@ mod tests {
         let mut cfg = valid_s3_config();
         cfg.region = "  ".to_string();
         assert!(validate_config(&cfg).is_err());
+    }
+
+    // ========================================================================
+    // endpoint 残缺输入（2026-11-10 移动端实测）
+    //
+    // Endpoint 只填到 scheme（`https://` / `https` / `HTTPS://`）时，此前校验
+    // 只看「非空」放行，virtual-hosted-style 拼出 `https://<bucket>.https/`，
+    // 用户对着一个正确的 OSS 地址收到「网络错误: GET 请求失败」。
+    // ========================================================================
+
+    #[test]
+    fn validate_config_rejects_truncated_endpoint() {
+        for bad in [
+            "https://",
+            "https",
+            "HTTPS://",
+            "ftp://oss-cn-shenzhen.aliyuncs.com",
+        ] {
+            let mut cfg = valid_s3_config();
+            cfg.endpoint = bad.to_string();
+            let err = validate_config(&cfg).expect_err("残缺 endpoint 必须在配置期拦下");
+            match err {
+                SyncError::Config { field, message } => {
+                    assert_eq!(field, "endpoint", "错误须指向 endpoint 字段（输入: {bad}）");
+                    assert!(
+                        message.contains("endpoint 无效"),
+                        "提示须可自助修复，实际: {message}"
+                    );
+                }
+                other => panic!("应为配置错误，实际: {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn validate_config_accepts_oss_virtual_hosted_endpoint_with_trailing_slash() {
+        // 移动端实测配方：OSS 默认域名 + 尾斜杠 + 大写 scheme 都算合法
+        for ok in [
+            "https://oss-cn-shenzhen.aliyuncs.com/",
+            "https://oss-cn-shenzhen.aliyuncs.com",
+            "HTTPS://oss-cn-shenzhen.aliyuncs.com/",
+        ] {
+            let mut cfg = valid_s3_config();
+            cfg.endpoint = ok.to_string();
+            assert!(validate_config(&cfg).is_ok(), "应通过校验: {ok}");
+        }
+    }
+
+    #[test]
+    fn create_adapter_rejects_truncated_endpoint_without_validate() {
+        // 备份/GC 等入口可能不经 validate_config：构造层必须自己兜住，
+        // 否则会带着 `https://<bucket>.https/` 出去发请求
+        let mut cfg = valid_s3_config();
+        cfg.endpoint = "https://".to_string();
+        match create_adapter(&cfg) {
+            Ok(_) => panic!("构造层必须拦下残缺 endpoint"),
+            Err(err) => {
+                assert!(matches!(err, SyncError::Config { field, .. } if field == "endpoint"));
+            }
+        }
     }
 }

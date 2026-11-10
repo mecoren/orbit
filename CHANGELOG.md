@@ -17,6 +17,15 @@
 
 ## [Unreleased]
 
+### 修复：残缺 Endpoint 报「网络错误」而非配置错误（2026-11-10）
+
+移动端「云同步连接」实测：Endpoint 只填到 `https://`（或遗留 `https` / 大写 `HTTPS://`）时，virtual-hosted-style 拼接把残缺片段当主机名，实际请求 `https://wait-test.https/?list-type=2`，界面只报「网络错误: GET 请求失败: error sending request for url (…)」——用户对着一个正确的 OSS 地址却无从下手。
+
+- **配置期拦截**：新增 `s3::url::endpoint_problem()`，`engine::validate_config` 与 `engine::create_adapter`（备份/GC 等不经校验的入口）双处调用，残缺输入直接回报「配置错误: endpoint - endpoint 无效：缺少主机名（应形如 https://oss-cn-shenzhen.aliyuncs.com）」；
+- **scheme 大小写不敏感**：`normalize_endpoint` 不再把 `HTTPS://host` 当无 scheme 输入再补一层（此前会拼出 `https://HTTPS://host`，主机名解析成字面量 `https`），并统一小写化 scheme；
+- **非 http(s) 协议**：`ftp://…` 这类显式协议直接按配置错误拒绝，不再被前缀改写后发到不相干的主机；
+- **验证**：`cargo test -p orbit-core --lib` 943 通过（新增 `endpoint_problem` / 配置校验 / 构造层回归用例）。
+
 ### 优化：桌面更新日志改为列表 + 原地详情（2026-11-09）
 
 「关于 → 更新日志」此前是 Accordion 手风琴（头部条目默认展开、摘要挤在触发行里），与刚重做的开源组件区版式割裂。本轮按开源组件页样式重建：
