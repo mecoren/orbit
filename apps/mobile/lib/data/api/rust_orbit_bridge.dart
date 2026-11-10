@@ -841,6 +841,8 @@ class RustOrbitBridge implements OrbitBridge {
       syncOnChange: v.syncOnChange,
       skipTlsVerify: v.skipTlsVerify,
       timeoutSeconds: v.timeoutSeconds,
+      // F80：令牌仅下发「是否已设置」，不留空省略会永远显示未设置
+      sessionTokenSet: v.sessionTokenSet,
       lastSyncedAt: v.lastSyncedAt,
     );
   }
@@ -864,6 +866,7 @@ class RustOrbitBridge implements OrbitBridge {
       syncOnChange: saved.syncOnChange,
       skipTlsVerify: saved.skipTlsVerify,
       timeoutSeconds: saved.timeoutSeconds,
+      sessionTokenSet: saved.sessionTokenSet,
       lastSyncedAt: saved.lastSyncedAt,
     );
   }
@@ -2333,6 +2336,8 @@ class RustOrbitBridge implements OrbitBridge {
         syncOnChange: m['sync_on_change'] as bool?,
         skipTlsVerify: m['skip_tls_verify'] as bool?,
         timeoutSeconds: m['timeout_seconds'] as int?,
+        // F80：STS 会话令牌必须随请求进 Rust——漏传时配了令牌的 S3 全部 403
+        sessionToken: m['session_token'] as String?,
       );
 }
 

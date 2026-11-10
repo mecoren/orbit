@@ -17,6 +17,14 @@
 
 ## [Unreleased]
 
+### 修复：移动端 STS 会话令牌未过桥、令牌状态提示恒「未设置」（2026-11-10）
+
+盘查云同步连接页时发现两处桥接漏字段，双端表现不一致：
+
+- **STS 令牌**：`rust_orbit_bridge` 的 `_toGenConfigInput` 未映射 `session_token`——页面 `_buildInput` 与 mock 桥都带着该键，真机链路却把它丢掉，配了 STS 临时凭据的 S3 会全量 403（F80 的令牌签名/请求头逻辑在 core 侧已就绪，只是值没进来）；
+- **令牌状态**：`syncConfigGet` / `syncConfigSave` 未映射 `sessionTokenSet`，页面「已设置，留空沿用」提示永远不出现；
+- **验证**：`flutter analyze`、`bridge_sync_methods_test` / `sync_settings_page_test` / `settings_sync_test` 全绿。
+
 ### 修复：残缺 Endpoint 报「网络错误」而非配置错误（2026-11-10）
 
 移动端「云同步连接」实测：Endpoint 只填到 `https://`（或遗留 `https` / 大写 `HTTPS://`）时，virtual-hosted-style 拼接把残缺片段当主机名，实际请求 `https://wait-test.https/?list-type=2`，界面只报「网络错误: GET 请求失败: error sending request for url (…)」——用户对着一个正确的 OSS 地址却无从下手。
