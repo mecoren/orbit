@@ -310,6 +310,30 @@ pub(crate) async fn probe_data_key_with_manifest(
     }
 }
 
+/// 探针阶段的 `KeyMismatch` 分流：从未成功同步过的设备判为密码错误
+///
+/// 探针在 pull 之前运行（快速失败），所以 pull 侧的首次同步分流拦截不到它。
+/// 本机从未成功同步过时，解不开云端清单只可能是「第一次填错同步密码」，
+/// 应引导重输密码（`password` 分类）；已同步过的设备才走 KeyMismatch 恢复流程。
+fn classify_first_sync_key_error(
+    err: CloudSyncError,
+    state_store: &SyncStateStore,
+) -> CloudSyncError {
+    if !err.is_key_mismatch_error() {
+        return err;
+    }
+    match state_store.load() {
+        Ok(state) if crate::cloud_sync::never_synced(&state) => {
+            log::info!(
+                "[probe] 首次同步解不开云端清单：判为同步密码不一致（引导重输），\
+                 而非 KeyMismatch 覆盖恢复"
+            );
+            crate::cloud_sync::first_sync_password_error()
+        }
+        _ => err,
+    }
+}
+
 /// 云端同步引擎
 ///
 /// 线程安全：内部所有字段都是 `Arc` 或 `Send + Sync`，可跨线程共享。
@@ -1249,8 +1273,10 @@ impl SyncEngine {
         // 极端场景下云端 crypto/config 可能与云端数据用的 Key 不一致
         // （历史污染、人工修改等），探针能提前发现并快速失败，避免进入 pull
         // 流水后才报 KeyMismatch。
-        if let Some(data_key) = self.crypto.get_data_key() {
-            probe_data_key_with_manifest(raw_adapter, base_path, &data_key).await?;
+        if let Some(data_key) = self.crypto.get_data_key()
+            && let Err(e) = probe_data_key_with_manifest(raw_adapter, base_path, &data_key).await
+        {
+            return Err(classify_first_sync_key_error(e, &self.state_store));
         }
         Ok(())
     }
@@ -1679,6 +1705,34 @@ mod tests {
         assert!(r.skipped);
         assert_eq!(r.pushed_modules, 0);
         assert_eq!(r.pulled_modules, 0);
+    }
+
+    /// 2026-11-10：探针阶段的 KeyMismatch 按「是否首次同步」分流
+    #[test]
+    fn first_sync_probe_mismatch_is_classified_as_password() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let store = SyncStateStore::new(tmp.path());
+
+        // 从未成功同步 → 密码错误（跳解锁页重输云端密码）
+        let err = classify_first_sync_key_error(CloudSyncError::KeyMismatch, &store);
+        assert_eq!(err.category_tag(), "password", "实得: {err}");
+        assert!(err.to_string().contains("同步密码"));
+
+        // 已同步过（epoch 推进）→ 保持 KeyMismatch（走恢复流程）
+        let mut state = store.load().unwrap();
+        state.manifest_epoch = 3;
+        store.save(&state).unwrap();
+        let err = classify_first_sync_key_error(CloudSyncError::KeyMismatch, &store);
+        assert_eq!(err.category_tag(), "key_mismatch", "实得: {err}");
+
+        // 非密钥错误原样透传
+        let err = classify_first_sync_key_error(
+            CloudSyncError::Database {
+                message: "x".to_string(),
+            },
+            &store,
+        );
+        assert_eq!(err.category_tag(), "database");
     }
 
     // ========================================================================

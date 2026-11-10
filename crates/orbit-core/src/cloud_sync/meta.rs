@@ -247,21 +247,48 @@ impl Manifest {
     }
 }
 
-/// 墓碑条目（uuid + 原始删除时间）
+/// 墓碑条目（uuid + 原始删除时间 + 可选整行快照）
 ///
 /// 删除时间参与「删除 vs 编辑」裁决（`merge::apply_tombstones`），
 /// 必须保留删除发生时的原始时间戳，不能写成同步时刻。
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+///
+/// `payload` 是**软删行的整行快照**（含 `_fk` 父行 uuid 标记），2026-11-10 起写出。
+/// 为什么需要：墓碑原先只有 uuid + deleted_at，全新设备首次全量 pull 时本地没有
+/// 这一行可供「打标记」——回收站条目与行数在换机后凭空消失（端到端测试实测
+/// `todo_tasks` 40,000 vs 39,201）。带上整行后，pull 可在本地缺失该 uuid 时
+/// 直接物化一条 `is_deleted=1` 的行；不带 payload 的旧墓碑仍按「父表最小占位行」
+/// 兜底（见 `merge::apply_tombstones_in_tx`）。
+///
+/// 注意：墓碑分桶指纹仍只对 `{uuid, deleted_at}` 计算（见 `push::build_table_outcome`），
+/// 不把 payload 纳入——否则新旧客户端会因指纹口径不同互相覆盖上传，形成振荡。
+/// 代价是「旧客户端已上传的同指纹墓碑桶」不会补发 payload；这类历史桶由最小占位行兜底。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct TombstoneEntry {
     /// 记录 uuid
     pub uuid: String,
     /// 软删除时间（Unix 毫秒）
     pub deleted_at: i64,
+    /// 软删行整行快照（旧数据 / 旧客户端可能没有）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub payload: Option<serde_json::Value>,
 }
 
 impl TombstoneEntry {
     pub fn new(uuid: String, deleted_at: i64) -> Self {
-        Self { uuid, deleted_at }
+        Self {
+            uuid,
+            deleted_at,
+            payload: None,
+        }
+    }
+
+    /// 带整行快照的墓碑（push 侧写出，pull 侧据此物化空库缺行）
+    pub fn with_payload(uuid: String, deleted_at: i64, payload: serde_json::Value) -> Self {
+        Self {
+            uuid,
+            deleted_at,
+            payload: Some(payload),
+        }
     }
 
     pub fn uuid(&self) -> &str {

@@ -114,10 +114,14 @@ pub struct MergeResult {
     pub deleted: u64,
     /// 跳过记录数（本地更新时间更大或相等）
     pub skipped: u64,
-    /// 冲突裁决数（S28：两端同 uuid 都有更新的记录数——LWW 平局 version
-    /// 裁决 + 本地胜出跳过 + 复活裁决的合计，此前恒 0 无可观测性）
+    /// 用户可见冲突数 = 真并发裁决并成功留档的条数
+    ///
+    /// 2026-11-10 起与 `copied` 恒等：旧实现把「他端顺延更新」与「删除 vs 编辑
+    /// 复活裁决」也计入，导致 `SyncResult.conflicts` 有值而 `sync_conflicts`
+    /// 表 0 行（toast 说 N 条冲突、冲突中心空列表）。现在只有双方都晚于上次
+    /// 同步基线（真并发）且败方副本成功落库才计数。
     pub conflicts: u64,
-    /// 留档的败方副本数（真并发冲突才留档，≤ `conflicts`）
+    /// 留档的败方副本数（与 `conflicts` 同源，保留字段便于桥层分别展示）
     pub copied: u64,
     /// 错误信息（不阻塞整体流程）
     pub errors: Vec<String>,
@@ -165,18 +169,22 @@ pub async fn merge_table_items(
 
     // 1.5 整数外键按父行 uuid 解析为本端 id（F47）；父表 uuid→id 同样须在事务外读。
     //     无外键的叶子表直接借用原切片，省掉整表克隆。
+    //
+    //     墓碑物化（空库首次全量 pull）同样需要这份映射：墓碑载荷里的外键是**源端
+    //     整数 id**，不解析就会把子行挂到本端的另一行上（静默改父）。故映射提到
+    //     事务外统一加载，数据合并与墓碑应用共用。
     let fk_cols = crate::db::sync_registry::fk_columns_of(table);
+    let mut parent_ids: HashMap<&'static str, HashMap<String, i64>> = HashMap::new();
+    for (_, parent) in fk_cols {
+        if !parent_ids.contains_key(parent) {
+            parent_ids.insert(*parent, load_uuid_id_map(db_pool, parent).await?);
+        }
+    }
     let resolved: Vec<serde_json::Value>;
     let refs: Vec<&serde_json::Value> = if fk_cols.is_empty() {
         remote_items.iter().collect()
     } else {
-        let mut parent_ids: HashMap<&'static str, HashMap<String, i64>> = HashMap::new();
-        for (_, parent) in fk_cols {
-            if !parent_ids.contains_key(parent) {
-                parent_ids.insert(*parent, load_uuid_id_map(db_pool, parent).await?);
-            }
-        }
-        resolved = resolve_foreign_keys(table, remote_items, parent_ids)?;
+        resolved = resolve_foreign_keys(table, remote_items, &parent_ids)?;
         resolved.iter().collect()
     };
 
@@ -205,8 +213,11 @@ pub async fn merge_table_items(
         }
     }
 
-    match apply_tombstones_in_tx(&mut tx, table, tombstones, &local_map).await {
-        Ok(count) => result.deleted = count,
+    match apply_tombstones_in_tx(&mut tx, table, tombstones, &parent_ids, &columns).await {
+        Ok((count, errors)) => {
+            result.deleted = count;
+            result.errors.extend(errors);
+        }
         Err(e) => {
             // 墓碑应用失败：只记 errors 仍 commit 恰好留下本文件开头禁止的
             // 「数据已合并、删除未应用」半合并；回滚整表上报 Err 同口径
@@ -237,7 +248,7 @@ pub async fn merge_table_items(
 fn resolve_foreign_keys(
     table: &str,
     items: &[serde_json::Value],
-    parent_ids: HashMap<&'static str, HashMap<String, i64>>,
+    parent_ids: &HashMap<&'static str, HashMap<String, i64>>,
 ) -> Result<Vec<serde_json::Value>, CloudSyncError> {
     let fk_cols = crate::db::sync_registry::fk_columns_of(table);
     let mut out = Vec::with_capacity(items.len());
@@ -370,7 +381,6 @@ async fn merge_single_table_in_tx(
                     LwwDecision::Update => {
                         // 远端胜出（updated_at 更大，或平局时 version 更高）→ UPDATE
                         let uuid_ref = obj.get("uuid").and_then(|v| v.as_str()).unwrap_or("");
-                        result.conflicts += 1;
                         // 平局裁决时输出 warn 日志，便于排查（非平局的正常 Update 不打日志）
                         if tie {
                             log::warn!(
@@ -388,6 +398,10 @@ async fn merge_single_table_in_tx(
                             && let Some(local_obj) =
                                 load_local_payload(&mut *tx, table, &uuid).await
                         {
+                            // 冲突计数只统计**真并发**裁决，与 sync_conflicts 留档一一对应。
+                            // 旧实现无条件 +1，把「他端顺延更新、本端自上次同步后没动过」
+                            // 的普通同步也计成冲突 → toast/历史显示 N 条冲突而冲突中心 0 条。
+                            result.conflicts += 1;
                             snapshots.push(build_snapshot(
                                 table,
                                 &uuid,
@@ -407,23 +421,20 @@ async fn merge_single_table_in_tx(
                                 table,
                                 uuid
                             );
-                        } else {
-                            // 本地胜出的真实冲突（远端也有更新但败出）
+                        } else if concurrent
+                            && let Some(local_obj) =
+                                load_local_payload(&mut *tx, table, &uuid).await
+                        {
+                            // 本地胜出的真并发冲突：远端版本被丢弃，留档并计数
                             result.conflicts += 1;
-                            // 远端被丢弃：把远端版本留档
-                            if concurrent
-                                && let Some(local_obj) =
-                                    load_local_payload(&mut *tx, table, &uuid).await
-                            {
-                                snapshots.push(build_snapshot(
-                                    table,
-                                    &uuid,
-                                    if tie { "tie_version" } else { "lww" },
-                                    "remote",
-                                    obj,
-                                    &local_obj,
-                                ));
-                            }
+                            snapshots.push(build_snapshot(
+                                table,
+                                &uuid,
+                                if tie { "tie_version" } else { "lww" },
+                                "remote",
+                                obj,
+                                &local_obj,
+                            ));
                         }
                         result.skipped += 1;
                     }
@@ -431,9 +442,10 @@ async fn merge_single_table_in_tx(
             }
             Some(local) => {
                 // 复活裁决（FR-2.6 口径）：deleted_at=0（极旧格式）视为可复活。
-                // 删除 vs 编辑的败方是「墓碑/存活记录」而非两版内容，不做副本留档
-                // （计入 conflicts 观察即可），避免把墓碑行当成可恢复内容误导用户。
-                result.conflicts += 1;
+                // 删除 vs 编辑的败方是「墓碑/存活记录」而非两版内容，不做副本留档，
+                // 也**不计入 conflicts**——`conflicts` 与 `sync_conflicts` 表一一对应
+                // （用户可见的冲突留档），把删除裁决也计进去会让「冲突 N 条」与冲突
+                // 中心列表条数对不上。裁决结果仍逐条写 log 供排查。
                 if remote_updated >= local.deleted_at || local.deleted_at == 0 {
                     log::info!(
                         "[merge] 复活裁决：表 {} uuid={} 远端更新时间 {} ≥ 本地删除时间 {}，\
@@ -734,63 +746,190 @@ async fn apply_tombstones_in_tx(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     table: &str,
     tombstones: &[TombstoneEntry],
-    local_map: &HashMap<String, LocalRecordState>,
-) -> Result<u64, CloudSyncError> {
-    // FR-2.6：时间戳裁决 — 过滤出需要删除的 (uuid, deleted_at)
-    let to_delete: Vec<(String, i64)> = tombstones
-        .iter()
-        .filter_map(|t| {
-            let uuid = t.uuid();
-            let local = local_map.get(uuid)?;
-            // 本地已是软删除状态 → 无需处理（旧版 map 不含墓碑行，天然跳过；
-            // Fix-01 后 map 含全量记录，此处显式保持该语义）
-            if local.is_deleted {
-                return None;
-            }
-            let deleted_at = t.deleted_at();
-            // 旧格式（deleted_at=0）或删除时间 >= 本地更新时间 → 删除
-            if deleted_at == 0 || deleted_at >= local.updated_at {
-                Some((uuid.to_string(), deleted_at))
-            } else {
-                // 编辑胜：本地更新时间晚于删除时间，跳过
-                None
-            }
-        })
-        .collect();
-
-    if to_delete.is_empty() {
-        return Ok(0);
+    parent_ids: &HashMap<&'static str, HashMap<String, i64>>,
+    columns: &HashMap<String, ColumnMeta>,
+) -> Result<(u64, Vec<String>), CloudSyncError> {
+    if tombstones.is_empty() {
+        return Ok((0, Vec::new()));
     }
 
     let mut deleted_count = 0u64;
+    let mut errors: Vec<String> = Vec::new();
     let now = crate::cloud_sync::db_loader::now_ms();
 
-    // 逐条 UPDATE（事务由调用方持有）：绑定墓碑自身删除时间，杜绝时间戳漂移
-    for (uuid, tombstone_deleted_at) in &to_delete {
+    for tombstone in tombstones {
+        let uuid = tombstone.uuid();
+        if uuid.is_empty() {
+            continue;
+        }
         // 病态数据（deleted_at=0）保留 now() 兜底；正常路径用原始删除时间
-        let ts = if *tombstone_deleted_at == 0 {
+        let raw_deleted_at = tombstone.deleted_at();
+        let ts = if raw_deleted_at == 0 {
             now
         } else {
-            *tombstone_deleted_at
+            raw_deleted_at
         };
+        // updated_at 优先取**源端整行快照**里的值：墓碑是搬运真实行状态，不能用
+        // 删除时间覆盖源端的 updated_at（否则源端两值不等的行在三端字段不一致）。
+        // 旧墓碑没有快照时回退删除时间（Fix-02 的「不得写成 now()」口径仍成立）。
+        let new_updated = tombstone
+            .payload
+            .as_ref()
+            .and_then(|p| p.get("updated_at"))
+            .and_then(|v| v.as_i64())
+            .filter(|v| *v > 0)
+            .unwrap_or(ts);
+
+        // ── 1) 已有存活行：时间戳裁决后软删 ──
+        //
+        // 判据直接写在 WHERE 里（而不是先用事务外加载的 local_map 过滤）：
+        // 本轮数据合并可能**刚 INSERT** 了同一个 uuid 的存活行（他端的旧数据桶
+        // 与本端墓碑并存），local_map 是合并前快照，看不到这批新行，旧实现会
+        // 把墓碑跳过 → 已删记录在对端复活。
+        //
+        // `? = 0` 分支对应旧格式墓碑（deleted_at 缺失）：无条件删除，保持旧行为。
         let sql = format!(
             "UPDATE \"{table}\" SET is_deleted = 1, deleted_at = ?, updated_at = ? \
-             WHERE uuid = ? AND is_deleted = 0"
+             WHERE uuid = ? AND is_deleted = 0 AND (? = 0 OR ? >= updated_at)"
         );
         let result = sqlx::query(&sql)
             .bind(ts)
-            .bind(ts)
+            .bind(new_updated)
             .bind(uuid)
+            .bind(raw_deleted_at)
+            .bind(raw_deleted_at)
             .execute(&mut **tx)
             .await
             .map_err(|e| CloudSyncError::Database {
                 message: format!("软删除表 {table} 失败: {e}"),
             })?;
-        deleted_count += result.rows_affected();
+        if result.rows_affected() > 0 {
+            deleted_count += 1;
+            continue;
+        }
+
+        // ── 2) 行仍在（已删除 / 本地编辑胜出）→ 无需动作 ──
+        let exists: Option<i64> = sqlx::query_scalar(&format!(
+            "SELECT 1 FROM \"{table}\" WHERE uuid = ? LIMIT 1"
+        ))
+        .bind(uuid)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(|e| CloudSyncError::Database {
+            message: format!("查询表 {table} 墓碑行失败: {e}"),
+        })?;
+        if exists.is_some() {
+            continue;
+        }
+
+        // ── 3) 本地完全没有这一行（换机 / 空库首次全量 pull）→ 物化软删行 ──
+        //
+        // 这是 2026-11-10 端到端测试暴露的缺口：墓碑原先只带 uuid + deleted_at，
+        // 空库没有行可「打标记」，799 条软删任务在另一端整行消失（回收站 799 vs 0）。
+        match materialize_tombstone_row(
+            tx,
+            table,
+            uuid,
+            ts,
+            new_updated,
+            tombstone.payload.as_ref(),
+            parent_ids,
+            columns,
+        )
+        .await
+        {
+            Ok(true) => {
+                log::info!("[merge] 物化墓碑行：表 {table} uuid={uuid} deleted_at={ts}");
+                deleted_count += 1;
+            }
+            Ok(false) => {
+                log::warn!(
+                    "[merge] 墓碑无法物化（旧版墓碑无整行快照且该表有必填外键）：\
+                     表 {table} uuid={uuid}。升级写出方后重新同步即可补齐"
+                );
+            }
+            Err(e) => {
+                errors.push(format!("表 {table}: 物化墓碑 uuid={uuid} 失败: {e}"));
+            }
+        }
     }
 
-    Ok(deleted_count)
+    Ok((deleted_count, errors))
 }
+
+/// 空库物化一条软删行（墓碑迁移路径）
+///
+/// 两个来源：
+/// - **带整行快照**（2026-11-10 起的新墓碑）：整行落地，外键按 `_fk` 父行 uuid
+///   解析成本端 id——子表（子任务/评论/提醒/关系/附件）也能正确物化。
+/// - **无快照**（历史墓碑/旧客户端）：仅当该表所有 NOT NULL 列都有 DEFAULT 时，
+///   用 `uuid + 删除时间` 建一条最小占位行（项目/任务/标签/筛选器/模板属于此类）。
+///   子表需要 task_id 等现象外键，没有快照就无从还原，返回 `Ok(false)` 交给
+///   调用方记 warn。
+///
+/// 返回 `Ok(true)` 表示确实插入了行。
+#[allow(clippy::too_many_arguments)] // 物化一条墓碑所需的最小上下文
+async fn materialize_tombstone_row(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    table: &str,
+    uuid: &str,
+    ts: i64,
+    updated_at: i64,
+    payload: Option<&serde_json::Value>,
+    parent_ids: &HashMap<&'static str, HashMap<String, i64>>,
+    columns: &HashMap<String, ColumnMeta>,
+) -> Result<bool, String> {
+    let mut row: serde_json::Map<String, serde_json::Value> = match payload {
+        Some(serde_json::Value::Object(obj)) => obj.clone(),
+        _ => {
+            // 无整行快照：只有「必填列全带默认值」的表能建最小占位行
+            let has_required_without_default = columns
+                .values()
+                .any(|m| m.not_null && m.dflt_value.is_none());
+            if has_required_without_default {
+                return Ok(false);
+            }
+            let mut m = serde_json::Map::new();
+            m.insert("uuid".to_string(), serde_json::Value::from(uuid));
+            m.insert("created_at".to_string(), serde_json::Value::from(ts));
+            m
+        }
+    };
+
+    // 强制删除态：payload 里可能带着 is_deleted=0；updated_at 用源端原值
+    // （搬运真实行状态，不能用删除时间覆盖，否则源端两值不等的行三端不一致）
+    row.insert("uuid".to_string(), serde_json::Value::from(uuid));
+    row.insert("is_deleted".to_string(), serde_json::Value::from(1));
+    row.insert("deleted_at".to_string(), serde_json::Value::from(ts));
+    row.insert("updated_at".to_string(), serde_json::Value::from(updated_at));
+    row.remove("id");
+    if row.get("created_at").and_then(|v| v.as_i64()).is_none() {
+        row.insert("created_at".to_string(), serde_json::Value::from(ts));
+    }
+    if row.get("version").and_then(|v| v.as_i64()).is_none() {
+        row.insert("version".to_string(), serde_json::Value::from(1));
+    }
+
+    // 外键解析：载荷里的整数外键是源端 id，必须换成父行 uuid 对应的本端 id
+    let resolved_row = if row.contains_key(FK_MARK) {
+        let mut resolved = resolve_foreign_keys(table, &[serde_json::Value::Object(row)], parent_ids)
+            .map_err(|e| e.to_string())?;
+        match resolved.pop() {
+            Some(serde_json::Value::Object(o)) => o,
+            _ => return Ok(false),
+        }
+    } else {
+        row
+    };
+
+    // 复用批量 INSERT 的列校验 / 类型规范化 / id 跳过逻辑
+    let inserted = batch_insert(tx, table, &[&resolved_row], columns)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(inserted > 0)
+}
+
+
 
 #[cfg(test)]
 mod tests {
@@ -1243,8 +1382,10 @@ mod tests {
             assert_eq!(row_count(&pool, "r3").await, 1);
         }
 
-        /// S28：冲突裁决计数——LWW 双向裁决与复活裁决都计入 conflicts，
-        /// 同数据（updated_at/version 全等）不计入；新增记录不计入
+        /// 冲突计数只统计**真并发**裁决，且与 `sync_conflicts` 留档一一对应
+        ///
+        /// 旧口径把「他端顺延更新」（本端自上次同步后没动过）也计成冲突，
+        /// 端到端测试实测 `SyncResult.conflicts=1` 而三端 `sync_conflicts` 0 行。
         #[tokio::test]
         async fn conflicts_counts_real_lww_adjudications_only() {
             let pool = setup_pool().await;
@@ -1255,49 +1396,68 @@ mod tests {
                 "_table": "todo_projects", "uuid": "c1", "title": "same",
                 "is_deleted": 0, "updated_at": 100, "version": 1
             })];
-            let r1 = merge_table_items(&pool, "todo_projects", &same, &[], 0)
+            let r1 = merge_table_items(&pool, "todo_projects", &same, &[], 50)
                 .await
                 .unwrap();
             assert_eq!(r1.skipped, 1);
             assert_eq!(r1.conflicts, 0, "同数据全等平局不是冲突");
 
-            // 本地胜出（远端有更新但较旧）→ 跳过且计冲突
+            // 本地胜出（两端都晚于基线 50）→ 跳过、计冲突、留档远端败方
             let local_wins = vec![serde_json::json!({
                 "_table": "todo_projects", "uuid": "c1", "title": "stale-remote",
                 "is_deleted": 0, "updated_at": 90, "version": 9
             })];
-            let r2 = merge_table_items(&pool, "todo_projects", &local_wins, &[], 0)
+            let r2 = merge_table_items(&pool, "todo_projects", &local_wins, &[], 50)
                 .await
                 .unwrap();
             assert_eq!(r2.skipped, 1);
-            assert_eq!(r2.conflicts, 1, "两端都有更新、本地胜出必须计冲突");
+            assert_eq!(r2.conflicts, 1, "真并发本地胜出必须计冲突");
+            assert_eq!(r2.copied, 1, "计数必须与留档同源");
 
-            // 远端胜出（updated_at 更大）→ 更新且计冲突
+            // 远端胜出（两端都晚于基线）→ 更新、计冲突、留档本地败方
             let remote_wins = vec![serde_json::json!({
                 "_table": "todo_projects", "uuid": "c1", "title": "fresh-remote",
                 "is_deleted": 0, "updated_at": 200, "version": 1
             })];
-            let r3 = merge_table_items(&pool, "todo_projects", &remote_wins, &[], 0)
+            let r3 = merge_table_items(&pool, "todo_projects", &remote_wins, &[], 50)
                 .await
                 .unwrap();
             assert_eq!(r3.updated, 1);
-            assert_eq!(r3.conflicts, 1, "远端胜出的覆盖更新必须计冲突");
+            assert_eq!(r3.conflicts, 1, "真并发远端胜出必须计冲突");
+            assert_eq!(r3.copied, 1);
 
             // 全新记录（本地无 uuid）→ 插入不计冲突
             let fresh = vec![serde_json::json!({
                 "_table": "todo_projects", "uuid": "c-new", "title": "brand-new",
                 "is_deleted": 0, "updated_at": 300, "version": 1
             })];
-            let r4 = merge_table_items(&pool, "todo_projects", &fresh, &[], 0)
+            let r4 = merge_table_items(&pool, "todo_projects", &fresh, &[], 50)
                 .await
                 .unwrap();
             assert_eq!(r4.inserted, 1);
             assert_eq!(r4.conflicts, 0, "单端新增不是冲突");
         }
 
-        /// S28 回归：复活裁决计入 conflicts（删除 vs 编辑的真实冲突）
+        /// 顺延传播（本端自上次同步后未改动）不得计冲突
         #[tokio::test]
-        async fn conflicts_counts_resurrection_adjudication() {
+        async fn sequential_remote_update_is_not_a_conflict() {
+            let pool = setup_pool().await;
+            insert_row(&pool, "c-seq", "旧值", 0, 0, 40).await;
+            let items = vec![serde_json::json!({
+                "_table": "todo_projects", "uuid": "c-seq", "title": "他端更新",
+                "is_deleted": 0, "updated_at": 200, "version": 2
+            })];
+            let r = merge_table_items(&pool, "todo_projects", &items, &[], 50)
+                .await
+                .unwrap();
+            assert_eq!(r.updated, 1, "数据照常更新");
+            assert_eq!(r.conflicts, 0, "他端顺延更新不是用户冲突");
+            assert_eq!(r.copied, 0);
+        }
+
+        /// 复活裁决不写留档，也不计入 conflicts（否则「冲突 N 条」与冲突中心对不上）
+        #[tokio::test]
+        async fn resurrection_is_logged_but_not_counted_as_conflict() {
             let pool = setup_pool().await;
             // 本地墓碑（删除时间 300）+ 远端存活（更新 200，早于删除 → 删除胜）
             insert_row(&pool, "c2", "deleted-local", 1, 300, 300).await;
@@ -1309,7 +1469,8 @@ mod tests {
                 .await
                 .unwrap();
             assert_eq!(result.skipped, 1, "删除胜出保持墓碑");
-            assert_eq!(result.conflicts, 1, "复活裁决是删除vs编辑冲突，必须计数");
+            assert_eq!(result.conflicts, 0, "复活裁决不产生用户可见冲突留档");
+            assert_eq!(result.copied, 0);
         }
 
         /// Fix-02 核心场景：应用墓碑后 deleted_at/updated_at 必须等于墓碑自身删除时间，
@@ -1325,13 +1486,8 @@ mod tests {
                 .as_millis() as i64;
 
             let tombstones = vec![TombstoneEntry::new("r4".to_string(), 100)];
-            // 先在事务外读映射：单连接池下事务持连接时再查询会死锁
-            let map = load_map(&pool).await;
-            let mut tx = pool.begin().await.unwrap();
-            let deleted = apply_tombstones_in_tx(&mut tx, "todo_projects", &tombstones, &map)
-                .await
-                .unwrap();
-            tx.commit().await.unwrap();
+            let deleted =
+                apply_tombstones(&pool, "todo_projects", &tombstones, &HashMap::new()).await;
 
             assert_eq!(deleted, 1);
             let row = get_row(&pool, "r4").await.unwrap();
@@ -1351,17 +1507,97 @@ mod tests {
             insert_row(&pool, "r5", "edited-after-delete", 0, 0, 500).await;
 
             let tombstones = vec![TombstoneEntry::new("r5".to_string(), 100)];
-            // 先在事务外读映射：单连接池下事务持连接时再查询会死锁
-            let map = load_map(&pool).await;
-            let mut tx = pool.begin().await.unwrap();
-            let deleted = apply_tombstones_in_tx(&mut tx, "todo_projects", &tombstones, &map)
-                .await
-                .unwrap();
-            tx.commit().await.unwrap();
+            let deleted =
+                apply_tombstones(&pool, "todo_projects", &tombstones, &HashMap::new()).await;
 
             assert_eq!(deleted, 0, "编辑(500) > 删除(100) 应跳过");
             let row = get_row(&pool, "r5").await.unwrap();
             assert_eq!(row.is_deleted, 0);
+        }
+
+        /// **P0 回归（2026-11-10 端到端测试）**：空库首次全量 pull 必须物化软删行
+        ///
+        /// 旧行为：墓碑只带 uuid + deleted_at，空库没有本地行可标记 →
+        /// `todo_tasks` 40,000 vs 39,201、回收站 799 vs 0（换机后删除记录凭空消失）。
+        /// 新行为：墓碑带整行快照，本地缺失即 INSERT 一条 `is_deleted=1` 行。
+        #[tokio::test]
+        async fn tombstone_materializes_missing_row_from_payload() {
+            let pool = setup_pool().await;
+            let payload = serde_json::json!({
+                "uuid": "gone-1", "title": "已删项目", "hex_color": "#EF4444",
+                "sort_order": 3, "is_archived": 0, "is_deleted": 1,
+                "deleted_at": 170, "created_at": 10, "updated_at": 170, "version": 4
+            });
+            let tombstones = vec![TombstoneEntry::with_payload(
+                "gone-1".to_string(),
+                170,
+                payload,
+            )];
+            let deleted =
+                apply_tombstones(&pool, "todo_projects", &tombstones, &HashMap::new()).await;
+
+            assert_eq!(deleted, 1, "空库必须物化墓碑行");
+            let row = get_row(&pool, "gone-1").await.unwrap();
+            assert_eq!(row.is_deleted, 1, "物化行必须是软删态");
+            assert_eq!(row.deleted_at, 170);
+            assert_eq!(row.updated_at, 170);
+            let (title,): (String,) =
+                sqlx::query_as("SELECT title FROM todo_projects WHERE uuid='gone-1'")
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
+            assert_eq!(title, "已删项目", "整行快照的字段要原样落地");
+        }
+
+        /// 旧墓碑没有整行快照：父表（必填列全带默认值）用最小占位行兜底
+        #[tokio::test]
+        async fn tombstone_without_payload_falls_back_to_minimal_row() {
+            let pool = setup_pool().await;
+            let tombstones = vec![TombstoneEntry::new("legacy-1".to_string(), 90)];
+            let deleted =
+                apply_tombstones(&pool, "todo_projects", &tombstones, &HashMap::new()).await;
+
+            assert_eq!(deleted, 1, "父表必须用最小占位行兜底");
+            let row = get_row(&pool, "legacy-1").await.unwrap();
+            assert_eq!(row.is_deleted, 1);
+            assert_eq!(row.deleted_at, 90);
+        }
+
+        /// 旧墓碑 + 子表（task_id 等必填外键无默认值）：无从还原，跳过而不报错
+        #[tokio::test]
+        async fn legacy_tombstone_on_child_table_is_skipped() {
+            let pool = setup_pool().await;
+            let tombstones = vec![TombstoneEntry::new("legacy-comment".to_string(), 90)];
+            let deleted =
+                apply_tombstones(&pool, "todo_comments", &tombstones, &HashMap::new()).await;
+            assert_eq!(deleted, 0, "缺少父级信息时不得凭空造子行");
+            let (c,): (i64,) =
+                sqlx::query_as("SELECT COUNT(*) FROM todo_comments WHERE uuid='legacy-comment'")
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
+            assert_eq!(c, 0);
+        }
+
+        /// 数据桶里的存活行与本端墓碑同轮到达：墓碑必须胜出（不得复活）
+        ///
+        /// 旧实现在事务外加载 local_map 判定，看不到本轮刚 INSERT 的行，墓碑被跳过；
+        /// 现在的裁决写在 UPDATE 的 WHERE 里，对本轮新插入行同样生效。
+        #[tokio::test]
+        async fn tombstone_applies_to_row_inserted_in_same_round() {
+            let pool = setup_pool().await;
+            let items = vec![serde_json::json!({
+                "uuid": "race-1", "title": "他端旧数据", "is_deleted": 0,
+                "deleted_at": 0, "updated_at": 50, "version": 1
+            })];
+            let tombstones = vec![TombstoneEntry::new("race-1".to_string(), 60)];
+            merge_table_items(&pool, "todo_projects", &items, &tombstones, 0)
+                .await
+                .unwrap();
+
+            let row = get_row(&pool, "race-1").await.unwrap();
+            assert_eq!(row.is_deleted, 1, "删除时间 60 > 数据更新时间 50，墓碑必须胜出");
+            assert_eq!(row.deleted_at, 60);
         }
 
         /// Fix-01 回归：本地不存在的 uuid → 正常 INSERT（新增记录不丢失）
@@ -1467,10 +1703,22 @@ mod tests {
             );
         }
 
-        async fn load_map(pool: &SqlitePool) -> HashMap<String, LocalRecordState> {
-            crate::cloud_sync::db_loader::load_table_uuid_map(pool, "todo_projects")
-                .await
-                .unwrap()
+        /// 测试辅助：按生产口径（事务 + 列元数据 + 外键映射）应用一批墓碑
+        async fn apply_tombstones(
+            pool: &SqlitePool,
+            table: &str,
+            tombstones: &[TombstoneEntry],
+            parent_ids: &HashMap<&'static str, HashMap<String, i64>>,
+        ) -> u64 {
+            let columns = load_table_columns(pool, table).await.unwrap();
+            let mut tx = pool.begin().await.unwrap();
+            let (deleted, errors) =
+                apply_tombstones_in_tx(&mut tx, table, tombstones, parent_ids, &columns)
+                    .await
+                    .unwrap();
+            tx.commit().await.unwrap();
+            assert!(errors.is_empty(), "墓碑物化不应产生错误: {errors:?}");
+            deleted
         }
 
         // ====================================================================
@@ -1514,7 +1762,10 @@ mod tests {
                 .await
                 .unwrap();
             assert_eq!(result.updated, 1);
-            assert_eq!(result.conflicts, 1, "裁决计数照旧");
+            assert_eq!(
+                result.conflicts, 0,
+                "无同步基线（从未同步）不是用户冲突，计数与留档同为 0"
+            );
             assert_eq!(result.copied, 0, "无同步基线不得留档");
             assert_eq!(conflict_count(&pool).await, 0);
         }

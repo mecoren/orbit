@@ -97,7 +97,21 @@ pub async fn pull_all(
             });
         }
         Some((bytes, _)) => {
-            let plain = decrypt_payload(&bytes, &data_key)?;
+            let plain = match decrypt_payload(&bytes, &data_key) {
+                Ok(p) => p,
+                Err(e)
+                    if e.is_key_mismatch_error()
+                        && crate::cloud_sync::never_synced(&state) =>
+                {
+                    // 本机**从未成功同步过**就解不开云端清单：这不是「密码对但 Key
+                    // 轮换」的 KeyMismatch，而是「新设备第一次填错了同步密码」。
+                    // 继续按 key_mismatch 引导会让用户去走「以本机为准覆盖云端」的
+                    // 恢复流程（会删云端的正确数据）；这里改判为密码错误，UI 跳解锁页
+                    // 重输云端密码即可。
+                    return Err(crate::cloud_sync::first_sync_password_error());
+                }
+                Err(e) => return Err(e),
+            };
             let m: Manifest = serde_json::from_slice(&plain)?;
             m.check_layout_version()?;
             m
@@ -732,6 +746,72 @@ mod tests {
         assert_eq!(result.skipped_modules, 1);
     }
 
+    /// 2026-11-10：**从未成功同步过**的新设备解不开清单 → 判为密码错误
+    ///
+    /// 测试场景「移动2 输错同步密码」必须报 wrong_password 语义。旧实现一律返回
+    /// KeyMismatch（跳恢复页、引导「以本机为准覆盖云端」），会把云端正确数据删掉。
+    #[tokio::test]
+    async fn first_sync_with_wrong_password_reports_password_category() {
+        let (pool, crypto, store, _tmp) = env().await;
+        let adapter = MemAdapter::new();
+        let manifest = Manifest::empty("dev-2");
+        // 用另一把 Key 加密清单，模拟「本机密码派生的 Key ≠ 云端 Key」
+        adapter.put(
+            paths::MANIFEST_PATH,
+            encrypt_payload(&serde_json::to_vec(&manifest).unwrap(), &[7u8; 32]).unwrap(),
+        );
+
+        let err = pull_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(
+            err.category_tag(),
+            "password",
+            "新设备首次同步错密必须归 password（跳解锁页），实得: {err}"
+        );
+        assert!(!err.is_key_mismatch_error());
+        assert!(err.to_string().contains("同步密码"));
+    }
+
+    /// 已同步过的设备解不开清单 → 仍是 KeyMismatch（走恢复页）
+    ///
+    /// 这类场景是「云端被别的设备 rekey / 本机数据过期」，重输密码无效。
+    #[tokio::test]
+    async fn previously_synced_device_keeps_key_mismatch_category() {
+        let (pool, crypto, store, _tmp) = env().await;
+        let mut state = store.load().unwrap();
+        state.manifest_epoch = 5;
+        state.last_pulled_at = 1;
+        store.save(&state).unwrap();
+
+        let adapter = MemAdapter::new();
+        let mut manifest = Manifest::empty("dev-2");
+        manifest.epoch = 6;
+        adapter.put(
+            paths::MANIFEST_PATH,
+            encrypt_payload(&serde_json::to_vec(&manifest).unwrap(), &[7u8; 32]).unwrap(),
+        );
+
+        let err = pull_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.category_tag(), "key_mismatch", "实得: {err}");
+    }
+
     #[tokio::test]
     async fn tombstone_bucket_propagates_delete() {
         let (pool, crypto, store, _tmp) = env().await;
@@ -801,6 +881,90 @@ mod tests {
                 .unwrap();
         assert_eq!(is_deleted, 1, "远端墓碑必须传播为本地软删");
         assert_eq!(deleted_at, 100, "删除时间必须保留原始值");
+    }
+
+    /// **P0 回归（2026-11-10）**：空库首次全量 pull 必须把带整行快照的墓碑物化
+    ///
+    /// 端到端测试实测：源端 799 条软删任务只以墓碑传播，空库 pull 后对端整行缺失
+    /// （行数 40,000 vs 39,201、回收站 799 vs 0）。修复后 pull 用墓碑载荷建软删行。
+    #[tokio::test]
+    async fn tombstone_bucket_materializes_row_on_empty_db() {
+        let (pool, crypto, store, _tmp) = env().await;
+        let adapter = MemAdapter::new();
+
+        let mut manifest = Manifest::empty("dev-2");
+        manifest.epoch = 9;
+        let payload = serde_json::json!({
+            "uuid": "deleted-on-a", "title": "A 端已删项目", "hex_color": "#EF4444",
+            "sort_order": 7, "is_archived": 0, "is_deleted": 1,
+            "deleted_at": 170, "created_at": 10, "updated_at": 170, "version": 3
+        });
+        let tombstones = vec![TombstoneEntry::with_payload(
+            "deleted-on-a".to_string(),
+            170,
+            payload,
+        )];
+        let bucket = crate::cloud_sync::db_loader::local_month_key(170);
+        let body = TombstoneBucketPayload {
+            table: "todo_projects".to_string(),
+            bucket: bucket.clone(),
+            tombstones: tombstones.clone(),
+        };
+        adapter.put(
+            &paths::tombstone_bucket_path("todo_projects", &bucket),
+            encrypt_payload(&serde_json::to_vec(&body).unwrap(), &KEY).unwrap(),
+        );
+        let fp = crate::cloud_sync::compute_fingerprint(
+            &tombstones
+                .iter()
+                .map(|t| serde_json::json!({"uuid": t.uuid, "deleted_at": t.deleted_at}))
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
+        manifest.tombstones.insert(
+            "todo_projects".to_string(),
+            crate::cloud_sync::meta::TombstoneIndex {
+                buckets: std::collections::BTreeMap::from([(
+                    bucket,
+                    crate::cloud_sync::meta::TombstoneBucketRef {
+                        fp,
+                        count: 1,
+                        max_deleted_at: 170,
+                    },
+                )]),
+            },
+        );
+        adapter.put(
+            paths::MANIFEST_PATH,
+            encrypt_payload(&serde_json::to_vec(&manifest).unwrap(), &KEY).unwrap(),
+        );
+
+        let result = pull_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(result.downloaded_tombstones, 1);
+        assert!(
+            result.changed_tables.contains(&"todo_projects".to_string()),
+            "物化墓碑行必须回报表变更: {:?}",
+            result.changed_tables
+        );
+        let (is_deleted, deleted_at, title): (i64, i64, String) = sqlx::query_as(
+            "SELECT is_deleted, deleted_at, title FROM todo_projects WHERE uuid='deleted-on-a'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(is_deleted, 1, "空库必须得到软删行而不是整行缺失");
+        assert_eq!(deleted_at, 170);
+        assert_eq!(title, "A 端已删项目", "墓碑载荷字段要原样落地");
     }
 
     /// F86：行级合并失败必须同时登记 `failed_modules`

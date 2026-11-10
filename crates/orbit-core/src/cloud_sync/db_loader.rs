@@ -121,32 +121,44 @@ async fn load_table_items_where(
         .map(|row| serde_json::Value::Object(sqlite_row_to_json(row)))
         .collect();
 
-    let fk_cols = crate::db::sync_registry::fk_columns_of(table);
-    if !fk_cols.is_empty() {
-        // 每张父表只读一次 id→uuid（同一父表可被多列引用，如 relations 的两端）
-        let mut parents: HashMap<&'static str, HashMap<i64, String>> = HashMap::new();
-        for (_, parent) in fk_cols {
-            if !parents.contains_key(parent) {
-                parents.insert(*parent, load_id_uuid_map(pool, parent).await?);
-            }
-        }
-        for item in &mut items {
-            let Some(obj) = item.as_object_mut() else {
-                continue;
-            };
-            let mut mark = serde_json::Map::new();
-            for (col, parent) in fk_cols {
-                if let Some(id) = obj.get(*col).and_then(|v| v.as_i64())
-                    && let Some(uuid) = parents[*parent].get(&id)
-                {
-                    mark.insert((*col).to_string(), serde_json::Value::String(uuid.clone()));
-                }
-            }
-            obj.insert(FK_MARK.to_string(), serde_json::Value::Object(mark));
-        }
-    }
+    attach_fk_marks(pool, table, &mut items).await?;
 
     Ok(items)
+}
+
+/// 给一批记录注入 `_fk` 父行 uuid 标记（`load_table_items*` 与墓碑快照共用）
+///
+/// 每张父表只读一次 `id → uuid`（同一父表可被多列引用，如 task_relations 的两端）。
+async fn attach_fk_marks(
+    pool: &SqlitePool,
+    table: &str,
+    items: &mut [serde_json::Value],
+) -> Result<(), CloudSyncError> {
+    let fk_cols = crate::db::sync_registry::fk_columns_of(table);
+    if fk_cols.is_empty() {
+        return Ok(());
+    }
+    let mut parents: HashMap<&'static str, HashMap<i64, String>> = HashMap::new();
+    for (_, parent) in fk_cols {
+        if !parents.contains_key(parent) {
+            parents.insert(*parent, load_id_uuid_map(pool, parent).await?);
+        }
+    }
+    for item in items.iter_mut() {
+        let Some(obj) = item.as_object_mut() else {
+            continue;
+        };
+        let mut mark = serde_json::Map::new();
+        for (col, parent) in fk_cols {
+            if let Some(id) = obj.get(*col).and_then(|v| v.as_i64())
+                && let Some(uuid) = parents[*parent].get(&id)
+            {
+                mark.insert((*col).to_string(), serde_json::Value::String(uuid.clone()));
+            }
+        }
+        obj.insert(FK_MARK.to_string(), serde_json::Value::Object(mark));
+    }
+    Ok(())
 }
 
 /// 外键标记解析器（M4：跨桶复用，避免每个桶都重扫父表）
@@ -499,11 +511,9 @@ pub async fn load_table_tombstones(
         });
     }
 
-    // deleted_at 优先，为 0/NULL 时回退 updated_at（与 LocalRecordState 同口径）
-    let sql = format!(
-        "SELECT uuid, COALESCE(NULLIF(deleted_at, 0), updated_at) AS ts \
-         FROM \"{table}\" WHERE is_deleted = 1"
-    );
+    // 整行读取：墓碑要带软删行快照，供全新设备首次全量 pull 时物化
+    // （只有 uuid + deleted_at 时，空库没有本地行可标记，回收站条目会凭空消失）。
+    let sql = format!("SELECT * FROM \"{table}\" WHERE is_deleted = 1");
     let rows = sqlx::query(&sql)
         .fetch_all(pool)
         .await
@@ -511,17 +521,41 @@ pub async fn load_table_tombstones(
             message: format!("加载表 {table} 墓碑失败: {e}"),
         })?;
 
+    let mut items: Vec<serde_json::Value> = rows
+        .iter()
+        .map(|row| serde_json::Value::Object(sqlite_row_to_json(row)))
+        .collect();
+    attach_fk_marks(pool, table, &mut items).await?;
+
     let mut buckets: BTreeMap<String, Vec<TombstoneEntry>> = BTreeMap::new();
-    for row in rows {
-        let uuid: String = row.try_get("uuid").unwrap_or_default();
-        let ts: i64 = row.try_get("ts").unwrap_or(0);
+    for mut item in items {
+        let obj = match item.as_object_mut() {
+            Some(o) => o,
+            None => continue,
+        };
+        let uuid = obj
+            .get("uuid")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
         if uuid.is_empty() {
             continue;
         }
+        // deleted_at 优先，为 0/NULL 时回退 updated_at（与 LocalRecordState 同口径）
+        let ts = obj
+            .get("deleted_at")
+            .and_then(|v| v.as_i64())
+            .filter(|v| *v != 0)
+            .or_else(|| obj.get("updated_at").and_then(|v| v.as_i64()))
+            .unwrap_or(0);
         buckets
             .entry(local_month_key(ts))
             .or_default()
-            .push(TombstoneEntry::new(uuid, ts));
+            .push(TombstoneEntry::with_payload(
+                uuid,
+                ts,
+                serde_json::Value::Object(obj.clone()),
+            ));
     }
     Ok(buckets)
 }
@@ -676,6 +710,53 @@ mod tests {
         assert!(
             !scan.dirty_uuids.contains_key(&clean_bucket),
             "干净桶不留 uuid 清单"
+        );
+    }
+
+    /// 2026-11-10：墓碑清单必须携带**整行快照**与 `_fk` 父行 uuid
+    ///
+    /// 旧实现只写 uuid + deleted_at，空库首次全量 pull 时无从物化软删行，
+    /// 端到端测试实测 799 条软删任务在另一端正行消失。
+    #[tokio::test]
+    async fn tombstones_carry_full_row_snapshot_with_fk_mark() {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("./src/db/migrations")
+            .run(&pool)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO todo_projects (uuid, title, created_at, updated_at, version) \
+             VALUES ('p-del-1', '项目', 1, 1, 1)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let pid: i64 = sqlx::query_scalar("SELECT id FROM todo_projects WHERE uuid='p-del-1'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO todo_tasks (uuid, title, project_id, is_deleted, deleted_at, \
+             created_at, updated_at, version) VALUES ('t-del-1','已删任务',?,1,170,10,170,2)",
+        )
+        .bind(pid)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let buckets = load_table_tombstones(&pool, "todo_tasks").await.unwrap();
+        let entries: Vec<&crate::cloud_sync::meta::TombstoneEntry> =
+            buckets.values().flatten().collect();
+        assert_eq!(entries.len(), 1);
+        let entry = entries[0];
+        assert_eq!(entry.uuid(), "t-del-1");
+        assert_eq!(entry.deleted_at(), 170);
+        let payload = entry.payload.as_ref().expect("新墓碑必须带整行快照");
+        assert_eq!(payload["title"], "已删任务");
+        assert_eq!(payload["is_deleted"], 1);
+        assert_eq!(
+            payload[FK_MARK]["project_id"], "p-del-1",
+            "子表墓碑必须带父行 uuid，否则空库物化会挂错父级"
         );
     }
 

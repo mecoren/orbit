@@ -514,7 +514,8 @@ async fn run(args: &Args) -> Result<(), String> {
         .bind(duration_minutes)
         .bind(is_deleted)
         .bind(created_at)
-        .bind(created_at)
+        // 与生产删除语义一致：软删行的 updated_at 就是删除时刻（不是创建时刻）
+        .bind(deleted_at.unwrap_or(created_at))
         .bind(deleted_at)
         .fetch_one(&mut *tx)
         .await

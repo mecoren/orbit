@@ -78,3 +78,28 @@ pub use progress::{NoopProgressSender, ProgressSender, SyncProgress};
 pub use pull::{PullResult, pull_all};
 pub use push::{PushResult, push_all};
 pub use state::{SyncState, SyncStateStore};
+
+/// 首次同步解不开云端数据的统一对外文案
+///
+/// 场景：新设备第一次输入同步密码后就同步。本机 meta 认为密码「正确」（它就是
+/// 用它初始化的），但云端密文是另一把 Key —— 旧实现一律返回 `KeyMismatch`
+/// （UI 跳恢复页，引导「以本机为准覆盖云端」，会删掉云端正确数据）。
+/// 本机从未成功同步过时，正确处置是「重输云端密码」，故归 `password` 分类。
+pub(crate) const FIRST_SYNC_PASSWORD_MISMATCH: &str = "首次同步无法解密云端数据：同步密码与云端不一致，\
+     请重新输入云端密码（重输后仍失败且其他设备可正常同步时，才需要走密钥恢复流程）";
+
+/// 构造首次同步错密错误（`is_password_error()==true` → UI 跳解锁页）
+pub(crate) fn first_sync_password_error() -> CloudSyncError {
+    CloudSyncError::Crypto {
+        message: FIRST_SYNC_PASSWORD_MISMATCH.to_string(),
+    }
+}
+
+/// 本机是否**从未成功同步过**（首次同步判定）
+///
+/// 同时看 `manifest_epoch` 与 `last_pulled_at`：只用帐号 push 过的设备
+/// （`push_only`）不会推进 `last_pulled_at`，但它确实见过云端数据，不属于首次设备。
+/// 反之只 pull 过（epoch 会推进）也不属于首次设备。
+pub(crate) fn never_synced(state: &SyncState) -> bool {
+    state.manifest_epoch == 0 && state.last_pulled_at == 0
+}
