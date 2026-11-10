@@ -21,7 +21,7 @@ import 'package:orbit/shared/widgets/shadcn/orbit_page_header.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_timeline_day.dart';
 import 'package:orbit/core/theme/icon_map.dart';
 import 'package:table_calendar/table_calendar.dart'
-    show CalendarFormat, TableCalendar;
+    show CalendarFormat, TableCalendarBase;
 import 'support/orbit_test_app.dart';
 import 'support/seed_dates.dart';
 
@@ -274,15 +274,18 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  /// 树内的 table_calendar 实例（应用侧是 `TableCalendar<void>`，byType 的
-  /// `TableCalendar<dynamic>` 泛型实参不等会扑空，走 `is` 子类型判定）
+  /// 树内的 table_calendar 网格实例。
+  ///
+  /// 应用侧叠的是 `TableCalendarBase`（`TableCalendar` 包装层的 `late final`
+  /// PageController 存在 remount 崩溃，见 orbit_month_calendar.dart）；
+  /// byType 对泛型 `TableCalendar` 的实参判定也不稳，统一走 `is` 子类型判定。
   Finder tableCalendarFinder() => find.byWidgetPredicate(
-    (w) => w is TableCalendar,
-    description: 'TableCalendar',
+    (w) => w is TableCalendarBase,
+    description: 'TableCalendarBase',
   );
 
-  TableCalendar calendarOf(WidgetTester tester) =>
-      tester.widget<TableCalendar>(tableCalendarFinder());
+  TableCalendarBase calendarOf(WidgetTester tester) =>
+      tester.widget<TableCalendarBase>(tableCalendarFinder());
 
   CalendarFormat calendarFormatOf(WidgetTester tester) =>
       calendarOf(tester).calendarFormat;

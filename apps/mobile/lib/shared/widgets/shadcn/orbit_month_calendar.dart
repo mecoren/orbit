@@ -78,10 +78,13 @@ class CalendarEventDot {
 /// 通用月历（设计系统 v3：`table_calendar` 承载网格与手势）。
 ///
 /// **为什么换实现**：v2 的自绘月历要自己维护 42 格网格、翻页手势、行高与选中态；
-/// v3 把这些交给成熟的 `table_calendar`（滑动翻页、`firstDay/lastDay` 边界、
-/// `onDaySelected/onDayLongPressed` 语义齐全），我们只保留业务相关的**日格内容**——
-/// 农历/节气副标签、休/班徽标、事件圆点、周末识别色、调休压暗底，
-/// 全部经 `CalendarBuilders.prioritizedBuilder` 注入。
+/// v3 把这些交给成熟的 `table_calendar`（滑动翻页、`firstDay/lastDay` 边界齐全），
+/// 我们只保留业务相关的**日格内容**——农历/节气副标签、休/班徽标、事件圆点、
+/// 周末识别色、调休压暗底，全部经 `TableCalendarBase.dayBuilder` 注入。
+///
+/// **只叠 `TableCalendarBase`，不叠 `TableCalendar`**：后者的 `late final`
+/// PageController 由子组件 initState 回写，remount 会抛 LateInitializationError
+/// 炸掉整棵网格（table_calendar issue #941），详见 build 内注释。
 ///
 /// 业务数据源不变：农历走 `core/lunar/`，节假日走调用方传入的 [holidays]
 /// （`holidayProvider` 取 `bridge.holidayList()`，空库回落 Rust 预置表）。
@@ -275,50 +278,66 @@ class OrbitMonthCalendar extends StatelessWidget {
     // `DateTime.now()` / `_ymd(selected!)` 是 42 次重复，翻页动画期间逐帧重算
     final now = DateTime.now();
     final selectedYmd = selected == null ? null : _ymd(selected!);
+    // 焦点日去掉时刻（table_calendar 的 `TableCalendar` 在构造里 normalizeDate，
+    // Base 层不做，这里自己归一，避免带时刻的日期算错页索引）
+    final focusDay = _dateOnly(focusedDay ?? monthStart);
 
-    Widget calendar = TableCalendar<void>(
+    // **只用 `TableCalendarBase`，不用 `TableCalendar` 包装层**（2026-11-10）：
+    // 后者的 `_TableCalendarState._pageController` 声明为 `late final`，却是在
+    // 子组件 `TableCalendarBase` 的 initState 回调里赋值（table_calendar
+    // issue #941）。一旦内层网格在父 State 存活期间被重新 inflate（remount），
+    // 回调二次写同一个 `late final` 字段 →
+    // `LateInitializationError: Field '_pageController' has already been
+    // initialized`，整棵月历子树变红屏且此后每次 rebuild 复现。
+    // Base 层自持 PageController（initState 建 / dispose 释），remount 只是换
+    // 新 controller，不会再炸。
+    //
+    // 代价：日格点按/长按要自己接（原来由 `TableCalendar._onDayTapped` 承担）。
+    // 口径镜像 `pageJumpingEnabled = false` 的默认行为——见 [_focusAfterTap]。
+    Widget calendar = TableCalendarBase(
       // 网格与手势交给 table_calendar；今天/选中的底色由我们自己画，
-      // 故把内置装饰全部置空，避免"双份高亮"
+      // Base 层本身不带装饰层，不存在「双份高亮」
       firstDay: firstDay,
       lastDay: lastDay,
-      focusedDay: focusedDay ?? monthStart,
-      locale: 'zh_CN',
+      focusedDay: focusDay,
       startingDayOfWeek: StartingDayOfWeek.monday,
       calendarFormat: calendarFormat,
       availableCalendarFormats: formats ?? const {CalendarFormat.month: ''},
       // 纵向收展一律走外层轴锁定门（内置纵向检测关闭，避免斜向误触发）
       availableGestures: AvailableGestures.horizontalSwipe,
-      headerVisible: false,
-      daysOfWeekHeight: showWeekdays
+      // 星期行显隐与高度由本组件自绘（Base 层 dowVisible 与 dowHeight 解耦）
+      dowVisible: showWeekdays,
+      dowHeight: showWeekdays
           ? (size == AppCalendarSize.large ? 24 : 18)
           : 0,
       rowHeight: _cellHeight,
       pageAnimationDuration: AppMotion.normal,
       pageAnimationCurve: AppMotion.standard,
-      selectedDayPredicate: (day) =>
-          selected != null && isSameDay(day, selected),
-      onDaySelected: (selectedDay, focusedDay) {
-        if (_outOfRange(selectedDay)) return;
-        onDayTap?.call(selectedDay);
-        onMonthChange?.call(focusedDay);
-      },
-      // 注意：table_calendar 的 onDayLongPressed 复用双参 OnDaySelected 签名
-      onDayLongPressed: (selectedDay, _) {
-        if (_outOfRange(selectedDay)) return;
-        onDayLongPress?.call(selectedDay);
-      },
-      onPageChanged: (focusedDay) => onMonthChange?.call(focusedDay),
-      calendarStyle: const CalendarStyle(
-        todayDecoration: BoxDecoration(),
-        selectedDecoration: BoxDecoration(),
-        markerDecoration: BoxDecoration(),
-        outsideDaysVisible: true,
-        cellMargin: EdgeInsets.zero,
-      ),
-      calendarBuilders: CalendarBuilders<void>(
-        // 单一入口接管全部日格（含前后月补位），保证 today/selected/
-        // 休班/农历副标签/事件圆点 的判定与旧实现完全一致
-        prioritizedBuilder: (context, day, _) => _buildCell(
+      onPageChanged: (focused) => onMonthChange?.call(focused),
+      dowBuilder: showWeekdays
+          ? (context, day) => Center(
+              child: Text(
+                _weekdayLabels[(day.weekday - 1) % 7],
+                style: TextStyle(
+                  fontSize: switch (size) {
+                    AppCalendarSize.large => 14,
+                    AppCalendarSize.medium => 12,
+                    AppCalendarSize.small => 10,
+                  },
+                  color: colors.secondaryText,
+                ),
+              ),
+            )
+          : null,
+      // 单一入口接管全部日格（含前后月补位），保证 today/selected/
+      // 休班/农历副标签/事件圆点 的判定与旧实现完全一致
+      dayBuilder: (context, day, _) => GestureDetector(
+        // 与 `TableCalendar` 的 dayHitTestBehavior 缺省值（opaque）同口径：
+        // 空白格也吃点击（否则点日格边角无反应）
+        behavior: HitTestBehavior.opaque,
+        onTap: () => _handleDayTap(day),
+        onLongPress: () => _handleDayLongPress(day),
+        child: _buildCell(
           context,
           colors,
           day,
@@ -327,21 +346,6 @@ class OrbitMonthCalendar extends StatelessWidget {
           now: now,
           selectedYmd: selectedYmd,
         ),
-        dowBuilder: showWeekdays
-            ? (context, day) => Center(
-                child: Text(
-                  _weekdayLabels[(day.weekday - 1) % 7],
-                  style: TextStyle(
-                    fontSize: switch (size) {
-                      AppCalendarSize.large => 14,
-                      AppCalendarSize.medium => 12,
-                      AppCalendarSize.small => 10,
-                    },
-                    color: colors.secondaryText,
-                  ),
-                ),
-              )
-            : null,
       ),
     );
 
@@ -496,6 +500,37 @@ class OrbitMonthCalendar extends StatelessWidget {
   bool _outOfRange(DateTime date) =>
       (selectableStart != null && date.isBefore(selectableStart!)) ||
       (selectableEnd != null && date.isAfter(selectableEnd!));
+
+  /// 只留日期、抹掉时刻（页索引按「月/周」算，带时刻会算错）
+  DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  /// 点日格：先判越界（可选范围外不响应），再上报选中与焦点。
+  ///
+  /// 镜像 `TableCalendar._onDayTapped`（`pageJumpingEnabled = false` 缺省口径）：
+  /// 月档点前后月补位格**不翻月**（焦点收在当前页月边界）；周档焦点跟随被点日
+  /// （周条本就按「周」翻页）。
+  void _handleDayTap(DateTime day) {
+    if (_outOfRange(day)) return;
+    onDayTap?.call(day);
+    onMonthChange?.call(_focusAfterTap(day));
+  }
+
+  /// 长按日格（对应桌面右键）：越界格不响应
+  void _handleDayLongPress(DateTime day) {
+    if (_outOfRange(day)) return;
+    onDayLongPress?.call(day);
+  }
+
+  /// 点选后的焦点日（镜像 `TableCalendar._updateFocusOnTap`）
+  DateTime _focusAfterTap(DateTime day) {
+    final focus = _dateOnly(focusedDay ?? month);
+    if (calendarFormat != CalendarFormat.month) return day;
+    final monthFirst = DateTime(focus.year, focus.month, 1);
+    if (day.isBefore(monthFirst)) return monthFirst;
+    final monthLast = DateTime(focus.year, focus.month + 1, 0);
+    if (day.isAfter(monthLast)) return monthLast;
+    return day;
+  }
 
   Widget _buildCell(
     BuildContext context,

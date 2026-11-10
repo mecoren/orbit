@@ -5,7 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/core/theme/app_colors.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_month_calendar.dart';
-import 'package:table_calendar/table_calendar.dart' show CalendarFormat;
+import 'package:table_calendar/table_calendar.dart'
+    show CalendarFormat, TableCalendar, TableCalendarBase;
 import 'support/orbit_test_app.dart';
 
 void main() {
@@ -171,5 +172,17 @@ void main() {
     expect(taps.first.$1.day, 10);
     expect(taps.first.$2.taskId, 1);
     expect(taps.first.$2.title, '任务1');
+  });
+
+  // ===== 实现层回归：不叠 `TableCalendar` 包装层 =====
+
+  testWidgets('网格只叠 TableCalendarBase（TableCalendar 包装层 remount 会崩）', (tester) async {
+    // table_calendar issue #941：`_TableCalendarState._pageController` 是
+    // `late final`，却由子网格 `TableCalendarBase.initState` 的回调赋值——
+    // 子网格一旦 remount，回调二次写同一字段 → LateInitializationError，
+    // 整棵网格变红屏且此后每次 rebuild 复现。Base 层自持 controller，不存在该路径。
+    await pumpMonth(tester, DateTime(2026, 2));
+    expect(find.byWidgetPredicate((w) => w is TableCalendarBase), findsOneWidget);
+    expect(find.byWidgetPredicate((w) => w is TableCalendar), findsNothing);
   });
 }
