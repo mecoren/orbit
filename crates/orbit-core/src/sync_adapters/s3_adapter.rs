@@ -671,6 +671,79 @@ x-amz-date:{}
             }
         }
     }
+
+    /// 是否阿里云 OSS 方言（与 SigV4 credential scope 的 service 判定同源）
+    fn is_oss(&self) -> bool {
+        infer_service(&self.config.endpoint) == "oss"
+    }
+
+    /// HEAD 读取 ETag，归一化后与 `download_with_token` 的并发令牌同源
+    async fn head_etag(&self, url: &str) -> Result<Option<String>, SyncError> {
+        let headers = self.sign_request("HEAD", url, &sha256_hex(b""))?;
+        let response = self
+            .http
+            .send_idempotent(reqwest::Method::HEAD, url, headers, None)
+            .await?;
+        let status = response.status().as_u16();
+        if !SyncError::classify_head_status(status)? {
+            return Ok(None);
+        }
+        Ok(response
+            .headers()
+            .get(reqwest::header::ETAG)
+            .and_then(|v| v.to_str().ok())
+            .and_then(crate::sync_adapters::traits::normalize_etag))
+    }
+
+    /// OSS 方言的条件写（2026-11-10 真机实测后的替代路径）
+    ///
+    /// 阿里云 OSS 对 PUT 携带 `If-Match` / `If-None-Match: *` 一律返回
+    /// `400 NotImplemented`，清单 CAS 写完不成，整轮 push 三次重试后必失败；
+    /// 而 GET/LIST 不受影响，所以「测试连接」全绿也代表不了写路径可用。
+    ///
+    /// - `Absent`：`x-oss-forbid-overwrite: true`，由服务端**原子**判存在；
+    ///   已存在回 `409 FileAlreadyExists`，折成 `PreconditionFailed`。
+    ///   该头无需进 SigV4（实测加签/不加签均 200），故直接追加到已签名头上。
+    /// - `Match(token)`：先 HEAD 读 ETag 与令牌比对，不符直接判前置条件失败；
+    ///   相符则普通 PUT。OSS 无原子 ETag 条件写，HEAD→PUT 之间存在竞态窗口，
+    ///   由 `cloud_sync::push` 的 `verify_manifest_write` 写后回读 + CAS 重试
+    ///   兜底——与 `traits.rs` 里「服务端忽略条件头」的既有兜底同一口径。
+    /// - `None`：普通 PUT。
+    async fn upload_conditional_oss(
+        &self,
+        path: &str,
+        data: &[u8],
+        precondition: UploadPrecondition,
+    ) -> Result<UploadOutcome, SyncError> {
+        let url = self.build_object_url(path);
+        if let UploadPrecondition::Match(token) = &precondition
+            && self.head_etag(&url).await?.as_deref() != Some(token.as_str())
+        {
+            return Ok(UploadOutcome::PreconditionFailed);
+        }
+
+        let payload_hash = sha256_hex(data);
+        let mut headers = self.sign_request("PUT", &url, &payload_hash)?;
+        if matches!(precondition, UploadPrecondition::Absent) {
+            headers.insert(
+                "x-oss-forbid-overwrite",
+                reqwest::header::HeaderValue::from_static("true"),
+            );
+        }
+        let response = self
+            .http
+            .send_idempotent(reqwest::Method::PUT, &url, headers, Some(data.to_vec()))
+            .await?;
+        let status = response.status().as_u16();
+        if matches!(status, 409 | 412) {
+            return Ok(UploadOutcome::PreconditionFailed);
+        }
+        if !crate::sync::error::is_success_status(status) {
+            let body = response.text().await.unwrap_or_default();
+            return Err(SyncError::from_http_status(status, &body));
+        }
+        Ok(UploadOutcome::Ok)
+    }
 }
 
 #[async_trait]
@@ -966,9 +1039,11 @@ impl SyncAdapter for S3Adapter {
         }
     }
 
-    /// 条件 PUT（S3/OSS 支持 If-Match 与 If-None-Match: *）
+    /// 条件 PUT：清单是小对象（不会触达 multipart 分派阈值）
     ///
-    /// 清单是小对象（不会触达 multipart 分派阈值），条件头可达。
+    /// AWS S3 / MinIO 等标准实现用 `If-Match` / `If-None-Match: *` 做服务端
+    /// 原子 CAS；**阿里云 OSS 不支持这两个头**（实测 400 NotImplemented），
+    /// 走 [`S3Adapter::upload_conditional_oss`] 的方言分支。
     async fn upload_conditional(
         &self,
         path: &str,
@@ -976,6 +1051,9 @@ impl SyncAdapter for S3Adapter {
         precondition: UploadPrecondition,
     ) -> Result<UploadOutcome, SyncError> {
         self.cancel_check()?;
+        if self.is_oss() {
+            return self.upload_conditional_oss(path, data, precondition).await;
+        }
         let url = self.build_object_url(path);
         let payload_hash = sha256_hex(data);
         let headers = self.sign_request("PUT", &url, &payload_hash)?;
@@ -1211,5 +1289,140 @@ mod multipart_tests {
             .sign_request("GET", "https://b.s3.amazonaws.com/x", &sha256_hex(b""))
             .unwrap();
         assert!(headers.get("x-amz-security-token").is_none());
+    }
+}
+
+/// OSS 条件写方言回归（2026-11-10 真机 400 NotImplemented 的复活防线）
+#[cfg(test)]
+mod oss_conditional_tests {
+    use super::*;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    fn local_cfg(endpoint: &str) -> S3Config {
+        S3Config {
+            endpoint: endpoint.to_string(),
+            bucket: "b".to_string(),
+            region: "oss-cn-shenzhen".to_string(),
+            access_key: "ak".to_string(),
+            secret_key: "sk".to_string(),
+            use_path_style: true,
+            timeout_secs: 5,
+            skip_tls_verify: false,
+            session_token: String::new(),
+        }
+    }
+
+    /// 一次性本地服务：收集前 `n` 个请求的报文头，统一回 200 + ETag
+    async fn serve(n: usize) -> (String, tokio::task::JoinHandle<Vec<String>>) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let handle = tokio::spawn(async move {
+            let mut reqs = Vec::new();
+            for _ in 0..n {
+                let (mut sock, _) = listener.accept().await.unwrap();
+                let mut buf = vec![0u8; 16 * 1024];
+                let len = sock.read(&mut buf).await.unwrap();
+                reqs.push(String::from_utf8_lossy(&buf[..len]).to_string());
+                let resp = "HTTP/1.1 200 OK\r\nETag: \"ETAG-1\"\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                sock.write_all(resp.as_bytes()).await.unwrap();
+                sock.shutdown().await.ok();
+            }
+            reqs
+        });
+        (format!("http://{addr}"), handle)
+    }
+
+    #[test]
+    fn oss_dialect_follows_signing_service_detection() {
+        let oss = S3Adapter::new(local_cfg("https://oss-cn-shenzhen.aliyuncs.com/")).unwrap();
+        assert!(oss.is_oss());
+        let aws = S3Adapter::new(local_cfg("https://s3.us-west-2.amazonaws.com")).unwrap();
+        assert!(!aws.is_oss());
+        let minio = S3Adapter::new(local_cfg("https://minio.example.com")).unwrap();
+        assert!(!minio.is_oss());
+    }
+
+    /// Absent：必须走 x-oss-forbid-overwrite，绝不能再带 If-None-Match（OSS 会 400）
+    #[tokio::test]
+    async fn oss_absent_uses_forbid_overwrite_without_if_headers() {
+        let (endpoint, server) = serve(1).await;
+        let adapter = S3Adapter::new(local_cfg(&endpoint)).unwrap();
+        let outcome = adapter
+            .upload_conditional_oss("manifest.orsync", b"x", UploadPrecondition::Absent)
+            .await
+            .unwrap();
+        let req = &server.await.unwrap()[0];
+        assert_eq!(outcome, UploadOutcome::Ok);
+        assert!(req.starts_with("PUT "), "实际请求: {req}");
+        assert!(
+            req.to_ascii_lowercase()
+                .contains("x-oss-forbid-overwrite: true")
+        );
+        assert!(!req.to_ascii_lowercase().contains("if-none-match"));
+        assert!(!req.to_ascii_lowercase().contains("if-match"));
+    }
+
+    /// 409 FileAlreadyExists 必须折成 PreconditionFailed，而不是报错
+    #[tokio::test]
+    async fn oss_absent_409_is_precondition_failed() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let handle = tokio::spawn(async move {
+            let (mut sock, _) = listener.accept().await.unwrap();
+            let mut buf = vec![0u8; 16 * 1024];
+            let _ = sock.read(&mut buf).await.unwrap();
+            sock.write_all(
+                b"HTTP/1.1 409 Conflict\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+            )
+            .await
+            .unwrap();
+        });
+        let adapter = S3Adapter::new(local_cfg(&format!("http://{addr}"))).unwrap();
+        let outcome = adapter
+            .upload_conditional_oss("manifest.orsync", b"x", UploadPrecondition::Absent)
+            .await
+            .unwrap();
+        assert_eq!(outcome, UploadOutcome::PreconditionFailed);
+        handle.await.unwrap();
+    }
+
+    /// Match：HEAD 比对令牌，令牌不符时不得发出 PUT
+    #[tokio::test]
+    async fn oss_match_stale_token_skips_put() {
+        let (endpoint, server) = serve(1).await;
+        let adapter = S3Adapter::new(local_cfg(&endpoint)).unwrap();
+        let outcome = adapter
+            .upload_conditional_oss(
+                "manifest.orsync",
+                b"x",
+                UploadPrecondition::Match("STALE".to_string()),
+            )
+            .await
+            .unwrap();
+        let reqs = server.await.unwrap();
+        assert_eq!(outcome, UploadOutcome::PreconditionFailed);
+        assert_eq!(reqs.len(), 1);
+        assert!(reqs[0].starts_with("HEAD "), "只应有一发 HEAD: {reqs:?}");
+    }
+
+    /// Match：令牌相符时普通 PUT，且不带 OSS 会拒的 If-Match
+    #[tokio::test]
+    async fn oss_match_valid_token_puts_without_if_match() {
+        let (endpoint, server) = serve(2).await;
+        let adapter = S3Adapter::new(local_cfg(&endpoint)).unwrap();
+        let outcome = adapter
+            .upload_conditional_oss(
+                "manifest.orsync",
+                b"x",
+                UploadPrecondition::Match("ETAG-1".to_string()),
+            )
+            .await
+            .unwrap();
+        let reqs = server.await.unwrap();
+        assert_eq!(outcome, UploadOutcome::Ok);
+        assert_eq!(reqs.len(), 2);
+        assert!(reqs[0].starts_with("HEAD "));
+        assert!(reqs[1].starts_with("PUT "));
+        assert!(!reqs[1].to_ascii_lowercase().contains("if-match"));
     }
 }
