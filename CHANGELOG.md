@@ -17,6 +17,15 @@
 
 ## [Unreleased]
 
+### 修复：Endpoint 首字符带不可见字符导致「设置对了却连不上」（2026-11-10）
+
+上一条把残缺 Endpoint 拦在配置期后，真机立刻暴露真凶：字段里看着完全正确的 `https://oss-cn-shenzhen.aliyuncs.com/` 仍被判「仅支持 http:// 或 https://，当前是 https://」——首字符其实是**肉眼不可见的 `U+FEFF`（BOM）**，从网页/文档粘贴时自带，`trim()` 去不掉（它不是 `char::is_whitespace`）。
+
+- 新增 `s3::url::sanitize_endpoint()`：清掉 `U+FEFF` / `U+200B`~`U+200D` / `U+2060` / `U+00AD` 并裁首尾空白，作为 endpoint 进入 URL 拼接与校验的唯一入口；
+- `normalize_endpoint` 与 `endpoint_problem` 都先过它，S3 的 `build_url` 与 **WebDAV 的 `build_url`**（此前自带一份 `starts_with` 判 scheme，同样被不可见前缀/大写 scheme 打歪）统一走同一规范化；
+- 报错文案里的隐形字符不再出现（此前「当前是 ␁https://」看起来像在自相矛盾）；
+- **验证**：`cargo test -p orbit-core --lib` 947 通过（新增不可见前缀的清洗、校验、S3/WebDAV URL 拼接回归用例）。
+
 ### 修复：移动端 STS 会话令牌未过桥、令牌状态提示恒「未设置」（2026-11-10）
 
 盘查云同步连接页时发现两处桥接漏字段，双端表现不一致：

@@ -43,6 +43,44 @@ pub fn uri_encode(s: &str, encode_slash: bool) -> String {
     out
 }
 
+/// 是否不可见字符（URL 里出现必是输入噪声）
+///
+/// - `U+FEFF`：BOM / 零宽不换行空格（从文本文件、网页、聊天工具复制粘贴时常见）
+/// - `U+200B` / `U+200C` / `U+200D`：零宽空格 / 零宽不连字 / 零宽连字
+/// - `U+2060`：word joiner
+/// - `U+00AD`：软连字符
+///
+/// 这些字符在输入框里**看不见**，但会改掉字符串前缀：`␁https://host` 的
+/// `starts_with("https://")` 为假，`trim` 也去不掉（只有 `U+FEFF` 以外的
+/// 空白才是 `char::is_whitespace`），于是被当成「无 scheme 输入」再补一层
+/// `https://`，最终 host 解析成字面量 `https`（2026-11-10 移动端两张实测
+/// 截图：先报 `https://wait-test.https/?list-type=2`，加校验后报
+/// 「当前是 ␁https://」——两个报错里那个字符都不可见）。
+fn is_invisible_noise(c: char) -> bool {
+    matches!(
+        c,
+        '\u{feff}' | '\u{200b}' | '\u{200c}' | '\u{200d}' | '\u{2060}' | '\u{00ad}'
+    )
+}
+
+/// 清洗 endpoint 输入：去掉不可见字符并裁掉首尾空白
+///
+/// 这是 endpoint 进入 URL 拼接/校验的**唯一入口**（`normalize_endpoint` 与
+/// `endpoint_problem` 都先过这里，WebDAV 的 `build_url` 同口径）。
+pub fn sanitize_endpoint(endpoint: &str) -> String {
+    let trimmed = endpoint.trim();
+    if trimmed.chars().any(is_invisible_noise) {
+        trimmed
+            .chars()
+            .filter(|c| !is_invisible_noise(*c))
+            .collect::<String>()
+            .trim()
+            .to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
 /// 规范化 endpoint：补全 scheme、统一小写 scheme、去掉末尾斜杠
 ///
 /// 与 Dart `S3SyncAdapter._normalizeEndpoint` 行为一致。
@@ -53,7 +91,7 @@ pub fn uri_encode(s: &str, encode_slash: bool) -> String {
 /// 字面量 `HTTPS:` 当主机名，最终请求打到 `https://<bucket>.https/` 这种
 /// 不存在的主机，报错与真实配置毫无关系。
 pub fn normalize_endpoint(endpoint: &str) -> String {
-    let mut s = endpoint.trim().to_string();
+    let mut s = sanitize_endpoint(endpoint);
     let has_scheme = s
         .get(..8)
         .map(|p| p.eq_ignore_ascii_case("https://"))
@@ -85,7 +123,10 @@ pub fn normalize_endpoint(endpoint: &str) -> String {
 /// 故在校验层（`engine::validate_config`）与构造层（`engine::create_adapter`）
 /// 统一拦截，报可读的配置错误。
 pub fn endpoint_problem(endpoint: &str) -> Option<String> {
-    let trimmed = endpoint.trim();
+    // 先洗掉不可见字符：`␁https://host` 的 scheme 切片是 `␁https`，
+    // 报错文案里那个字符不可见 → 用户看到「当前是 https://」而设置明明是对的
+    let cleaned = sanitize_endpoint(endpoint);
+    let trimmed = cleaned.as_str();
     // 显式写了非 http(s) 协议：`normalize_endpoint` 会再补一个 `https://`，
     // 拼出的主机名与用户意图无关，必须按协议拦下
     if let Some(pos) = trimmed.find("://") {
@@ -452,6 +493,52 @@ mod tests {
         ] {
             assert_eq!(endpoint_problem(ok), None, "应判为可用: {ok}");
         }
+    }
+
+    #[test]
+    fn endpoint_problem_accepts_invisible_prefixed_endpoint() {
+        // 2026-11-10 实测第二张截图：字段里看着完全正确，实际首字符是
+        // U+FEFF（从网页/文档粘贴自带），旧逻辑报「当前是 ␁https://」
+        for good in [
+            "\u{feff}https://oss-cn-shenzhen.aliyuncs.com/",
+            "\u{200b}https://oss-cn-shenzhen.aliyuncs.com/",
+            "  \u{feff} https://oss-cn-shenzhen.aliyuncs.com/  ",
+        ] {
+            assert_eq!(
+                endpoint_problem(good),
+                None,
+                "不可见前缀必须清洗后放行: {good:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn sanitize_endpoint_strips_invisible_noise_everywhere() {
+        assert_eq!(
+            sanitize_endpoint("\u{feff} https://oss-cn-shenzhen.aliyuncs.com/\u{200b}"),
+            "https://oss-cn-shenzhen.aliyuncs.com/"
+        );
+        // 干净输入原样返回（含内部空格，由 URL 编码层处理）
+        assert_eq!(
+            sanitize_endpoint("  https://minio.example.com  "),
+            "https://minio.example.com"
+        );
+    }
+
+    #[test]
+    fn build_url_drops_invisible_prefix_before_scheme_detection() {
+        // 首字符不可见时不得再补一层 https://（否则 host 变字面量 "https"）
+        let url = build_url(
+            "\u{feff}https://oss-cn-shenzhen.aliyuncs.com/",
+            "wait-test",
+            "",
+            false,
+            &[("list-type".to_string(), "2".to_string())],
+        );
+        assert_eq!(
+            url,
+            "https://wait-test.oss-cn-shenzhen.aliyuncs.com?list-type=2"
+        );
     }
 
     #[test]

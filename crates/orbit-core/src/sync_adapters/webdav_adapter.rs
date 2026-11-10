@@ -233,14 +233,14 @@ impl WebDavAdapter {
     /// 编码走 `sync_adapters::uri_encode`（与 S3 同一实现，保留 `/` 作分隔符）。
     /// 调用方一律传**原始未编码**路径——自编码会被二次编码成 `%2520`。
     fn build_url(&self, path: &str) -> String {
-        let trimmed = self.config.server_url.trim();
-        let base = if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
-            trimmed.trim_end_matches('/').to_string()
-        } else {
-            format!("https://{}", trimmed)
-                .trim_end_matches('/')
-                .to_string()
-        };
+        // 2026-11-10：改走 S3 同一套 `normalize_endpoint`——它先清掉输入里的
+        // 不可见字符（BOM/零宽空格，粘贴自带且肉眼不可见）、再按大小写不敏感
+        // 判定 scheme。此前这里用 `starts_with` 判 scheme：`␁https://host` 或
+        // `HTTPS://host` 都会被当成无 scheme 输入再补一层，请求打到
+        // `https://␁https//host` / `https://HTTPS://host` 这种不存在的主机上。
+        let base = crate::s3::normalize_endpoint(&self.config.server_url)
+            .trim_end_matches('/')
+            .to_string();
         let encoded = crate::sync_adapters::uri_encode(path, false);
         if encoded.starts_with('/') {
             format!("{}{}", base, encoded)
@@ -1997,6 +1997,23 @@ mod tests {
         assert_eq!(
             a.build_url("/leading"),
             "https://dav.example.com/dav/leading"
+        );
+    }
+
+    /// 2026-11-10：粘贴自带的不可见前缀（BOM / 零宽空格）与大写 scheme
+    /// 都不得让 base 被再补一层 `https://`——否则请求打到不存在的主机上
+    #[test]
+    fn build_url_ignores_invisible_prefix_and_scheme_case() {
+        let a = adapter_for("\u{feff}https://dav.example.com/dav");
+        assert_eq!(
+            a.build_url("manifest.orsync"),
+            "https://dav.example.com/dav/manifest.orsync"
+        );
+
+        let a = adapter_for("HTTPS://dav.example.com/dav/");
+        assert_eq!(
+            a.build_url("manifest.orsync"),
+            "https://dav.example.com/dav/manifest.orsync"
         );
     }
 
