@@ -4214,14 +4214,15 @@ class MockOrbitBridge implements OrbitBridge {
       final row =
           existing ??
           StatsProjectRow(
-            projectId: pid,
+            // 与 core 同口径：统计只透出跨端稳定的项目 uuid
+            projectUuid: project?['uuid'] as String?,
             projectTitle: title,
             projectHexColor: project?['hex_color'] as String?,
             doneCount: 0,
             pendingCount: 0,
           );
       byProjectMap[key] = StatsProjectRow(
-        projectId: row.projectId,
+        projectUuid: row.projectUuid,
         projectTitle: row.projectTitle,
         projectHexColor: row.projectHexColor,
         doneCount: row.doneCount + (t['done'] == 1 ? 1 : 0),

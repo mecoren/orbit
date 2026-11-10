@@ -1414,7 +1414,8 @@ export interface StatsStreak {
   done_today: boolean;
 }
 export interface StatsProjectRow {
-  project_id: number | null;
+  /** 项目 uuid（跨设备稳定；本地自增 id 不能用来做跨端对比/缓存键） */
+  project_uuid: string | null;
   /** null = 未分组 */
   project_title: string | null;
   /** 项目自选色（null = 未分组；空串/缺失回落待办强调色） */

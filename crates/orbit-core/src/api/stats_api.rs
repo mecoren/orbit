@@ -76,9 +76,13 @@ pub struct StreakData {
 }
 
 /// 项目维度分布行（NULL 项目聚合为「未分组」）
+///
+/// `project_uuid` 而不是本地自增 `id`：统计结果要跨设备可比（端到端测试
+/// 2026-11-10 实测 `by_project[].project_id` 三端不同，仅因项目插入顺序不同）。
+/// 前端只拿它做列表 key / 未分组判据，不参与数据库查询。
 #[derive(Debug, Clone, Serialize)]
 pub struct ProjectDistRow {
-    pub project_id: Option<i64>,
+    pub project_uuid: Option<String>,
     /// 项目名（未分组时 None，前端显示「未分组」）
     pub project_title: Option<String>,
     /// 项目自选色（未分组时 None；前端条形图按此着色，空串回落待办强调色）
@@ -342,8 +346,10 @@ async fn stats_streak_impl(rows: &[TaskStatRow]) -> CoreResult<StreakData> {
 
 // bounded-by-data: GROUP BY 项目，结果集 = 项目数（百级），与任务总数无关
 async fn stats_by_project_impl(pool: &SqlitePool) -> CoreResult<Vec<ProjectDistRow>> {
-    let rows: Vec<(Option<i64>, String, String, i64, i64)> = sqlx::query_as(
-        "SELECT t.project_id, \
+    // GROUP BY 仍按本地 project_id（NULL 归「未分组」），但投影出 uuid：
+    // 自增 id 在换机/清库重同步后会重排，直接透出会让同一份数据在三端产出不同结果。
+    let rows: Vec<(Option<String>, String, String, i64, i64)> = sqlx::query_as(
+        "SELECT p.uuid, \
                 CASE WHEN t.project_id IS NULL THEN '' ELSE p.title END, \
                 CASE WHEN t.project_id IS NULL THEN '' ELSE p.hex_color END, \
                 SUM(CASE WHEN t.done = 1 THEN 1 ELSE 0 END), \
@@ -357,12 +363,15 @@ async fn stats_by_project_impl(pool: &SqlitePool) -> CoreResult<Vec<ProjectDistR
     .await?;
     Ok(rows
         .into_iter()
-        .map(|(pid, title, hex, done, pending)| ProjectDistRow {
-            project_id: pid,
-            project_title: if pid.is_some() { Some(title) } else { None },
-            project_hex_color: if pid.is_some() { Some(hex) } else { None },
-            done_count: done,
-            pending_count: pending,
+        .map(|(puuid, title, hex, done, pending)| {
+            let grouped = puuid.is_some();
+            ProjectDistRow {
+                project_uuid: puuid,
+                project_title: if grouped { Some(title) } else { None },
+                project_hex_color: if grouped { Some(hex) } else { None },
+                done_count: done,
+                pending_count: pending,
+            }
         })
         .collect())
 }
@@ -668,10 +677,13 @@ mod tests {
         seed_pending(&pool, "u1", 0).await;
 
         let rows = stats_by_project_impl(&pool).await.unwrap();
-        let grouped = rows.iter().find(|r| r.project_id == Some(proj.id)).unwrap();
+        let grouped = rows
+            .iter()
+            .find(|r| r.project_uuid.as_deref() == Some(proj.uuid.as_str()))
+            .unwrap();
         assert_eq!(grouped.project_title.as_deref(), Some("工作"));
         assert_eq!(grouped.project_hex_color.as_deref(), Some("#2DB87A"));
-        let ungrouped = rows.iter().find(|r| r.project_id.is_none()).unwrap();
+        let ungrouped = rows.iter().find(|r| r.project_uuid.is_none()).unwrap();
         assert!(ungrouped.project_hex_color.is_none(), "未分组行不带色");
     }
 

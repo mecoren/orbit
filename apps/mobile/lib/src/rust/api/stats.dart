@@ -170,15 +170,17 @@ class StatsPriorityRow {
 }
 
 /// 项目分布行（镜像 core ProjectDistRow；title None = 未分组）
+///
+/// `project_uuid` 是跨设备稳定键（本地自增 id 在换机/重同步后会重排）。
 class StatsProjectRow {
-  final PlatformInt64? projectId;
+  final String? projectUuid;
   final String? projectTitle;
   final String? projectHexColor;
   final PlatformInt64 doneCount;
   final PlatformInt64 pendingCount;
 
   const StatsProjectRow({
-    this.projectId,
+    this.projectUuid,
     this.projectTitle,
     this.projectHexColor,
     required this.doneCount,
@@ -187,7 +189,7 @@ class StatsProjectRow {
 
   @override
   int get hashCode =>
-      projectId.hashCode ^
+      projectUuid.hashCode ^
       projectTitle.hashCode ^
       projectHexColor.hashCode ^
       doneCount.hashCode ^
@@ -198,7 +200,7 @@ class StatsProjectRow {
       identical(this, other) ||
       other is StatsProjectRow &&
           runtimeType == other.runtimeType &&
-          projectId == other.projectId &&
+          projectUuid == other.projectUuid &&
           projectTitle == other.projectTitle &&
           projectHexColor == other.projectHexColor &&
           doneCount == other.doneCount &&

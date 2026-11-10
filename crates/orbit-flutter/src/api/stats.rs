@@ -54,9 +54,11 @@ pub struct StatsStreak {
 }
 
 /// 项目分布行（镜像 core ProjectDistRow；title None = 未分组）
+///
+/// `project_uuid` 是跨设备稳定键（本地自增 id 在换机/重同步后会重排）。
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct StatsProjectRow {
-    pub project_id: Option<i64>,
+    pub project_uuid: Option<String>,
     pub project_title: Option<String>,
     pub project_hex_color: Option<String>,
     pub done_count: i64,
@@ -124,7 +126,7 @@ impl From<stats_api::StatsAggregate> for StatsAggregate {
                 .by_project
                 .into_iter()
                 .map(|r| StatsProjectRow {
-                    project_id: r.project_id,
+                    project_uuid: r.project_uuid,
                     project_title: r.project_title,
                     project_hex_color: r.project_hex_color,
                     done_count: r.done_count,

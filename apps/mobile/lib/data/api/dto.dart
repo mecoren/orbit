@@ -1891,15 +1891,18 @@ class StatsStreak {
 }
 
 /// 项目分布行（title null = 未分组）
+///
+/// `projectUuid` 是跨设备稳定键：本地自增 id 在换机/清库重同步后会重排，
+/// 透出 id 会让同一份数据在三端产出不同统计结果（也做不了稳定的缓存 key）。
 class StatsProjectRow {
-  final int? projectId;
+  final String? projectUuid;
   final String? projectTitle;
   final String? projectHexColor;
   final int doneCount;
   final int pendingCount;
 
   const StatsProjectRow({
-    required this.projectId,
+    this.projectUuid,
     required this.projectTitle,
     this.projectHexColor,
     required this.doneCount,

@@ -9488,13 +9488,13 @@ impl SseDecode for crate::api::stats::StatsPriorityRow {
 impl SseDecode for crate::api::stats::StatsProjectRow {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_projectId = <Option<i64>>::sse_decode(deserializer);
+        let mut var_projectUuid = <Option<String>>::sse_decode(deserializer);
         let mut var_projectTitle = <Option<String>>::sse_decode(deserializer);
         let mut var_projectHexColor = <Option<String>>::sse_decode(deserializer);
         let mut var_doneCount = <i64>::sse_decode(deserializer);
         let mut var_pendingCount = <i64>::sse_decode(deserializer);
         return crate::api::stats::StatsProjectRow {
-            project_id: var_projectId,
+            project_uuid: var_projectUuid,
             project_title: var_projectTitle,
             project_hex_color: var_projectHexColor,
             done_count: var_doneCount,
@@ -12775,7 +12775,7 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::stats::StatsPriorityRow>
 impl flutter_rust_bridge::IntoDart for crate::api::stats::StatsProjectRow {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.project_id.into_into_dart().into_dart(),
+            self.project_uuid.into_into_dart().into_dart(),
             self.project_title.into_into_dart().into_dart(),
             self.project_hex_color.into_into_dart().into_dart(),
             self.done_count.into_into_dart().into_dart(),
@@ -15557,7 +15557,7 @@ impl SseEncode for crate::api::stats::StatsPriorityRow {
 impl SseEncode for crate::api::stats::StatsProjectRow {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <Option<i64>>::sse_encode(self.project_id, serializer);
+        <Option<String>>::sse_encode(self.project_uuid, serializer);
         <Option<String>>::sse_encode(self.project_title, serializer);
         <Option<String>>::sse_encode(self.project_hex_color, serializer);
         <i64>::sse_encode(self.done_count, serializer);

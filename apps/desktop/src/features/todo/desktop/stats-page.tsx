@@ -191,13 +191,13 @@ export function StatsPanel() {
               )}
               {agg.by_project.map((r) => (
                 <DistBar
-                  key={r.project_id ?? "none"}
+                  key={r.project_uuid ?? "none"}
                   label={r.project_title ?? "未分组"}
                   done={r.done_count}
                   pending={r.pending_count}
                   max={maxProject}
                   color={r.project_hex_color || TODO_ACCENT}
-                  labelColor={r.project_id != null ? r.project_hex_color || TODO_ACCENT : undefined}
+                  labelColor={r.project_uuid != null ? r.project_hex_color || TODO_ACCENT : undefined}
                 />
               ))}
             </div>

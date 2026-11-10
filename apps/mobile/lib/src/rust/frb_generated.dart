@@ -8625,7 +8625,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     if (arr.length != 5)
       throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
     return StatsProjectRow(
-      projectId: dco_decode_opt_box_autoadd_i_64(arr[0]),
+      projectUuid: dco_decode_opt_String(arr[0]),
       projectTitle: dco_decode_opt_String(arr[1]),
       projectHexColor: dco_decode_opt_String(arr[2]),
       doneCount: dco_decode_i_64(arr[3]),
@@ -11774,13 +11774,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   StatsProjectRow sse_decode_stats_project_row(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_projectId = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_projectUuid = sse_decode_opt_String(deserializer);
     var var_projectTitle = sse_decode_opt_String(deserializer);
     var var_projectHexColor = sse_decode_opt_String(deserializer);
     var var_doneCount = sse_decode_i_64(deserializer);
     var var_pendingCount = sse_decode_i_64(deserializer);
     return StatsProjectRow(
-      projectId: var_projectId,
+      projectUuid: var_projectUuid,
       projectTitle: var_projectTitle,
       projectHexColor: var_projectHexColor,
       doneCount: var_doneCount,
@@ -14815,7 +14815,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_opt_box_autoadd_i_64(self.projectId, serializer);
+    sse_encode_opt_String(self.projectUuid, serializer);
     sse_encode_opt_String(self.projectTitle, serializer);
     sse_encode_opt_String(self.projectHexColor, serializer);
     sse_encode_i_64(self.doneCount, serializer);

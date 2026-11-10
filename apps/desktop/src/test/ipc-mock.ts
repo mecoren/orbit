@@ -2330,13 +2330,14 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       return doneTasks.filter((t) => idxOf(dayKey(t.done_at!)) >= cutoff).length;
     };
 
-    const byProjectMap = new Map<number | "none", { id: number | null; title: string | null; hex: string | null; done: number; pending: number }>();
+    const byProjectMap = new Map<number | "none", { uuid: string | null; title: string | null; hex: string | null; done: number; pending: number }>();
     for (const t of live) {
       const key = t.project_id ?? "none";
       const row =
         byProjectMap.get(key) ??
         {
-          id: t.project_id ?? null,
+          // 统计只透出跨端稳定的 uuid（本地自增 id 在换机/重同步后会重排）
+          uuid: t.project_id != null ? db.projects.find((p) => p.id === t.project_id)?.uuid ?? null : null,
           title: t.project_id != null ? db.projects.find((p) => p.id === t.project_id)?.title ?? "未知项目" : null,
           hex: t.project_id != null ? db.projects.find((p) => p.id === t.project_id)?.hex_color ?? null : null,
           done: 0,
@@ -2372,7 +2373,7 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       heatmap: { year, start_date: cells[0].date, end_date: cells[cells.length - 1].date, cells },
       streak: { current, best, done_today: doneToday },
       by_project: [...byProjectMap.values()]
-        .map((r) => ({ project_id: r.id, project_title: r.title, project_hex_color: r.hex, done_count: r.done, pending_count: r.pending }))
+        .map((r) => ({ project_uuid: r.uuid, project_title: r.title, project_hex_color: r.hex, done_count: r.done, pending_count: r.pending }))
         .sort((a, b) => b.done_count - a.done_count),
       by_priority: [...byPriorityMap.entries()]
         .map(([priority, r]) => ({ priority, done_count: r.done, pending_count: r.pending }))
