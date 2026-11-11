@@ -13,6 +13,7 @@ import 'package:flutter_miuix/miuix.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:orbit/data/api/dto.dart' show SyncHistoryRow, SyncProgress;
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/settings/sync_settings_page.dart';
@@ -70,6 +71,20 @@ Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
 Future<void> _tapAt(WidgetTester tester, Finder finder) async {
   await _scrollTo(tester, finder);
   await tester.tap(finder);
+}
+
+/// 计数桥：同步历史的回读次数可观测（其余行为全走 mock 内存实现）
+class _CountingHistoryBridge extends MockOrbitBridge {
+  int historyCalls = 0;
+
+  @override
+  Future<List<SyncHistoryRow>> cloudSyncHistory({
+    String scope = 'all',
+    int limit = 20,
+  }) {
+    historyCalls++;
+    return super.cloudSyncHistory(scope: scope, limit: limit);
+  }
 }
 
 const _presetConfig = <String, Object?>{
@@ -538,6 +553,40 @@ void main() {
     await _flush(tester);
 
     expect(find.text('没有可回收的孤儿数据桶'), findsOneWidget);
+    await drainToastTimers(tester);
+  });
+
+  testWidgets('同步历史卡：回读途中同步结束也要补跑一次（不用手动刷新）', (tester) async {
+    // 视口拉到一次渲染全部卡片的高度：滚动会推进虚拟时钟，把「首轮回读在飞」
+    // 的窗口吃掉，测不到本用例要覆盖的那条交错路径
+    tester.view.physicalSize = const Size(1080, 4200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final bridge = _CountingHistoryBridge();
+    await tester.pumpWidget(_wrap(bridge));
+    await tester.pump(); // 历史卡已挂载，首轮回读在飞（mock 内置 120ms 延迟）
+    expect(bridge.historyCalls, 1);
+
+    bridge.emitSyncProgress(
+      const SyncProgress(
+        phase: 'done',
+        origin: 'manual',
+        percent: 100,
+        displayText: '同步完成',
+      ),
+    );
+    await tester.pump();
+    expect(bridge.historyCalls, 1, reason: '本轮未读完时不得重入');
+
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(
+      bridge.historyCalls,
+      2,
+      reason: '终态落在飞行窗口里，读完必须补跑一次，否则看到的是上一轮记录',
+    );
+
+    await _flush(tester);
     await drainToastTimers(tester);
   });
 }

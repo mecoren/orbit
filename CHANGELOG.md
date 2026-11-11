@@ -39,7 +39,7 @@
 
 ### 优化：同步历史/账本自动刷新、移动端日志级别回归 Info（2026-11-11）
 
-- **两张同步诊断卡自动刷新（移动端）**：同步历史与同步账本此前只在「进入页面」和手动「刷新」时回读，刚同步完看到的还是上一轮的记录（桌面端早已订阅 `sync-finished`）。改为订阅 `syncProgressProvider` 的终态事件（`done` / `error`）自动重读，双端口径对齐。
+- **两张同步诊断卡自动刷新（移动端）**：同步历史与同步账本此前只在「进入页面」和手动「刷新」时回读，刚同步完看到的还是上一轮的记录（桌面端早已订阅 `sync-finished`）。改为订阅 `syncProgressProvider` 的终态事件（`done` / `error`）自动重读，双端口径对齐；终态若落在某次回读的飞行窗口内（进页面那一下正好同步收尾），置位后在读完后补跑一次，不再要求手动点「刷新」。
 - **移动端 logger 安装顺序**：`init_app` 里 `setup_default_user_utils()` 先装 FRB 自带 logger，全局 `log` logger 先到者胜，导致 `crates/orbit-flutter/src/logging.rs` 的 `with_tag("orbit")` + `Info` 级别静默失效——同步期间 logcat 里每条 SQL 都以 `D sqlx_core::logger` 逐条落盘。现改为先 `logging::install()` 再 `setup_default_user_utils()`，并补 `log::set_max_level(Info)` 兜底。
 
 验证：`cargo check -p orbit-flutter` 通过；`flutter analyze lib/modules/settings/sync_settings_page.dart` 无 issue；`flutter test test/sync_settings_page_test.dart` 19 通过。（模拟器在本轮收尾时已离线，日志级别与自动刷新的真机观感未复测。）

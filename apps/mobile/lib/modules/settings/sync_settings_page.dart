@@ -1076,6 +1076,12 @@ class _SyncHistoryCardState extends ConsumerState<_SyncHistoryCard> {
   List<SyncHistoryRow> _rows = const [];
   bool _loading = true;
 
+  /// 回读途中又来了终态事件：置位后在本轮读完后补跑一次
+  ///
+  /// 典型场景是「进页面」那次 `_load` 的飞行窗口里同步恰好结束——此前直接丢弃
+  /// 该事件，用户看到的仍是上一轮记录，得再手动点一次「刷新」。
+  bool _reloadAfter = false;
+
   int get _scopeIndex {
     final i = _scopeKeys.indexOf(_scope);
     return i < 0 ? 0 : i;
@@ -1107,6 +1113,11 @@ class _SyncHistoryCardState extends ConsumerState<_SyncHistoryCard> {
       if (!mounted) return;
       setState(() => _loading = false);
       WaitToast.destructive('读取同步历史失败：${_errMsg(e)}');
+    } finally {
+      if (mounted && _reloadAfter) {
+        _reloadAfter = false;
+        unawaited(_load());
+      }
     }
   }
 
@@ -1126,12 +1137,16 @@ class _SyncHistoryCardState extends ConsumerState<_SyncHistoryCard> {
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
 
-    // 同步结轮会改写 sync_history：core 的 `SyncProgress` 终态是唯一后台变更源，
+    // 同步收尾会改写 sync_history：core 的 `SyncProgress` 终态是唯一后台变更源，
     // 据此回读（此前只有进入页面与手动「刷新」两个触发点，与桌面订阅
     // `sync-finished` 的口径不对齐——刚同步完看到的还是上一轮的历史）
     ref.listen<AsyncValue<SyncProgress>>(syncProgressProvider, (_, next) {
       final p = next.value;
-      if (p == null || !p.isTerminal || _loading || !mounted) return;
+      if (p == null || !p.isTerminal || !mounted) return;
+      if (_loading) {
+        _reloadAfter = true;
+        return;
+      }
       unawaited(_load());
     });
 
@@ -1276,6 +1291,9 @@ class _SyncLedgerCardState extends ConsumerState<_SyncLedgerCard> {
   bool _loading = true;
   Object? _error;
 
+  /// 回读途中又来了终态事件：置位后在本轮读完后补跑一次（同历史卡口径）
+  bool _reloadAfter = false;
+
   @override
   void initState() {
     super.initState();
@@ -1305,6 +1323,11 @@ class _SyncLedgerCardState extends ConsumerState<_SyncLedgerCard> {
         _error = e;
         _loading = false;
       });
+    } finally {
+      if (mounted && _reloadAfter) {
+        _reloadAfter = false;
+        unawaited(_load());
+      }
     }
   }
 
@@ -1313,11 +1336,15 @@ class _SyncLedgerCardState extends ConsumerState<_SyncLedgerCard> {
     final colors = AppColors.ofContext(context);
     final state = _state;
 
-    // 同步结轮会重写 sync_state.json（epoch/桶指纹/水位线）：跟历史卡同一口径，
+    // 同步收尾会重写 sync_state.json（epoch/桶指纹/水位线）：跟历史卡同一口径，
     // 订阅终态自动回读，不再要求手动点「刷新」
     ref.listen<AsyncValue<SyncProgress>>(syncProgressProvider, (_, next) {
       final p = next.value;
-      if (p == null || !p.isTerminal || _loading || !mounted) return;
+      if (p == null || !p.isTerminal || !mounted) return;
+      if (_loading) {
+        _reloadAfter = true;
+        return;
+      }
       unawaited(_load());
     });
 
