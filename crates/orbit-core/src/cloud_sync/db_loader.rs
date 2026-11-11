@@ -134,6 +134,13 @@ async fn attach_fk_marks(
     table: &str,
     items: &mut [serde_json::Value],
 ) -> Result<(), CloudSyncError> {
+    // 空集必须早退：`load_table_tombstones` 每张表每轮都会带着（多数时候为空的）
+    // 墓碑进来，零墓碑还去父表读全量 `id → uuid` 是纯浪费——有 FK 的几张表每轮
+    // 各来一遍，等于把 todo_tasks 这类父表整表读上数遍（大库上正是幂等轮的
+    // 固定开销之一）。
+    if items.is_empty() {
+        return Ok(());
+    }
     let fk_cols = crate::db::sync_registry::fk_columns_of(table);
     if fk_cols.is_empty() {
         return Ok(());
@@ -141,7 +148,16 @@ async fn attach_fk_marks(
     let mut parents: HashMap<&'static str, HashMap<i64, String>> = HashMap::new();
     for (_, parent) in fk_cols {
         if !parents.contains_key(parent) {
-            parents.insert(*parent, load_id_uuid_map(pool, parent).await?);
+            let started = std::time::Instant::now();
+            let map = load_id_uuid_map(pool, parent).await?;
+            let ms = started.elapsed().as_millis();
+            if ms >= 50 {
+                log::info!(
+                    "[push] 装载父表 {parent} 的 id→uuid 映射耗时 {ms}ms（{} 行，为 {table} 注入 _fk）",
+                    map.len()
+                );
+            }
+            parents.insert(*parent, map);
         }
     }
     for item in items.iter_mut() {
@@ -364,6 +380,9 @@ pub async fn scan_local_buckets(
     if watermark <= 0 {
         return Ok(None);
     }
+    // 分段计时：幂等轮也会整表读一遍 uuid+updated_at，214k 行档这一项与墓碑装载
+    // 谁是 70s+ 的主因，实测数据比猜可靠。只在明显偏慢时打一行，正常小库不刷屏。
+    let started = std::time::Instant::now();
     // bounded-by-data: 每表 uuid + updated_at 索引（干净桶的 uuid 在归集后立即释放，
     // 只留脏桶清单；见函数内注释与 N52 口径）
     let sql = format!("SELECT uuid, updated_at FROM \"{table}\" WHERE is_deleted = 0");
@@ -395,6 +414,14 @@ pub async fn scan_local_buckets(
         .into_iter()
         .filter(|(bucket, _)| scan.dirty.contains(bucket))
         .collect();
+    let ms = started.elapsed().as_millis();
+    if ms >= 50 {
+        log::info!(
+            "[push] 水位线扫描 {table} 耗时 {ms}ms（{} 个存活桶 / {} 个脏桶）",
+            scan.live_counts.len(),
+            scan.dirty.len()
+        );
+    }
     Ok(Some(scan))
 }
 
@@ -513,6 +540,7 @@ pub async fn load_table_tombstones(
 
     // 整行读取：墓碑要带软删行快照，供全新设备首次全量 pull 时物化
     // （只有 uuid + deleted_at 时，空库没有本地行可标记，回收站条目会凭空消失）。
+    let started = std::time::Instant::now();
     let sql = format!("SELECT * FROM \"{table}\" WHERE is_deleted = 1");
     let rows = sqlx::query(&sql)
         .fetch_all(pool)
@@ -526,6 +554,11 @@ pub async fn load_table_tombstones(
         .map(|row| serde_json::Value::Object(sqlite_row_to_json(row)))
         .collect();
     attach_fk_marks(pool, table, &mut items).await?;
+    // 分段计时（见 `scan_local_buckets` 同款注释）：零墓碑表也不该出现在慢表清单里
+    let ms = started.elapsed().as_millis();
+    if ms >= 50 {
+        log::info!("[push] 装载 {table} 墓碑耗时 {ms}ms（{} 条）", items.len());
+    }
 
     let mut buckets: BTreeMap<String, Vec<TombstoneEntry>> = BTreeMap::new();
     for mut item in items {
@@ -628,6 +661,28 @@ pub fn now_ms() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 零墓碑时必须早退，不去父表读 `id → uuid`
+    ///
+    /// 用「什么表都没有的空库」当探针：若不早退，`load_id_uuid_map(todo_tasks)`
+    /// 会直接报 `no such table`。这正是大库幂等轮白白多读数十万行父表的来源。
+    #[tokio::test]
+    async fn attach_fk_marks_skips_parent_lookup_for_empty_items() {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        let mut empty: Vec<serde_json::Value> = Vec::new();
+        attach_fk_marks(&pool, "todo_comments", &mut empty)
+            .await
+            .expect("空集必须早退");
+
+        // 对照：有记录时必须真去查父表（空库上必然失败），证明上面不是「函数本来就空转」
+        let mut one = vec![serde_json::json!({"id": 1, "task_id": 1})];
+        assert!(
+            attach_fk_marks(&pool, "todo_comments", &mut one)
+                .await
+                .is_err(),
+            "有记录时仍应装载父表映射"
+        );
+    }
 
     #[test]
     fn syncable_tables_match_registry() {
