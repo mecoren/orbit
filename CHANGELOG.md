@@ -17,6 +17,21 @@
 
 ## [Unreleased]
 
+### 变更：应用内 0.1.0 更新日志按当前代码重写（2026-11-11）
+
+- **双端同一份**：桌面 `changelog_versions` 命令与移动 FRB 同名桥都读
+  `crates/orbit-core/src/models/changelog/data.rs`，壳层只渲染，分类标签同口径；本次只改
+  这一处，两端「关于 → 更新日志」内容一致（测试用 mock 各自占位，不属生产口径）。
+- **按代码纠偏**：云同步改「WebDAV / S3 兼容存储」两档（OSS 是 S3 方言）、视图改五档 +
+  Logbook 特殊态、备份包改 `.orfullsync`（`.orsync` 仅遗留读兼容）、首模块「今天」更名
+  「视图」、应用内更新按端区分（桌面下载→验签→安装重启 / 移动只打开发布页）、Android
+  主屏小组件/磁贴/角标与桌面托盘各归其端，不再笼统写「双端全功能」。
+- **补齐发版后批次**：把 [Unreleased] 段 2026-09-26 至 11-11 的工作按模块归并进同一条目
+  （规划今天/收件箱分诊/回顾、时间轴与多档日历、拼音搜索与 NLP v2、流式备份与同步诊断、
+  flutter_miuix 玻璃体系与帧耗时门禁、端到端同步修复、品牌图等）；版本 `0.1.0` 与发版
+  日期 `2026-09-26` 不变，仓库侧逐批明细仍留在 [Unreleased] 段，历史归档段落未改。
+- 验证：Rust `changelog` 单测、发版一致性护栏 vitest、`pnpm bump:check` 通过。
+
 ### 变更：全平台品牌图换为扁平「C 环 + 对勾 + 轨道」版（2026-11-11）
 
 - **单一源图、一次产出**：新图入库为 `scripts/icon-asset-2026-11-11.png`（1080² 透明底），`scripts/generate_icons.py` 切到该源并按 alpha 动态裁紧框（不再硬编码旧图 bbox）；桌面 Tauri 全尺寸族 / ICO / ICNS / Windows Store 族 / `icon-transparent.png`、关于页 `app-icon.png`、Android 启动器 / 自适应前景 / 启动屏 / 通知小图标、Flutter `assets/app_icon.png`、设计母版全部重生成，两端仍是同一枚图标。
