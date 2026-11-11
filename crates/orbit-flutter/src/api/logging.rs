@@ -12,8 +12,17 @@
 //! codegen 接线，放 lib.rs 会被静默忽略。
 
 /// FRB 库加载钩子（幂等；由生成代码在启动期自动调用，业务代码勿重复调用）
+///
+/// **安装顺序（2026-11-11 修正）**：`logging::install()` 必须**先于**
+/// `setup_default_user_utils()`。后者会先装 FRB 自带的 logger，全局 `log`
+/// logger 只能有一个——先装者胜，`android_logger::init_once` 后到即静默失效，
+/// 于是 `with_tag("orbit")` 与 Info 级别双双不生效：同步期间 logcat 里每条 SQL
+/// 都以 `D sqlx_core::logger` 逐条落盘（tag 退化成模块路径、级别退化成 Debug），
+/// 一次 214k 行的同步刷出成片日志写入。
+/// `set_max_level` 再兜一道：即便未来别的初始化抢先装了 logger，级别仍钉在 Info。
 #[flutter_rust_bridge::frb(init)]
 pub fn init_app() {
-    flutter_rust_bridge::setup_default_user_utils();
     crate::logging::install();
+    log::set_max_level(log::LevelFilter::Info);
+    flutter_rust_bridge::setup_default_user_utils();
 }
