@@ -1126,6 +1126,15 @@ class _SyncHistoryCardState extends ConsumerState<_SyncHistoryCard> {
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
 
+    // 同步结轮会改写 sync_history：core 的 `SyncProgress` 终态是唯一后台变更源，
+    // 据此回读（此前只有进入页面与手动「刷新」两个触发点，与桌面订阅
+    // `sync-finished` 的口径不对齐——刚同步完看到的还是上一轮的历史）
+    ref.listen<AsyncValue<SyncProgress>>(syncProgressProvider, (_, next) {
+      final p = next.value;
+      if (p == null || !p.isTerminal || _loading || !mounted) return;
+      unawaited(_load());
+    });
+
     return OrbitSettingsGroup(
       title: '同步历史',
       subtitle: _loading ? null : '近 ${_rows.length} 次',
@@ -1169,6 +1178,15 @@ class _SyncHistoryCardState extends ConsumerState<_SyncHistoryCard> {
             )
           else
             for (final r in _rows) _row(colors, r),
+          // 口径说明常驻（不挂在每行上）：一次全量同步的真实行数是 4 万级，
+          // 而这里只显示「项」= 数据模块 + 附件，两者差两个数量级
+          if (!_loading && _rows.isNotEmpty) ...[
+            const SizedBox(height: AppDimens.space12),
+            Text(
+              '拉取 / 推送按「项」计：1 项 = 1 个数据模块或 1 个附件，不是行数。',
+              style: TextStyle(fontSize: 11, color: colors.secondaryText),
+            ),
+          ],
         ],
       ),
     );
@@ -1211,8 +1229,11 @@ class _SyncHistoryCardState extends ConsumerState<_SyncHistoryCard> {
             ],
           ),
           const SizedBox(height: AppDimens.space2),
+          // 2026-11-11：口径改「项」——`sync_history.pulled_count` 记的是
+          // 数据模块数 + 附件数之和（引擎不产出行级计数），原「拉取 259」
+          // 会被读成 259 行；卡片底部统一补一行口径说明
           Text(
-            '拉取 ${r.pulledCount} · 推送 ${r.pushedCount} · '
+            '拉取 ${r.pulledCount} 项 · 推送 ${r.pushedCount} 项 · '
             '冲突 ${r.conflictCount} · 耗时 ${(r.elapsedMs / 1000).toStringAsFixed(1)}s',
             style: TextStyle(fontSize: 11, color: colors.secondaryText),
           ),
@@ -1291,6 +1312,14 @@ class _SyncLedgerCardState extends ConsumerState<_SyncLedgerCard> {
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
     final state = _state;
+
+    // 同步结轮会重写 sync_state.json（epoch/桶指纹/水位线）：跟历史卡同一口径，
+    // 订阅终态自动回读，不再要求手动点「刷新」
+    ref.listen<AsyncValue<SyncProgress>>(syncProgressProvider, (_, next) {
+      final p = next.value;
+      if (p == null || !p.isTerminal || _loading || !mounted) return;
+      unawaited(_load());
+    });
 
     return OrbitSettingsGroup(
       title: '同步账本',
@@ -1782,10 +1811,12 @@ class _SyncDiagnosticCardState extends ConsumerState<_SyncDiagnosticCard> {
           '同步完成但有 ${r.errors.length} 条错误：${r.errors.first}',
         );
       } else {
+        // 两个方向都报：先拉后推只显示拉取数会让「本轮其实推了东西」看不出来
         WaitToast.success(
           mode == 'push'
-              ? '仅推送完成：${r.pushedModules} 个模块'
-              : '先拉后推完成：拉取 ${r.pulledModules} 个模块',
+              ? '仅推送完成：推送 ${r.pushedModules} 个模块'
+              : '先拉后推完成：拉取 ${r.pulledModules} 个模块 / '
+                  '推送 ${r.pushedModules} 个模块',
         );
       }
       // 单向同步同样会改云端账本与「上次同步」，回读本页与设置页角标
