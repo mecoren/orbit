@@ -193,8 +193,8 @@ export function DiagnosticsSection() {
       } else {
         toast.success(
           mode === "push"
-            ? `仅推送完成：${result.pushed_modules} 个模块`
-            : `先拉后推完成：拉取 ${result.pulled_modules} 个模块`,
+            ? `仅推送完成：推送 ${result.pushed_modules} 个模块`
+            : `先拉后推完成：拉取 ${result.pulled_modules} 个模块 / 推送 ${result.pushed_modules} 个模块`,
           { description: `耗时 ${(result.duration_ms / 1000).toFixed(1)}s` },
         );
       }

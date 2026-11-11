@@ -74,6 +74,8 @@ fn summarize_partial_failures(errors: &[String]) -> String {
 ///
 /// 口径：
 /// - `skipped`（防重入跳过）**不记录**——未执行的同步不是历史
+/// - `started_at_ms` 由调用方在进入 `*_inner` **之前**取，`finished_at` 取本函数
+///   执行时刻；两者相减才是「耗时」（曾同传 now_ms，耗时恒 0.0s）
 /// - 拉取/推送计数映射：模块数 + 附件数合并计入
 ///   （pushed = pushed_modules + uploaded_attachments，行级计数引擎不产出）
 /// - `errors` 非空按 failed 记（整体 Ok 但模块级有错属于"部分失败"）
@@ -89,6 +91,7 @@ fn summarize_partial_failures(errors: &[String]) -> String {
 async fn record_incremental_history(
     pool: &SqlitePool,
     sync_type: &str,
+    started_at_ms: i64,
     result: &Result<SyncResult, CloudSyncError>,
 ) {
     // Ok(skipped) 是防重入跳过：没有真正执行，不产生历史
@@ -113,14 +116,22 @@ async fn record_incremental_history(
         Err(e) => {
             // N33：取消是用户操作而非故障，历史记 cancelled（中性色展示），
             // 「失败」只留给真正的错误，避免把主动取消算进失败率
-            let status = if e.is_cancelled() { "cancelled" } else { "failed" };
+            let status = if e.is_cancelled() {
+                "cancelled"
+            } else {
+                "failed"
+            };
             (status, 0, 0, 0, Some(e.to_string()))
         }
     };
     if clean {
         advance_last_synced_at(pool, now_ms).await;
     }
-    let Ok(id) = sync_history_repo::insert(pool, sync_type, status, now_ms).await else {
+    // started_at 必须是真的开始时刻：此前 insert 与 update 都传 now_ms，
+    // 导致每行 started_at == finished_at、双端历史「耗时」恒显示 0.0s
+    // （2026-11-10 端到端测试在真机上发现，一次 205s 的全量轮也显示 0.0s）
+    let started_at = started_at_ms.min(now_ms);
+    let Ok(id) = sync_history_repo::insert(pool, sync_type, status, started_at).await else {
         return;
     };
     let _ = sync_history_repo::update_status(
@@ -591,6 +602,7 @@ impl SyncEngine {
         device_id: &str,
         attachments_dir: &str,
     ) -> Result<SyncResult, CloudSyncError> {
+        let started_at_ms = chrono::Utc::now().timestamp_millis();
         let r = self
             .sync_now_inner(
                 adapter,
@@ -601,7 +613,7 @@ impl SyncEngine {
                 attachments_dir,
             )
             .await;
-        record_incremental_history(&self.db_pool, SYNC_TYPE_SYNC_NOW, &r).await;
+        record_incremental_history(&self.db_pool, SYNC_TYPE_SYNC_NOW, started_at_ms, &r).await;
         self.emit_result_events(origin, &r);
         r
     }
@@ -744,6 +756,7 @@ impl SyncEngine {
         device_id: &str,
         attachments_dir: &str,
     ) -> Result<SyncResult, CloudSyncError> {
+        let started_at_ms = chrono::Utc::now().timestamp_millis();
         let r = self
             .push_only_inner(
                 adapter,
@@ -754,7 +767,7 @@ impl SyncEngine {
                 attachments_dir,
             )
             .await;
-        record_incremental_history(&self.db_pool, SYNC_TYPE_PUSH_ONLY, &r).await;
+        record_incremental_history(&self.db_pool, SYNC_TYPE_PUSH_ONLY, started_at_ms, &r).await;
         self.emit_result_events(origin, &r);
         r
     }
@@ -859,6 +872,7 @@ impl SyncEngine {
         device_id: &str,
         attachments_dir: &str,
     ) -> Result<SyncResult, CloudSyncError> {
+        let started_at_ms = chrono::Utc::now().timestamp_millis();
         let r = self
             .pull_then_push_inner(
                 adapter,
@@ -869,7 +883,8 @@ impl SyncEngine {
                 attachments_dir,
             )
             .await;
-        record_incremental_history(&self.db_pool, SYNC_TYPE_PULL_THEN_PUSH, &r).await;
+        record_incremental_history(&self.db_pool, SYNC_TYPE_PULL_THEN_PUSH, started_at_ms, &r)
+            .await;
         self.emit_result_events(origin, &r);
         r
     }
@@ -2498,6 +2513,11 @@ mod tests {
         );
     }
 
+    /// 历史起点：`ago_ms` 毫秒前（让 finished_at - started_at 可断言）
+    fn started_ago(ago_ms: i64) -> i64 {
+        chrono::Utc::now().timestamp_millis() - ago_ms
+    }
+
     fn ok_result(errors: Vec<String>) -> SyncResult {
         SyncResult {
             pushed_modules: 2,
@@ -2516,7 +2536,8 @@ mod tests {
     async fn history_records_success_with_counts() {
         let engine = history_engine().await;
         let r = Ok(ok_result(vec![]));
-        record_incremental_history(&engine.db_pool, SYNC_TYPE_SYNC_NOW, &r).await;
+        record_incremental_history(&engine.db_pool, SYNC_TYPE_SYNC_NOW, started_ago(1200), &r)
+            .await;
 
         let rows = sync_history_repo::get_recent_by_types(&engine.db_pool, &["incremental"], 10)
             .await
@@ -2528,13 +2549,19 @@ mod tests {
         assert_eq!(h.pushed_count, 3, "推送计数 = 模块 2 + 附件 1");
         assert_eq!(h.conflict_count, 5, "S28：冲突裁决数必须落库（此前恒 0）");
         assert!(h.error_message.is_none());
+        // 2026-11-11：起止时间必须可相减，否则双端历史「耗时」恒显示 0.0s
+        let elapsed = h.finished_at.expect("结束时间必填") - h.started_at;
+        assert!(
+            elapsed >= 1200,
+            "耗时必须来自真实起止时间（此前 insert/update 同传 now_ms → 恒 0），实际 {elapsed}ms"
+        );
     }
 
     #[tokio::test]
     async fn history_records_module_errors_as_failed() {
         let engine = history_engine().await;
         let r = Ok(ok_result(vec!["todos 模块上传失败".to_string()]));
-        record_incremental_history(&engine.db_pool, SYNC_TYPE_PUSH_ONLY, &r).await;
+        record_incremental_history(&engine.db_pool, SYNC_TYPE_PUSH_ONLY, started_ago(0), &r).await;
 
         let rows = sync_history_repo::get_recent_by_types(&engine.db_pool, &["push_only"], 10)
             .await
@@ -2550,7 +2577,13 @@ mod tests {
         let r = Err::<SyncResult, _>(CloudSyncError::Adapter {
             message: "连接超时".to_string(),
         });
-        record_incremental_history(&engine.db_pool, SYNC_TYPE_PULL_THEN_PUSH, &r).await;
+        record_incremental_history(
+            &engine.db_pool,
+            SYNC_TYPE_PULL_THEN_PUSH,
+            started_ago(500),
+            &r,
+        )
+        .await;
 
         let rows = sync_history_repo::get_recent_by_types(&engine.db_pool, &["pull_only"], 10)
             .await
@@ -2564,7 +2597,7 @@ mod tests {
     async fn history_skips_when_sync_was_skipped() {
         let engine = history_engine().await;
         let r = Ok(SyncResult::skipped());
-        record_incremental_history(&engine.db_pool, SYNC_TYPE_SYNC_NOW, &r).await;
+        record_incremental_history(&engine.db_pool, SYNC_TYPE_SYNC_NOW, started_ago(0), &r).await;
 
         let rows = sync_history_repo::get_recent_by_types(&engine.db_pool, &["incremental"], 10)
             .await
@@ -2634,7 +2667,7 @@ mod tests {
         let r = Err::<SyncResult, _>(CloudSyncError::Cancelled {
             message: "用户取消同步".to_string(),
         });
-        record_incremental_history(&engine.db_pool, SYNC_TYPE_SYNC_NOW, &r).await;
+        record_incremental_history(&engine.db_pool, SYNC_TYPE_SYNC_NOW, started_ago(0), &r).await;
 
         let rows = sync_history_repo::get_recent_by_types(&engine.db_pool, &["incremental"], 10)
             .await
@@ -2645,12 +2678,11 @@ mod tests {
             "主动取消不是故障，历史记 cancelled 而非 failed"
         );
 
-        let ledger: (Option<i64>,) = sqlx::query_as(
-            "SELECT last_synced_at FROM sync_configs WHERE is_active = 1",
-        )
-        .fetch_one(&engine.db_pool)
-        .await
-        .unwrap();
+        let ledger: (Option<i64>,) =
+            sqlx::query_as("SELECT last_synced_at FROM sync_configs WHERE is_active = 1")
+                .fetch_one(&engine.db_pool)
+                .await
+                .unwrap();
         assert!(
             ledger.0.is_none(),
             "取消轮次不得推进 last_synced_at（回收站守卫线）"
@@ -2777,6 +2809,7 @@ mod tests {
         record_incremental_history(
             &engine.db_pool,
             SYNC_TYPE_SYNC_NOW,
+            started_ago(0),
             &Ok(ok_result(vec!["表 todo_tasks push 失败".to_string()])),
         )
         .await;
@@ -2788,6 +2821,7 @@ mod tests {
         record_incremental_history(
             &engine.db_pool,
             SYNC_TYPE_SYNC_NOW,
+            started_ago(0),
             &Ok(SyncResult::skipped()),
         )
         .await;
@@ -2799,6 +2833,7 @@ mod tests {
         record_incremental_history(
             &engine.db_pool,
             SYNC_TYPE_SYNC_NOW,
+            started_ago(500),
             &Err::<SyncResult, _>(CloudSyncError::Adapter {
                 message: "连接超时".to_string(),
             }),
@@ -2809,8 +2844,13 @@ mod tests {
             "引擎级失败不得推进账本"
         );
 
-        record_incremental_history(&engine.db_pool, SYNC_TYPE_SYNC_NOW, &Ok(ok_result(vec![])))
-            .await;
+        record_incremental_history(
+            &engine.db_pool,
+            SYNC_TYPE_SYNC_NOW,
+            started_ago(0),
+            &Ok(ok_result(vec![])),
+        )
+        .await;
         assert!(
             matches!(ledger(&engine.db_pool).await, Some(t) if t > 0),
             "干净轮次必须推进账本（否则回收站永不清理）"
@@ -2840,7 +2880,7 @@ mod tests {
             .unwrap();
         }
         let r = Ok(ok_result(vec![]));
-        record_incremental_history(&engine.db_pool, SYNC_TYPE_SYNC_NOW, &r).await;
+        record_incremental_history(&engine.db_pool, SYNC_TYPE_SYNC_NOW, started_ago(0), &r).await;
 
         assert_eq!(
             sync_history_repo::count_by_type(&engine.db_pool, "incremental")

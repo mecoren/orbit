@@ -1096,8 +1096,11 @@ function SyncHistoryCard() {
                     </span>
                   )}
                 </span>
-                <span className="shrink-0 text-xs text-muted-foreground">
-                  拉 {h.pulled_count} / 推 {h.pushed_count}
+                <span
+                  className="shrink-0 text-xs text-muted-foreground"
+                  title="按「项」计：1 项 = 1 个数据模块或 1 个附件，不是行数"
+                >
+                  拉取 {h.pulled_count} 项 / 推送 {h.pushed_count} 项
                   {/* S28：冲突裁决数——多设备并发编辑被 LWW 裁决的记录数 */}
                   {h.conflict_count > 0 && ` / 冲突 ${h.conflict_count}`}
                 </span>
@@ -1109,6 +1112,12 @@ function SyncHistoryCard() {
               </div>
             ))}
           </div>
+          {entries !== null && entries.length > 0 && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              拉取 / 推送按「项」计：1 项 = 1 个数据模块或 1 个附件，不是行数（一次全量同步的
+              真实行数是万级）。
+            </p>
+          )}
         </div>
       )}
     </div>

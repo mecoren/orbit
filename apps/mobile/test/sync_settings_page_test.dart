@@ -484,11 +484,11 @@ void main() {
     await _flush(tester);
 
     // mock push_only：pushedModules = 2、pulledModules = 0
-    expect(find.text('仅推送完成：2 个模块'), findsOneWidget);
+    expect(find.text('仅推送完成：推送 2 个模块'), findsOneWidget);
     await drainToastTimers(tester);
   });
 
-  testWidgets('同步排障：先拉后推 → 成功 toast 报拉取模块数', (tester) async {
+  testWidgets('同步排障：先拉后推 → 成功 toast 双方向都报模块数', (tester) async {
     final bridge = MockOrbitBridge()
       ..store.syncPasswordSet = true
       ..store.syncUnlocked = true
@@ -499,7 +499,9 @@ void main() {
     await _tapAt(tester, find.widgetWithText(OrbitButton, '先拉后推'));
     await _flush(tester);
 
-    expect(find.text('先拉后推完成：拉取 2 个模块'), findsOneWidget);
+    // mock pull_then_push：pulledModules = 2、pushedModules = 1
+    // 2026-11-11：先拉后推同时报推送数（此前只报拉取，推上去的改动不可见）
+    expect(find.text('先拉后推完成：拉取 2 个模块 / 推送 1 个模块'), findsOneWidget);
     await drainToastTimers(tester);
   });
 

@@ -798,6 +798,13 @@ pub struct Attachment {
 }
 
 // ---------- sync_history ----------
+/// 一次同步的历史留档
+///
+/// **计数口径（2026-11-11 明确）**：`pulled_count` / `pushed_count` 记的是
+/// **数据模块数 + 附件数之和**（引擎不产出行级计数），不是行数——一次 4 万行
+/// 的全量同步这里只可能是「1 个数据模块 + 258 个附件 = 259」。UI 必须按
+/// 「项」表述并注明口径，不要写成「拉取 259 行」。
+/// DDL 注释（`0001_init.sql` 的「本次拉取行数」）属冻结基线笔误，以本注释为准。
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct SyncHistory {
     pub id: i64,
@@ -805,7 +812,9 @@ pub struct SyncHistory {
     pub status: String,
     pub started_at: i64,
     pub finished_at: Option<i64>,
+    /// 拉取项数 = `pulled_modules + downloaded_attachments`（非行数）
     pub pulled_count: i64,
+    /// 推送项数 = `pushed_modules + uploaded_attachments`（非行数）
     pub pushed_count: i64,
     pub conflict_count: i64,
     pub error_message: Option<String>,
