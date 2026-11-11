@@ -171,6 +171,7 @@ pnpm bump:check           # 只校验一致性（零写入，CI/本地通用）
 - **发布流水线口径**（`.github/workflows/release.yml`）：tag 触发全链路；`workflow_dispatch` 的 `dry_run` 默认 true（只构建不发布，发版前先预演一次）。`latest.json` 由 `publish-updater-manifest` **单点合成**（矩阵并发读改写会撞 PATCH 竞态，故 `includeUpdaterJson` 恒 false）；`createUpdaterArtifacts: true` 下缺 `Secrets.TAURI_SIGNING_PRIVATE_KEY` 会直接失败（刻意保护），audit job 会提前给出配置指引。
 - **应用内更新**：手动检查（设置 → 关于与更新），**不做自动轮询**（本地优先，更新时机归用户）；endpoint 取 GitHub Releases 的 `latest.json`。改动更新链路（endpoint / pubkey / 清单平台键 / 安装方式）必须同步本文件与 `docs/08`。
 - **密钥轮换**：换 updater 密钥会让**已安装旧版本拒绝升级**（`pubkey` 变更），须先发一版带新公钥的常规更新再轮换；私钥丢失等价于全部用户重装。
+- **已发布日志条目纠偏（用户显式要求，非发版动作）**：用户点名「按当前代码重写 X.Y.Z 更新日志」时，只改 `data.rs` 该版本的 `summary` / `changes`，`version` / `date` 与 `CHANGELOG.md` 归档段都不动，纠偏说明及发版后逐批明细留 `[Unreleased]`；**不算版本漂移、不走上面六步**，细则见 `docs/08` §3.2。
 
 ## Rust 约定（orbit-core / orbit-flutter）
 
