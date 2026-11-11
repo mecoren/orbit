@@ -86,12 +86,19 @@ export function TitleBar() {
           <SyncStatusButton />
         </div>
 
-        {/* 中部：居中标题（可拖拽）—— 应用显示名「循迹」（README 命名约定） */}
+        {/* 中部：居中标题（可拖拽）—— 品牌图 + 应用显示名「循迹」（README 命名约定） */}
         <div
-          className="absolute left-1/2 -translate-x-1/2 select-none text-sm font-medium"
+          className="absolute left-1/2 flex -translate-x-1/2 select-none items-center gap-2 text-sm font-medium"
           data-tauri-drag-region
         >
-          循迹
+          <img
+            src="/app-icon.png"
+            alt=""
+            className="size-5"
+            draggable={false}
+            data-tauri-drag-region
+          />
+          <span data-tauri-drag-region>循迹</span>
         </div>
 
         {/* 右侧：待办、设置、关于、主题、窗口控制按钮（不响应拖拽，避免点击被吞）。

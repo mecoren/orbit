@@ -17,6 +17,13 @@
 
 ## [Unreleased]
 
+### 变更：全平台品牌图换为扁平「C 环 + 对勾 + 轨道」版（2026-11-11）
+
+- **单一源图、一次产出**：新图入库为 `scripts/icon-asset-2026-11-11.png`（1080² 透明底），`scripts/generate_icons.py` 切到该源并按 alpha 动态裁紧框（不再硬编码旧图 bbox）；桌面 Tauri 全尺寸族 / ICO / ICNS / Windows Store 族 / `icon-transparent.png`、关于页 `app-icon.png`、Android 启动器 / 自适应前景 / 启动屏 / 通知小图标、Flutter `assets/app_icon.png`、设计母版全部重生成，两端仍是同一枚图标。
+- **自检口径**：旧「环带十二点蓝色采样」绑死闭合圆环构图，改为「透明底 + 不透明/蓝色覆盖率」通用校验；小尺寸 alpha 陡化、短轴定标、2x 密度族等既有口径不变。
+- **补齐品牌露出**：新增桌面 `favicon.ico` 并在 `index.html` 接线；桌面标题栏、解锁页、关于页与移动端解锁页、关于页、开源许可品牌卡均改为展示同源资产（关于页去掉圆角裁切与矩形阴影，完整显示透明图）；功能型图标（快捷方式、小组件、Lucide）不属品牌位，保持原样。
+- **历史脚本**：`scripts/gen_orbit_icon.py` 标注废弃（误跑会用旧手绘图覆盖 `icon-transparent.png`），ADR 0004 补 v6 换版记录，v5 段落留作历史存档。
+
 ### 优化：同步开始即说明「本次为全量比对」（2026-11-11）
 
 清掉 `sync_state.json` 后首轮走全量比对（实测 205 s），进度区此前只显示「准备同步…」，用户容易当成卡死直接取消。现由 core 在 `SyncProgress::Starting` 上回传 `full_compare`：push 侧判据 `rekey || last_pushed_clock_ms <= 0`（与 `scan_local_buckets` 的 `watermark <= 0` 同源），pull 侧判 `never_synced`（本机无桶指纹快照）。

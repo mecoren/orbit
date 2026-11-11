@@ -172,6 +172,12 @@ class _BrandCard extends StatelessWidget {
           padding: const EdgeInsets.all(AppDimens.cardPadding),
           child: Column(
             children: [
+              Image.asset(
+                'assets/app_icon.png',
+                width: AppDimens.splashLogoSize,
+                height: AppDimens.splashLogoSize,
+              ),
+              const SizedBox(height: AppDimens.space8),
               Text(
                 '循迹',
                 style: TextStyle(

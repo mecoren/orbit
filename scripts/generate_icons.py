@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
-"""Orbit 品牌图标生成器（M5.1；2026-09-08 换 AI 生图「圆环轨道」版）。
+"""Orbit 品牌图标生成器（2026-11-11 换扁平「C 环 + 对勾 + 轨道」v6 版）。
 
 用法（仓库根）：python scripts/generate_icons.py
 
 产出（均覆盖写入）：
-- 桌面 Tauri：apps/desktop/src-tauri/icons/{icon.png, icon.ico, icon.icns,
-  32x32.png, 128x128.png, 128x128@2x.png, Square*.png, StoreLogo.png}
-- 桌面关于页：apps/desktop/public/app-icon.png（256，透明底 squircle）
+- 桌面 Tauri：apps/desktop/src-tauri/icons/{icon.png, icon-transparent.png,
+  icon.ico, icon.icns, 32x32.png, 128x128.png, 128x128@2x.png, Square*.png,
+  StoreLogo.png}
+- 桌面关于页 / 页面图标：apps/desktop/public/{app-icon.png, favicon.ico}
 - Android 启动器：apps/mobile/android/app/src/main/res/mipmap-{m,hdpi,xhdpi,
   xxhdpi,xxxhdpi}/ic_launcher.png（Flutter 模板同尺寸族）
 - Android 自适应图标（API 26+）：mipmap-anydpi-v26/{ic_launcher,
-  ic_launcher_round}.xml（白底 @color/ic_launcher_background + 前景分层）
+  ic_launcher_round}.xml（透明底 @color/ic_launcher_background + 前景分层）
   + mipmap-*/ic_launcher_foreground.png（108dp 画布，内容缩入安全区）
 - Android 启动屏：mipmap-xxxhdpi/launch_image.png（512，无圆角全出血）
 - 移动端 Flutter 资产：apps/mobile/assets/app_icon.png（512，启动等待
@@ -18,19 +19,19 @@
 - Android 通知小图标：drawable-*/ic_stat_orbit.png（白色剪影，API 21+ 语义）
 - 设计源文件：docs/adr/assets/orbit-icon-master.png
 
-设计 v5（源：scripts/icon-asset-2026-09-08b.png，AI 生图带透明通道）：
-蓝色正圆环（缺口嵌卫星球、彗星从中心越环）+ 双层 glow 光晕；主体蓝
-#2B6EF7。资产为栅格合成（环圆度实测 ±2px、蓝色 std<3，无需重描）；
-**全族透明底**（用户口径「扣成透明背景」）——无底板，深色底由宿主环境
-提供；Android 启动屏为白底 + 居中本图（launch_background.xml 的 launch_bg）。
+设计 v6（源：scripts/icon-asset-2026-11-11.png，1080² 透明底扁平图）：
+深蓝 #126FFD 的 C 形粗环 + 中心对勾 + 右上卫星球 + 浅蓝斜向轨道带；
+无 glow、无底板。源图自带透明通道，脚本按 alpha>16 裁紧框后直接使用；
+**全族透明底**（用户口径「扣成透明背景」）——深色底由宿主环境提供；
+Android 启动屏为白底 + 居中本图（launch_background.xml 的 launch_bg）。
 
 图标口径（2026-09-19）：移动端与桌面端**同一枚图标**——launcher 图标、
 原生启动屏图、Flutter 等待画面资产三处全部出自本脚本的 render_master，
 换版一次产出全平台，不允许单端手改位图。
-内容对齐：**短轴定标**——以 solid 短轴（蓝色圆环外径 812，视觉主体）
-撑满画布 86%（PAD=0.07），fit_scale 夹逼保证整幅资产不越界、彗星尾梢
-不裁；源图已按 solid 紧框裁过（glow 余量≈0），环占 88.2% 为 clip-free
-上限。参数改动请同步更新本文件顶部注释与 0004 ADR。
+内容对齐：**短轴定标**——以裁紧框后的短轴（视觉主体）撑满画布 86%
+（PAD=0.07），fit_scale 夹逼保证整幅资产不越界、轨道带尾梢不裁；
+bbox 由 alpha 动态计算，换源图只需替换 scripts/ 下的资产文件，不再手改常量。
+参数改动请同步更新本文件顶部注释与 0004 ADR。
 """
 
 from __future__ import annotations
@@ -41,18 +42,30 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 REPO = Path(__file__).resolve().parent.parent
-ASSET_PATH = Path(__file__).resolve().parent / "icon-asset-2026-09-08b.png"
+ASSET_PATH = Path(__file__).resolve().parent / "icon-asset-2026-11-11.png"
 
 # ---- 设计参数（与 docs/adr/0004 §图标一致）----
-PAD = 0.07  # solid 短轴边距（相对画布；短轴=蓝色圆环外径，视觉主体定标基准）
-# 资产内 solid 内容 bbox（icon-asset-2026-09-08b.png 920×816 实测）
-SOLID_BBOX = (1, 3, 915, 814)  # x0, y0, x1, y1（含端点）
+PAD = 0.07  # 紧框短轴边距（相对画布；短轴=裁紧框后内容的短边，视觉主体定标基准）
+
+
+def _trim_to_content(im: Image.Image) -> Image.Image:
+    """按 alpha>16 裁掉源图留白（保留抗锯齿边缘），定标不随源画布留白漂移。"""
+    mask = im.getchannel("A").point(lambda v: 255 if v > 16 else 0)
+    bbox = mask.getbbox()
+    if bbox is None:
+        raise RuntimeError(f"源图无可见内容：{ASSET_PATH}")
+    return im.crop(bbox)
+
+
+ASSET = _trim_to_content(Image.open(ASSET_PATH).convert("RGBA"))
+# 紧框后整幅资产即 solid 内容域（v5 时代按旧源图硬编码的 bbox 作废）
+SOLID_BBOX = (0, 0, ASSET.width - 1, ASSET.height - 1)
 
 
 def fit_scale(ss: int, pad: float = PAD) -> float:
-    """定标系数：以 solid 短轴（=蓝色圆环外径 812，视觉主体）撑满 (1-2*pad)*ss。
+    """定标系数：以紧框短轴（视觉主体）撑满 (1-2*pad)*ss。
 
-    夹逼 ss/ASSET.width 保证整幅资产不越出画布——彗星尾梢与 glow 一律不裁。
+    夹逼 ss/ASSET.width 保证整幅资产不越出画布——斜向轨道带的尾梢一律不裁。
     """
     sx0, sy0, sx1, sy1 = SOLID_BBOX
     short_axis = min(sx1 - sx0 + 1, sy1 - sy0 + 1)
@@ -82,7 +95,7 @@ ADAPTIVE_DENSITIES = {
     "mipmap-xxhdpi": 648,
     "mipmap-xxxhdpi": 864,
 }
-# 108dp 画布中系统可见区 72dp（66.7%）；取 60%（pad 0.20）给彗星尾梢留
+# 108dp 画布中系统可见区 72dp（66.7%）；取 60%（pad 0.20）给斜向轨道带尾梢留
 # 余量——圆形 / 圆角方形遮罩下四角不裁到品牌图形。
 ADAPTIVE_PAD = 0.20
 
@@ -94,8 +107,6 @@ NOTIFICATION_DENSITIES = {
     "drawable-xxhdpi": 72,
     "drawable-xxxhdpi": 96,
 }
-
-ASSET = Image.open(ASSET_PATH).convert("RGBA")
 
 
 def _place_asset(im: Image.Image, ss: int, pad: float = PAD) -> None:
@@ -178,7 +189,7 @@ def write_adaptive_icons(res: Path) -> None:
     anydpi.mkdir(parents=True, exist_ok=True)
     xml = (
         '<?xml version="1.0" encoding="utf-8"?>\n'
-        "<!-- Orbit 自适应图标（API 26+）：白底 + 品牌前景层；"
+        "<!-- Orbit 自适应图标（API 26+）：透明底 + 品牌前景层；"
         "脚本产出（scripts/generate_icons.py），勿手改。 -->\n"
         '<adaptive-icon xmlns:android='
         '"http://schemas.android.com/apk/res/android">\n'
@@ -194,8 +205,8 @@ def render_notification_silhouette(size: int) -> Image.Image:
     """通知小图标：主体白色剪影（透明底），Android 5.0+ alpha 通道语义。
 
     几何与主图共用 fit_scale 口径（不逐处漂移）；状态栏图标有额外内缩
-    惯例，取 pad=0.10（短轴口径下环占 80%，仍大于旧 width 口径的 71%），
-    避免 24px 档彗星尾梢贴边被 OEM 切梢。
+    惯例，取 pad=0.10（短轴口径下主体占 80%），
+    避免 24px 档斜向轨道带尾梢贴边被 OEM 切梢。
     """
     ss = 512
     canvas = Image.new("RGBA", (ss, ss), (0, 0, 0, 0))
@@ -277,21 +288,24 @@ def self_check(master: Image.Image, notif: Image.Image) -> None:
         r, g, b, al = px[x, y]
         if al > 30:
             raise RuntimeError(f"自检失败：底不透明 ({x},{y}) -> ({r},{g},{b},{al})")
-    # 3) 主体蓝存在（短轴定标后实测采样平台：rr=0.325w 在 PAD 0.06~0.08
-    # 区间均 12/12 命中；取平台中心而非边缘，抗后续微调）
-    cx = cy = w / 2
-    rr = w * 0.325  # 环带中段
-    hits = 0
-    import math
-    for deg in range(0, 360, 30):
-        x = int(cx + rr * math.cos(math.radians(deg)))
-        y = int(cy + rr * math.sin(math.radians(deg)))
-        if 0 <= x < w and 0 <= y < h:
+    # 2) 主体蓝存在：按 4px 网格统计不透明像素与蓝色像素占比。
+    #    v5 的「环带 rr=0.325w 十二点采样」绑死旧圆环构图，v6 是 C 环 +
+    #    对勾 + 斜向轨道带，环带上半圈有缺口，故改为与构图无关的覆盖率口径：
+    #    可见主体至少占采样点 15%，且其中蓝色占比 ≥60%（浅蓝轨道带同样 b-r>60）。
+    opaque = 0
+    blue = 0
+    sampled = 0
+    for y in range(0, h, 4):
+        for x in range(0, w, 4):
             r, g, b, al = px[x, y]
-            if al > 200 and b - r > 60:
-                hits += 1
-    if hits < 6:
-        raise RuntimeError(f"自检失败：环带蓝色采样命中不足（{hits}/12）")
+            sampled += 1
+            if al > 200:
+                opaque += 1
+                if b - r > 60 and b > 120:
+                    blue += 1
+    if opaque < sampled * 0.15 or blue < opaque * 0.60:
+        raise RuntimeError(
+            f"自检失败：主体蓝覆盖不足（不透明 {opaque}/{sampled}，蓝 {blue}）")
     # 4) 通知小图标：只允许白色与透明
     npx = notif.load()
     for x in range(0, notif.size[0], 2):
@@ -323,16 +337,20 @@ def main() -> None:
         icons / "icon.icns",
     )
     render_master(512).save(icons / "icon.png")
+    # 同目录历史文件名（v7 手绘脚本曾产出）：一并覆盖，禁留旧图
+    render_master(1024).save(icons / "icon-transparent.png")
 
-    # ---- 桌面关于页 app-icon（透明底 squircle 同主图）----
-    render_master(256).save(REPO / "apps/desktop/public/app-icon.png")
+    # ---- 桌面关于页 / 页面图标（透明底同主图）----
+    public = REPO / "apps/desktop/public"
+    render_master(256).save(public / "app-icon.png")
+    write_ico([16, 32, 48], public / "favicon.ico")
 
     # ---- Android 启动器图标 ----
     res = REPO / "apps/mobile/android/app/src/main/res"
     for bucket, size in ANDROID_DENSITIES.items():
         render_master(size).save(res / bucket / "ic_launcher.png")
 
-    # ---- Android 自适应图标（API 26+ 分层：白底 + 品牌前景）----
+    # ---- Android 自适应图标（API 26+ 分层：透明底 + 品牌前景）----
     write_adaptive_icons(res)
 
     # ---- Android 启动屏（全出血无圆角，xxxhdpi 512 一枚）----

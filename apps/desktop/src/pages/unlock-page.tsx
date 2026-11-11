@@ -39,6 +39,7 @@ export function UnlockPage({ onUnlocked }: UnlockPageProps) {
   return (
     <div className="flex h-screen items-center justify-center bg-background">
       <form onSubmit={submit} className="w-full max-w-xs space-y-4 text-center">
+        <img src="/app-icon.png" alt="循迹" className="mx-auto size-16" draggable={false} />
         <h1 className="text-xl font-semibold">循迹</h1>
         <p className="text-sm text-muted-foreground">请输入主密码解锁</p>
         <div className="space-y-2 text-left">

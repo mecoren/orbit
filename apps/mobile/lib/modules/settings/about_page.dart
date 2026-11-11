@@ -119,6 +119,12 @@ class _AboutPageState extends ConsumerState<AboutPage> {
               children: [
                 Column(
                   children: [
+                    Image.asset(
+                      'assets/app_icon.png',
+                      width: AppDimens.splashLogoSize,
+                      height: AppDimens.splashLogoSize,
+                    ),
+                    const SizedBox(height: AppDimens.space8),
                     Text(
                       '循迹',
                       style: TextStyle(

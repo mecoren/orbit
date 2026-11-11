@@ -1,4 +1,11 @@
 """
+历史脚本（v7 手绘，已废弃）：请勿运行。
+
+2026-11-11 起全平台品牌图统一由 scripts/generate_icons.py 从
+scripts/icon-asset-2026-11-11.png 一次产出；运行本脚本会把
+apps/desktop/src-tauri/icons/icon-transparent.png 覆盖成旧手绘图。
+保留仅为设计历史存档（见 docs/adr/0004）。
+
 Generate Orbit app icon with transparent background (v7 - final tuning).
 
 Refined proportions:

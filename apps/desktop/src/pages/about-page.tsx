@@ -67,7 +67,8 @@ function InfoSection() {
         <img
           src="/app-icon.png"
           alt="循迹"
-          className="size-20 rounded-2xl object-cover shadow-md"
+          className="size-20 object-contain"
+          draggable={false}
         />
         <p className="mt-1 text-lg font-semibold">循迹</p>
         <p className="text-xs text-muted-foreground">桌面优先 · 本地优先 · 端到端加密</p>

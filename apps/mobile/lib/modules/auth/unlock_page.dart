@@ -127,6 +127,12 @@ class _UnlockPageState extends ConsumerState<UnlockPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                Image.asset(
+                  'assets/app_icon.png',
+                  width: AppDimens.splashLogoSize,
+                  height: AppDimens.splashLogoSize,
+                ),
+                const SizedBox(height: AppDimens.space8),
                 Text(
                   '循迹',
                   style: TextStyle(
