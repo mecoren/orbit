@@ -17,6 +17,33 @@
 
 ## [Unreleased]
 
+### 优化：同步开始即说明「本次为全量比对」（2026-11-11）
+
+清掉 `sync_state.json` 后首轮走全量比对（实测 205 s），进度区此前只显示「准备同步…」，用户容易当成卡死直接取消。现由 core 在 `SyncProgress::Starting` 上回传 `full_compare`：push 侧判据 `rekey || last_pushed_clock_ms <= 0`（与 `scan_local_buckets` 的 `watermark <= 0` 同源），pull 侧判 `never_synced`（本机无桶指纹快照）。
+
+- **文案单点**：`display_text` 在 `full_compare` 档产出「正在做全量比对（本机无同步账本，可能较慢）…」，移动端直接展示（该行改用强调色，免得被当成普通进度）；
+- **桌面**：`syncProgressText` 同口径分支，`SyncProgressEvent` 的 `full_compare` 为可选字段（旧载荷/缺字段回落原文案）；
+- **桥接**：FRB `SyncProgressDto` 与 Dart 镜像各加一列（`serde(default)` 保证旧壳反序列化不炸）。
+
+验证：`cargo test -p orbit-core --lib cloud_sync::` 247 通过（新增「首轮 true / 幂等轮 false」与「旧载荷缺字段回落 false」用例）；`cargo check -p orbit-flutter` 通过；桌面 `sync-status.test.ts` 29 通过 + `tsc --noEmit` 通过；移动端 `flutter analyze` 无 issue、`sync_status_button_test.dart` 6 通过；codegen 重生成后产物只含该字段（3 文件 / +20 行），该批生成物需随本条目一并提交后 `pnpm frb` 自检才转绿。
+
+### 修复：同步历史「耗时」恒为 0.0s、计数口径被读成行数（2026-11-11）
+
+端到端测试在真机上发现：同步历史每行都显示「耗时 0.0s」，连 205s 的全量轮也不例外——`record_incremental_history` 的 `insert` 与 `update_status` 同传一个 `now_ms`，`started_at == finished_at`。同时 `pulled_count/pushed_count` 记的是「模块数 + 附件数」，UI 却写成「拉取 259」，被读成 259 行。
+
+- **耗时**：`record_incremental_history` 增加 `started_at_ms` 入参，`sync_now` / `push_only` / `pull_then_push` 三处在进入 `*_inner` **之前**取时刻，`finished_at` 仍取写入时刻；取消/失败轮次同样得到真实耗时。新增断言「`finished_at - started_at ≥ 1.2s`」的用例锁住行为。
+- **口径**：桌面 `sync-section` 与移动 `sync_settings_page` 的历史行改「拉取 N 项 / 推送 N 项」，卡片底部常驻「1 项 = 1 个数据模块或 1 个附件，不是行数」；`SyncHistory` 结构补文档注释（`0001_init.sql` 冻结基线里的「本次拉取行数」注释以代码注释为准）。
+- **排障 toast**：双端「先拉后推完成」补报推送模块数（此前只报拉取，推上去的改动不可见），「仅推送完成」统一为「推送 N 个模块」。
+
+验证：`cargo test -p orbit-core history_` 9 通过；`flutter test test/sync_settings_page_test.dart` 19 通过；`apps/desktop` `pnpm typecheck` 通过。
+
+### 优化：同步历史/账本自动刷新、移动端日志级别回归 Info（2026-11-11）
+
+- **两张同步诊断卡自动刷新（移动端）**：同步历史与同步账本此前只在「进入页面」和手动「刷新」时回读，刚同步完看到的还是上一轮的记录（桌面端早已订阅 `sync-finished`）。改为订阅 `syncProgressProvider` 的终态事件（`done` / `error`）自动重读，双端口径对齐。
+- **移动端 logger 安装顺序**：`init_app` 里 `setup_default_user_utils()` 先装 FRB 自带 logger，全局 `log` logger 先到者胜，导致 `crates/orbit-flutter/src/logging.rs` 的 `with_tag("orbit")` + `Info` 级别静默失效——同步期间 logcat 里每条 SQL 都以 `D sqlx_core::logger` 逐条落盘。现改为先 `logging::install()` 再 `setup_default_user_utils()`，并补 `log::set_max_level(Info)` 兜底。
+
+验证：`cargo check -p orbit-flutter` 通过；`flutter analyze lib/modules/settings/sync_settings_page.dart` 无 issue；`flutter test test/sync_settings_page_test.dart` 19 通过。（模拟器在本轮收尾时已离线，日志级别与自动刷新的真机观感未复测。）
+
 ### 修复：首次全量恢复丢失软删行、统计跨端不可比、冲突计数与留档不一致（2026-11-10）
 
 端到端测试（`docs/同步功能{协议}端到端测试报告-2026-11-09.md`）实测三项，逐项修复：
