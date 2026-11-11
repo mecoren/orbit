@@ -430,9 +430,17 @@ class _SyncInfoSheetState extends ConsumerState<_SyncInfoSheet> {
                     height: 4,
                   ),
                   const SizedBox(height: AppDimens.space6),
+                  // 全量比对（清空账本/首同步）实测以分钟计，文案由 core 单点
+                  // 产出，这里只用强调色把它从「普通进度」里拎出来，免得被
+                  // 当成卡死直接取消
                   Text(
                     progress.displayText,
-                    style: TextStyle(fontSize: 12, color: colors.secondaryText),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: progress.fullCompare
+                          ? colors.accent
+                          : colors.secondaryText,
+                    ),
                   ),
                 ],
               ),

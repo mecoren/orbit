@@ -137,7 +137,11 @@ pub async fn pull_all(
     let mut table_names: std::collections::BTreeSet<&String> = manifest.tables.keys().collect();
     table_names.extend(manifest.tombstones.keys());
     let tables = tables_in_dependency_order(table_names.into_iter());
-    builder.starting(tables.len() as u32);
+    // 本机没有账本快照（`sync_state.json` 缺失/被清）时，下面的逐桶比对命中不了
+    // `state.remote_chunk_fp` 缓存，所有分桶都要下载+解密+合并——与 push 侧同一
+    // 判据口径，UI 据此提示「本次会慢」。epoch 未变的那条早退已在上面 return，
+    // 走到这里一定是要真比对的轮次。
+    builder.starting(tables.len() as u32, crate::cloud_sync::never_synced(&state));
 
     let mut result = PullResult::default();
     let mut changed_records_total = 0u64;

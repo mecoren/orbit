@@ -8765,8 +8765,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   SyncProgressDto dco_decode_sync_progress_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 8)
-      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
     return SyncProgressDto(
       phase: dco_decode_String(arr[0]),
       origin: dco_decode_String(arr[1]),
@@ -8775,7 +8775,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       total: dco_decode_opt_box_autoadd_i_64(arr[4]),
       message: dco_decode_opt_String(arr[5]),
       percent: dco_decode_i_64(arr[6]),
-      displayText: dco_decode_String(arr[7]),
+      fullCompare: dco_decode_bool(arr[7]),
+      displayText: dco_decode_String(arr[8]),
     );
   }
 
@@ -11960,6 +11961,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_total = sse_decode_opt_box_autoadd_i_64(deserializer);
     var var_message = sse_decode_opt_String(deserializer);
     var var_percent = sse_decode_i_64(deserializer);
+    var var_fullCompare = sse_decode_bool(deserializer);
     var var_displayText = sse_decode_String(deserializer);
     return SyncProgressDto(
       phase: var_phase,
@@ -11969,6 +11971,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       total: var_total,
       message: var_message,
       percent: var_percent,
+      fullCompare: var_fullCompare,
       displayText: var_displayText,
     );
   }
@@ -14943,6 +14946,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_box_autoadd_i_64(self.total, serializer);
     sse_encode_opt_String(self.message, serializer);
     sse_encode_i_64(self.percent, serializer);
+    sse_encode_bool(self.fullCompare, serializer);
     sse_encode_String(self.displayText, serializer);
   }
 

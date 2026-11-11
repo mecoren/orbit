@@ -143,6 +143,17 @@ pub async fn push_all_force_full(
     .await
 }
 
+/// 本轮是否是「无账本全量比对」（进度事件与逐表快路径共用同一判据）
+///
+/// true = force（rekey 全量重传）或水位线 ≤ 0（首同步 / `sync_state.json` 被清 /
+/// 账本读取失败已退化成 `Default`）。此时 F41 的逐桶快路径
+/// （`bucket_is_unchanged`）全部失效，每行都要重新装载+序列化+哈希，大库上
+/// 以分钟计——进度事件据此让 UI 提前说明「本次会慢」，判据必须与
+/// `scan_local_buckets` 里 `watermark <= 0 → None` 同源，否则提示与实际行为脱节。
+fn is_full_compare_round(force: bool, pushed_watermark_ms: i64) -> bool {
+    force || pushed_watermark_ms <= 0
+}
+
 #[allow(clippy::too_many_arguments)] // 内部实现：对外两入口的全部入参 + 两个开关，收组会让调用侧多一层解构
 async fn push_all_impl(
     db_pool: &SqlitePool,
@@ -179,7 +190,10 @@ async fn push_all_impl(
     }
 
     let builder = ProgressBuilder::new(progress_sender, origin);
-    builder.starting(tables.len() as u32);
+    builder.starting(
+        tables.len() as u32,
+        is_full_compare_round(force, state.last_pushed_clock_ms),
+    );
 
     // F41：本轮水位线上界——本轮开始时刻的逻辑时钟快照。成功保存账本时
     // 写入 `last_synced_clock_ms`：所有 `updated_at ≤ 本值` 的本地写入都在
@@ -1701,6 +1715,49 @@ mod tests {
             "多一行同样是异常（说明装载混入了别的行）"
         );
         assert!(bucket_count_matches(0, 0), "空桶对空期望是相符");
+    }
+
+    /// 进度事件的「全量比对」档：首轮（无账本）为 true，账本落定后的幂等轮回落 false
+    ///
+    /// 判据错成常 true 会让用户每轮都看到「可能较慢」，错成常 false 则大库首同步
+    /// 看起来像卡死——两个方向都得钉住。
+    #[tokio::test]
+    async fn starting_frame_reports_full_compare_only_without_ledger() {
+        use crate::cloud_sync::progress::SyncProgress;
+
+        struct FrameRecorder(std::sync::Mutex<Vec<bool>>);
+        impl ProgressSender for FrameRecorder {
+            fn send(&self, p: SyncProgress) {
+                if let SyncProgress::Starting { full_compare, .. } = p {
+                    self.0.lock().unwrap().push(full_compare);
+                }
+            }
+        }
+
+        let (pool, crypto, store, _tmp) = env().await;
+        let adapter = MemAdapter::new();
+        let frames = FrameRecorder(std::sync::Mutex::new(Vec::new()));
+        for _ in 0..2 {
+            push_all(
+                &pool,
+                &crypto,
+                &store,
+                &adapter,
+                &frames,
+                SyncOrigin::Manual,
+                "dev-1",
+                &[],
+            )
+            .await
+            .unwrap();
+        }
+
+        let seen = frames.0.lock().unwrap().clone();
+        assert_eq!(
+            seen,
+            vec![true, false],
+            "首轮无账本必须标全量比对，水位线推进后的幂等轮必须回落"
+        );
     }
 
     /// N52：行级增量装载产出的分桶载荷必须与全量装载**逐字节一致**

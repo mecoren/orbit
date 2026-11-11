@@ -31,6 +31,13 @@ export interface SyncProgressEvent {
   current?: number;
   total?: number;
   message?: string;
+  /**
+   * starting 档专用：本轮「无账本全量比对」（水位线 ≤ 0 / rekey / 本机无桶指纹
+   * 快照）。大库上这一轮以分钟计，文案要提前说明，否则用户当成卡死。
+   *
+   * 可选：旧 Rust 侧 / mock 不发该字段时按 false 处理。
+   */
+  full_compare?: boolean;
 }
 
 /** 派生展示状态（优先级：未配置 > 未就绪 > 运行态） */
@@ -94,10 +101,14 @@ export function syncProgressText(e: {
   current?: number;
   total?: number;
   message?: string;
+  full_compare?: boolean;
 }): string {
   switch (e.phase) {
     case "starting":
-      return "准备同步…";
+      // 与移动端同句口径的核心信息一致（移动端直接展示 core 的 display_text）
+      return e.full_compare
+        ? "正在做全量比对（本机无同步账本，可能较慢）…"
+        : "准备同步…";
     case "pushing":
       return `正在上传${e.display_name ?? ""} ${e.current ?? 0}/${e.total ?? 0}…`;
     case "pulling":

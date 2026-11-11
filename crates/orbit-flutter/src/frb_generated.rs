@@ -9685,6 +9685,7 @@ impl SseDecode for crate::api::dto::SyncProgressDto {
         let mut var_total = <Option<i64>>::sse_decode(deserializer);
         let mut var_message = <Option<String>>::sse_decode(deserializer);
         let mut var_percent = <i64>::sse_decode(deserializer);
+        let mut var_fullCompare = <bool>::sse_decode(deserializer);
         let mut var_displayText = <String>::sse_decode(deserializer);
         return crate::api::dto::SyncProgressDto {
             phase: var_phase,
@@ -9694,6 +9695,7 @@ impl SseDecode for crate::api::dto::SyncProgressDto {
             total: var_total,
             message: var_message,
             percent: var_percent,
+            full_compare: var_fullCompare,
             display_text: var_displayText,
         };
     }
@@ -12994,6 +12996,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::dto::SyncProgressDto {
             self.total.into_into_dart().into_dart(),
             self.message.into_into_dart().into_dart(),
             self.percent.into_into_dart().into_dart(),
+            self.full_compare.into_into_dart().into_dart(),
             self.display_text.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -15675,6 +15678,7 @@ impl SseEncode for crate::api::dto::SyncProgressDto {
         <Option<i64>>::sse_encode(self.total, serializer);
         <Option<String>>::sse_encode(self.message, serializer);
         <i64>::sse_encode(self.percent, serializer);
+        <bool>::sse_encode(self.full_compare, serializer);
         <String>::sse_encode(self.display_text, serializer);
     }
 }

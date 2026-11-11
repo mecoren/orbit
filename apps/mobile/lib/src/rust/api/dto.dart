@@ -1018,6 +1018,12 @@ class SyncProgressDto {
   /// 估算百分比 0-100（core `SyncProgress::percent` 同口径）
   final PlatformInt64 percent;
 
+  /// starting 档专用：本轮是否「无账本全量比对」（其余 phase 恒 false）
+  ///
+  /// core `Starting.full_compare` 的落点，同时体现在 `display_text` 里；
+  /// 单列出来是给 UI 决定「要不要用警示色/加一行说明」，不必靠文案匹配。
+  final bool fullCompare;
+
   /// 可直接展示的整句文案（core `SyncProgress::display_text` 同口径）
   ///
   /// 双端共用同一句中文：文案口径在 core 单点维护，避免 Dart 侧再抄一份
@@ -1032,6 +1038,7 @@ class SyncProgressDto {
     this.total,
     this.message,
     required this.percent,
+    required this.fullCompare,
     required this.displayText,
   });
 
@@ -1044,6 +1051,7 @@ class SyncProgressDto {
       total.hashCode ^
       message.hashCode ^
       percent.hashCode ^
+      fullCompare.hashCode ^
       displayText.hashCode;
 
   @override
@@ -1058,6 +1066,7 @@ class SyncProgressDto {
           total == other.total &&
           message == other.message &&
           percent == other.percent &&
+          fullCompare == other.fullCompare &&
           displayText == other.displayText;
 }
 

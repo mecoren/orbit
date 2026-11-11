@@ -60,6 +60,18 @@ pub enum SyncProgress {
         origin: SyncOrigin,
         /// 模块总数
         total_modules: u32,
+        /// 本轮是否要做「无账本全量比对」
+        ///
+        /// true 的来源共三处：本机从未成功 push（水位线 ≤ 0，含 `sync_state.json`
+        /// 被清空、账本读取失败退化成默认值，见 `push.rs` 的 `full_compare`）、
+        /// rekey 全量重传、pull 侧从未成功同步（`never_synced`，逐桶指纹缓存全空）。
+        /// 这一轮要把每张表每一行重新装载、序列化并重算指纹，大库上耗时以分钟计
+        /// （实测 21 万行档约 3 分钟），UI 据此提前说明「本次会慢」，避免把正常的
+        /// 全量比对当成卡死或失败。
+        ///
+        /// `serde(default)`：旧壳收到的 JSON 没有该字段时按 false 解，不炸反序列化
+        #[serde(default)]
+        full_compare: bool,
     },
 
     /// 正在推送模块
@@ -171,6 +183,10 @@ impl SyncProgress {
     /// 获取模块显示名（用于 UI 文案）
     pub fn display_text(&self) -> String {
         match self {
+            // 全量比对要几分钟，先把原因讲清（文案走 core 单点，双端同句）
+            SyncProgress::Starting {
+                full_compare: true, ..
+            } => "正在做全量比对（本机无同步账本，可能较慢）...".to_string(),
             SyncProgress::Starting { .. } => "准备同步...".to_string(),
             SyncProgress::Pushing { display_name, .. } => {
                 format!("正在上传{display_name}...")
@@ -224,7 +240,7 @@ impl ProgressSender for NoopProgressSender {
 /// 用法：
 /// ```ignore
 /// let builder = ProgressBuilder::new(&sender, SyncOrigin::Manual);
-/// builder.starting(14);
+/// builder.starting(14, false);
 /// builder.pushing("movies", "影视数据", 1, 14);
 /// builder.done(1234, 2, 1, 5, 3);
 /// ```
@@ -238,11 +254,12 @@ impl<'a> ProgressBuilder<'a> {
         Self { sender, origin }
     }
 
-    /// 同步开始
-    pub fn starting(&self, total_modules: u32) {
+    /// 同步开始（`full_compare` = 本轮无账本、要做全量比对，见变体注释）
+    pub fn starting(&self, total_modules: u32, full_compare: bool) {
         self.sender.send(SyncProgress::Starting {
             origin: self.origin,
             total_modules,
+            full_compare,
         });
     }
 
@@ -343,6 +360,7 @@ mod tests {
         let p = SyncProgress::Starting {
             origin: SyncOrigin::Manual,
             total_modules: 14,
+            full_compare: false,
         };
         assert_eq!(p.percent(), 0);
     }
@@ -390,6 +408,7 @@ mod tests {
         let p = SyncProgress::Starting {
             origin: SyncOrigin::Manual,
             total_modules: 14,
+            full_compare: false,
         };
         assert_eq!(p.display_text(), "准备同步...");
     }
@@ -432,6 +451,7 @@ mod tests {
         let p = SyncProgress::Starting {
             origin: SyncOrigin::Manual,
             total_modules: 14,
+            full_compare: false,
         };
         let json = serde_json::to_string(&p).unwrap();
         let parsed: SyncProgress = serde_json::from_str(&json).unwrap();
@@ -439,10 +459,39 @@ mod tests {
             SyncProgress::Starting {
                 origin,
                 total_modules,
+                full_compare,
             } => {
                 assert_eq!(origin, SyncOrigin::Manual);
                 assert_eq!(total_modules, 14);
+                assert!(!full_compare);
             }
+            _ => panic!("解析类型错误"),
+        }
+    }
+
+    /// 全量比对档的文案必须与普通档区分开（双端都直接展示这句）
+    #[test]
+    fn display_text_for_full_compare_starting() {
+        let p = SyncProgress::Starting {
+            origin: SyncOrigin::Manual,
+            total_modules: 27,
+            full_compare: true,
+        };
+        assert!(
+            p.display_text().contains("全量比对"),
+            "全量比对档必须把原因说明白，实际: {}",
+            p.display_text()
+        );
+        assert_eq!(p.percent(), 0);
+    }
+
+    /// 旧壳/旧账本推来的 JSON 没有 `full_compare` 字段时按 false 反序列化
+    #[test]
+    fn starting_without_full_compare_field_defaults_false() {
+        let json = r#"{"phase":"starting","origin":"manual","total_modules":14}"#;
+        let parsed: SyncProgress = serde_json::from_str(json).unwrap();
+        match parsed {
+            SyncProgress::Starting { full_compare, .. } => assert!(!full_compare),
             _ => panic!("解析类型错误"),
         }
     }
@@ -474,6 +523,7 @@ mod tests {
         sender.send(SyncProgress::Starting {
             origin: SyncOrigin::Manual,
             total_modules: 1,
+            full_compare: false,
         });
         sender.send(SyncProgress::Done {
             origin: SyncOrigin::Manual,
@@ -518,7 +568,7 @@ mod tests {
         };
         let builder = ProgressBuilder::new(&sender, SyncOrigin::Background);
 
-        builder.starting(14);
+        builder.starting(14, false);
         builder.pushing("movies", "影视", 1, 14);
         builder.local_data_applied(2);
         builder.done(1000, 1, 0, 0, 0);

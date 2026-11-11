@@ -1650,6 +1650,11 @@ pub struct SyncProgressDto {
     pub message: Option<String>,
     /// 估算百分比 0-100（core `SyncProgress::percent` 同口径）
     pub percent: i64,
+    /// starting 档专用：本轮是否「无账本全量比对」（其余 phase 恒 false）
+    ///
+    /// core `Starting.full_compare` 的落点，同时体现在 `display_text` 里；
+    /// 单列出来是给 UI 决定「要不要用警示色/加一行说明」，不必靠文案匹配。
+    pub full_compare: bool,
     /// 可直接展示的整句文案（core `SyncProgress::display_text` 同口径）
     ///
     /// 双端共用同一句中文：文案口径在 core 单点维护，避免 Dart 侧再抄一份
@@ -1736,6 +1741,13 @@ impl From<orbit_core::cloud_sync::progress::SyncProgress> for SyncProgressDto {
             total,
             message,
             percent: p.percent() as i64,
+            full_compare: matches!(
+                &p,
+                P::Starting {
+                    full_compare: true,
+                    ..
+                }
+            ),
             display_text: p.display_text(),
         }
     }

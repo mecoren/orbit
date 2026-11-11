@@ -1209,6 +1209,7 @@ class RustOrbitBridge implements OrbitBridge {
       total: p.total?.toInt(),
       message: p.message,
       percent: p.percent.toInt(),
+      fullCompare: p.fullCompare,
       displayText: p.displayText,
     ),
   );

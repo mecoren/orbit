@@ -14,6 +14,7 @@ import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_icon_button.dart';
 import 'package:orbit/shared/widgets/sync_status_button.dart';
 import 'support/orbit_test_app.dart';
+import 'package:orbit/core/theme/app_colors.dart';
 import 'package:orbit/core/theme/icon_map.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_progress_bar.dart';
 
@@ -157,6 +158,41 @@ void main() {
       find.byType(OrbitProgressBar),
     );
     expect(bar.value, closeTo(0.3, 0.001));
+
+    await _flush(tester);
+    await _drainTimers(tester);
+  });
+
+  testWidgets('全量比对档：文案用强调色标出，不再和普通进度同一灰度', (tester) async {
+    final bridge = MockOrbitBridge();
+    final presetConfig = bridge.syncConfigSave(_presetConfig);
+    final presetCrypto = bridge.syncCryptoInit('123456');
+    await tester.pumpWidget(_wrap(bridge));
+    await _flush(tester);
+    await presetConfig;
+    await presetCrypto;
+    await _flush(tester);
+
+    await tester.tap(find.byType(OrbitIconButton));
+    await _flush(tester);
+    await tester.tap(find.text('立即同步'));
+    await tester.pump();
+
+    const text = '正在做全量比对（本机无同步账本，可能较慢）...';
+    bridge.emitSyncProgress(
+      const SyncProgress(
+        phase: 'starting',
+        origin: 'manual',
+        percent: 0,
+        fullCompare: true,
+        displayText: text,
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text(text), findsOneWidget);
+    final colors = AppColors.ofContext(tester.element(find.text(text)));
+    expect(tester.widget<Text>(find.text(text)).style?.color, colors.accent);
 
     await _flush(tester);
     await _drainTimers(tester);

@@ -142,6 +142,12 @@ describe("syncProgressText", () => {
     expect(syncProgressText({ phase: "attachments" })).toBe("同步附件中…");
   });
 
+  it("无账本全量比对档单独说明（分钟级耗时，不能只显示「准备同步」）", () => {
+    expect(syncProgressText({ phase: "starting", full_compare: true })).toContain("全量比对");
+    // 缺省/旧载荷不带该字段时仍是原文案
+    expect(syncProgressText({ phase: "starting", full_compare: false })).toBe("准备同步…");
+  });
+
   it("done / error 终态文案", () => {
     expect(syncProgressText({ phase: "done" })).toBe("同步完成");
     expect(syncProgressText({ phase: "error", message: "连接超时" })).toBe("同步失败：连接超时");

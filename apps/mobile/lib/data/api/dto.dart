@@ -2161,6 +2161,12 @@ class SyncProgress {
   /// 估算百分比 0–100
   final int percent;
 
+  /// starting 档专用：本轮是否「无账本全量比对」（其余 phase 恒 false）
+  ///
+  /// 与 `displayText` 同源但不等价：`displayText` 只管文案，本字段给 UI 决定
+  /// 要不要加重显示（清空账本后首轮全量比对实测 3 分钟以上，容易被当成卡死）。
+  final bool fullCompare;
+
   /// 可直接展示的整句文案（core 同口径）
   final String displayText;
 
@@ -2172,6 +2178,7 @@ class SyncProgress {
     this.total,
     this.message,
     required this.percent,
+    this.fullCompare = false,
     required this.displayText,
   });
 
