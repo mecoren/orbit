@@ -36,6 +36,7 @@ fn c(
 }
 
 /// 全部直接依赖（默认顺序：前端 → Rust → Flutter）
+// bounded-by-data: 编译期静态只读常量，上界 = 手工维护的直接依赖条目数（百级，只增不能自动累积）
 pub static ALL_COMPONENTS: LazyLock<Vec<OssComponent>> = LazyLock::new(|| {
     vec![
         // ================= 桌面前端（npm） =================
