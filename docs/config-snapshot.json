@@ -1,101 +1,144 @@
 {
-  "说明": "Orbit 云同步端到端测试配置快照（run4）。凭据仅保留末 4 位；同步密码本身不记录、不修改、不删除。",
-  "runId": "20261110-run4",
-  "快照时间": "2026-11-10 20:50（清库前）与 21:00–22:20（清库后重建、同步与取证），本地时间",
-  "文件日期说明": "报告文件名按需求沿用 2026-11-09，实际执行日期为 2026-11-10",
+  "说明": "Orbit 云同步端到端测试配置快照（20261111-run5，全缺口覆盖版）。凭据仅保留末 4 位；同步密码本身不记录、不修改、不删除。业务域仅待办，无账本/交易/微信/支付宝数据。",
+  "runId": "20261111-run5",
+  "快照时间": "2026-11-11 15:50（S3 轮清库前）、16:10（WebDAV 轮清库前）、17:20–18:10（移动/桌面真机 GUI 补跑）、19:00–20:30（S3 真机轮与阶段5异常轮）、20:40（收尾核对），本地时间",
+  "文件日期说明": "报告文件名按需求沿用 2026-11-09；实际执行日期为 2026-11-11",
   "测试隔离base_path": {
-    "S3_主链路": "orbit-sync-test/20261110-run4/s3",
-    "S3_阶段5": "orbit-sync-test/20261110-run4/s3-phase5",
-    "WebDAV": "orbit-sync-test/20261110-run4/webdav",
-    "隔离口径": "均为本轮新建前缀，未与既有 orbit-test / 20261110-run2 数据共用；云端对象测试结束后全部保留"
+    "S3_阶段3_4主轮": "orbit-sync-test/20261111-run5/s3-clean",
+    "S3_阶段5": "orbit-sync-test/20261111-run5/s3",
+    "S3_真机轮与异常轮": "orbit-sync-test/20261111-run5/s3-devices",
+    "WebDAV_主轮与真机GUI": "orbit-sync-test/20261111-run5/webdav",
+    "隔离口径": "均为本轮新建前缀，未与 20261110-run2/run3/run4 共用；测试结束云端对象全部保留"
   },
   "设备": {
     "移动1": { "serial": "127.0.0.1:16384", "model": "24031PN0DC", "android": "15 (API 35)", "applicationId": "cn.wait.orbit", "appVersion": "0.1.0+6", "dataDir": "/data/data/cn.wait.orbit/files/" },
     "移动2": { "serial": "127.0.0.1:16416", "model": "SM-S9110", "android": "15 (API 35)", "applicationId": "cn.wait.orbit", "appVersion": "0.1.0+6", "dataDir": "/data/data/cn.wait.orbit/files/" },
-    "桌面": { "启动": "orbit.exe（debug 二进制，devUrl http://127.0.0.1:5173，WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222）", "identifier": "cn.wait.orbit.dev", "appVersion": "0.1.0", "dataDir": "%APPDATA%\\cn.wait.orbit.dev\\" }
+    "桌面": { "启动": "orbit.exe（debug，devUrl http://127.0.0.1:5173，WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222）", "identifier": "cn.wait.orbit.dev", "appVersion": "0.1.0", "dataDir": "%APPDATA%\\cn.wait.orbit.dev\\" }
   },
   "工具链": {
     "rust": "1.96.1（rust-toolchain.toml 锁 1.96）",
+    "flutter": "3.47.6 stable",
     "node": "v24.16.0 / pnpm 11.10.0 / Vite 8.2.2",
-    "webdav": "WsgiDAV 4.3.5 + cheroot，0.0.0.0:8123，根目录 target/sync-e2e/davroot",
-    "python": "3.14"
+    "python": "3.14.7",
+    "webdav": "自建 WsgiDAV 4.3.5 + cheroot，0.0.0.0:8123，根目录 target/sync-e2e/davroot，PROPFIND 207，写入需 Basic 鉴权"
   },
   "阶段0_配置快照": {
-    "清库前三端生效配置": {
-      "protocol": "webdav",
-      "endpoint": "http://192.168.31.108:8123",
-      "username": "m4tester",
-      "password": "****s123",
-      "basePath": "orbit-sync-test/20261110-run2/webdav-devices",
-      "timeout秒": 30,
-      "skipTlsVerify": false,
-      "autoSync": false,
-      "syncIntervalMinutes": 0,
-      "syncOnChange": false,
-      "同步密码卡": { "hasPassword": true, "isUnlocked": false },
-      "测试连接": { "移动1": "连接成功（根目录 1 个条目）", "移动2": "连接成功（根目录 1 个条目）", "桌面": "sync_test_connection 返回 1" }
+    "S3轮_清库前三端生效配置": {
+      "protocol": "webdav", "endpoint": "http://192.168.31.108:8123", "username": "m4tester", "password": "****s123",
+      "basePath": "orbit-sync-test/20261110-run4/webdav", "timeout秒": 30, "skipTlsVerify": false,
+      "autoSync": false, "syncIntervalMinutes": 0, "syncOnChange": false, "manifestEpoch": 3,
+      "证据": ["target/sync-e2e/run5/phase0-configs-s3-round.json", "target/sync-e2e/run5/phase0/desktop-ipc.json"]
+    },
+    "WebDAV轮_清库前三端生效配置": {
+      "protocol": "s3", "endpoint": "https://oss-cn-shenzhen.aliyuncs.com/", "bucket": "wait-test", "region": "oss-cn-shenzhen",
+      "accessKey": "****7kRx", "secretKey": "****BuoD", "basePath": "orbit-sync-test/20261111-run5/s3",
+      "manifestEpoch": null, "证据": ["target/sync-e2e/run5/phase0-configs-webdav-round.json"]
     },
     "其余字段": { "mergeStrategy": "lww", "syncMode": "two_way", "isEncrypted": true, "isActive": true, "concurrentReqs": 8, "targets": "todo", "syncScope": "all", "scheduleType": "interval", "fullSyncInterval": 0, "historyKeepCount": 5, "notifyProgress": true, "keyDerivation": "v2", "iterations": 600000, "salt": "19XzoOEVs2+4zYX6M95gIw==" },
-    "证据": ["target/sync-e2e/run4/phase0-configs.json", "m1-testconn2.png", "m2-testconn3.png", "desktop-config-run4.json", "desktop-crypto-run4.json", "desktop-testconn-run4.json"]
+    "移动端GUI逐字段截图与测试连接": {
+      "入口": "底部「清单」tab → 页头「设置」→「云同步设置」（底栏「更多」hit test 失效，绕道）",
+      "回显": { "引擎": "S3 / WebDAV", "服务器地址": "http://192.168.31.108:8123 或 https://oss-cn-shenzhen.aliyuncs.com/", "远端路径": "按各轮隔离前缀", "定时同步": "关", "同步间隔": "每 0 小时", "修改后立即同步": "仅按定时或手动同步", "请求超时秒": 30, "跳过TLS验证": "校验服务器证书（推荐）", "密钥方案": "v2（同密码跨设备同 Key）" },
+      "测试连接返回": { "移动1_S3_GUI": "连接成功（根目录 1000 个条目）", "移动2_S3_GUI": "连接成功（根目录 1000 个条目）", "移动1_WebDAV_GUI": "连接成功（根目录 1 个条目）", "移动2_WebDAV_GUI": "连接成功（根目录 1 个条目）", "桌面_IPC_S3": 1000, "桌面_IPC_WebDAV": 1 },
+      "同步密码卡": { "移动1": "已设置；已锁定 → 已解锁（4–5s）", "移动2": "已设置；已锁定 → 已解锁（4–5s）", "桌面": "hasPassword=true / isUnlocked=true" },
+      "证据": ["target/sync-e2e/run5/unlock-s3m1.json", "target/sync-e2e/run5/unlock-s3m2.json", "target/sync-e2e/run5/unlock-m1.json", "target/sync-e2e/run5/unlock-m2.json", "target/sync-e2e/run5/gui/*-phase0-*.png"]
+    },
+    "误触处置": "首次自动化因滚动过头 + 模糊匹配回退，移动2 弹出「清除本机同步密码缓存？」确认框；已点「取消」关闭，未执行清除；随后按钮匹配收紧为精确匹配并显式禁用断连/清理/重置类按钮"
   },
   "阶段1_清库与重建": {
-    "移动1": { "force-stop": true, "删除": ["files/orbit.db", "files/orbit.db-wal", "files/orbit.db-shm", "files/sync_state.json"], "保留": ["files/sync_crypto_meta.json"], "重建后": "注入 seed4 库（215,409 行）+ 258 附件 + S3 配置（base_path orbit-sync-test/20261110-run4/s3）" },
-    "移动2": { "force-stop": true, "删除": ["files/orbit.db", "files/orbit.db-wal", "files/orbit.db-shm", "files/sync_state.json"], "保留": ["files/sync_crypto_meta.json"], "重建后": "应用重建空库（405,504 B）+ 注入同口径 S3 配置" },
-    "桌面": { "退出应用": true, "删除": ["orbit.db", "orbit.db-wal", "orbit.db-shm", "sync_state.json"], "保留": ["sync_config.enc", "sync_crypto_meta.json"], "重建": "重开空库 + sync_config_save(S3) + sync_crypto_unlock" },
+    "轮次": ["S3 轮", "WebDAV 轮", "S3 真机轮"],
+    "删除": ["orbit.db", "orbit.db-wal", "orbit.db-shm", "sync_state.json"],
+    "保留": ["sync_crypto_meta.json", "sync_config.enc（桌面）", "attachments/", "backups/"],
+    "移动端": "adb am force-stop → run-as rm -f → run-as ls -l files/ 复核 → am start；重启后新建空库 405,504 B",
+    "桌面": "退出应用后删四文件，重启后新建空库；CDP 9222 恢复",
     "重建逐字段核对": {
-      "移动1": "配置页语义树：引擎 S3 / endpoint / bucket wait-test / region oss-cn-shenzhen / Access Key 末 4 位 7kRx / base_path orbit-sync-test/20261110-run4/s3 / 超时 30 / 定时同步关（0 小时）/ 修改后同步关 / 跳过 TLS 关；证据 m1-s3-config-ui.txt",
-      "移动2": "同左；证据 m2-s3-config-ui.txt",
-      "桌面": "sync_config_get 回显：engine=s3/endpoint/bucket/region/username/base_path/interval_minutes=0/auto_sync_enabled=false/sync_on_change=false/skip_tls_verify=false/timeout_seconds=30/session_token_set=false；证据 desktop-s3-save.json",
-      "同步密码": "三端 hasPassword=true；移动端输入密码后 isUnlocked=true（未改密码），桌面 sync_crypto_unlock 后 is_unlocked=true"
+      "S3": { "base_path": "orbit-sync-test/20261111-run5/s3", "桌面": "sync_config_save → sync_config_get 全等；sync_test_connection=1000；解锁后 hasPassword/isUnlocked=true", "证据": "target/sync-e2e/run5/phase1-rebuild-s3.json（已脱敏）" },
+      "WebDAV": { "base_path": "orbit-sync-test/20261111-run5/webdav", "桌面": "sync_config_get 全等；sync_test_connection=1；已解锁", "证据": "target/sync-e2e/run5/phase1-rebuild-webdav.json（已脱敏）" },
+      "S3真机轮": { "base_path": "orbit-sync-test/20261111-run5/s3-devices", "三端": "sync_configs / sync_config_get 全等；桌面 test=1000；m1 注入 seed5 + 258 附件；m2 空库", "证据": "target/sync-e2e/run5/s3-devices-setup.json" }
     }
   },
   "阶段2_数据画像": {
-    "生成命令": "cargo run --release -p orbit-core --example seed_demo_db -- --out target/sync-e2e/seed4/orbit.db --profile sync-e2e --rows 40000 --projects 8 --history 1999:2018 --labels 40 --attachments 300 --big-attachments 2 --relations 3000 --saved-filters 20 --templates 20",
+    "生成命令": "cargo run --release -p orbit-core --example seed_demo_db -- --out target/sync-e2e/run5/seed5/orbit.db --profile sync-e2e --rows 40000 --projects 8 --history 1999:2018 --labels 40 --attachments 300 --big-attachments 2 --relations 3000 --saved-filters 20 --templates 20",
     "seed_bytes": 65957888,
-    "counts": { "todo_projects": 10, "todo_tasks": 40000, "todo_subtasks": 58628, "todo_labels": 40, "todo_task_labels": 78287, "todo_comments": 19201, "todo_task_relations": 3000, "todo_reminders": 14601, "todo_task_attachments": 303, "todo_saved_filters": 20, "todo_templates": 20 },
-    "total_rows": 215409,
+    "counts": { "todo_projects": 9, "todo_tasks": 40000, "todo_subtasks": 58628, "todo_labels": 40, "todo_task_labels": 78287, "todo_comments": 19201, "todo_task_relations": 3000, "todo_reminders": 14601, "todo_task_attachments": 303, "todo_saved_filters": 20, "todo_templates": 20 },
+    "total_rows": 214109, "phase4_total_rows": 214110, "WebDAV真机最终_total_rows": 214111,
     "deleted_rows": 799,
     "attachments": { "unique_files": 258, "total_bytes": 20840448, "big_files_over_8MiB": 2, "big_file_bytes": 8912896 },
-    "证据": ["target/sync-e2e/run4/seed4-stats.json"]
+    "真机落地": "移动1 adb push 明文库 + 258 个附件，run-as cp 进 files/，rm -f -wal/-shm 后重启 Activity；移动2/桌面保持空库",
+    "证据": ["target/sync-e2e/run5/phase2-seed-profile.json", "target/sync-e2e/run5/seed5/orbit.db"]
   },
   "阶段3_执行时序": {
-    "S3_真机与桌面壳": {
-      "3.1_m1_push_s": 142, "3.2_m2_full_pull_s": 105, "3.3_m2_idempotent_s": 78,
-      "3.4_desktop_full_pull_ms": 102666, "3.5_desktop_push_ms": 52912, "3.6_m2_pull_s": 55,
-      "3.7_m2_pull_push_s": 205, "3.8_desktop_pull_ms": 66089, "3.9_m1_pull_s": 63,
-      "合计_s": 870,
-      "说明": "3.7 前删除了移动2 的 sync_state.json，故为全量 pull + 增量 push"
-    },
-    "WebDAV_三实例": {
-      "3.1_ms": 53060, "3.2_ms": 75161, "3.3_ms": 10665, "3.4_ms": 70841,
-      "3.5_ms": 11745, "3.6_ms": 16218, "3.7_ms": 17804, "3.8_ms": 17252, "3.9_ms": 13821,
-      "phase3_total_ms": 286934, "total_ms": 348406
-    },
-    "sync_history": "三端全程 status=success、error_message=null；全量轮 pulled_count=259（258 附件 + 1 数据模块）",
-    "证据": ["target/sync-e2e/run4/m1-*.png", "target/sync-e2e/run4/m2-*.png", "target/sync-e2e/run4/desktop-sync-*.json", "target/sync-e2e/run4/round-webdav/timeline.jsonl", "target/sync-e2e/run4/round-s3-phase5.log"]
+    "S3_干净轮_s3-clean": { "3.1_ms": 33211, "3.2_ms": 33683, "3.3_ms": 7199, "3.4_ms": 35537, "3.5_ms": 7784, "3.6_ms": 9236, "3.7_ms": 7610, "3.8_ms": 8957, "3.9_ms": 8631, "phase3_total_ms": 152054, "total_ms": 184318 },
+    "S3_原轮含阶段5": { "phase3_total_ms": 150404, "total_ms": 262004 },
+    "WebDAV_核心测试台": { "3.1_ms": 42462, "3.2_ms": 55398, "3.3_ms": 7215, "3.4_ms": 53652, "3.5_ms": 7023, "3.6_ms": 8039, "3.7_ms": 7038, "3.8_ms": 7659, "3.9_ms": 8371, "phase3_total_ms": 197033, "total_ms": 229756 },
+    "真机GUI_WebDAV前缀": { "移动2_全量pull_ms": 78285, "移动2_幂等_ms": 51800, "移动1_收敛_ms": 105906, "移动1_幂等_ms": 51513, "桌面真壳_全量pull_ms": 97451, "桌面真壳_幂等_ms": 51059, "跨端回流": "桌面改标题 + 新建项目 → 移动2 GUI 同步可见；改回同样可见", "证据": ["gui-round-m2.json", "gui-round-m1.json", "cross-end-verification.json", "desktop-shell-sync.json", "desktop-shell-idempotent.json"] },
+    "真机GUI_S3前缀_s3-devices": { "m1_全量push_ms": 145891, "m1_幂等_ms": 94436, "m2_全量pull_ms": 60811, "m2_幂等_ms": 61035, "桌面_全量pull_ms": 88842, "桌面_幂等_ms": 57771, "m1_收敛_ms": 6531, "跨端回流": "双向回流传导成功=true（E2E-真机跨端-桌面改写 / E2E-S3真机跨端-改回）", "证据": ["s3-devices-chain.json", "s3-devices-desktop.json", "cross-end-verification-s3dev.json", "s3-devices-m1-converge.json"] },
+    "sync_history": "全程 status=success、error_message=null；全量轮 pulled_count=259（258 附件 + 1 数据模块）"
   },
   "阶段4_一致性": {
-    "S3_真机与桌面壳": { "run_dir": "target/sync-e2e/run4", "all_pass": true, "manifest_epoch": 3, "buckets": 523, "attachments": 258, "deleted_tasks": 799 },
-    "WebDAV_三实例": { "run_dir": "target/sync-e2e/run4/round-webdav", "all_pass": true, "manifest_epoch": 3, "buckets": 523, "attachments": 258, "deleted_tasks": 799 },
-    "S3_阶段5轮": { "run_dir": "target/sync-e2e/run4/round-s3-phase5", "all_pass": true, "manifest_epoch": 3 }
+    "S3_干净轮": { "run_dir": "target/sync-e2e/run5/round-s3-clean", "all_pass": true, "manifest_epoch": 3, "buckets": 523, "remote_tables_digest": "d51eb74c0d6b7c10", "remote_tombstones_digest": "f6bda2c01143f840" },
+    "S3_原轮": { "run_dir": "target/sync-e2e/run5/round-s3", "all_pass": true, "manifest_epoch": 3, "buckets": 523 },
+    "WebDAV_核心测试台": { "run_dir": "target/sync-e2e/run5/round-webdav", "all_pass": true, "manifest_epoch": 3, "buckets": 523, "remote_tables_digest": "bd1419ab0e786525", "remote_tombstones_digest": "f6bda2c01143f840" },
+    "三端真机_WebDAV": { "evidence": "target/sync-e2e/run5/final-three-verification.json", "all_equal": true, "manifest_epoch": 5, "projects": 11 },
+    "三端真机_WebDAV云端账本": { "evidence": "target/sync-e2e/run5/true-cloud-view.json", "all_equal": true, "buckets": 524, "remote_tables_digest": "e913e031688b6677", "remote_tombstones_digest": "f6bda2c01143f840" },
+    "三端真机_S3": { "evidence": "target/sync-e2e/run5/s3-devices-verification.json", "all_equal": true, "counts_equal": { "true": true, "false": true }, "stats_equal": true, "row_digest_equal": true, "sample_equal": true, "trash_equal": true, "attachments_equal": true, "cloud_view_equal": true, "manifest_epoch": 3, "buckets": 523, "remote_tables_digest": "fda852451ff3ae77" },
+    "跨壳": { "evidence": "target/sync-e2e/run5/cross-shell-verification.json", "all_equal": true },
+    "真机设备侧附件": "两台设备 files/attachments/ 各 258 文件，逐个 sha256sum 与桌面集合全等"
   },
   "阶段5_异常": {
-    "冲突": "m2 updated_at=1794319858495 > m1 1794319857211 → m2 胜；两端各 1 行 sync_conflicts（decision=lww），该 uuid 仅 1 行",
-    "墓碑": "m1 软删 e2e-new-project → m2 is_deleted=1、deleted_at=1794319881380 一致，未复活",
-    "错密": "解锁 WrongPassword；同步 Crypto/Crypto 分类为 password；本地 40,000 行前后不变",
-    "取消": "cancel_hit=true → Cancelled → 回待命 → 重试成功（pushed_modules=1）"
+    "核心测试台_S3前缀": { "冲突": "m2 updated_at=1794385035428 > m1 1794385034152 → m2 胜；sync_conflicts=1、该 uuid 仅 1 行", "墓碑": "m2 alive_rows=0、deleted_at=1794385052953 一致，未复活", "错密": "unlock_error=WrongPassword；同步链路 Crypto 密码不一致；本地 40,000 行前后不变", "取消": "cancel_hit=true、idle_after_cancel=true、retry_ok=true" },
+    "真机_S3前缀_s3-devices": {
+      "冲突": "m2 离线改 E2E-S3CONFLICT-M2 @1794396162715、桌面 2s 后改 E2E-S3CONFLICT-DESKTOP @1794396210215 → LWW 桌面胜；三端标题统一，该 uuid 各 1 行；m2 sync_conflicts=1",
+      "墓碑": "桌面软删项目 e6c87d1d-6bfc-4225-8033-c1dd62315ad0 → 三端 deleted_projects=1、deleted_at 合计 1794397232378",
+      "错密": "桌面 IPC sync_crypto_unlock 错误密码 → [wrong_password] 同步密码错误，未改密码、未清数据",
+      "取消": "移动2 GUI 点立即同步 → 取消同步 → 回待命 46,018 ms → 再同步账本推进（cancel-retry-verification.json 结论=true）",
+      "证据": ["s3-phase5-conflict.json", "s3-phase5-final-a.json", "s3-phase5-final-b.json", "cancel-retry-verification.json"]
+    },
+    "异常后全量重比": { "evidence": "target/sync-e2e/run5/s3-phase5-verification.json", "严格口径_all_equal": false, "业务口径_business_all_equal": true, "manifest_epoch": 5, "buckets": 522, "remote_tables_digest": "62813d85873b4d6b", "remote_tombstones_digest": "1c37b767a5b7ab38" }
+  },
+  "差异清单": {
+    "阶段3_4与两协议真机轮": "无差异",
+    "阶段5异常后严格逐字段口径": [
+      { "表名": "todo_projects", "uuid": "e6c87d1d-6bfc-4225-8033-c1dd62315ad0", "字段": "version", "移动1": 1, "移动2": 1, "桌面": 2, "归因": "本地同步版本号；软删由桌面发起本地递增到 2，pull 合并端按云端载荷落 1；业务字段全等，剔除 version 后 11 表摘要全等" },
+      { "表名": "sync_conflicts", "字段": "行数", "移动1": 0, "移动2": 1, "桌面": 0, "归因": "本地冲突审计表，不进同步白名单，只在 LWW 裁决端产生，属预期" }
+    ]
+  },
+  "附件实际应用内打开": {
+    "桌面": "生产 IPC task_attachment_export 流式导出两个 8.5 MiB 附件，各 8,912,896 B，sha256 与内容寻址名一致，已向系统发出打开请求（desktop-attachment-open.json）",
+    "移动1": "GUI 搜索「读书笔记 #35284」→ 任务详情 →「打开附件」→ Toast「已保存到缓存目录 /data/user/0/cn.wait.orbit/cache/orbit-att-<hash>.bin」，缓存文件 8,912,896 B 且 sha256sum 与内容寻址名一致（mobile-attachment-open2.json）"
+  },
+  "S3云端对象清单": {
+    "evidence": "target/sync-e2e/run5/s3-cloud-objects.json",
+    "说明": "只读列举，未删除或修改任何云端对象；403 已按生产适配器口径修复",
+    "s3": { "total": 784, "kinds": { "assets": 258, "tables": 522, "tombstones": 2, "manifest.orsync": 1, "manifest.prev.orsync": 1 } },
+    "s3-clean": { "total": 784, "kinds": { "assets": 258, "tables": 523, "tombstones": 1, "manifest.orsync": 1, "manifest.prev.orsync": 1 } },
+    "s3-devices": { "total": 784, "kinds": { "assets": 258, "tables": 522, "tombstones": 2, "manifest.orsync": 1, "manifest.prev.orsync": 1 } },
+    "s3-phase5": { "total": 0 }
+  },
+  "已知问题与限制": {
+    "底栏更多按钮": "hit test 失效（顶栏/列表/FAB/其余四个 tab 可点，更多整段不可点；sendevent 与键盘遍历亦不可达）。本轮绕道「清单 → 页头设置」，建议排查 HomeShell 玻璃 Overlay",
+    "GUI输入注入前提": "adb shell input tap 需在 am force-stop + am start 后等待 ≥6s 才生效；残留窗口状态会吞触摸；keyevent 始终有效",
+    "GUI解锁陷阱": "早期脚本每次 force-stop 重启会清内存 Data Key 且常找不到密码输入框，导致同步被 not_unlocked 静默跳过；改为不重启按需解锁 + sync_state.last_synced_at 变化判定后全部通过（ensure_unlocked.py / robust_sync.py）",
+    "S3独立对象列举": "已修复：根因是 query 保留斜杠 + 优先 path-style；生产对 aliyuncs.com 用虚拟主机风格且把 / 编码成 %2F。修正后四个前缀列举成功",
+    "验收字段": "SyncState 无 downloaded_chunks；等价口径为 pulled_modules / downloaded_attachments + 桶指纹 + 前后账本逐字节比对",
+    "同步元数据差异": "阶段 5 异常后 todo_projects 软删行 version 1/1/2 与本地审计表 sync_conflicts 0/1/0，属本地同步元数据/审计表口径差异，业务数据全等；建议引擎传播远端 version 或验收规范显式剔除",
+    "附件可打开": "已在桌面与移动端经应用自身读取/导出链路完整打开并校验 sha256；随机二进制无关联预览器，未做第三方播放器打开",
+    "证据": ["target/sync-e2e/run5/gui/tab-清单.txt", "target/sync-e2e/run5/probe_bottom.py", "target/sync-e2e/run5/s3_list_objects.py", "target/sync-e2e/run5/s3-connectivity-now.json", "target/sync-e2e/run5/verify_s3_phase5.py"]
   },
   "禁止项遵守情况": {
     "cloud_sync_rekey": "未调用",
-    "同步密码": "未删除、未修改、未重设；仅用正确密码解锁（移动端逐次输入，桌面 sync_crypto_unlock）",
-    "sync_crypto_meta.json": "三端均保留，未删除",
-    "云端对象": "未清空、未调用 cloud_orphan_chunks_gc / cloud_unused_attachments_delete",
-    "全局_cargo_fmt": "未运行；仅对新增取证助手单文件 rustfmt --edition 2021",
-    "测试结束状态": "三端配置均指向 WebDAV orbit-sync-test/20261110-run4/webdav（移动端已锁定、桌面已解锁），云端对象全部保留"
+    "同步密码": "未删除、未修改、未重设；仅用正确密码 GUI/IPC 解锁（桌面 remember=false），另有 1 次错误密码验证",
+    "sync_crypto_meta.json": "三端全程保留",
+    "云端对象": "未清空；未调用 cloud_orphan_chunks_gc / cloud_unused_attachments_delete / 附件删除；未点击「断开云同步 / 清理云端孤儿附件 / 回收孤儿数据桶 / 以本机为准重置云端」；误弹的「清除本机同步密码缓存」确认框已取消",
+    "全局_cargo_fmt": "未运行；未修改任何仓库源码（工作区仅三个文档文件）",
+    "凭据脱敏": "测试产物中完整 AK/SK 已替换为末 4 位；e2e-secrets.json 与 .sync_password 仅存在于 gitignored 的 target/ 下",
+    "测试结束状态": "末轮为 S3 真机轮，三端配置均指向 orbit-sync-test/20261111-run5/s3-devices（配置完整保留）；桌面 hasPassword=true / isUnlocked=true，两台设备进程保持运行且已解锁；WebDAV 云端 789 文件 / 26,031,647 B 保留，S3 三个前缀各 784 对象全部保留",
+    "证据": "target/sync-e2e/run5/final-state.json"
   },
   "历史轮次": {
-    "20261110-run1": "S3 因 OSS 条件 PUT 回 400 NotImplemented 失败，判不一致；当日完成 S3 方言分支整改",
-    "20261110-run2": "空库首次全量 pull 未物化软删行、stats 用本地自增 id、conflicts 计数口径不一致，判不一致；当日整改",
-    "20261110-run3": "修复后 S3 六项判据与阶段 5 四项全通过，判一致"
+    "20261110-run1": "S3 条件 PUT 回 400 NotImplemented，判不一致；当日完成 OSS 方言分支整改",
+    "20261110-run2": "空库全量 pull 未物化软删行、stats 用本地自增 id、conflicts 口径不一致，判不一致；当日整改",
+    "20261110-run3": "修复后 S3 六项判据与阶段 5 四项全通过，判一致",
+    "20261110-run4": "真机 + 桌面壳全链路重跑，判一致",
+    "20261111-run5": "本轮：两协议六项判据 + 阶段 5 四项 + 三端真机 GUI 全链路 + 附件实开 + 云端对象清点全部完成；业务数据判一致，异常轮严格逐字段口径发现 version 1 处元数据差异，判不一致"
   }
 }
