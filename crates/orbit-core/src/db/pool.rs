@@ -8,7 +8,7 @@ use std::path::Path;
 use std::str::FromStr;
 use std::time::Duration;
 
-use crate::error::CoreResult;
+use crate::error::{CoreError, CoreResult};
 
 /// SQLite page cache 每连接上限（-2000 = 兆字节口径，2MB）
 ///
@@ -68,7 +68,21 @@ pub async fn init_pool(db_path: &Path, db_key: Option<&str>) -> CoreResult<Sqlit
         .await?;
 
     // 运行迁移（嵌入 src/db/migrations/ 目录的 .sql 文件）
-    sqlx::migrate!("./src/db/migrations").run(&pool).await?;
+    if let Err(e) = sqlx::migrate!("./src/db/migrations").run(&pool).await {
+        // 0001 是冻结基线：被并回改写后，老库 _sqlx_migrations 的 version 1
+        // 校验和对不上。裸 VersionMismatch 只说「已应用但被修改」，用户按字面
+        // 理解会直接删库——必须给出备份与恢复路径。0001 头注中「init_pool
+        // 无兜底」的旧描述以本分支为准，基线文件本身保持冻结不动。
+        if let sqlx::migrate::MigrateError::VersionMismatch(_) = &e {
+            pool.close().await;
+            return Err(CoreError::Other(format!(
+                "数据库迁移基线校验和不匹配：{e}。请先备份当前数据库文件（含 -wal/-shm），\
+                 再通过云同步或全量备份恢复；切勿直接删除数据库。\
+                 若确属未发布版本的一次性基线重建，须明确接受存量库重装。"
+            )));
+        }
+        return Err(e.into());
+    }
 
     // 恢复逻辑时钟（慢表重启后不得让时间戳回落到墙上时钟，见 db/clock.rs）
     crate::db::clock::load(&pool).await?;
@@ -137,5 +151,35 @@ mod tests {
                 .unwrap();
             assert_eq!(cache, -PAGE_CACHE_MB * 1024, "连接 {i} cache_size 未生效");
         }
+    }
+
+    /// 基线被并回改写后，老库 `_sqlx_migrations` 的 version 1 校验和对不上。
+    /// `init_pool` 不能只抛一句 VersionMismatch：用户必须先备份、再走恢复路径，
+    /// 否则第一反应就是删库，数据直接没了。
+    #[tokio::test]
+    async fn version_mismatch_error_explains_backup_and_recovery() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = tmp.path().join("orbit.db");
+        let pool = init_pool_unencrypted(&db).await.unwrap();
+        sqlx::query(
+            "UPDATE _sqlx_migrations SET checksum = X'00000000000000000000000000000000' WHERE version = 1",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        pool.close().await;
+
+        let err = match init_pool_unencrypted(&db).await {
+            Ok(p) => {
+                p.close().await;
+                panic!("校验和不匹配必须报错，不能让旧库带着错基线启动");
+            }
+            Err(e) => e.to_string(),
+        };
+        assert!(err.contains("备份"), "应提示先备份当前库: {err}");
+        assert!(
+            err.contains("云同步") && err.contains("恢复"),
+            "应提示云同步 / 全量备份恢复路径: {err}"
+        );
     }
 }
