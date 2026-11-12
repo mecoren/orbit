@@ -330,9 +330,14 @@ impl HttpClient {
             match failure {
                 None => return Ok(written),
                 Some(e) => {
-                    // 截回本次尝试起点（append 模式下不破坏已确认的片）
-                    if let Ok(f) = tokio::fs::OpenOptions::new().write(true).open(target).await {
-                        let _ = f.set_len(start_len).await;
+                    // 截回本次尝试起点（append 模式下不破坏已确认的片）。
+                    // 截断失败必须中止：继续重试会在半截数据后追加新片，
+                    // 产出一份长度对、内容错位的下载文件（校验不过却已落盘）。
+                    if let Err(trunc_err) = truncate_to(target, start_len).await {
+                        return Err(SyncError::Network {
+                            message: format!("续传起点截断失败（目标文件可能已损坏）: {trunc_err}"),
+                            retryable: false,
+                        });
                     }
                     if !e.is_retryable() || e.is_rate_limited() {
                         return Err(e);
@@ -769,6 +774,16 @@ impl HttpClient {
             .map(|s| s.trim().to_string());
         Ok(etag)
     }
+}
+
+/// 把文件截到指定长度（续传重试的回滚点）
+///
+/// 单独拆出来是为了让「打不开文件」与「截断失败」都被调用方看见——
+/// 旧实现用 `let _ =` 吞掉两类失败，随后继续 append，落盘文件既长且错位。
+async fn truncate_to(path: &std::path::Path, len: u64) -> std::io::Result<()> {
+    let file = tokio::fs::OpenOptions::new().write(true).open(path).await?;
+    file.set_len(len).await?;
+    Ok(())
 }
 
 #[cfg(test)]
