@@ -23,7 +23,19 @@
          权限声明（API 28+ 系统对话框；API 23-27 由插件回落
          FingerprintManager 兼容路径，不需要此权限） -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
+    <!-- allowBackup 必须显式关闭：Android 默认 true，会把明文 SQLite
+         （含 sync_configs.credential 的云密码/secret_key）、sync_config.json
+         与小组件 SharedPreferences 一并交给 Google 云备份 / adb backup。
+         数据主权是产品前提，备份能力由应用内 .orfullsync 承担（用户可控、
+         可加密、可审计），不走系统通道。 -->
+    <!-- usesCleartextTraffic 仍为 true：自建 LAN WebDAV（http://192.168.x.x）
+         是真实用法，内核层一刀切会静默断掉这批用户；明文传输风险改由
+         两端同步设置页在保存 http:// 端点时明确告警（见 sync-section.tsx /
+         sync_settings_page.dart），并在 PRIVACY.md 披露。 -->
     <application
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:usesCleartextTraffic="true"
         android:label="@string/app_name"
         android:name="${applicationName}"

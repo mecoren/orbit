@@ -186,10 +186,19 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
 
   Future<void> _save() async {
     if (_busy) return;
+    // 明文 HTTP 不拦截（局域网自建 WebDAV 是真实用法），但必须让用户在
+    // 保存这一刻知道凭据会以可被同网段嗅探的方式传输。
+    final plainHttp = _endpointController.text.trim().toLowerCase().startsWith('http://');
     setState(() => _busy = true);
     try {
       await ref.read(orbitBridgeProvider).syncConfigSave(_buildInput());
       WaitToast.success('同步配置已保存');
+      if (plainHttp) {
+        WaitToast.warning(
+          '当前使用明文 HTTP',
+          description: '账号与密码会以明文经过网络，同网段可被嗅探。建议改用 https://。',
+        );
+      }
       await _load();
       ref.invalidate(syncConfigProvider);
     } catch (e) {

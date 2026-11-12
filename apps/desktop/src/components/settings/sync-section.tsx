@@ -242,10 +242,20 @@ function ConnectionCard() {
   };
 
   const handleSave = async () => {
+    // 明文 HTTP 不拦截（局域网自建 WebDAV 是真实用法），但必须让用户
+    // 在保存这一刻知道凭据会以可被同网段嗅探的方式传输。
+    const plainHttp = endpoint.trim().toLowerCase().startsWith("http://");
     setBusy(true);
     try {
       await syncConfigSave(buildInput());
       toast.success("同步配置已保存");
+      if (plainHttp) {
+        toast.warning("当前使用明文 HTTP", {
+          description:
+            "账号与密码会以明文经过网络，同网段可被嗅探。建议改用 https://；自建局域网服务请确认网络可信。",
+          duration: 10_000,
+        });
+      }
       const c = await syncConfigGet();
       setConfig(c);
       void qc.invalidateQueries({ queryKey: ["sync-config"] });
