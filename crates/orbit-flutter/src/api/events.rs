@@ -101,6 +101,14 @@ static POLLER_STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::Atomic
 static NOTIFIED_REMINDERS: Lazy<std::sync::Mutex<BTreeSet<(i64, i64)>>> =
     Lazy::new(|| std::sync::Mutex::new(BTreeSet::new()));
 
+/// 取去重集合：锁中毒不 abort（`panic = "abort"` 下 `unwrap()` 等于整 App 闪退，
+/// 而集合本身没有不可用状态）。
+fn notified_guard() -> std::sync::MutexGuard<'static, BTreeSet<(i64, i64)>> {
+    NOTIFIED_REMINDERS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 /// 去重集合上界：单机 24h 窗口内的到期提醒量级远小于此（每提醒每轮至多一条，
 /// 且 `BATCH_LIMIT` 已限单轮扫描条数）；到顶即按最旧淘汰。
 const NOTIFIED_REMINDERS_MAX: usize = 5000;
@@ -160,26 +168,32 @@ async fn poll_once(sink: &StreamSink<ReminderDueDto>) {
         // 去重：进程内存活期，键为 (id, remind_at)——持续提醒顺延后
         // remind_at 变化（新键），后续几轮照常推送（G2）
         let dedupe_key = (row.id, row.remind_at);
-        if NOTIFIED_REMINDERS.lock().unwrap().contains(&dedupe_key) {
+        if notified_guard().contains(&dedupe_key) {
             continue;
         }
 
-        let _ = sink.add(ReminderDueDto {
+        if let Err(e) = sink.add(ReminderDueDto {
             id: row.id,
             task_id: row.task_id,
             title: row.title.clone(),
             remind_at: row.remind_at,
             is_constant: row.is_constant,
-        });
+        }) {
+            // sink 已关闭（壳层退订）：记下来，别让「提醒事件丢失」无迹可查
+            log::warn!("[reminder] 提醒事件推送失败（sink 已关闭）: {e}");
+        }
 
         // 到期处置下沉引擎（advance_fired_reminder，与桌面同源）：持续提醒
         // 原地顺延（G2）；重复任务删旧建新续排（防雪球守卫在引擎内）；
-        // 非重复/已完成行清理。失败静默——下一轮 20s 轮询幂等重扫兜底
-        let _ = orbit_core::api::todo_api::advance_fired_reminder(&pool, &row).await;
+        // 非重复/已完成行清理。失败不阻塞本轮——下一轮 20s 轮询幂等重扫兜底，
+        // 但要留日志（此前完全静默，用户侧只表现为「提醒偶尔不响」）。
+        if let Err(e) = orbit_core::api::todo_api::advance_fired_reminder(&pool, &row).await {
+            log::warn!("[reminder] 到期处置失败（id={}）: {e}", row.id);
+        }
 
         // 有界插入（A7）：超 NOTIFIED_REMINDERS_MAX 丢最小键，防长驻会话只增不减
         orbit_core::bounded::insert_bounded(
-            &mut NOTIFIED_REMINDERS.lock().unwrap(),
+            &mut notified_guard(),
             dedupe_key,
             NOTIFIED_REMINDERS_MAX,
         );
