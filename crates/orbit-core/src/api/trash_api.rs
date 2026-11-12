@@ -7,9 +7,10 @@
 //!   云同步 pull 端已有「复活裁决」（merge.rs：远端 updated_at ≥ 本地
 //!   deleted_at 才复活），恢复后正常 push 存活行即可跨设备传播，同步层零改动；
 //!   恢复时若原项目已软删则置 project_id=NULL（落入未分组，避免悬空引用）。
-//! - 彻底删除 / 清空（物理 DELETE；用户明确意图，无同步守卫——写回墓碑没意义，
+//! - 单任务彻底删除（物理 DELETE；用户明确意图，无同步守卫——写回墓碑没意义，
 //!   其他端本地若仍保留该墓碑，最终状态一致为「已删」）。
-//! - TTL 自动清理：按保留天数清「已同步出去的」过期墓碑（守卫见 [purge_todo_tasks_before]）。
+//! - 清空回收站 / TTL 自动清理：都经 [purge_todo_tasks_before] 的同步守卫，
+//!   只清「已确认上云」的墓碑；清空只是不按保留天数筛选（`cutoff = i64::MAX`）。
 //!
 //! ## 保留时间设置
 //! 存 `cfg_kv`（key `trash_retention_days`；档位 7/30/90/永久=0，默认 30，对标
@@ -17,13 +18,14 @@
 //! SYNCABLE_TABLES 同步白名单——保留时间是本机偏好，各端各自设置（与
 //! holiday_auto_enabled 同边界）。
 //!
-//! ## TTL 清理与墓碑同步协议的冲突守卫（ADR 见 docs/adr/0005）
+//! ## 物理清理与墓碑同步协议的冲突守卫（ADR 见 docs/adr/0005）
 //! 墓碑行是云同步「删除」语义的唯一载体。若把尚未 push 到云端的墓碑物理清掉，
 //! 云端仍留有该 uuid 的旧存活数据，其他设备（及本端重配同步）pull 时会 INSERT
-//! 复活该任务。守卫口径：启用云同步（激活配置存在）时，TTL 只清
+//! 复活该任务。守卫口径：启用云同步（激活配置存在）时，只清
 //! `deleted_at < last_pushed_at`（sync_configs.last_synced_at，成功 push/sync
 //! 后记账）的墓碑——早于该时间点的删除已上传云端。未启用云同步时无守卫直接清
-//! （没有其他设备可复活；云端也无数据）。**恢复与手动彻底删除不受守卫约束**。
+//! （没有其他设备可复活；云端也无数据）。**恢复与单任务彻底删除不受守卫约束**；
+//! 清空回收站受同一守卫约束（见 [purge_all_trashed_tasks]）。
 
 use serde::Serialize;
 use sqlx::SqlitePool;
@@ -281,50 +283,20 @@ pub async fn purge_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<()> {
 /// [purge_all_trashed_tasks] 的独立投影查询）。
 pub const TRASH_LIST_LIMIT: i64 = 1000;
 
-/// 清空回收站（全部墓碑任务物理删除；含各自的子表行）
+/// 清空回收站（物理删除墓碑任务；含各自的子表行）
 ///
 /// 返回删除的任务数。无墓碑时直接返回 0（不 emit 事件）。
 ///
-/// 事件载荷取**独立投影查询**而非 [list_trashed_tasks]：后者带列表上限，
-/// 复用它会让「删除行数 > 事件数」（超上限的墓碑被物理删却不发 db-change）。
-/// 投影只取 id/uuid（与 TTL 清理同口径），不整行物化。
-// bounded-by-lifecycle: 物理清除必须遍历全部墓碑；投影只含 id/uuid，函数返回即释放
+/// **与 TTL 同源的同步守卫**：清空同样不能物理删掉尚未 push 的墓碑，否则云端
+/// 旧存活数据会在 pull 时复活该任务（ADR 0005）。因此直接复用
+/// [purge_todo_tasks_before]，`cutoff = i64::MAX` 表示「不按保留天数筛选」，
+/// 只留下守卫线判定；独立 id/uuid 投影（不受 [list_trashed_tasks] 列表上限
+/// 约束）、7 类子表集合式 DELETE、db-change 事件口径全部同源，不另写一份。
+/// 启用同步且存在未 push 的墓碑时，它们会留在回收站，待下次成功 push 后
+/// 再次清空（或由 TTL）清掉。
 pub async fn purge_all_trashed_tasks(pool: &SqlitePool) -> CoreResult<u64> {
-    let trashed: Vec<(i64, String)> = sqlx::query_as::<_, (i64, String)>(
-        "SELECT id, uuid FROM todo_tasks WHERE is_deleted = 1 AND deleted_at IS NOT NULL",
-    )
-    .fetch_all(pool)
-    .await?;
-    if trashed.is_empty() {
-        return Ok(0);
-    }
-
-    let mut tx = pool.begin().await?;
-    // relations 的两列都指向任务，任一命中即清
-    sqlx::query(
-        "DELETE FROM todo_task_relations \
-         WHERE task_id IN (SELECT id FROM todo_tasks WHERE is_deleted = 1) \
-            OR other_task_id IN (SELECT id FROM todo_tasks WHERE is_deleted = 1)",
-    )
-    .execute(&mut *tx)
-    .await?;
-    for sql in [
-        "DELETE FROM todo_subtasks WHERE task_id IN (SELECT id FROM todo_tasks WHERE is_deleted = 1)",
-        "DELETE FROM todo_task_labels WHERE task_id IN (SELECT id FROM todo_tasks WHERE is_deleted = 1)",
-        "DELETE FROM todo_comments WHERE task_id IN (SELECT id FROM todo_tasks WHERE is_deleted = 1)",
-        "DELETE FROM todo_reminders WHERE task_id IN (SELECT id FROM todo_tasks WHERE is_deleted = 1)",
-        "DELETE FROM todo_task_attachments WHERE task_id IN (SELECT id FROM todo_tasks WHERE is_deleted = 1)",
-        "DELETE FROM todo_tasks WHERE is_deleted = 1",
-    ] {
-        sqlx::query(sql).execute(&mut *tx).await?;
-    }
-    tx.commit().await?;
-
-    let device_id = generic_repo::current_device_id();
-    for (id, uuid) in &trashed {
-        EVENT_BUS.emit(DbEvent::delete("todo_tasks", *id, uuid, &device_id));
-    }
-    Ok(trashed.len() as u64)
+    let (purged, _guarded) = purge_todo_tasks_before(pool, i64::MAX).await?;
+    Ok(purged)
 }
 
 // ============================================================================
@@ -371,7 +343,8 @@ pub async fn maybe_purge_expired(pool: &SqlitePool) -> CoreResult<PurgeStats> {
 /// **同步守卫**：启用云同步（激活配置存在）时仅清 `deleted_at < last_pushed_at`
 /// 的行——早于该时间点的删除已上传云端墓碑集；更晚的删除可能尚未 push，
 /// 物理清掉会让云端旧存活数据在 pull 时复活该任务。未启用云同步则无守卫
-/// （无其他设备可复活）。恢复/手动彻底删除不经此函数，不受守卫约束。
+/// （无其他设备可复活）。恢复与单任务彻底删除不经此函数，不受守卫约束；
+/// 清空回收站以 `cutoff = i64::MAX` 经本函数，只保留守卫线判定。
 ///
 /// F24 起守卫线只在**干净轮次**推进（`SyncResult::advances_ledger()`：非 skipped
 /// 且 `errors` 为空），代价是任一轮带错即整天不推进 → 回收站物理清理要等到
@@ -550,6 +523,19 @@ mod tests {
                 .await
                 .unwrap();
         n
+    }
+
+    /// 造一条激活的云同步配置（last_synced_at = 上次成功 push 的毫秒时间戳）
+    async fn enable_sync(pool: &SqlitePool, last_synced_at: i64) {
+        sqlx::query(
+            "INSERT INTO sync_configs (protocol, endpoint, bucket, region, path, device_id, \
+             credential, is_active, last_synced_at, created_at, updated_at) \
+             VALUES ('s3', 'http://x', '', '', '', 'dev', '', 1, ?, 1, 1)",
+        )
+        .bind(last_synced_at)
+        .execute(pool)
+        .await
+        .unwrap();
     }
 
     fn input(title: &str) -> TodoTaskCreateInput {
@@ -731,6 +717,35 @@ mod tests {
                 .await
                 .unwrap();
         assert_eq!(left, 0);
+    }
+
+    /// 清空回收站必须与 TTL 同源守卫：删除晚于上次成功 push 的墓碑一旦被
+    /// 物理清掉，云端旧存活数据会在 pull 时复活该任务（ADR 0005）。
+    #[tokio::test]
+    async fn purge_all_guard_holds_unpushed_tombstones() {
+        let pool = setup_db().await;
+        let now = chrono::Utc::now().timestamp_millis();
+        seed_trashed(&pool, "已推送", Some(now - 10 * DAY_MS)).await;
+        seed_trashed(&pool, "未推送", Some(now - 9 * DAY_MS)).await;
+        enable_sync(&pool, now - (9 * DAY_MS + DAY_MS / 2)).await;
+
+        let purged = purge_all_trashed_tasks(&pool).await.unwrap();
+        assert_eq!(purged, 1, "只应物理清掉已确认上云的墓碑");
+        let trash = list_trashed_tasks(&pool).await.unwrap();
+        assert_eq!(trash.len(), 1);
+        assert_eq!(trash[0].title, "未推送", "未 push 的墓碑须留待同步后清理");
+    }
+
+    /// 启用云同步但从未成功 push：清空回收站不得删任何墓碑
+    #[tokio::test]
+    async fn purge_all_guard_holds_all_when_never_pushed() {
+        let pool = setup_db().await;
+        seed_trashed(&pool, "删了没同步", Some(100)).await;
+        enable_sync(&pool, 0).await;
+
+        let purged = purge_all_trashed_tasks(&pool).await.unwrap();
+        assert_eq!(purged, 0, "从未 push → 全部守卫跳过");
+        assert_eq!(list_trashed_tasks(&pool).await.unwrap().len(), 1);
     }
 
     #[tokio::test]
