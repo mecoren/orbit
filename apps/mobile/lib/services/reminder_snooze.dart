@@ -139,7 +139,9 @@ Future<void> landSnoozeInDb(
   List<TodoReminder> rows;
   try {
     rows = await bridge.todoReminderList(const ListFilter(pageSize: 5000));
-  } catch (_) {
+  } catch (e) {
+    // 读失败按「没有旧提醒」继续：推迟本身比去重更值得保住，但要看得到
+    debugPrint('[reminder-snooze] 读取提醒失败，按空列表继续: $e');
     rows = const <TodoReminder>[];
   }
   // 同刻行已存在（连点两次推迟）：幂等跳过，避免堆两条
@@ -157,7 +159,10 @@ Future<void> landSnoozeInDb(
     if (r.constant) inheritedConstant = 1;
     try {
       await bridge.todoReminderDelete(r.id);
-    } catch (_) {}
+    } catch (e) {
+      // 删旧失败会让同一时刻出现两条提醒（重复弹），必须留痕
+      debugPrint('[reminder-snooze] 删除旧提醒失败（id=${r.id}）: $e');
+    }
   }
   try {
     await bridge.todoReminderCreate(
@@ -167,7 +172,10 @@ Future<void> landSnoozeInDb(
         isConstant: inheritedConstant,
       ),
     );
-  } catch (_) {}
+  } catch (e) {
+    // 新提醒写入失败 = 用户点了「推迟」但到点不会响，必须留痕
+    debugPrint('[reminder-snooze] 新建推迟提醒失败（task=$taskId）: $e');
+  }
 }
 
 /// 暂存的一条推迟意图
@@ -252,7 +260,9 @@ Future<bool> applySnoozeLanding(OrbitBridge bridge, SnoozeLanding plan) async {
     try {
       await bridge.todoReminderDelete(id);
       changed = true;
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[reminder-snooze] 启动补齐删除失败（id=$id）: $e');
+    }
   }
   for (final c in plan.creates) {
     try {
@@ -264,7 +274,9 @@ Future<bool> applySnoozeLanding(OrbitBridge bridge, SnoozeLanding plan) async {
         ),
       );
       changed = true;
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[reminder-snooze] 启动补齐新建失败（task=${c.taskId}）: $e');
+    }
   }
   return changed;
 }

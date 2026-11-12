@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:progressive_background_blur/progressive_background_blur.dart';
 
 import 'app.dart';
@@ -25,6 +28,7 @@ import 'shared/widgets/shadcn/orbit_select_popup.dart';
 /// 切回内存 Mock（MockOrbitBridge，无需 Rust 工具链/NDK）。
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  _installErrorHandlers();
   // #107：不再锁竖屏。平板/横屏由 OrbitBreakpoints 断点驱动布局
   // （840dp 起非清单页常驻侧栏、详情/子列表/抽屉限宽、月历日格封顶）；
   // 360dp 竖屏保持原版式。有意不设 landscapeLeft/Right 白名单：
@@ -71,4 +75,47 @@ Future<void> main() async {
       child: const OrbitApp(),
     ),
   );
+}
+
+/// 全局错误兜底（PRIVACY.md §三「崩溃信息仅落本地」的移动端实现点）
+///
+/// 此前移动端没有任何全局 handler：框架异常/未捕获异步异常只进控制台，
+/// 用户侧表现为「点了没反应/突然回到桌面」，报障时拿不到任何现场。
+/// 这里统一落 `{应用数据目录}/crash.log`（1MB 上限，超限重建），
+/// 不上报任何远端。
+void _installErrorHandlers() {
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    _appendCrashLog('flutter', details.exceptionAsString(), details.stack);
+  };
+  PlatformDispatcher.instance.onError = (error, stack) {
+    _appendCrashLog('async', '$error', stack);
+    // 已记录并展示：返回 true 避免同一个异常被再次升级上报/终止
+    return true;
+  };
+}
+
+void _appendCrashLog(String kind, String message, StackTrace? stack) {
+  final entry =
+      '=== ${DateTime.now().toIso8601String()} [$kind] ===\n$message\n${stack ?? ''}\n\n';
+  debugPrint('[crash] $entry');
+  // 文件写入不阻塞 UI；失败只可能发生在磁盘不可写，此时控制台仍有记录
+  unawaited(() async {
+    try {
+      final dir = await getApplicationSupportDirectory();
+      final file = File('${dir.path}${Platform.pathSeparator}crash.log');
+      final exists = await file.exists();
+      if (exists && await file.length() > 1024 * 1024) {
+        await file.writeAsString(entry, flush: true);
+      } else {
+        await file.writeAsString(
+          entry,
+          mode: FileMode.append,
+          flush: true,
+        );
+      }
+    } catch (_) {
+      // 崩溃留痕本身不能再抛（否则会在错误处理里递归）
+    }
+  }());
 }
