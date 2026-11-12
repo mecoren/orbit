@@ -642,15 +642,26 @@ fn advance_calendar_months(d: &mut chrono::DateTime<chrono::Local>, months: i32)
     );
     let days_in_target = last_day_of_month(ty, tm0 as u32 + 1);
     let day = d.day().min(days_in_target);
-    let naive = chrono::NaiveDate::from_ymd_opt(ty, tm0 as u32 + 1, day)
-        .expect("month advance always yields a valid date")
-        .and_time(time);
+    // 生产路径不允许 panic（`panic = "abort"` 下等于整个进程消失）：
+    // ty/tm0 由「本地日期 + 月步长」推出，只有同步对端写入的极端脏日期
+    // 才会越界；此时保持原日期不动，让这条重复任务下一轮再试。
+    let Some(target) = chrono::NaiveDate::from_ymd_opt(ty, tm0 as u32 + 1, day) else {
+        log::warn!(
+            "[repeat] 月推进得到非法日期（year={ty}, month={}, day={day}），保持原日期",
+            tm0 + 1
+        );
+        return;
+    };
+    let naive = target.and_time(time);
     if let Some(local) = chrono::Local.from_local_datetime(&naive).single() {
         *d = local;
     }
 }
 
 /// 目标年月的天数（12 月 → 次年 1 月倒推；2 月闰年 29）
+///
+/// 越界（年份超出 chrono 可表示范围，只可能来自同步脏数据）回退 28：
+/// 该函数只用于「把日号截断到目标月」，28 是最保守的安全下界。
 fn last_day_of_month(year: i32, month: u32) -> u32 {
     let (y, m) = if month == 12 {
         (year + 1, 1)
@@ -658,10 +669,9 @@ fn last_day_of_month(year: i32, month: u32) -> u32 {
         (year, month + 1)
     };
     chrono::NaiveDate::from_ymd_opt(y, m, 1)
-        .unwrap()
-        .pred_opt()
-        .unwrap()
-        .day()
+        .and_then(|first| first.pred_opt())
+        .map(|last| last.day())
+        .unwrap_or(28)
 }
 
 /// 结束条件类型（todo_tasks.repeat_end_type 列语义一致）
