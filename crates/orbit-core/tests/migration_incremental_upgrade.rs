@@ -18,13 +18,18 @@ use sqlx::SqlitePool;
 /// 一律追加 NNNN_xxx.sql。更新常量的唯一合法时机是首发前的基线定型，之后永不改。
 /// 2026-11-12 更新即属该窗口：未随任何 release 发布的 0002_task_start_sort_index
 /// 并回基线（单文件基线重新定型），常量随之重算。
+///
+/// **常量按 LF 字节定型**：Windows 开发机 `core.autocrlf=true` 会让 `include_str!`
+/// 读到 CRLF 版本（同为 0001 内容，只差 868 个行尾），若直接对读到字节哈希，本地绿、
+/// Linux CI 必红（2026-11-12 CI 即此形态）。故比较前先归一 `\r\n` → `\n`，两端同一值。
 #[test]
 fn baseline_migration_checksum_is_frozen() {
     const FROZEN_SHA256: &str =
-        "74f5f13daa782fe80cd9b6f35392d29a51c24452165cd51a55bdf8164cb392ed";
+        "0b548297308b1727329f20077667d3764bb44e81f3caa5230401d8694c6c1e0c";
     let sql = include_str!("../src/db/migrations/0001_init.sql");
+    let normalized = sql.replace("\r\n", "\n");
     assert_eq!(
-        sha256_hex(sql.as_bytes()),
+        sha256_hex(normalized.as_bytes()),
         FROZEN_SHA256,
         "0001_init.sql 是冻结基线：结构变更请追加 NNNN_xxx.sql，不要改本文件"
     );
