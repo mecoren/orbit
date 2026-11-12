@@ -750,10 +750,8 @@ fn build_task_predicate_clause(table: &str, filter: &ListFilter) -> TaskPredicat
         for s in states {
             match s.as_str() {
                 "done" => wants_done = true,
-                "pending" | "doing" => {
-                    if !plain.contains(&s.as_str()) {
-                        plain.push(s.as_str());
-                    }
+                "pending" | "doing" if !plain.contains(&s.as_str()) => {
+                    plain.push(s.as_str());
                 }
                 _ => {}
             }
@@ -776,11 +774,9 @@ fn build_task_predicate_clause(table: &str, filter: &ListFilter) -> TaskPredicat
             clause.push_str(&format!(" AND ({})", terms.join(" OR ")));
         }
     }
-    if !has_status_in {
-        if let Some(status) = filter.status.clone() {
-            clause.push_str(" AND status = ?");
-            status_binding = Some(status);
-        }
+    if !has_status_in && let Some(status) = filter.status.clone() {
+        clause.push_str(" AND status = ?");
+        status_binding = Some(status);
     }
     if let Some(min) = filter.priority_min {
         clause.push_str(" AND priority >= ?");

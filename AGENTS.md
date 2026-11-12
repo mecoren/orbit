@@ -38,7 +38,7 @@ Orbit（循迹）是本地优先的跨平台任务管理应用：待办（项目
 | UI | shadcn/ui 风格（Radix 原语）+ Tailwind CSS v4（CSS-first，无 tailwind.config） |
 | 状态 | React Query（queryKey 约定见下）+ 局部 zustand；localStorage 持久化视图态 |
 | 移动 | Flutter（stable，CI 锁 3.44.2）+ flutter_rust_bridge 2.12（codegen 锁 2.12.0） |
-| 状态(移动) | Riverpod；移动 UI 组件体系 = **flutter_miuix 1.3.0（精确锁版，HyperOS/OS4 玻璃，组件主体）** + shadcn_flutter 0.0.53（精确锁版，**仅 LucideIcons 图标字体源**）+ table_calendar/fl_chart，库内无等价物的组件自绘同风格并沉淀 `shared/widgets/shadcn/` |
+| 状态(移动) | Riverpod；移动 UI 组件体系 = **flutter_miuix 1.3.0（精确锁版，HyperOS/OS4 玻璃，组件主体）** + shadcn_flutter 0.0.53（精确锁版，**仅 LucideIcons 图标字体源**）+ table_calendar，库内无等价物的组件自绘同风格并沉淀 `shared/widgets/shadcn/`（统计图表与热力图自绘，无 fl_chart 依赖） |
 | 核心 | Rust edition 工具链锁 `rust-toolchain.toml` 1.96，clippy + rustfmt |
 | 加密 | SQLCipher 本地库 + AES-256-GCM 云同步 E2E（PBKDF2 600k 单调不降级） |
 | 质量 | tsc / vitest 4 / Playwright 冒烟 / cargo test / flutter analyze+test；内存门禁（`perf-metrics/`）；CI 四 job（web/rust-core/flutter-mobile 含 FRB codegen 一致性门禁/perf-gate） |
@@ -151,8 +151,8 @@ pnpm bump 0.2.0           # 升版：写源 + 同步五处清单 + 两个 Cargo.
 pnpm bump:check           # 只校验一致性（零写入，CI/本地通用）
 ```
 
-- CI（`.github/workflows/ci.yml`）四 job：web（typecheck+vitest+build+e2e）/ rust-core（cargo check --workspace --all-targets + cargo test --workspace --lib + `cargo test -p orbit-core --test sync_fault_matrix`）/ flutter-mobile（FRB codegen 一致性 + analyze + test）/ perf-gate（无界审计 + 内存增长曲线）。提交前本地跑通同等检查。
-- `sync_fault_matrix` 单独点名入 CI 的原因：它自带零依赖假服务（`tests/common`，std `TcpListener` 内存假 WebDAV/S3），干净机器必全绿，且是 F22 条件头上线、F23 分片协议的**唯一网络级证据**；`--lib` 口径下整份 `tests/` 都不执行，故与「要真 WebDAV 的 m4_sync_e2e」区别对待——后者仍是本机口径的已知非回归失败。夹具的请求行解析必须容忍 origin-form 与 absolute-form 两种形态（本机常驻 `HTTP_PROXY` 时 reqwest 发后者）。
+- CI（`.github/workflows/ci.yml`）四 job：web（typecheck+vitest+build+e2e）/ rust-core（`cargo check --workspace --all-targets` + `cargo clippy --workspace --all-targets -- -D warnings` + `cargo test --workspace --tests`）/ flutter-mobile（FRB codegen 一致性 + analyze + test）/ perf-gate（无界审计 + 内存增长曲线）。提交前本地跑通同等检查。
+- rust-core 用 `--tests` 而非 `--lib` 的原因：`--lib` 口径下整份 `tests/` 都不执行，12 个集成测试文件（迁移链、备份流式、GC、取消、拼音索引台账守卫 `search_index_guard` 等）长期不在 CI，守卫翻红无人发现。`--tests` 同时覆盖库内单测与全部集成用例；`sync_fault_matrix` 自带零依赖假服务（`tests/common`，std `TcpListener` 内存假 WebDAV/S3），干净机器必全绿，是 F22 条件头上线、F23 分片协议的**唯一网络级证据**，已包含在该步骤内（含 9MiB 分片用例约 4.5 分钟），不再单独点名重复执行。「要真 WebDAV 的 m4_sync_e2e」带 `#[ignore]` 自动跳过，仍是本机口径的已知非回归失败；桌面壳（嵌套 workspace）不属根 workspace 且 clippy 有 21 处既有 `doc_lazy_continuation`，暂不入 CI。夹具的请求行解析必须容忍 origin-form 与 absolute-form 两种形态（本机常驻 `HTTP_PROXY` 时 reqwest 发后者）。
 - e2e/Playwright 专用端口 **5273**（非 vite 默认 5173，防撞其他项目 dev server）；strictPort 双保险。内存门禁端口 **5275**（`growth-curve` 自起 dist 静态服务）。
 
 ## 版本发布与更新流程（改版本号时自动执行）
@@ -227,7 +227,7 @@ pnpm bump:check           # 只校验一致性（零写入，CI/本地通用）
 - **动效口径参考微软 To-Do 移动端**（勾选确认、完成划线、行入场、拖拽抬起、抽屉轻快入场、触感反馈）；动效参数统一收口 `core/theme/app_motion.dart`（时长/曲线/缩放档；视图内禁裸 `Duration(...)` 与裸 `Curves.*`），清单与有意边界见 docs/05 §九。视觉蓝本仍是 wait-home——该章只加"动作过程"，不改任何像素规格。
 - **拖拽浮层（`proxyDecorator`）统一口径**：`Transform.scale(1 + (dragLiftScale-1) * elevated)` + `Material(elevation: 6 * elevated, medium 圆角, Clip.antiAlias, color: lerp(transparent → surface, elevated))` + 起止 `HapticFeedback.selectionClick()`。底面必须随抬起渐变为实色 surface——扁平行本身透明，常驻透明会透出页面底色变成灰块（2026-09-26 清单项目行与功能模块行两次实测）；`elevated` 取 `AppMotion.standard.transform(Tween(0→1).evaluate(animation))`。
 - 日历今天/选中强调色统一取 `OrbitAccents.themeAccent`（#4E8CFF，与桌面端日历 `--primary`＝themeAccent 体系同源）：`modules/todo/calendar_screen.dart`（月历今日实心块与选中描边、右栏选中日高亮底、今日文字与「今天」徽标）和 `year_overview_page.dart`（迷你历今日实心格/周末数字/当前月标题）。主题由 token 派生（`miuix_theme.dart` 的 `primary`/`secondary` 分别取 themeAccent/todoAccent），组件仍建议显式取 `OrbitAccents.themeAccent` 以绑定语义。
-- 图表：统计页条形/环形占比用 `fl_chart`（1.2.0 精确锁版）；**热力图 fl_chart 不支持**（shadcn `tracker` 只是单行条带，承载不了 7 行 × 53 列年历网格），由 `shared/widgets/shadcn/orbit_heatmap.dart` 用 token 色阶自组网格——色阶取 `OrbitAccents.todoAccent` 的 22/45/68/90% 四档。
+- 图表：统计页条形/环形占比由页面用 Row/Card 自绘（`pubspec.yaml` 无 `fl_chart` 依赖，不引图表库）；热力图由 `shared/widgets/shadcn/orbit_heatmap.dart` 用 token 色阶自组 7 行 × 53 列年历网格——色阶取 `OrbitAccents.todoAccent` 的 22/45/68/90% 四档。
 - 布局对齐坑：行标签/占位格与实际格必须同 padding 规则（末行不加尾距，否则固定高 Column 溢出 3px）；`Text.rich` 在 widget 测试 `find.text` 不可见——标题行用 Row + 独立 Text。
 - 测试：`MockOrbitBridge` 注入 `orbitBridgeProvider.overrideWithValue` 冒烟渲染；纯 Dart test 直接调 bridge 排除 UI 层（widget 卡死超时先分离归因）。
 - toast 用 `WaitToast`（`shared/widgets/shadcn/orbit_toast.dart`，底层 = miuix `MiuixSnackbarHost` 队列 + squircle 毛玻璃卡面，支持 action 钮与横滑关闭；宿主 `OrbitToastHost` 挂在根装配 `app.dart` 的 Stack 里）；空态用 `EmptyState`（`shared/widgets/shadcn/orbit_empty_state.dart`，让出页头后剩余视口垂直居中）。**测试壳必须与生产根装配同构**——统一用 `test/support/orbit_test_app.dart` 的 `orbitTestApp` / `orbitTestAppRouter`（含 `OrbitToastHost`；toast 相关用例收尾用 `drainToastTimers`）；miuix 队列按宿主挂载实例隔离，不要在用例间共享。

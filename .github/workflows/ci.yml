@@ -103,17 +103,17 @@ jobs:
       - name: 检查核心库 workspace
         run: cargo check --workspace --all-targets
 
-      # --lib 只跑各 crate 的库内单测：tests/ 下的 m4 WebDAV 集成用例要真实远端，
-      # runner 没有该环境（本机同口径——AGENTS.md 把它列为已知非回归失败）
-      - name: 核心库单元测试
-        run: cargo test --workspace --lib
+      - name: clippy（核心库 workspace，-D warnings）
+        run: cargo clippy --workspace --all-targets -- -D warnings
 
-      # 故障矩阵与 m4 的区别是「自带零依赖假服务」（tests/common，std TcpListener 内存假
-      # WebDAV/S3），干净机器可全绿，却一直只在 --lib 之外躺着——F22 条件头上线、F23 分片
-      # 协议的**唯一网络级证据**此前从未进过 CI，回归会静默溜过。故单独显式点名执行。
-      # 本机实测约 4.5 分钟（含 9MiB 分片用例），耗时来自用例自身的重试退避，非夹具空转。
-      - name: 同步故障矩阵（零外部依赖假服务）
-        run: cargo test -p orbit-core --test sync_fault_matrix
+      # --tests 覆盖各 crate 库内单测 + crates/orbit-core/tests/ 全部集成用例。
+      # 此前只跑 --lib，12 个集成测试文件从不进 CI——拼音索引台账守卫
+      # (search_index_guard) 就是这样静默翻红的。m4_sync_e2e / holiday_net_e2e
+      # 带 #[ignore] 需真实远端，自动跳过；其余用例走 tests/common 零依赖假服务。
+      # sync_fault_matrix（F22 条件头 / F23 分片协议的唯一网络级证据，含 9MiB
+      # 分片用例约 4.5 分钟）已包含在本步骤内，不再单独点名重复执行。
+      - name: 核心库单测与集成测试
+        run: cargo test --workspace --tests
 
   flutter-mobile:
     runs-on: ubuntu-latest
