@@ -25,22 +25,26 @@ use crate::commands::data_dir::resolve_app_data_dir;
 pub struct PendingDbKey(pub std::sync::Mutex<Option<String>>);
 
 impl PendingDbKey {
+    /// 锁中毒（持锁线程 panic 过）不应让解锁流程直接 abort：密钥缓存本身
+    /// 没有不变量可破坏，取回 poisoned guard 继续用即可。
+    fn guard(&self) -> std::sync::MutexGuard<'_, Option<String>> {
+        self.0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
     pub fn put(&self, hex: String) {
-        *self.0.lock().unwrap() = Some(hex);
+        *self.guard() = Some(hex);
     }
 
     pub fn take(&self) -> Result<String, String> {
-        self.0
-            .lock()
-            .unwrap()
+        self.guard()
             .take()
             .ok_or_else(|| "[not_unlocked] 密钥未就绪：请先完成解锁或初始化".to_string())
     }
 
     pub fn peek(&self) -> Result<String, String> {
-        self.0
-            .lock()
-            .unwrap()
+        self.guard()
             .clone()
             .ok_or_else(|| "[not_unlocked] 密钥未就绪：请先完成解锁或初始化".to_string())
     }

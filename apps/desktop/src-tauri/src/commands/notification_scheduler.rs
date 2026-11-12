@@ -71,6 +71,14 @@ static POLLER_STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::Atomic
 static NOTIFIED_REMINDERS: Lazy<std::sync::Mutex<BTreeSet<(i64, i64)>>> =
     Lazy::new(|| std::sync::Mutex::new(BTreeSet::new()));
 
+/// 取去重集合：锁中毒不 abort（`panic = "abort"` 下 `unwrap()` 会把「少弹一条
+/// 提醒」升级成「整个进程消失」；集合本身没有不可用状态）。
+fn notified_guard() -> std::sync::MutexGuard<'static, BTreeSet<(i64, i64)>> {
+    NOTIFIED_REMINDERS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 /// 去重集合上界：单机 24h 窗口内的到期提醒量级远小于此（每提醒每轮至多一条，
 /// 且 [`BATCH_LIMIT`] 已限单轮扫描条数）；到顶即按最旧淘汰。
 const NOTIFIED_REMINDERS_MAX: usize = 5000;
@@ -153,7 +161,7 @@ async fn poll_once(app: &AppHandle) {
         // 去重：进程内存活期，键为 (id, remind_at)——持续提醒顺延后
         // remind_at 变化（新键），后续几轮照常弹（G2）
         let dedupe_key = (id, row.remind_at);
-        if NOTIFIED_REMINDERS.lock().unwrap().contains(&dedupe_key) {
+        if notified_guard().contains(&dedupe_key) {
             continue;
         }
 
@@ -164,7 +172,7 @@ async fn poll_once(app: &AppHandle) {
         let is_first_round = !FIRST_ROUND_DONE.load(std::sync::atomic::Ordering::SeqCst);
         if is_first_round && now - row.remind_at > STALE_SKIP_MS {
             orbit_core::bounded::insert_bounded(
-                &mut NOTIFIED_REMINDERS.lock().unwrap(),
+                &mut notified_guard(),
                 dedupe_key,
                 NOTIFIED_REMINDERS_MAX,
             );
@@ -225,7 +233,7 @@ async fn poll_once(app: &AppHandle) {
         // ④ 记入去重集合（有界插入 A7：超 NOTIFIED_REMINDERS_MAX 丢最小键，
         //    防长驻会话只增不减）
         orbit_core::bounded::insert_bounded(
-            &mut NOTIFIED_REMINDERS.lock().unwrap(),
+            &mut notified_guard(),
             dedupe_key,
             NOTIFIED_REMINDERS_MAX,
         );
