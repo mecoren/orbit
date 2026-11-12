@@ -27,8 +27,9 @@ use crate::db::repository::sync_config_repo::SyncConfigRepo;
 use crate::full_sync_backup::backup_naming::generate_backup_filename_with_name;
 use crate::full_sync_backup::backup_prefs::BackupPrefs;
 use crate::full_sync_backup::backup_repository::{
-    BackupEntry, delete_backup as repo_delete_backup, keep_latest_backup as repo_keep_latest,
-    list_backups as repo_list_backups, resolve_backup_dir,
+    BackupEntry, MAX_AUTO_BACKUPS, delete_backup as repo_delete_backup,
+    keep_latest_backup as repo_keep_latest, list_backups as repo_list_backups, prune_backups,
+    resolve_backup_dir,
 };
 use crate::full_sync_backup::decoder::decode_backup;
 use crate::full_sync_backup::error::{FullSyncBackupError, FullSyncBackupResult};
@@ -123,6 +124,8 @@ pub async fn export_full_sync_backup(
         cloud_config,
         local_enabled,
         cloud_enabled,
+        // 自动备份参与份数轮转；手动导出是用户显式动作，不主动删历史文件
+        matches!(origin, BackupOrigin::Auto),
     )
     .await
 }
@@ -180,6 +183,7 @@ async fn export_full_sync_backup_inner(
     cloud_config_in: Option<EngineSyncConfig>,
     local_enabled: bool,
     cloud_enabled: bool,
+    auto_prune: bool,
 ) -> FullSyncBackupResult<ExportResult> {
     // 1. 读取 device_id / device_name
     //    （解锁校验与密码读取由上层 export_full_sync_backup 完成，
@@ -270,7 +274,7 @@ async fn export_full_sync_backup_inner(
     // 记录云端阶段历史（无 cloud_config 时跳过云端阶段，不写历史）
     if has_cloud_config {
         let cloud_status = if cloud_uploaded { "success" } else { "failed" };
-        let _ = insert_sync_history(
+        if let Err(e) = insert_sync_history(
             pool,
             "cloud_full_backup",
             cloud_status,
@@ -280,7 +284,10 @@ async fn export_full_sync_backup_inner(
             0,
             cloud_error.as_deref(),
         )
-        .await;
+        .await
+        {
+            log::warn!("[backup] 云端备份历史写入失败: {e}");
+        }
     }
 
     // ===== 9. 本地阶段（受 local_enabled 开关控制）=====
@@ -296,8 +303,20 @@ async fn export_full_sync_backup_inner(
         match std::fs::rename(&staged_for_move, &target_for_move) {
             Ok(()) => {
                 local_path = Some(target_path.to_string_lossy().to_string());
-                if prefs.keep_latest {
-                    let _ = repo_keep_latest(&backup_dir, &target_path);
+                // 清理旧备份失败不影响本次备份成功（新文件已落盘），
+                // 但必须留日志：否则「备份目录只增不减」会完全没有痕迹。
+                let rotation = if prefs.keep_latest {
+                    repo_keep_latest(&backup_dir, &target_path)
+                } else if auto_prune {
+                    prune_backups(&backup_dir, MAX_AUTO_BACKUPS)
+                } else {
+                    Ok(Vec::new())
+                };
+                if let Err(e) = rotation {
+                    log::warn!(
+                        "[backup] 备份轮转失败（目录 {}）: {e}",
+                        backup_dir.display()
+                    );
                 }
             }
             Err(e) => {
@@ -309,7 +328,7 @@ async fn export_full_sync_backup_inner(
         } else {
             "failed"
         };
-        let _ = insert_sync_history(
+        if let Err(e) = insert_sync_history(
             pool,
             "local_full_backup",
             local_status,
@@ -319,7 +338,11 @@ async fn export_full_sync_backup_inner(
             0,
             local_error.as_deref(),
         )
-        .await;
+        .await
+        {
+            // 历史写入失败不影响备份本体，但排障页会缺一行，需可回溯
+            log::warn!("[backup] 本地备份历史写入失败: {e}");
+        }
     }
     // 本地备份关闭时：跳过文件写入与历史记录，backup_dir 留空亦无副作用。
     // 此时 staged 文件必须清掉，否则每次云端备份都会在备份目录留一个孤儿。
@@ -1538,9 +1561,10 @@ mod export_table_guard_tests {
         .await
         .unwrap();
 
-        let err = export_full_sync_backup_inner(&pool, tmp.path(), "pw-123456", None, true, false)
-            .await
-            .expect_err("表读取失败必须中止导出");
+        let err =
+            export_full_sync_backup_inner(&pool, tmp.path(), "pw-123456", None, true, false, false)
+                .await
+                .expect_err("表读取失败必须中止导出");
         match err {
             FullSyncBackupError::Other(msg) => {
                 assert!(msg.contains("todo_saved_filters"), "错误应点明表名: {msg}");
@@ -1571,10 +1595,17 @@ mod export_table_guard_tests {
             .await
             .unwrap();
 
-        let result =
-            export_full_sync_backup_inner(&pool, tmp.path(), "pw-123456", None, false, false)
-                .await
-                .expect("缺表属预期情形，不应中止导出");
+        let result = export_full_sync_backup_inner(
+            &pool,
+            tmp.path(),
+            "pw-123456",
+            None,
+            false,
+            false,
+            false,
+        )
+        .await
+        .expect("缺表属预期情形，不应中止导出");
 
         assert!(
             !result

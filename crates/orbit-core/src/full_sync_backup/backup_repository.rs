@@ -113,6 +113,36 @@ pub fn delete_backup(file_path: &Path) -> FullSyncBackupResult<()> {
     Ok(())
 }
 
+/// 自动备份保留份数上限
+///
+/// 同步前自动备份默认开启（`local_backup_enabled = true`），每次「立即同步」
+/// 都会写一份；`keep_latest` 默认关闭，若不做上限，备份目录会随使用时长无界增长。
+/// 10 份足够覆盖「最近若干次操作把数据改坏」的回滚需求。
+pub const MAX_AUTO_BACKUPS: usize = 10;
+
+/// 按份数轮转自动备份：只保留最新 `keep` 份（文件名排序，最新在前）
+///
+/// 只处理符合 `backup*.orfullsync` 命名的文件；手动导出的备份与自动备份同目录，
+/// 也会计入份数（用户看到的就是「最近 10 份」这个语义）。
+pub fn prune_backups(backup_dir: &Path, keep: usize) -> FullSyncBackupResult<Vec<PathBuf>> {
+    if keep == 0 {
+        return Ok(Vec::new());
+    }
+    let entries = list_backups(backup_dir)?;
+    let mut deleted: Vec<PathBuf> = Vec::new();
+    for entry in entries.into_iter().skip(keep) {
+        match delete_backup(&entry.file_path) {
+            Ok(()) => deleted.push(entry.file_path),
+            Err(e) => log::warn!(
+                "[prune_backups] 删除过期备份失败: {} - {}",
+                entry.file_path.display(),
+                e
+            ),
+        }
+    }
+    Ok(deleted)
+}
+
 /// 仅保留最新备份：删除 `keep_file` 之外的所有 `backup*.orfullsync` 文件（兼容遗留扩展名）
 ///
 /// 返回被删除的文件路径列表
@@ -256,6 +286,39 @@ mod tests {
 
         let result = delete_backup(&path);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn prune_backups_keeps_newest_n() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path().join("backups");
+        fs::create_dir_all(&dir).unwrap();
+
+        for day in 1..=12 {
+            create_backup_file(&dir, &format!("backup2026-07-{day:02}.orfullsync"));
+        }
+        let _other = create_backup_file(&dir, "data.zip");
+
+        let deleted = prune_backups(&dir, 10).unwrap();
+
+        assert_eq!(deleted.len(), 2);
+        let left = list_backups(&dir).unwrap();
+        assert_eq!(left.len(), 10);
+        assert_eq!(left[0].filename, "backup2026-07-12.orfullsync");
+        assert!(_other.exists(), "非备份命名文件不应被删除");
+    }
+
+    #[test]
+    fn prune_backups_zero_keep_is_noop() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path().join("backups");
+        fs::create_dir_all(&dir).unwrap();
+        create_backup_file(&dir, "backup2026-07-20.orfullsync");
+
+        let deleted = prune_backups(&dir, 0).unwrap();
+
+        assert!(deleted.is_empty());
+        assert_eq!(list_backups(&dir).unwrap().len(), 1);
     }
 
     #[test]

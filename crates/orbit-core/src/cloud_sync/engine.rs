@@ -1568,7 +1568,9 @@ impl SyncEngine {
     /// 仅在 `sync_password` 已缓存时执行；为 `None` 时跳过备份。
     ///
     /// 需求2：同步前备份按「本地备份开关」判定，不传 cloud_config（仅本地写入）。
-    /// 默认本地备份关闭故跳过；用户开启 local_backup_enabled 后，每次同步前自动写本地副本。
+    /// `local_backup_enabled` 默认 **true**（见 `BackupPrefs::default`）：每次
+    /// `sync_now` / `pull_then_push` 前写一份本地安全副本；自动备份按
+    /// `MAX_AUTO_BACKUPS`（10 份）轮转，避免长期使用把备份目录撑爆。
     ///
     /// 调用时机：`sync_now`/`pull_then_push` 的 `acquire_lock` 成功后、
     /// 首个 push/pull 之前。`push_only`（修改后立即同步）不调用本方法
