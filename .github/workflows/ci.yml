@@ -115,6 +115,27 @@ jobs:
       - name: 核心库单测与集成测试
         run: cargo test --workspace --tests
 
+  # 桌面壳编译门禁：src-tauri 是嵌套独立 workspace，此前只在发版矩阵里首次编译——
+  # 壳层命令改坏要等打 tag 后才发现（白等一轮 20 分钟矩阵）。这里只做 check，
+  # 不跑壳层测试（壳层用例依赖真实 WebView/托盘，见 src-tauri/tests 手工探针）。
+  desktop-shell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+
+      - name: Linux 系统依赖（webkit2gtk 4.1）
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
+            librsvg2-dev patchelf libgtk-3-dev
+
+      - name: 检查桌面壳
+        run: cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets
+
   flutter-mobile:
     runs-on: ubuntu-latest
     defaults:

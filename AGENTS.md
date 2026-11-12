@@ -41,7 +41,7 @@ Orbit（循迹）是本地优先的跨平台任务管理应用：待办（项目
 | 状态(移动) | Riverpod；移动 UI 组件体系 = **flutter_miuix 1.3.0（精确锁版，HyperOS/OS4 玻璃，组件主体）** + shadcn_flutter 0.0.53（精确锁版，**仅 LucideIcons 图标字体源**）+ table_calendar，库内无等价物的组件自绘同风格并沉淀 `shared/widgets/shadcn/`（统计图表与热力图自绘，无 fl_chart 依赖） |
 | 核心 | Rust edition 工具链锁 `rust-toolchain.toml` 1.96，clippy + rustfmt |
 | 加密 | SQLCipher 本地库 + AES-256-GCM 云同步 E2E（PBKDF2 600k 单调不降级） |
-| 质量 | tsc / vitest 4 / Playwright 冒烟 / cargo test / flutter analyze+test；内存门禁（`perf-metrics/`）；CI 四 job（web/rust-core/flutter-mobile 含 FRB codegen 一致性门禁/perf-gate） |
+| 质量 | tsc / vitest 4 / Playwright 冒烟 / cargo test / flutter analyze+test；内存门禁（`perf-metrics/`）；CI 五 job（web/rust-core/desktop-shell 壳层编译/flutter-mobile 含 FRB codegen 一致性门禁/perf-gate） |
 
 ## 架构边界
 
