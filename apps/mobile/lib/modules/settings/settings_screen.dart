@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_miuix/miuix.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -1713,12 +1714,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   /// 安全卡内容：库加密态（明文/加密）+ 主密码操作 + 指纹解锁开关
   ///
   /// 三段结构：
-  /// 1. 加密态说明与迁移入口（明文库 → 开启加密；加密库 → 关闭加密）；
+  /// 1. 加密态说明与迁移入口（明文库 → 开启加密；加密库 → 关闭加密；
+  ///    Android 明文库例外 → 只读说明，见 ADR 0001）；
   /// 2. 主密码修改（仅加密库；只换开屏密码包装，DB Key 不变）；
   /// 3. 指纹解锁开关（硬件可用才有；无硬件给只读说明而非整卡降级）。
   List<Widget> _buildSecurityCard(BuildContext context) {
     final colors = AppColors.ofContext(context);
     final encrypted = _masterAuthSet;
+    final android = defaultTargetPlatform == TargetPlatform.android;
 
     return <Widget>[
       // 加密态行（示例「通用列表项」同构：起始图标 + 标题 + 摘要）
@@ -1760,7 +1763,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           onClick: _clearMasterPassword,
         ),
       ],
-      if (encrypted != null) ...[
+      // Android 目标无 SQLCipher，`db_migrate_to_encrypted` 依赖的
+      // sqlcipher_export 必然报 no such function（ADR 0001 §1.2）。明文库下
+      // 不摆这个必败入口，改给只读说明，避免失败回滚留下「meta 已写、
+      // 库仍是明文」的混合态。
+      if (encrypted != null && (encrypted || !android)) ...[
         const _RowDivider(),
         _arrowRow(
           context,
@@ -1774,6 +1781,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   color: OrbitAccents.themeAccent,
                 )
               : null,
+        ),
+      ],
+      if (encrypted == false && android) ...[
+        const _RowDivider(),
+        MiuixBasicComponent(
+          title: '本机加密暂不可用',
+          summary: 'Android 当前使用明文 SQLite，本机加密将在后续版本提供；'
+              '云端数据仍由同步密码端到端加密。',
+          startAction: Icon(
+            OrbitIcons.lockOpen,
+            size: AppDimens.iconSizeMd,
+            color: colors.secondaryText,
+          ),
+          insideMargin: _rowMargin,
         ),
       ],
       if (_bioAvailable == true) ...[
