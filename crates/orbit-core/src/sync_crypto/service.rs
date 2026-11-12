@@ -458,18 +458,41 @@ impl SyncCryptoService {
     /// `force = false` 返回 `LocalMetaExists`（导入会静默切换本机 Data Key，
     /// 必须经用户确认后以 `force = true` 重试）。云端 bundle 与本地完全一致
     /// 时无论 force 与否都直接成功（幂等）。
+    ///
+    /// **F33 单调不降级**：云端 `crypto/config` 是明文 JSON，迭代次数低于本地
+    /// meta 时一律返回 `Bundle`（`force` 不豁免）——`force` 授权的是切换 Data
+    /// Key，不是降低口令派生强度；校验在 PBKDF2 之前完成，避免降级被误报成密码错误。
     pub fn import_crypto_bundle(
         &self,
         bundle: &SyncCryptoMeta,
         sync_password: &str,
         force: bool,
     ) -> Result<Vec<u8>, SyncCryptoError> {
-        // Fix-10：覆盖守卫——先比对本地 meta，不一致且未确认时拒绝。
+        // 本地 meta 只读一次，供下面两道守卫共用（沿用 Fix-10 原口径：
+        // 读取失败按「无本地 meta」处理，不改变损坏态的错误语义）。
+        let local_meta = crate::sync_crypto::meta_store::load_sync_crypto_meta(&self.app_data_dir)
+            .ok()
+            .flatten();
+
+        // F33 补强：单调不降级。云端 crypto/config 是明文 JSON，存储端可把
+        // iterations 从 600k 改回 200k；force 只授权切换 Data Key，不授权
+        // 降低口令派生强度。必须在 PBKDF2 之前拦下，否则只会表现为「密码错误」。
+        if let Some(local) = &local_meta
+            && bundle.iterations < local.iterations
+        {
+            return Err(SyncCryptoError::Bundle {
+                message: format!(
+                    "云端 PBKDF2 迭代次数 {} 低于本地 {}，拒绝降级（force 不豁免）",
+                    bundle.iterations, local.iterations
+                ),
+            });
+        }
+
+        // Fix-10：覆盖守卫——本地 meta 与云端不一致且未确认时拒绝。
         // 放在解密之前可避免"先花 600k 次 PBKDF2 再被拒"的浪费。
         if !force
-            && let Ok(Some(local)) =
-                crate::sync_crypto::meta_store::load_sync_crypto_meta(&self.app_data_dir)
-            && local != *bundle
+            && let Some(local) = &local_meta
+            && local != bundle
         {
             return Err(SyncCryptoError::LocalMetaExists);
         }
@@ -807,6 +830,35 @@ mod tests {
                 .import_crypto_bundle(&bundle, "shared_pw", false)
                 .is_ok(),
             "meta 一致时应幂等成功"
+        );
+    }
+
+    /// 单调不降级：云端 crypto/config 是明文 JSON，存储端可把 iterations 从
+    /// 600k 改到 200k。本地已升级时即便 force=true 也只授权切换 Data Key，
+    /// 不授权降低口令派生强度。
+    #[test]
+    fn import_rejects_kdf_downgrade_even_with_force() {
+        let tmp_a = TempDir::new().unwrap();
+        let svc_a = SyncCryptoService::new(tmp_a.path());
+        svc_a.init("pw_a").unwrap();
+        let mut downgraded = svc_a.export_crypto_bundle().unwrap();
+        assert_eq!(downgraded.iterations, ITERATIONS);
+        downgraded.iterations = LEGACY_ITERATIONS;
+
+        let tmp_b = TempDir::new().unwrap();
+        let svc_b = SyncCryptoService::new(tmp_b.path());
+        svc_b.init("pw_b").unwrap();
+
+        let err = svc_b
+            .import_crypto_bundle(&downgraded, "pw_a", true)
+            .unwrap_err();
+        assert!(
+            matches!(err, SyncCryptoError::Bundle { .. }),
+            "降级必须在派生前被拒，实际: {err:?}"
+        );
+        assert!(
+            svc_b.unlock("pw_b").is_ok(),
+            "拒绝降级后本地 Data Key 必须保持不变"
         );
     }
 
