@@ -1,14 +1,27 @@
 use sha2::{Digest, Sha256};
 
+/// SHA-256 哈希，返回 32 字节原始摘要
+///
+/// 密码学用途（如 AES-GCM nonce 派生）必须取原始字节：hex 字符串的前 12
+/// 个字符只有 16^12 = 48-bit 有效熵，取原始摘要前 12 字节才是 96-bit。
+pub fn sha256_bytes(data: &[u8]) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(data);
+    let digest = hasher.finalize();
+    let mut out = [0u8; 32];
+    out.copy_from_slice(&digest);
+    out
+}
+
 /// SHA-256 哈希，返回 hex 字符串
 ///
 /// 与 `s3::signing::sha256_hex` 实现一致，
 /// 提供通用密码学入口（不绑定 S3 语义）。
 pub fn sha256_hex(data: &[u8]) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(data);
-    let result = hasher.finalize();
-    result.iter().map(|b| format!("{:02x}", b)).collect()
+    sha256_bytes(data)
+        .iter()
+        .map(|b| format!("{:02x}", b))
+        .collect()
 }
 
 /// 常数时间字符串比较（长度不等时按较长串比较，避免提前返回泄露前缀信息）
@@ -41,6 +54,19 @@ pub fn is_sha256_hex(s: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 原始摘要与 hex 编码必须同源（RFC 6234 向量），避免两套哈希实现漂移
+    #[test]
+    fn sha256_bytes_match_hex_encoding() {
+        let raw = sha256_bytes(b"abc");
+        assert_eq!(raw.len(), 32);
+        assert_eq!(
+            raw.iter().map(|b| format!("{b:02x}")).collect::<String>(),
+            sha256_hex(b"abc")
+        );
+        assert_eq!(raw[0], 0xba);
+        assert_eq!(raw[31], 0xad);
+    }
 
     #[test]
     fn sha256_empty_string() {

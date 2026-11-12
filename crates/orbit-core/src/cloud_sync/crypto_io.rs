@@ -65,17 +65,14 @@ const ZSTD_LEVEL: i32 = 3;
 /// 的前提（S4，2026-09-14）：重试会话中已上传的分片与新会话重加密的分片
 /// 字节一致，才能跳过重传。
 ///
-/// 安全性（F80/N36 口径对齐，2026-10-01 第六轮）：AES-GCM 的 nonce 唯一性
-/// 要求是「同 key 下 nonce 不重复」——本派生下不同 plaintext 的 nonce 碰撞
-/// 等价于 SHA-256 碰撞（第二原像），且输入含密文外部不可得的 data_key，
-/// 攻击者无法构造碰撞对。**注意有效熵是 48-bit 而非 96-bit**：最终哈希取的
-/// 是 hex 字符串的「前 12 字节」= 12 个 ASCII hex 字符，生日界约 2^24——
-/// 同步 payload 量级下可用，但不得误述为「96-bit 余量充足」（详见
-/// [`derive_deterministic_nonce`] 的口径澄清；存量密文按此格式落盘，
-/// 改派生宽度属格式演进，须走版本门禁）。SIV（RFC 5297）/AES-GCM-SIV
-/// 是该构造的正规化形式，语义相同：用「明文+key 的哈希」做 nonce 的合成
-/// IV。格式版本仍为 0x01（随机/确定性 nonce 产出的密文均可被现有 decrypt
-/// 解开，不构成不兼容变更）。
+/// 安全性（首发前定型，2026-11-12）：AES-GCM 的 nonce 唯一性要求是「同 key
+/// 下 nonce 不重复」——本派生下不同 plaintext 的 nonce 碰撞等价于 SHA-256
+/// 碰撞（第二原像），且输入含外部不可得的 data_key，攻击者无法构造碰撞对。
+/// nonce 取 SHA-256 **原始摘要**前 12 字节 = 96-bit 有效熵（SIV/RFC 5297
+/// 的合成 IV 语义）。早期实现取 hex 字符串前 12 个 ASCII 字符，只有 48-bit
+/// 熵、生日界约 2^24；读侧从 payload 头部取 nonce、不重算派生式，因此改派生
+/// 不动密文格式（仍 0x01），旧密文照常可解——故在零存量数据的首发窗口一次
+/// 定型，不留兼容分支。
 pub fn encrypt_payload(plaintext: &[u8], data_key: &[u8]) -> Result<Vec<u8>, CloudSyncError> {
     encrypt_payload_at(plaintext, data_key, None)
 }
@@ -142,13 +139,12 @@ fn encrypt_payload_at(
 }
 
 /// 确定性 nonce 派生（纯函数，供单测）
-/// 口径澄清（N36 收口）：`full` 是 SHA-256 的 hex 字符串（64 个 ASCII 字符），
-/// 取前 12 字节即 12 个 hex 字符 = 48-bit 熵，不是 AES-GCM 标准 96-bit 随机
-/// nonce。生日界约 2^24，同步 payload 量级下可用，但不得误述为“96-bit 余量
-/// 充足”。存量云端密文即按此格式落盘，任何改动（取原始字节/加长）都是格式
-/// 演进，须走版本门禁，当前一行不改，只 pin 住现状。
 ///
-/// `SHA256(data_key ‖ SHA256(compressed)hex ‖ len_be)[0..12]`
+/// 取 SHA-256 **原始摘要**的前 12 字节（96-bit 有效熵）。早期取 hex 字符串前
+/// 12 个 ASCII 字符只有 48-bit 熵，已在首发窗口定型；派生式的输入构造不变，
+/// 只改最终取字节的方式。读侧从 payload 头部读 nonce，故旧密文仍可解。
+///
+/// `SHA256(data_key ‖ SHA256(compressed)hex ‖ len_be)[0..12]`（原始摘要字节）
 ///
 /// - data_key 参与哈希：key 不同 → nonce 全不同；攻击者无 key 时无法为
 ///   目标明文预计算 nonce，也无法构造碰撞对（nonce 碰撞 ⊇ SHA-256 碰撞）
@@ -157,7 +153,7 @@ fn encrypt_payload_at(
 ///   的明文，nonce 唯一性须按它保证；hex 拼接避免 `‖` 拼接歧义
 /// - aad 参与派生：0x02 载荷下同一明文落到不同对象路径时 nonce 不同，
 ///   「同 key + 同 nonce 加密不同 AAD 消息」这条 GCM 禁忌因此不成立；
-///   0x01 的 aad 恒为空串 → 派生结果与存量密文逐字节一致
+///   0x01 的 aad 恒为空串 → 派生结果与引入 AAD 前逐字节一致
 fn derive_deterministic_nonce(data_key: &[u8], compressed: &[u8], aad: &[u8]) -> Vec<u8> {
     let inner = crate::crypto::sha256::sha256_hex(compressed);
     let len = (compressed.len() as u64).to_be_bytes();
@@ -166,8 +162,8 @@ fn derive_deterministic_nonce(data_key: &[u8], compressed: &[u8], aad: &[u8]) ->
     input.extend_from_slice(inner.as_bytes());
     input.extend_from_slice(&len);
     input.extend_from_slice(aad);
-    let full = crate::crypto::sha256::sha256_hex(&input);
-    full.into_bytes()[..NONCE_LEN].to_vec()
+    let digest = crate::crypto::sha256::sha256_bytes(&input);
+    digest[..NONCE_LEN].to_vec()
 }
 
 /// 解密 payload：分离 magic/version/nonce/ciphertext → AES 解密 → zstd 解压
@@ -338,40 +334,88 @@ mod deterministic_nonce_tests {
         assert_ne!(n1, n3, "前缀延长的明文不得命中同一 nonce（len 域分离）");
     }
 
-    /// 派生 nonce 长度恒为 12 字节，且为 hex ASCII（pin 住存量格式：改即不兼容）
+    /// 首发前定型：nonce 取 SHA-256 摘要**原始字节**前 12 字节（96-bit 有效熵），
+    /// 不是 hex 字符串的前 12 个 ASCII 字符（仅 48-bit、生日界约 2^24）。
+    ///
+    /// 读侧从 payload 头部取 nonce，不重算派生式，故改派生不改密文格式（仍 0x01）。
+    #[test]
+    fn derived_nonce_uses_full_96bit_digest_bytes() {
+        let key = [9u8; 32];
+        let compressed = b"any";
+        let n = derive_deterministic_nonce(&key, compressed, b"");
+
+        let inner = crate::crypto::sha256::sha256_hex(compressed);
+        let mut input = Vec::new();
+        input.extend_from_slice(&key);
+        input.extend_from_slice(inner.as_bytes());
+        input.extend_from_slice(&(compressed.len() as u64).to_be_bytes());
+        let digest_hex = crate::crypto::sha256::sha256_hex(&input);
+        let expected: Vec<u8> = (0..NONCE_LEN)
+            .map(|i| u8::from_str_radix(&digest_hex[i * 2..i * 2 + 2], 16).unwrap())
+            .collect();
+
+        assert_eq!(
+            n, expected,
+            "nonce 应为摘要原始字节前 12 字节；hex ASCII 只有 48-bit 有效熵"
+        );
+    }
+
+    /// 派生 nonce 长度恒为 12 字节（AES-GCM 标准长度），且不再限于 hex 字符集
     #[test]
     fn derived_nonce_length_is_12() {
         let n = derive_deterministic_nonce(&[9u8; 32], b"any", b"");
         assert_eq!(n.len(), NONCE_LEN);
         assert_eq!(NONCE_LEN, 12);
         assert!(
-            n.iter().all(|b| b.is_ascii_hexdigit()),
-            "存量 nonce 是 hex 字符串前 12 字符，须全为 hex ASCII"
+            !n.iter().all(|b| b.is_ascii_hexdigit()),
+            "nonce 取摘要原始字节，不应退化成 hex ASCII（48-bit 熵）"
         );
     }
 
-    /// 空 AAD 时派生口径与存量密文逐字节一致（AAD 入参是纯增量，不改 0x01 格式）
+    /// 空 AAD 时派生口径可复算（AAD 入参是纯增量，不改 0x01 格式）
     #[test]
-    fn empty_aad_keeps_legacy_nonce() {
+    fn empty_aad_nonce_matches_digest_bytes() {
         let key = [3u8; 32];
         let compressed = b"payload";
-        // 手工重算改动前的公式：SHA256(key ‖ sha256_hex(compressed) ‖ len_be) 前 12 hex
         let inner = crate::crypto::sha256::sha256_hex(compressed);
         let mut input = Vec::new();
         input.extend_from_slice(&key);
         input.extend_from_slice(inner.as_bytes());
         input.extend_from_slice(&(compressed.len() as u64).to_be_bytes());
-        let expected = crate::crypto::sha256::sha256_hex(&input).into_bytes()[..NONCE_LEN].to_vec();
+        let expected = crate::crypto::sha256::sha256_bytes(&input)[..NONCE_LEN].to_vec();
         assert_eq!(
             derive_deterministic_nonce(&key, compressed, b""),
             expected,
-            "空 AAD 必须产出与存量云端密文相同的 nonce"
+            "空 AAD 的 nonce 必须是摘要原始字节前 12 字节"
         );
         assert_ne!(
             derive_deterministic_nonce(&key, compressed, b"tables/todo_tasks/7.orsync"),
             expected,
             "绑定路径后同一明文在不同对象上不得复用 nonce"
         );
+    }
+
+    /// 旧 hex-ASCII nonce 密文仍可解：读侧从头部取 nonce，不重算派生式
+    #[test]
+    fn legacy_hex_nonce_payload_still_decrypts() {
+        let key = [5u8; 32];
+        let plain = b"legacy-nonce".to_vec();
+        let compressed = zstd::encode_all(plain.as_slice(), ZSTD_LEVEL).unwrap();
+        let inner = crate::crypto::sha256::sha256_hex(&compressed);
+        let mut input = Vec::new();
+        input.extend_from_slice(&key);
+        input.extend_from_slice(inner.as_bytes());
+        input.extend_from_slice(&(compressed.len() as u64).to_be_bytes());
+        let old_nonce =
+            crate::crypto::sha256::sha256_hex(&input).into_bytes()[..NONCE_LEN].to_vec();
+        let ciphertext = aes_gcm_encrypt_aad(&key, &compressed, &old_nonce, b"").unwrap();
+
+        let mut payload = Vec::with_capacity(HEADER_LEN + NONCE_LEN + ciphertext.len());
+        payload.extend_from_slice(MAGIC);
+        payload.push(PAYLOAD_VERSION);
+        payload.extend_from_slice(&old_nonce);
+        payload.extend_from_slice(&ciphertext);
+        assert_eq!(decrypt_payload(&payload, &key).unwrap(), plain);
     }
 
     /// 往返：确定性加密 → 现有 decrypt 正常解开（格式不变，version 0x01）

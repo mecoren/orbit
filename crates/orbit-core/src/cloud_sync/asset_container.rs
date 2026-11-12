@@ -425,18 +425,21 @@ impl Header {
     }
 }
 
-/// 确定性 nonce 基值：`SHA256(data_key ‖ object_id ‖ domain)[0..12]`
+/// 确定性 nonce 基值：`SHA256(data_key ‖ object_id ‖ domain)[0..12]`（原始摘要字节）
 ///
 /// `object_id` 即附件明文 hash，同内容同 key 必得同一容器字节（重试/多设备
-/// 重加密幂等）。用 hex 字符串前 12 字节与存量 payload 同口径（48-bit 有效
-/// 熵，附件量级下够用；见 `crypto_io::derive_deterministic_nonce` 的口径澄清）。
+/// 重加密幂等）。与 `crypto_io::derive_deterministic_nonce` 同口径取摘要原始
+/// 字节前 12 字节（96-bit 有效熵）；早期取 hex 前 12 字符只有 48-bit。容器
+/// 头部自带 `nonce_base`，读侧不重算派生式，故旧容器仍可解。
 fn derive_nonce_base(data_key: &[u8], object_id: &str) -> [u8; 12] {
     let mut input = Vec::with_capacity(data_key.len() + object_id.len() + 26);
     input.extend_from_slice(data_key);
     input.extend_from_slice(object_id.as_bytes());
     input.extend_from_slice(b"orbit-asset-container-v1");
-    let full = crate::crypto::sha256::sha256_hex(&input);
-    full.into_bytes()[..12].try_into().expect("12 字节固定长度")
+    let digest = crate::crypto::sha256::sha256_bytes(&input);
+    let mut nonce = [0u8; 12];
+    nonce.copy_from_slice(&digest[..12]);
+    nonce
 }
 
 /// 帧 nonce：基值后 8 字节与帧序号异或（序号唯一 ⇒ nonce 唯一）
@@ -477,6 +480,19 @@ fn attachment_io(context: &str, err: std::io::Error) -> CloudSyncError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 容器 nonce 基值与同步 payload 同口径：摘要原始字节前 12（96-bit 有效熵）
+    #[test]
+    fn nonce_base_uses_raw_digest_bytes() {
+        let key = [7u8; 32];
+        let object_id = "abc123";
+        let mut input = Vec::new();
+        input.extend_from_slice(&key);
+        input.extend_from_slice(object_id.as_bytes());
+        input.extend_from_slice(b"orbit-asset-container-v1");
+        let expected = crate::crypto::sha256::sha256_bytes(&input)[..12].to_vec();
+        assert_eq!(derive_nonce_base(&key, object_id).to_vec(), expected);
+    }
 
     fn tmp() -> tempfile::TempDir {
         tempfile::TempDir::new().unwrap()
