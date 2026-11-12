@@ -9,7 +9,7 @@ use crate::s3::{
     parse_list_objects_xml, sha256_hex,
 };
 use crate::sync::cancel::SyncCancelToken;
-use crate::sync::error::{SyncError, transport_message};
+use crate::sync::error::{SyncError, redact_userinfo, transport_message};
 use crate::sync_adapters::http_client::HttpClient;
 use crate::sync_adapters::traits::{
     RemoteAssetKind, RemoteAssetObject, RemoteFile, SyncAdapter, UploadOutcome, UploadPrecondition,
@@ -774,7 +774,9 @@ impl SyncAdapter for S3Adapter {
                 log::info!(
                     "[s3] 连接测试列举命中 1000/页上限，显示的是首屏计数（非全量）: \
                      endpoint={}",
-                    self.config.endpoint
+                    // endpoint 可能被用户写成 `user:pass@host`，日志脱敏红线
+                    // 与 sync_history 同口径（F34）
+                    redact_userinfo(&self.config.endpoint)
                 );
             }
             page.entries
