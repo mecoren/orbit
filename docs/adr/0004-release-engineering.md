@@ -101,7 +101,7 @@ MVP 发布（06 文档 §二 M5）要求五端产物签名/分发就绪。现状
 | Windows | **暂不购买证书**：OV 代码签名证书年费成本 + 单人维护量，MVP 以「下载后校验哈希」过渡；README/Release 注明未签名 + SmartScreen 提示的处理说明 | 若购证：配置 `TAURI_SIGNING_PRIVATE_KEY` 环境变量 + tauri-action 自动签名（参考 `.github/workflows/release.yml` 注释段） |
 | macOS | **不签名不公证发布 MVP**（ad-hoc 签名仅本机构建）；Gatekeeper 提示 xattr 处理说明写入 Release 模板 | Apple Developer ID（$99/年）到位后：`signingIdentity` 填 "Developer ID Application: …" + `APPLE_ID/APASSWORD/TEAM_ID` 公证三件套 + `tauri.conf.json` `entitlements` |
 | Linux | deb/AppImage 无签名惯例（仓库/镜像分发），CI 产出即发布；校验哈希随 Release 附 `SHA256SUMS` | — |
-| Android | release 签名密钥**已留配置位**：`android/key.properties`（gitignore）+ `build.gradle.kts` signingConfigs 读取；未配置时回落 debug 签名（开发装真机可覆盖安装） | 生成正式 keystore：`keytool -genkey -v -keystore orbit-release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias orbit`，写入 key.properties |
+| Android | release 签名密钥**已硬化（2026-10-28）**：`android/key.properties`（gitignore）+ `build.gradle.kts` signingConfigs 读取；缺 `key.properties` 的 release 任务直接抛 `GradleException`，**不再回落 debug 签名**（随机 debug 签名会让后续版本无法覆盖安装） | 本地 `pnpm keystore:android` 生成正式 keystore 与两个密码并离线备份；CI 由 `ANDROID_KEYSTORE_BASE64` / `ANDROID_KEYSTORE_PASSWORD` / `ANDROID_KEY_ALIAS` / `ANDROID_KEY_PASSWORD` 四个 Secrets 还原（`release.yml` audit job 强校验） |
 | 安装包完整性（ updater） | **已落地（2026-09-15 修订）**：`tauri signer generate` 生成 minisign 密钥对，公钥入 `tauri.conf.json` 的 `plugins.updater.pubkey`，私钥入 Secrets；`bundle.createUpdaterArtifacts: true` 使每个平台产出 `.sig`，由 `publish-updater-manifest` 合成 `latest.json` | 私钥已生成（Secrets 待用户配置）；轮换会让旧客户端拒升级，口径见 `docs/08` §3.6 |
 
 > 原则：**没有证书物料的环节一律明示「未签名」并给出用户侧校验/放行指引**，

@@ -17,6 +17,17 @@
 
 ## [Unreleased]
 
+### 修复：首发前代码缺陷收口（2026-11-12）
+
+- **发布流水线**：`release.yml` 的 Release 资产枚举从不存在的 `releases/assets/{id}/assets` 改为 `releases/{id}/assets`；枚举结果先落变量并显式检查 `gh api` 退出码——原先放在进程替换 `< <(...)` 内，失败不会触发 `set -e`，会被读成「空资产表」再误报成签名密钥不匹配。首发时「上一轮 latest.json 回落签名」必然为空，故该错误必然导致空清单拒绝发布。新增 `apps/desktop/src/test/release-workflow.test.ts` 静态护栏（`dry_run` 不执行 manifest 作业，端点写错在预演里发现不了）。
+- **加密格式首发定型**：确定性 nonce 从 hex 字符串前 12 个 ASCII 字符（48-bit 有效熵、生日界约 2^24）改为 SHA-256 原始摘要前 12 字节（96-bit）；`crypto/sha256.rs` 新增 `sha256_bytes` 并让 `sha256_hex` 复用；`cloud_sync/crypto_io.rs` 与 `cloud_sync/asset_container.rs` 同口径。读侧从 payload / 容器头取 nonce、不重算派生式，故格式仍为 0x01、旧密文可解（补回归用例），在零存量数据的首发窗口一次定型，不留兼容分支。
+- **KDF 单调不降级**：`sync_crypto/service.rs` 导入云端 `crypto/config` 时，iterations 低于本地 meta 即在 PBKDF2 之前返回 `Bundle`（`force` 不豁免——force 只授权切换 Data Key）；此前降级只会表现为「密码错误」。全局 `MIN_KDF_ITERATIONS` 保持 200k：v1 备份容器头固定写 200k，抬高下限会直接破坏备份读写。
+- **明文残留**：`db/migrate.rs` 新增 `cleanup_orphan_migration_tmp`，`db/pool.rs` 在 `init_pool` 最前面清扫 `*.db.plain_tmp` / `*.db.enc_tmp`，覆盖「导出成功 → rename 前进程崩溃」留下整库明文副本的窗口（F80 此前只清导出失败路径）。
+- **CI 门禁**：`ci.yml` rust-core 由 `cargo test --workspace --lib` 改为 `--tests`（覆盖 12 个此前从不进 CI 的集成测试文件），新增 `cargo clippy --workspace --all-targets -- -D warnings`，去掉重复的 `sync_fault_matrix` 步骤；`AGENTS.md` 同步口径。门禁一接上即抓到 `search_index_guard` 台账漏登记 `dev_seed_api` 四组直写路径（生产代码已 `mark_dirty`，补齐台账即绿）；另以等价重构清掉 `generic_repo.rs` 两处 clippy 告警，使 `-D warnings` 可用。
+- **配置与文档**：`.gitignore` 补 `.env` / 私钥规则；修正 `AGENTS.md` 的 `fl_chart` 依赖声明、`docs/adr/0004` 的 Android debug 回落描述、`docs/07 §六` 与 `#114` 已完成状态的矛盾；`docs/08` 首次发布清单补 manifest 端点护栏校验步骤。
+- **验证**：vitest 788 绿、`pnpm typecheck` 绿、`pnpm build` 绿、Playwright 冒烟 85/85 绿（20 spec）、`flutter analyze` 零问题、全量 `flutter test` 1314 绿、core lib 970 绿（首次全量的 166 个 `PermissionDenied` 是 `%TEMP%` 对 cargo 子进程拒写的环境性假红，重定向后消失）、集成测试目标全绿、`cargo clippy -D warnings` 绿、`bump:check` / 无界审计 / 双端桥门禁全绿。`release` 的 `dry_run` 预演属远端 Actions 动作、本地不执行，由 `release-workflow` 静态护栏与 `docs/08` 清单第 3 步覆盖 manifest 端点。
+- **刻意保留**：`csp: null`、`usesCleartextTraffic`、移动端空 catch、AAD 渐进绑定、v1 备份 200k、桌面壳 clippy/rustfmt 债——分别需要真机验证、产品决策或牵连备份格式，不在本批范围。
+
 ### 变更：发版流程补「已发布更新日志事后纠偏」例外口径（2026-11-11）
 
 - **背景**：上一条应用内 `0.1.0` 日志按当前代码重写是用户显式要求的内容纠偏，不是发版动作；原 `docs/08` §3.2 只写「按 tag 边界提炼、不改历史段落」，会被读成版本漂移。

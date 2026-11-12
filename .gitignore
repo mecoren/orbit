@@ -17,6 +17,15 @@ apps/desktop/src-tauri/gen/
 *.sqlite-shm
 *.sqlite-wal
 
+# 密钥 / 环境文件（发版流程会生成 Tauri 私钥、Android keystore 与本地环境配置）
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.mobileprovision
+
 # 日志与临时文件
 *.log
 *.pid
