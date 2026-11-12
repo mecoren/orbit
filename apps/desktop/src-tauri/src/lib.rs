@@ -40,25 +40,89 @@ impl AppState {
     }
 }
 
-/// 探测日志目录是否可写（决定 log 插件是否挂 LogDir 目标）
+/// 日志目录（与 Tauri 的 `app_log_dir()` 同口径）
 ///
-/// 路径口径与 Tauri 的 `app_log_dir()` 一致：macOS 取 `~/Library/Logs/<bundle identifier>`，
-/// 其余平台取 `data_local_dir()/<bundle identifier>/logs`。注意这里用的是**发布标识**
+/// macOS 取 `~/Library/Logs/<bundle identifier>`，其余平台取
+/// `data_local_dir()/<bundle identifier>/logs`。注意这里用的是**发布标识**
 /// `cn.wait.orbit`：dev 构建的库虽落在 `.dev` 目录，日志仍写发布目录
 /// （Tauri 只认 tauri.conf.json 的 identifier）。
+fn log_dir() -> Option<std::path::PathBuf> {
+    #[cfg(target_os = "macos")]
+    {
+        dirs::home_dir().map(|home| {
+            home.join("Library/Logs")
+                .join(commands::data_dir::APP_IDENTIFIER)
+        })
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        dirs::data_local_dir()
+            .map(|base| base.join(commands::data_dir::APP_IDENTIFIER).join("logs"))
+    }
+}
+
+/// 追加一条崩溃记录到 `{log_dir}/crash.log`（PRIVACY.md 承诺的本地崩溃留痕）
+///
+/// 有界写入：超过 1MB 即整体重建，避免异常循环把磁盘写满。
+/// 本函数在 panic hook 内调用，**任何一步失败都只能放弃**（不能再 panic）。
+fn append_crash_log(message: &str) {
+    let Some(dir) = log_dir() else {
+        return;
+    };
+    if std::fs::create_dir_all(&dir).is_err() {
+        return;
+    }
+    let path = dir.join("crash.log");
+    let too_large = std::fs::metadata(&path)
+        .map(|m| m.len() > 1_000_000)
+        .unwrap_or(false);
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let entry = format!("=== {ts} ===\n{message}\n\n");
+    if too_large {
+        let _ = std::fs::write(&path, &entry);
+    } else if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+    {
+        use std::io::Write as _;
+        let _ = f.write_all(entry.as_bytes());
+    }
+}
+
+/// 安装 panic hook：进程因 `panic = "abort"` 直接退出前，把现场落到 `crash.log`
+///
+/// 口径（PRIVACY.md §三）：**只写本机，不上报**。没有它，abort 型崩溃在用户侧
+/// 表现为「窗口突然消失」，连一句可反馈的信息都拿不到。
+fn install_crash_hook() {
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let location = info
+            .location()
+            .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
+            .unwrap_or_else(|| "<unknown>".to_string());
+        let payload = info
+            .payload()
+            .downcast_ref::<&str>()
+            .map(|s| (*s).to_string())
+            .or_else(|| info.payload().downcast_ref::<String>().cloned())
+            .unwrap_or_else(|| "<non-string panic payload>".to_string());
+        append_crash_log(&format!("[panic] {location}\n{payload}"));
+        default_hook(info);
+    }));
+}
+
+/// 探测日志目录是否可写（决定 log 插件是否挂 LogDir 目标）
 ///
 /// 探测方式 = 按插件自身的方式建目录 + 追加打开 `app_log.log`
 /// （插件用 `dir.join(file_name).with_extension("log")`），任一步失败即判不可写。
 /// 动因：tauri-plugin-log 的 LogDir 目标初始化失败会让整个 `Builder::build()`
 /// 返回 Err，只读 AppData（企业策略 / 受限沙箱 / 磁盘满）下日志旁路会把启动带崩。
 fn log_dir_writable() -> bool {
-    #[cfg(target_os = "macos")]
-    let dir = dirs::home_dir()
-        .map(|home| home.join("Library/Logs").join(commands::data_dir::APP_IDENTIFIER));
-    #[cfg(not(target_os = "macos"))]
-    let dir = dirs::data_local_dir()
-        .map(|base| base.join(commands::data_dir::APP_IDENTIFIER).join("logs"));
-    let Some(dir) = dir else {
+    let Some(dir) = log_dir() else {
         return false;
     };
     if !dir.exists() && std::fs::create_dir_all(&dir).is_err() {
@@ -98,6 +162,10 @@ pub(crate) fn window_state_flags() -> tauri_plugin_window_state::StateFlags {
 // 移动端已拆分为独立 Flutter 应用（apps/mobile），本壳仅服务桌面，
 // 不再声明 tauri::mobile_entry_point。
 pub fn run() {
+    // 崩溃留痕先于一切：builder 失败、守护线程 panic 都要在 abort 前落到
+    // crash.log（PRIVACY.md §三「崩溃信息仅落本地 logs/crash.log」的实现点）。
+    install_crash_hook();
+
     // WebView2 内存参数（2026-09-12 F5/M3，Windows）：
     // - --disk-cache-size=52428800：磁盘缓存 50MB 封顶，防附件/图片
     //   预览撑大 cache 目录。
@@ -213,8 +281,9 @@ pub fn run() {
             // （log_dir_writable）仍保留——不可写时优雅退化为仅 stdout，
             // 不打错误行。
             if let Err(e) = _app.handle().plugin({
-                let mut targets =
-                    vec![tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout)];
+                let mut targets = vec![tauri_plugin_log::Target::new(
+                    tauri_plugin_log::TargetKind::Stdout,
+                )];
                 if log_dir_writable() {
                     targets.push(tauri_plugin_log::Target::new(
                         tauri_plugin_log::TargetKind::LogDir {
@@ -225,6 +294,11 @@ pub fn run() {
                 tauri_plugin_log::Builder::new()
                     .targets(targets)
                     .level(log::LevelFilter::Info)
+                    // 插件默认 40KB + KeepOne，一次同步失败就能把窗口刷掉；
+                    // 4MB × 保留 5 份既够排障，也仍然有界（不设 max_file_size
+                    // 等于把磁盘增长交给默认值，改口径时别只改一半）。
+                    .max_file_size(4_000_000)
+                    .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepSome(5))
                     .build()
             }) {
                 eprintln!("[log] 日志插件注册失败（不影响启动，仅无日志）: {e}");
@@ -577,7 +651,14 @@ pub fn run() {
             commands::startup_cmd::startup_launched_hidden,
         ])
         .build(tauri::generate_context!())
-        .expect("error while building tauri application")
+        // 不用 expect：builder 失败是「双击无反应」的经典形态，必须在退出前
+        // 留下 crash.log（2026-10-22 日志插件事故的同类窗口）。
+        .unwrap_or_else(|e| {
+            let msg = format!("[startup] Tauri Builder 构建失败: {e}");
+            eprintln!("{msg}");
+            append_crash_log(&msg);
+            std::process::exit(1);
+        })
         .run(|_app, event| {
             // 托盘驻留 + 窗口回收：最后一窗被销毁时 tauri 默认请求退出，
             // 须阻止（进程要留守护）；真退出走托盘 quit_app（mark_quitting
