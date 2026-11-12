@@ -353,8 +353,15 @@ jobs:
           linux-x86_64-deb|Orbit_${VER}_amd64.deb"
 
           declare -A ASSET_ID
+          # 枚举结果先落变量：进程替换 `< <(gh api ...)` 的退出码不会触发 set -e，
+          # 端点写错/鉴权失败会被静默读成「空资产表」，再误报成签名密钥不匹配。
+          # 列表端点是 /releases/{release_id}/assets；/releases/assets/{asset_id} 只取单个资产。
+          ASSET_LIST=$(gh api "${API}/releases/${RELEASE_ID}/assets" --paginate) || {
+            echo "::error::枚举 Release ${RELEASE_ID} 的资产失败——确认 Release 已创建且 token 有读权限"
+            exit 1
+          }
           while IFS=$'\t' read -r aid aname; do ASSET_ID["$aname"]="$aid"; done < <(
-            gh api "${API}/releases/assets/${RELEASE_ID}/assets" --paginate | jq -r '.[] | "\(.id)\t\(.name)"'
+            jq -r '.[] | "\(.id)\t\(.name)"' <<< "$ASSET_LIST"
           )
 
           # 幂等重跑回落源：上一轮发布已在收尾清理 *.sig 资产时，改从已发布的
