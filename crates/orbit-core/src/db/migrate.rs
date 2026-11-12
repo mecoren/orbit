@@ -150,6 +150,23 @@ pub fn finalize_encrypted_migration(db_path: &Path) -> CoreResult<()> {
     replace_db_file(&tmp_path, db_path)
 }
 
+/// 清扫上次迁移崩溃遗留的临时库文件（启动时在打开数据库之前调用）
+///
+/// `migrate_to_plaintext` 成功导出后到 `finalize_migration` 完成 rename 前，
+/// 进程一旦崩溃，`*.db.plain_tmp` 就是一份**整库明文副本**长期留在磁盘上
+/// （F80 只清理了导出失败路径）。正常迁移流程此时已完成 rename，故这里
+/// 无条件删除两个固定后缀不会误伤进行中的迁移；enc_tmp 是半成品，一并清除。
+pub fn cleanup_orphan_migration_tmp(db_path: &Path) -> CoreResult<()> {
+    for suffix in ["db.plain_tmp", "db.enc_tmp"] {
+        let path = db_path.with_extension(suffix);
+        if path.exists() {
+            std::fs::remove_file(&path)?;
+            log::warn!("[db] 已清除上次迁移遗留的临时库文件: {:?}", path);
+        }
+    }
+    Ok(())
+}
+
 /// 公共替换逻辑：移除旧 WAL/SHM 后用临时文件原子替换主库文件
 fn replace_db_file(tmp_path: &Path, db_path: &Path) -> CoreResult<()> {
     // 删除旧的 -wal/-shm 文件（与旧主库配套的 WAL 不适用于新文件）

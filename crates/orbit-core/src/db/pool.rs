@@ -41,6 +41,10 @@ const MAX_CONNECTIONS: u32 = 3;
 ///    直接对池执行只会命中第一条连接，加密库后续连接将因未解密读出密文）
 /// 4. 运行迁移脚本（migrations/ 目录）
 pub async fn init_pool(db_path: &Path, db_key: Option<&str>) -> CoreResult<SqlitePool> {
+    // 先清掉上次迁移崩溃遗留的明文/半成品临时库，再打开数据库（见 migrate.rs）。
+    // 放在最前面：加密库存在时旁边多一份整库明文副本，等于加密形同虚设。
+    crate::db::migrate::cleanup_orphan_migration_tmp(db_path)?;
+
     let url = format!("sqlite://{}?mode=rwc", db_path.display());
     let mut opts = SqliteConnectOptions::from_str(&url)?
         .create_if_missing(true)
@@ -80,6 +84,27 @@ pub async fn init_pool_unencrypted(db_path: &Path) -> CoreResult<SqlitePool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 迁移崩溃遗留的临时库必须在下次启动被清扫
+    ///
+    /// `migrate_to_plaintext` 成功导出后、finalize rename 前若进程崩溃，
+    /// `*.db.plain_tmp` 就是一份**整库明文副本**，会一直躺在加密库旁边。
+    #[tokio::test]
+    async fn orphan_migration_tmp_files_are_cleaned_on_startup() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = tmp.path().join("orbit.db");
+        let plain_tmp = tmp.path().join("orbit.db.plain_tmp");
+        let enc_tmp = tmp.path().join("orbit.db.enc_tmp");
+        std::fs::write(&plain_tmp, b"PLAINTEXT-LEAK").unwrap();
+        std::fs::write(&enc_tmp, b"half-written").unwrap();
+
+        let pool = init_pool_unencrypted(&db).await.unwrap();
+        pool.close().await;
+
+        assert!(!plain_tmp.exists(), "明文临时库残留等于加密库旁躺着明文");
+        assert!(!enc_tmp.exists(), "半成品加密临时库必须一并清除");
+        assert!(db.exists(), "正常库文件不得被误删");
+    }
 
     /// 每连接 PRAGMA 生效口径：并发取满池连接，逐条校验
     /// foreign_keys 与 cache_size（曾因 PRAGMA 只跑第一条连接潜伏未解密 bug）
