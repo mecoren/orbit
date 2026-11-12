@@ -17,6 +17,18 @@
 
 ## [Unreleased]
 
+### 修复：上线前代码收口 · 崩溃留痕 / 隐私边界 / 备份轮转 / 门禁补齐（2026-11-12）
+
+- **CI 恢复绿**：`trash_api` 复用 TTL 物理清理路径后，`search_index_guard` 台账仍记 3 处（实际 2 处）导致 `cargo test --workspace --tests` 红，CI `rust-core` 连续失败；台账按实际处数下调并写明收敛原因。新增 `desktop-shell` job（`cargo check --manifest-path apps/desktop/src-tauri`，带 Linux webkit2gtk 依赖）——壳层此前只在发版矩阵首次编译，改坏要等打 tag 才发现。
+- **崩溃留痕（兑现 PRIVACY 承诺）**：桌面 `run()` 安装 panic hook，`panic = "abort"` 退出前把位置与载荷追加到 `{app_log_dir}/crash.log`（1MB 上限自重建）；Builder 失败由 `.expect()` 改为 `unwrap_or_else` 写同款日志后退 1。移动端 `main.dart` 补 `FlutterError.onError` + `PlatformDispatcher.instance.onError`，落应用数据目录 `crash.log`，不上报远端。
+- **日志窗口可用**：`tauri-plugin-log` 从默认 40KB/KeepOne 改为 4MB/KeepSome(5)，一次同步失败仍可回溯。
+- **锁中毒不再 abort**：`crypto_cmd::PendingDbKey`、桌面提醒轮询、移动端提醒轮询的去重集合改 `unwrap_or_else(|p| p.into_inner())`；`panic = "abort"` 下原 `lock().unwrap()` 会把「少弹一条提醒」升级为整个进程消失。
+- **core 生产路径去 panic**：重复任务月推进的 `expect` / `last_day_of_month` 的 `unwrap` 改为越界回退（保持原日期 / 28 天）并 `log::warn!`；续传重试的 `set_len` 从静默吞错改为失败即中止（避免落盘半截错位文件）。
+- **备份目录有界**：新增 `MAX_AUTO_BACKUPS = 10` 与 `prune_backups`，自动备份（同步前 / 定时）按份数轮转；手动导出不参与裁剪。备份历史与轮转失败由静默改为 `log::warn!`。
+- **Android 隐私边界**：`allowBackup=false` + `dataExtractionRules` 全量排除（明文库、`sync_configs.credential`、小组件 SharedPreferences 不再进系统云备份 / `adb backup`）；`usesCleartextTraffic` 保留（局域网自建 WebDAV），改由两端同步设置页在保存 `http://` 端点时明确告警。`PRIVACY.md` 同步披露凭据列、系统备份关闭、明文 HTTP 风险，并修正 `.orfullsync` 扩展名与日志口径。
+- **桌面 CSP 收紧**：`tauri.conf.json` 的 `csp: null` 改为白名单策略（`script-src 'self'`、`style-src 'self' 'unsafe-inline'`、`connect-src ipc: http://ipc.localhost`、`img-src` 含 `asset:`/`blob:`/`data:`）。**需一次桌面冒烟确认** IPC 与附件预览未被拦（配置无自动化覆盖）。
+- 验证：`cargo check -p orbit-core --all-targets` / `orbit-flutter` / 桌面壳全绿；clippy `-D warnings` 绿；`search_index_guard`、`backup_repository`（14）、`full_sync_backup_api`（12）、`http_client`（14）、`todo_api`（63）定向绿；vitest 788 绿；移动端提醒推迟 31 例绿、`flutter analyze` 零问题；`pnpm typecheck` 绿。
+
 ### 修复：首发前代码缺陷收口 · 数据一致性与基线护栏（2026-11-12）
 
 - **清空回收站纳入同步守卫**：`trash_api.rs::purge_all_trashed_tasks` 改为复用 `purge_todo_tasks_before(pool, i64::MAX)`，与 TTL 同源判定「删除早于上次成功 push 才允许物理清」；此前清空会一次抹掉整批未上云墓碑，云端旧存活数据在 pull 时批量复活。子表集合式 DELETE / 独立 id-uuid 投影 / db-change 事件口径全部复用，返回值仍为删除数，被守卫跳过的墓碑待下次成功 push 后再清。新增两条回归用例；`ADR 0005` 的「手动 purge 无守卫」例外收窄到单任务彻底删除（§3.1/§3.2/§五同步）。
