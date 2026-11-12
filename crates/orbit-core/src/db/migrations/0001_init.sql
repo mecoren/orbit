@@ -9,7 +9,9 @@
 --       0005_task_duration / 0006_repeat_monthly_nth / 0007_subtask_parent /
 --       0008_project_review / 0009_search_pinyin / 0010_search_pinyin_state /
 --       0011_task_keyset_indexes / 0012_task_done_at_index 共 11 个增量文件已按
---       2026-10-27 决策全量并回本文件（均晚于 v0.1.1 tag，未随任何 release 发布）。
+--       2026-10-27 决策全量并回本文件（均晚于 v0.1.1 tag，未随任何 release 发布）；
+--       0002_task_start_sort_index（idx_todo_tasks_keyset_start）已按 2026-11-12
+--       决策并回本文件（同样晚于 v0.1.1 tag、未随任何 release 发布）。
 -- 内容：sync 基础设施 3 表 + todo 业务 11 表 + cfg 4 表 + 本地日志/附件/拼音
 --       索引 5 表 + 种子（收件箱/选项/拼音对账哨兵，选项用 category_key
 --       NOT EXISTS 幂等写法）+ uuid UNIQUE 索引治理段 + FTS5 全文索引段
@@ -233,6 +235,10 @@ CREATE INDEX IF NOT EXISTS idx_todo_tasks_keyset_created
 -- 截止时间档：无截止恒沉底（表达式索引）
 CREATE INDEX IF NOT EXISTS idx_todo_tasks_keyset_due
   ON todo_tasks(is_deleted, (due_date IS NULL), due_date, id);
+-- 开始时间档（原 0002_task_start_sort_index 并入，2026-11-12）：与截止档同构，
+-- 无开始恒沉底（表达式索引），升/降序共用一棵索引树（反方向可反向扫）。
+CREATE INDEX IF NOT EXISTS idx_todo_tasks_keyset_start
+  ON todo_tasks(is_deleted, (start_date IS NULL), start_date, id);
 -- Logbook（已完成列表）键集分页：done_at 为空的历史行沉底（表达式索引）；
 -- done 列放 is_deleted 之后——Logbook 只查完成态、其余列表只查未完成，两档
 -- 都能命中该索引前缀。

@@ -17,6 +17,19 @@
 
 ## [Unreleased]
 
+### 修复：首发前代码缺陷收口 · 数据一致性与基线护栏（2026-11-12）
+
+- **清空回收站纳入同步守卫**：`trash_api.rs::purge_all_trashed_tasks` 改为复用 `purge_todo_tasks_before(pool, i64::MAX)`，与 TTL 同源判定「删除早于上次成功 push 才允许物理清」；此前清空会一次抹掉整批未上云墓碑，云端旧存活数据在 pull 时批量复活。子表集合式 DELETE / 独立 id-uuid 投影 / db-change 事件口径全部复用，返回值仍为删除数，被守卫跳过的墓碑待下次成功 push 后再清。新增两条回归用例；`ADR 0005` 的「手动 purge 无守卫」例外收窄到单任务彻底删除（§3.1/§3.2/§五同步）。
+- **迁移基线冻结与可操作错误**：`db/pool.rs::init_pool` 对 `MigrateError::VersionMismatch` 返回「先备份当前库（含 -wal/-shm）→ 云同步 / 全量备份恢复 → 切勿直接删库」的中文指引，不再只抛 `migration 1 was previously applied but has been modified`；`tests/migration_incremental_upgrade.rs` 新增 `baseline_migration_checksum_is_frozen`，把 0001 字节 SHA-256 锁成常量（CI `cargo test --workspace --tests` 拦截误改基线），常量按 2026-11-12 并回 0002 后的基线定稿。本批未改 `0001_init.sql`，其头注「init_pool 无兜底」的旧描述以 `pool.rs` 实现为准。
+- **Android 必败加密入口**：`settings_screen.dart` 安全卡按 `defaultTargetPlatform` 门控——Android 明文库不再摆「开启加密（设置主密码）」（`sqlcipher_export` 在纯 SQLite 下必报 no such function，ADR 0001 §1.2），改为「本机加密暂不可用」只读说明；非 Android 入口不变。新增 `test/settings_encryption_test.dart` 两例锁住两端分支（debug 平台变量须在 test body 内复位，否则 `_verifyInvariants` 抢在 tearDown 前报错）；`ADR 0001 §七-③` 的「设置页只读设计」结论随本次复核更新。
+- **验证**：core lib 975 绿、`trash_api` 16 绿、`db::pool` 3 绿、迁移守护 8 绿、`cargo clippy --workspace --all-targets -- -D warnings` 绿；`flutter analyze` 零问题、全量 `flutter test` 1316 绿（含新增 2 例）。`%TEMP%` 权限假红按既有口径重定向后复跑。
+
+### 变更：未发布的 0002 增量迁移并回 0001 基线（2026-11-12）
+
+- `0002_task_start_sort_index.sql`（开始时间档键集分页索引 `idx_todo_tasks_keyset_start`，2026-10-30 引入）晚于 v0.1.1 tag、未随任何 release 发布，按「未发布可合并」档并回 `0001_init.sql` 的键集索引段并删除增量文件；schema 与「0001 + 0002」等效，`_sqlx_migrations` 从 2 条收敛为 1 条。
+- 代价仍是 version 1 校验和变化：已有本地库下次启动判 `VersionMismatch`，须删库重建 + 云同步 / `.orsync` 恢复（与 2026-10-27 全量并回同一处置）。
+- 同步口径：`0001` 头部来源清单、迁移守护测试新增索引回归、`docs/03 §二` 并回对照表与例外记录。
+
 ### 修复：首发前代码缺陷收口（2026-11-12）
 
 - **发布流水线**：`release.yml` 的 Release 资产枚举从不存在的 `releases/assets/{id}/assets` 改为 `releases/{id}/assets`；枚举结果先落变量并显式检查 `gh api` 退出码——原先放在进程替换 `< <(...)` 内，失败不会触发 `set -e`，会被读成「空资产表」再误报成签名密钥不匹配。首发时「上一轮 latest.json 回落签名」必然为空，故该错误必然导致空清单拒绝发布。新增 `apps/desktop/src/test/release-workflow.test.ts` 静态护栏（`dry_run` 不执行 manifest 作业，端点写错在预演里发现不了）。

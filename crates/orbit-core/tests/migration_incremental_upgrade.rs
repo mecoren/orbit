@@ -1,11 +1,34 @@
 //! 迁移守护：基线 schema 回归 + 增量口径（追加 NNNN 不伤老用户）。
 //!
 //! 约定见 03 文档 §二：0001 冻结，新增结构走 NNNN_xxx.sql（加列带 DEFAULT）。
-//! 2026-10-27 起 0002-0012 已全量并回 0001（均为 v0.1.0 后的未发布增量），
-//! 故现行基线本身就是完整 schema；本文件逐列回归这些结构，并用「模拟未来增量」
-//! 用例守住 ALTER 加列不丢老行 / 默认值回填的口径。
+//! 2026-10-27 起 0002-0012、2026-11-12 起 0002_task_start_sort_index 均已
+//! 全量并回 0001（均为未随任何 release 发布的增量），故现行基线本身就是完整
+//! schema；本文件逐列/逐索引回归这些结构，并用「模拟未来增量」用例守住
+//! ALTER 加列不丢老行 / 默认值回填的口径。
 
+use orbit_core::crypto::sha256_hex;
 use sqlx::SqlitePool;
+
+/// 0001 基线冻结护栏：首发前一次性定型
+///
+/// 「未发布的多文件可并回 0001」只在零存量用户窗口成立；发布后任何一次改写
+/// （哪怕只改注释）都会让老库 `_sqlx_migrations` 的 version 1 校验和对不上，
+/// 启动即 VersionMismatch（现由 `init_pool` 给出备份/恢复指引）。本用例把基线
+/// 字节的 SHA-256 锁成常量：动基线必须显式改这里，让 review 看得见；新增结构
+/// 一律追加 NNNN_xxx.sql。更新常量的唯一合法时机是首发前的基线定型，之后永不改。
+/// 2026-11-12 更新即属该窗口：未随任何 release 发布的 0002_task_start_sort_index
+/// 并回基线（单文件基线重新定型），常量随之重算。
+#[test]
+fn baseline_migration_checksum_is_frozen() {
+    const FROZEN_SHA256: &str =
+        "74f5f13daa782fe80cd9b6f35392d29a51c24452165cd51a55bdf8164cb392ed";
+    let sql = include_str!("../src/db/migrations/0001_init.sql");
+    assert_eq!(
+        sha256_hex(sql.as_bytes()),
+        FROZEN_SHA256,
+        "0001_init.sql 是冻结基线：结构变更请追加 NNNN_xxx.sql，不要改本文件"
+    );
+}
 
 /// 新鲜库跑全链：schema 版本 == 迁移目录里的最大编号文件
 /// （断言由目录推导，新增 NNNN_xxx.sql 时无需手改本测试——只增文件不改断言）
@@ -273,4 +296,22 @@ async fn task_duration_minutes_backfills_null() {
         .await
         .unwrap();
     assert_eq!(n, 2);
+}
+
+/// 基线 schema：开始时间档键集分页索引已并入 0001（原未发布 0002 增量）
+#[tokio::test]
+async fn task_start_keyset_index_in_baseline() {
+    let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+    sqlx::migrate!("./src/db/migrations")
+        .run(&pool)
+        .await
+        .unwrap();
+
+    let (count,): (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_todo_tasks_keyset_start'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(count, 1, "开始时间档键集分页索引应在 0001 基线内建好");
 }
