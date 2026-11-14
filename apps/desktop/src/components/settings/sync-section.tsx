@@ -549,7 +549,12 @@ function SyncPasswordCard() {
   };
 
   const handleLock = async () => {
-    await syncCryptoLock().catch(() => {});
+    // 锁定失败不能静默：用户会以为 Data Key 已清出内存，实际仍可解密同步内容。
+    try {
+      await syncCryptoLock();
+    } catch (err) {
+      toast.error(`锁定同步密码失败：${errMsg(err)}`);
+    }
     refresh();
   };
 
@@ -989,7 +994,12 @@ function SyncHistoryCard() {
     setLoading(true);
     cloudSyncHistory(nextScope, 50)
       .then(setEntries)
-      .catch(() => setEntries([]))
+      .catch((err) => {
+        // 保留空列表以免面板卡在加载态，但错误必须可见：把「读取失败」
+        // 伪装成「没有同步记录」会让用户误判同步是否真的跑过。
+        toast.error(`读取同步历史失败：${errMsg(err)}`);
+        setEntries([]);
+      })
       .finally(() => setLoading(false));
   };
 
@@ -1699,13 +1709,20 @@ function BackupCard() {
   const loadHistory = () => {
     fullBackupListLocal()
       .then(setHistory)
-      .catch(() => setHistory([]));
+      .catch((err) => {
+        // 空列表 ≠ 没有备份：恢复/回滚决策依赖这份列表，读取失败必须明示。
+        toast.error(`读取本地备份历史失败：${errMsg(err)}`);
+        setHistory([]);
+      });
   };
 
   const loadCloud = () => {
     fullBackupListCloud()
       .then(setCloudList)
-      .catch(() => setCloudList([]));
+      .catch((err) => {
+        toast.error(`读取云端备份列表失败：${errMsg(err)}`);
+        setCloudList([]);
+      });
   };
 
   // 首次展开时懒加载；导出成功后由 handleExport 调 loadHistory 刷新

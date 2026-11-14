@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "桌面端默认权限：核心 Tauri API（自绘标题栏窗口控制/事件）与各插件能力",
+  "description": "桌面端默认权限：核心 Tauri API（自绘标题栏窗口控制/事件）与各插件能力。fs 权限刻意不配静态 allow scope：前端所有 read/write/stat 路径均来自 dialog 的 open()/save()，Tauri 2 会把用户选中的路径动态加入 fs scope（会话级，重启清空）；静态放通 $HOME 等宽泛 scope 反而扩大攻击面。若新增不经 dialog 的 fs 路径，必须显式补 fs:scope allow 并做真机冒烟。",
   "windows": ["main"],
   "permissions": [
     "core:default",
