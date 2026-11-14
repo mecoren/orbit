@@ -438,14 +438,36 @@ pub async fn apply_day_plan(
 /// cfg_kv 键：排程偏好（JSON 序列化的 DayPlanPrefs）
 const KV_PREFS: &str = "day_plan_prefs";
 
-/// 读取排程偏好（缺键/非法 JSON 逐次回落默认——损坏的偏好不阻断预览）
+/// cfg_kv 键：排程偏好损坏时的原始值备份（本机不同步，仅供人工排查/恢复）
+const KV_PREFS_CORRUPT: &str = "day_plan_prefs.corrupt";
+
+/// 读取排程偏好（缺键回落默认；非法 JSON 备份原始值后回落默认）
+///
+/// 非法 JSON 不阻断预览，但 `set_day_plan_prefs` 会把 UI 回显值整键覆盖，
+/// 损坏内容将永久消失。故首次读到损坏值时先原样备份到
+/// `day_plan_prefs.corrupt`（覆盖式，只留最近一次），再回落默认。
 pub async fn get_day_plan_prefs(pool: &SqlitePool) -> CoreResult<DayPlanPrefs> {
     let row: Option<(String,)> = sqlx::query_as("SELECT value FROM cfg_kv WHERE key = ?1")
         .bind(KV_PREFS)
         .fetch_optional(pool)
         .await?;
     match row.map(|(v,)| v) {
-        Some(raw) => Ok(serde_json::from_str(&raw).unwrap_or_default()),
+        Some(raw) => match serde_json::from_str::<DayPlanPrefs>(&raw) {
+            Ok(p) => Ok(p),
+            Err(_) => {
+                // 备份失败不影响读取（偏好本就是本机可重建数据）
+                let _ = sqlx::query(
+                    "INSERT INTO cfg_kv (key, value, updated_at) VALUES (?1, ?2, ?3) \
+                     ON CONFLICT(key) DO UPDATE SET value = ?2, updated_at = ?3",
+                )
+                .bind(KV_PREFS_CORRUPT)
+                .bind(&raw)
+                .bind(clock::next_ms())
+                .execute(pool)
+                .await;
+                Ok(DayPlanPrefs::default())
+            }
+        },
         None => Ok(DayPlanPrefs::default()),
     }
 }
@@ -946,6 +968,31 @@ mod api_tests {
         let saved = set_day_plan_prefs(&pool, &input).await.unwrap();
         assert_eq!(saved, input);
         assert_eq!(get_day_plan_prefs(&pool).await.unwrap(), input);
+    }
+
+    #[tokio::test]
+    async fn prefs_corrupt_json_backs_up_raw_before_fallback() {
+        let pool = setup_db().await;
+        sqlx::query("INSERT INTO cfg_kv (key, value, updated_at) VALUES (?1, ?2, 1)")
+            .bind(KV_PREFS)
+            .bind("{\"work_start_minute\": ")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        // 损坏值 → 回落默认，但原始串必须先备份（否则 UI 回显后保存会覆盖它）
+        let p = get_day_plan_prefs(&pool).await.unwrap();
+        assert_eq!(p.work_start_minute, 9 * 60);
+        let backup: Option<(String,)> =
+            sqlx::query_as("SELECT value FROM cfg_kv WHERE key = ?1")
+                .bind(KV_PREFS_CORRUPT)
+                .fetch_optional(&pool)
+                .await
+                .unwrap();
+        assert_eq!(
+            backup.map(|(v,)| v).as_deref(),
+            Some("{\"work_start_minute\": ")
+        );
     }
 
     #[tokio::test]

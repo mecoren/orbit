@@ -104,13 +104,21 @@ export function fmtValue(key: string, v: unknown): string {
   return s.length > 120 ? `${s.slice(0, 120)}…` : s;
 }
 
-/** 解析载荷为字段表（解析失败时回落为空对象，不吞掉整条记录） */
-export function parsePayload(raw: string): Record<string, unknown> {
+/**
+ * 解析载荷为字段表；**非法 JSON / 非对象返回 null**。
+ *
+ * 旧实现回退 `{}` 并自称「不吞掉整条记录」，但 `diffFields` 拿到两个空对象
+ * 就产出空差异表——用户在看不到任何字段差异的情况下点「恢复」，可能把
+ * 错误版本重新写回。现在由渲染层显示「载荷损坏」并禁用展开与恢复。
+ */
+export function parsePayload(raw: string): Record<string, unknown> | null {
   try {
-    const v = JSON.parse(raw) as unknown;
-    return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+    const v: unknown = JSON.parse(raw);
+    return v && typeof v === "object" && !Array.isArray(v)
+      ? (v as Record<string, unknown>)
+      : null;
   } catch {
-    return {};
+    return null;
   }
 }
 
@@ -232,8 +240,10 @@ export function SyncConflictSection() {
           rows.map((r, i) => {
             const loser = parsePayload(r.loser_payload);
             const winner = parsePayload(r.winner_payload);
-            const diffs = diffFields(loser, winner);
-            const open = expanded === r.id;
+            const payloadBroken = loser === null || winner === null;
+            const diffs =
+              loser !== null && winner !== null ? diffFields(loser, winner) : [];
+            const open = expanded === r.id && !payloadBroken;
             return (
               <div
                 key={r.id}
@@ -259,21 +269,31 @@ export function SyncConflictSection() {
                       {r.resolution === "restored" && " · 已恢复"}
                       {r.resolution === "dismissed" && " · 已忽略"}
                     </div>
+                    {payloadBroken && (
+                      <div className="mt-1 text-xs text-destructive">
+                        冲突载荷解析失败，无法比较字段差异或恢复；请保留此记录并联系支持。
+                      </div>
+                    )}
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
                     <Button
                       size="sm"
                       variant="ghost"
+                      disabled={payloadBroken}
                       onClick={() => setExpanded(open ? null : r.id)}
                     >
-                      {open ? "收起" : `查看差异（${diffs.length}）`}
+                      {payloadBroken
+                        ? "载荷损坏"
+                        : open
+                          ? "收起"
+                          : `查看差异（${diffs.length}）`}
                     </Button>
                     {r.resolution === "unresolved" && (
                       <>
                         <Button
                           size="sm"
                           variant="outline"
-                          disabled={restoreMutation.isPending}
+                          disabled={restoreMutation.isPending || payloadBroken}
                           onClick={() => setRestoreTarget(r)}
                         >
                           <RotateCcw className="mr-1 size-3.5" />

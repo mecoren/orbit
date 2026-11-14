@@ -2,8 +2,9 @@
  * 冲突记录分区纯函数测试（03 文档 §八 遗留项）
  *
  * 面板的「查看差异」是用户判断该不该点「恢复」的唯一依据，因此载荷解析、
- * 差异计算与值渲染三个纯函数必须稳定：解析失败要回落空对象（不丢整条记录）、
- * 元字段不得混进业务差异、时间戳列要按本地时间可读化。
+ * 差异计算与值渲染三个纯函数必须稳定：解析失败要返回 null（渲染层据此显示
+ * 「载荷损坏」并禁用展开/恢复，避免用户在看不到内容时做决策）、元字段不得
+ * 混进业务差异、时间戳列要按本地时间可读化。
  */
 import { describe, expect, it } from "vitest";
 
@@ -17,10 +18,13 @@ describe("parsePayload", () => {
     });
   });
 
-  it("非法/非对象载荷回落空对象（不吞整条记录）", () => {
-    expect(parsePayload("not-json")).toEqual({});
-    expect(parsePayload("[1,2]")).toEqual({});
-    expect(parsePayload('"str"')).toEqual({});
+  it("非法/非对象载荷返回 null（渲染层显示载荷损坏并禁用决策）", () => {
+    // 返回 {} 会让差异表变空，用户在看不到内容的情况下选胜方；null 才能
+    // 让渲染层区分「合法空对象载荷」与「解析失败」。
+    expect(parsePayload("not-json")).toBeNull();
+    expect(parsePayload("[1,2]")).toBeNull();
+    expect(parsePayload('"str"')).toBeNull();
+    expect(parsePayload("{}")).toEqual({});
   });
 });
 

@@ -255,8 +255,10 @@ class _SyncConflictsPageState extends ConsumerState<SyncConflictsPage> {
     final colors = AppColors.ofContext(context);
     final loser = _parse(r.loserPayload);
     final winner = _parse(r.winnerPayload);
-    final diffs = _diff(loser, winner);
-    final open = _expanded == r.id;
+    final payloadBroken = loser == null || winner == null;
+    // payloadBroken 为 false 时 Flow 分析已把两侧 promote 成非空，无需 `!`
+    final diffs = payloadBroken ? <_FieldDiff>[] : _diff(loser, winner);
+    final open = _expanded == r.id && !payloadBroken;
 
     return Padding(
       padding: const EdgeInsets.only(top: AppDimens.space8),
@@ -302,18 +304,33 @@ class _SyncConflictsPageState extends ConsumerState<SyncConflictsPage> {
               '${_fmtWhen(r.createdAt)}',
               style: TextStyle(fontSize: 11, color: colors.secondaryText),
             ),
+            if (payloadBroken)
+              Padding(
+                padding: const EdgeInsets.only(top: AppDimens.space4),
+                child: Text(
+                  '冲突载荷解析失败，无法比较字段差异或恢复；请保留此记录并联系支持。',
+                  style: TextStyle(fontSize: 11, color: colors.warning),
+                ),
+              ),
             const SizedBox(height: AppDimens.space8),
             Row(
               children: [
                 OrbitButton.text(
-                  onPressed: () =>
-                      setState(() => _expanded = open ? null : r.id),
-                  child: Text(open ? '收起' : '查看差异（${diffs.length}）'),
+                  onPressed: payloadBroken
+                      ? null
+                      : () => setState(() => _expanded = open ? null : r.id),
+                  child: Text(
+                    payloadBroken
+                        ? '载荷损坏'
+                        : (open ? '收起' : '查看差异（${diffs.length}）'),
+                  ),
                 ),
                 const Spacer(),
                 if (r.resolution == 'unresolved') ...[
                   OrbitButton.outline(
-                    onPressed: _busy ? null : () => _restore(r),
+                    onPressed: (_busy || payloadBroken)
+                        ? null
+                        : () => _restore(r),
                     child: const Text('恢复'),
                   ),
                   const SizedBox(width: AppDimens.space8),
@@ -451,12 +468,17 @@ class _SyncConflictsPageState extends ConsumerState<SyncConflictsPage> {
     return s.length > 120 ? '${s.substring(0, 120)}…' : s;
   }
 
-  static Map<String, Object?> _parse(String raw) {
+  /// 非法 JSON / 非对象返回 null。
+  ///
+  /// 旧实现回退空 Map，`_diff` 拿到两个空 Map 就产出空差异表——用户在看不到
+  /// 任何字段差异时点「恢复」，可能把错误版本重新写回。现在渲染层显示
+  /// 「载荷损坏」并禁用展开与恢复。
+  static Map<String, Object?>? _parse(String raw) {
     try {
       final v = jsonDecode(raw);
-      return v is Map<String, Object?> ? v : <String, Object?>{};
+      return v is Map<String, Object?> ? v : null;
     } catch (_) {
-      return <String, Object?>{};
+      return null;
     }
   }
 

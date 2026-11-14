@@ -44,6 +44,7 @@ import {
   type TaskStatusFilterSet,
 } from "../shared/task-filters";
 import { applySavedFilter } from "../shared/saved-filter";
+import { parseConditions } from "../shared/saved-filter-builder";
 import { nextViewMode, type ViewMode } from "../shared/view-mode";
 import {
   savedFiltersList,
@@ -694,12 +695,37 @@ export default function TaskPanel() {
         ? (projects.find((p) => p.id === projectId)?.title ?? "项目")
         : (activeQuickDef?.label ?? "全部任务");
 
+  // 条件损坏可见化：`applySavedFilter` 与分页下推（savedConditions）在 JSON
+  // 解析失败时都选择「忽略条件」，列表看起来完全正常，实际是全量数据。
+  // 只在标题旁给一个常驻徽标，避免用户以为筛选生效。
+  const savedFilterCorrupted = useMemo(
+    () =>
+      activeSavedFilter ? parseConditions(activeSavedFilter.conditions) === null : false,
+    [activeSavedFilter],
+  );
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* 工具栏（relative：底缘挂完成进度线，与 1px 描边同宽通栏） */}
       <div className="relative flex items-center justify-between gap-3 border-b px-4 py-3">
         <div className="flex items-baseline gap-2">
           <h1 className="text-lg font-semibold">{title}</h1>
+          {savedFilterCorrupted && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  data-testid="saved-filter-corrupted"
+                  className="inline-flex items-center gap-1 rounded border border-destructive/50 px-1.5 py-0.5 text-xs font-normal text-destructive"
+                >
+                  <AlertTriangle className="size-3.5" />
+                  条件损坏
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                筛选条件无法解析，当前列表未按条件过滤；请打开筛选器编辑后另存以修复
+              </TooltipContent>
+            </Tooltip>
+          )}
           {/* 计数与分页进度合并成一个紧凑指示：未加载完时报「已加载 X / Y」
               （悬停补滚动口径），末页到账或全量通道回落为纯计数 */}
           {listLoadHint ? (
