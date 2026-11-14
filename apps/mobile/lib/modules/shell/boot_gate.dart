@@ -195,11 +195,15 @@ class _BootGateState extends ConsumerState<BootGate>
     _goReady();
   }
 
-  /// 设备 ID 接线（对齐桌面 ensureDeviceId）：DB 初始化后必须
-  /// dbSetDeviceId 写入 Rust OnceCell——generic_repo 的 device_id
-  /// 自动填充与同步引擎 validate_config 均依赖此值，缺失则云同步在
-  /// 移动端必然报「device_id 不能为空」。持久化在应用支持目录
-  /// device_id.txt（清库不清除）；失败静默不阻断启动（桌面同口径）。
+  /// 设备 ID 接线：DB 初始化后必须 dbSetDeviceId 写入 Rust OnceCell——
+  /// generic_repo 的 device_id 自动填充与同步引擎 validate_config 均依赖此值。
+  /// 持久化在应用支持目录 device_id.txt（清库不清除）。
+  ///
+  /// ⚠️ 与桌面**不同口径**：桌面 App.tsx 的 ensureDeviceId 是 await 的启动
+  /// 门控，写入失败直接上抛成可见错误并回读断言；这里刻意不 await（见下），
+  /// 失败只能留日志，因此 Rust 桥层 `current_device_id()` 在同步执行入口把空
+  /// device_id 变成「请重启应用」的可见错误，避免空串静默跳过 Lamport
+  /// 版本号写入。若日后把接线改成可 await，请一并对齐桌面的启动门控。
   ///
   /// 不 await：path_provider 的 platform channel 在 fake_async 测试
   /// zone 里永不 resolve（探针实证）——await 会把 bootstrap 挂死，
@@ -210,10 +214,10 @@ class _BootGateState extends ConsumerState<BootGate>
       try {
         await bridge.dbSetDeviceId(id);
       } catch (e) {
-        debugPrint('[BootGate] dbSetDeviceId failed: $e');
+        debugPrint('[BootGate] dbSetDeviceId failed: $e；同步入口将提示重启应用');
       }
     }).catchError((e) {
-      debugPrint('[BootGate] device id setup failed: $e');
+      debugPrint('[BootGate] device id setup failed: $e；同步入口将提示重启应用');
     });
   }
 

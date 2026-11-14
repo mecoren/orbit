@@ -203,6 +203,26 @@ async fn active_config() -> Result<Option<SyncConfigRecord>, String> {
         .map_err(|e| format!("[database] 读取同步配置失败: {e}"))
 }
 
+/// 同步执行入口的 device_id 前置校验。
+///
+/// `db_set_device_id` 写的是进程级 OnceCell；启动期写入失败时它是空的。
+/// 过去这里 `unwrap_or_default()` 回落空串：`generic_repo` 会跳过 Lamport
+/// 版本号写入，且深层 `validate_config` 只抛一句「device_id 不能为空」，
+/// 用户无从区分「启动接线失败」与「配置填错」。改成显式、可操作的错误。
+///
+/// 只用于无副作用的同步执行入口（cloud_sync_now / cloud_sync_force）：
+/// rekey / 改密 / 升级 v2 这几条路径在本机密钥已变更后才取 device_id，
+/// 提前 `?` 会跳过既有的失败补偿文案，故仍沿用原口径。
+fn current_device_id() -> Result<String, String> {
+    context::get_device_id()
+        .map(|id| id.to_string())
+        .map_err(|_| {
+            "[config] 设备标识未初始化（启动期写入失败），请重启应用后再同步；\
+             此状态下本地改动可能缺少版本号"
+                .to_string()
+        })
+}
+
 /// 将 DB 记录转换为引擎配置（照抄桌面 sync_runtime::engine_config_of_record）
 ///
 /// 列复用约定（沿袭 wait-home 移动端）：WebDAV 用户名 / S3 access_key 存
@@ -546,7 +566,7 @@ async fn run_sync(origin: SyncOrigin, action: SyncAction) -> Result<String, Stri
     let engine = runtime_engine()?;
     let base_dir = with_state(|s| Ok(s.base_dir.clone()))?;
     let attachments = attachments_dir(&base_dir);
-    let device_id = context::get_device_id().unwrap_or_default().to_string();
+    let device_id = current_device_id()?;
 
     let result = match action {
         SyncAction::Now => {
@@ -606,7 +626,7 @@ pub async fn cloud_sync_force(origin: String, wait_for_idle_ms: u64) -> Result<S
     let engine = runtime_engine()?;
     let base_dir = with_state(|s| Ok(s.base_dir.clone()))?;
     let attachments = attachments_dir(&base_dir);
-    let device_id = context::get_device_id().unwrap_or_default().to_string();
+    let device_id = current_device_id()?;
 
     let result = cloud_sync_api::force_sync(
         &engine,
