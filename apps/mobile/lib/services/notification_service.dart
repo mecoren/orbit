@@ -254,7 +254,10 @@ class NotificationService {
     await _ensureSelfContained();
     try {
       await _plugin.cancel(id: alarmIdFor(taskId));
-    } catch (_) {}
+    } catch (e) {
+      // 原通知可能残留；后台 isolate 无法弹 UI，只留日志（不打断确认流程）
+      debugPrint('[NotificationService] 完成动作取消原通知失败: $e');
+    }
     try {
       await _plugin.show(
         id: pendingCompleteIdFor(taskId),
@@ -262,7 +265,9 @@ class NotificationService {
         body: '$title 已标记完成，打开应用后生效',
         notificationDetails: _quietDetails(),
       );
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[NotificationService] 完成动作确认横幅展示失败: $e');
+    }
   }
 
   /// payload 第三段起的任务标题（与推迟解析同容错：缺失回退占位）
@@ -352,7 +357,10 @@ class NotificationService {
           await android?.requestExactAlarmsPermission();
         }
       }
-    } catch (_) {
+    } catch (e) {
+      // 初始化失败 _granted=false → 所有提醒退 warning toast 兜底。
+      // 不记日志的话用户只会觉得「通知不弹」，完全无从定位。
+      debugPrint('[NotificationService] 初始化失败，通知降级为应用内提示: $e');
       _granted = false;
     }
   }
@@ -416,12 +424,17 @@ class NotificationService {
         final pendingAt = parts.length > 1 ? int.tryParse(parts[1]) : null;
         if (pendingAt != null && pendingAt > remindAt) return true;
       }
-    } catch (_) {}
+    } catch (e) {
+      // 保守返回 false（宁可多弹一次正常提醒，也不吞掉它）；留日志区分
+      // 「确实没被推迟」与「pending 列表读不到」。
+      debugPrint('[NotificationService] pending 列表不可读，按未推迟处理: $e');
+    }
     return false;
   }
 
   /// 系统侧闹钟域 pending（启动补齐用）：解析 payload 得 taskId|remindAt，
-  /// 跳过确认/完成通知域（id ≥ 1e9）。读取失败返回空表（保守：不落地）。
+  /// 跳过确认/完成通知域（id ≥ 1e9）。读取失败返回空表（保守：不落地），
+  /// 但必须留日志——否则「系统里明明有推迟闹钟，启动补齐却没落地」无从排查。
   Future<List<PendingAlarm>> pendingAlarms() async {
     final out = <PendingAlarm>[];
     try {
@@ -435,7 +448,9 @@ class NotificationService {
         if (taskId == null || at == null) continue;
         out.add(PendingAlarm(taskId: taskId, remindAt: at));
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[NotificationService] pendingAlarms 读取失败，启动补齐跳过: $e');
+    }
     return out;
   }
 
@@ -444,10 +459,13 @@ class NotificationService {
   /// 必要性：「后台推迟产物」与「用户删提醒后的残留闹钟」在系统侧无法区分
   /// （都是只有 payload、没有 DB 行）；不主动取消，下次重排的孤儿补齐会把
   /// 用户刚删掉的提醒又建回来（planSnoozeLanding 的 activeTaskIds 规则）。
+  /// 取消失败会留下僵尸闹钟（用户删了提醒还会响），因此必须留日志。
   Future<void> cancelAlarmFor(int taskId) async {
     try {
       await _plugin.cancel(id: alarmIdFor(taskId));
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[NotificationService] cancelAlarmFor($taskId) 失败，可能残留僵尸闹钟: $e');
+    }
   }
 
   // ── 通道 2：后台闹钟全量重排 ──

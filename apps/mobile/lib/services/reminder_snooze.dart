@@ -210,7 +210,7 @@ class SnoozeSpool {
   static File get file =>
       File('${Directory.systemTemp.path}/orbit_snooze_pending.jsonl');
 
-  /// 追加一条推迟记录（失败静默：绝不阻断推迟本身）
+  /// 追加一条推迟记录（失败只记日志：绝不阻断推迟本身；后台 isolate 无法弹 UI）
   static Future<void> append({
     required int taskId,
     required int fromRemindAt,
@@ -226,7 +226,11 @@ class SnoozeSpool {
         mode: FileMode.append,
         flush: true,
       );
-    } catch (_) {}
+    } catch (e) {
+      // 推迟意图会丢失（下次启动不会补写），但后台 isolate 无法弹 UI，
+      // 也不能让写盘失败反过来打断通知动作；只留日志供排障。
+      debugPrint('[SnoozeSpool] append 推迟意图落盘失败: $e');
+    }
   }
 
   /// 取出全部记录并清空文件（脏行忽略；失败返回已读到的部分）
@@ -245,9 +249,15 @@ class SnoozeSpool {
             fromRemindAt: (j['from'] as num).toInt(),
             nextAt: (j['next'] as num).toInt(),
           ));
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('[SnoozeSpool] 忽略损坏的暂存行: $e');
+        }
       }
-    } catch (_) {}
+    } catch (e) {
+      // 启动补齐通道（BootGate._landSpooledSnoozes）只能拿到已读到的
+      // 部分记录；留日志区分「确实没有待落地」与「读取失败」。
+      debugPrint('[SnoozeSpool] drain 读取/清理失败: $e');
+    }
     return out;
   }
 }

@@ -459,6 +459,9 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
   Future<void> _save() async {
     if (_saving || !_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
+    // 部分成功口径：附属项逐条失败不阻断主任务落库，但不能静默吞掉——
+    // 关闭面板前如实提示，避免用户以为标签/子任务都已建好。
+    var failedAttachments = 0;
     // 应用标题 NLP 解析结果（日期/优先级/项目/标签 + 标题剥离）后再取值
     _applyTitleParse();
     final title = _titleController.text.trim();
@@ -541,7 +544,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
           );
         }
         // 新建：标签挂载（NLP 命中 ∪ 手动勾选，去重；失败不阻断保存——
-        // 部分成功口径，与桌面 TagsField 提交链一致）
+        // 部分成功口径，与桌面 TagsField 提交链一致，但失败数要如实上报）
         final labelIds = <int>{
           ..._pendingLabelIds,
           for (final l in _pickedLabels) l.id,
@@ -552,7 +555,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
               TodoTaskLabelCreateInput(taskId: created.id, labelId: labelId),
             );
           } catch (_) {
-            // 标签挂载失败不阻断保存（部分成功口径）
+            failedAttachments++;
           }
         }
         _pendingLabelIds = [];
@@ -563,7 +566,9 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
             await bridge.todoSubtaskCreate(
               TodoSubtaskCreateInput(taskId: created.id, title: title),
             );
-          } catch (_) {}
+          } catch (_) {
+            failedAttachments++;
+          }
         }
         // 新建：模板子任务逐条建立（percent_done 由后端按完成度回算；
         // 单条失败不阻断——部分成功口径与标签挂载一致）
@@ -573,7 +578,9 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
             await bridge.todoSubtaskCreate(
               TodoSubtaskCreateInput(taskId: created.id, title: title),
             );
-          } catch (_) {}
+          } catch (_) {
+            failedAttachments++;
+          }
         }
         // 新建即完成：子任务/标签/提醒挂载完再走完成引擎（重复任务生成的
         // 下一期才能承接子任务与提醒；直接写 status=done 会丢下一期）
@@ -641,6 +648,10 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
       if (mounted) {
         if (nextDueMs != null) {
           WaitToast.success('已完成，已生成下一期：${rep.formatCnDate(nextDueMs)}');
+        } else if (failedAttachments > 0) {
+          WaitToast.warning(
+            '任务已保存，但有 $failedAttachments 项标签/子任务未创建成功，可在详情中补建',
+          );
         }
         Navigator.of(context).pop();
       }

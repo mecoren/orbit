@@ -77,14 +77,22 @@ class ShareReceiver {
         repeatAfter: parsed.repeat?.after,
         repeatWeekdays: parsed.repeat?.weekdays,
       ));
-      // NLP 命中的标签挂载（失败不阻断——部分成功口径）
+      // NLP 命中的标签挂载（失败不阻断创建，但不能谎报「全部成功」）
+      var failedLabels = 0;
       for (final labelId in parsed.labelIds) {
         try {
           await bridge.todoTaskLabelCreate(
               TodoTaskLabelCreateInput(taskId: created.id, labelId: labelId));
-        } catch (_) {}
+        } catch (_) {
+          failedLabels++;
+        }
       }
-      WaitToast.success('已从分享创建任务');
+      if (failedLabels > 0) {
+        WaitToast.warning(
+            '任务已创建，但有 $failedLabels 个标签未挂载，可在详情中补建');
+      } else {
+        WaitToast.success('已从分享创建任务');
+      }
       return true;
     } catch (_) {
       WaitToast.destructive('分享创建任务失败');
