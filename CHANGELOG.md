@@ -27,7 +27,7 @@
 - **隐私披露**：`PRIVACY.md` 补 v2 确定性派生口径——密钥强度完全取决于同步密码、同口令用户密钥相同、可离线猜测（每轮 600k PBKDF2）、忘密不可恢复、改密需完成云端 rekey。
 - **生产入口**：`main.tsx` 的 mock IPC 安装加 `import.meta.env.DEV && !__TAURI_INTERNALS__` 守卫（保持同步调用不动启动时序；dist 产物实测已被 Rollup 摇掉 mock 模块）。
 - **刻意未改**：`capabilities/default.json` 的 fs/shell 权限零 scope 未收紧——收紧会破坏「用户自选任意路径导出明文/备份」，且 Tauri 2 空 scope 语义需真机核验，留到发布前权限冒烟再定。
-- **验证**：`cargo test -p orbit-core --lib` 978 绿；`cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets` 绿；`tsc --noEmit` 绿；vitest 71 文件 / 789 例绿（含新增审计护栏）；`flutter analyze saved_filters_screen.dart` 无 issue。
+- **验证**：`cargo test -p orbit-core --lib` 978 绿；`cargo test -p orbit-core --tests` 全绿（lib 978 + 13 个集成目标，含 sync_fault_matrix 14 例，0 failed）；`cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets` 绿；`tsc --noEmit` 绿；vitest 71 文件 / 789 例绿（含新增审计护栏）；`flutter analyze saved_filters_screen.dart` 无 issue。
 
 ### 修复：上线前代码收口 · 崩溃留痕 / 隐私边界 / 备份轮转 / 门禁补齐（2026-11-12）
 
