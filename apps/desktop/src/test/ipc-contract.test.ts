@@ -166,9 +166,16 @@ describe("IPC 包装与 e2e 覆盖边界", () => {
       "utf8",
     );
     expect(ci).toContain('VITE_E2E_MOCK: "1"');
-    expect(release, "发布构建绝不能注入 mock IPC").not.toContain(
-      "VITE_E2E_MOCK",
+    // 只断言「release.yml 文本不含该变量」不够：仓库/组织级 Actions Variables
+    // 里的同名开关会被发版 job 继承，产出带 mock 的正式包而护栏仍全绿。
+    // 发布构建必须显式置空覆盖它。
+    expect(release, "发布构建必须显式置空 mock 开关").toContain(
+      'VITE_E2E_MOCK: ""',
     );
+    expect(release, "发布构建绝不能启用 mock IPC").not.toContain(
+      'VITE_E2E_MOCK: "1"',
+    );
+    expect(release).not.toContain("VITE_E2E_MOCK: 1");
 
     const cfg = readFileSync(path.join(ROOT, "playwright.config.ts"), "utf8");
     expect(cfg).toContain("不覆盖真 Tauri 壳");

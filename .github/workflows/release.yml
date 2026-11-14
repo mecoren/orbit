@@ -212,6 +212,11 @@ jobs:
           # publish-updater-manifest 消费其内容合成 latest.json。
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # 显式置空：CI 的 perf-gate 需要生产 dist 带 mock 桩，故在 ci.yml 的
+          # 该 job 注入 VITE_E2E_MOCK=1。若仓库/组织级 Variables 里也设了同名
+          # 开关，发版 job 会继承它，产出带 window.__orbitMock 的正式包。
+          # 这里主动覆盖成空串（vite 判定 === "1" 不成立），不依赖「文件里没有」。
+          VITE_E2E_MOCK: ""
         with:
           projectPath: apps/desktop
           # tag 推送且非 dry_run 才发版；dry_run 时留空 → 只构建、只传 artifact

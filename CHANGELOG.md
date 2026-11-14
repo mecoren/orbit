@@ -17,6 +17,24 @@
 
 ## [Unreleased]
 
+### 修复：损坏数据覆盖 / device_id 全仓收口 / 冲突载荷可见化（2026-11-14）
+
+- **P1 桌面三条「解析失败 → 空值 → 一保存就覆盖」路径**（第一批只修了移动端 `saved_filters_screen.dart`，桌面同型路径仍在）：
+  - `saved-filter-builder.ts::parseConditions` 原先把非法 JSON 回落 `EMPTY_FILTER_FORM`，而编辑弹窗会把它经 `buildConditions` 序列化成 `"{}"` 提交 → **空条件覆盖原筛选器且不可逆**。更糟的是 `saved-filter-builder.test.ts` 把「`parseConditions("not-json")` 等于空表单」当成预期行为锁住了，静默损坏被测试固化。现改为返回 `FilterFormState | null`，弹窗区分「合法空条件 `{}`」与「损坏 null」，后者显示红色横幅、禁用保存并在提交处二次拦截；测试同步改为断言 `null`（另补 `null` / `[]` / `42` 三类非对象）。
+  - `templates-section.tsx::draftOf` 解析失败「按空编辑」，保存时 `draftToPayload` + `templateUpdate` 会把空 payload 写回覆盖模板。现返回 `TemplateDraft | null`，列表摘要显示「（内容损坏）」时编辑入口同样拒绝打开并提示删除重建。
+  - `color-theme.ts::readCustomThemes` 解析失败回落 `[]`，而 add/update/rename/remove 都是「先读 → 改 → `writeCustomThemes` 整体写回」，**一次新增就把损坏前的全部自定义主题覆盖掉**。现读侧留痕（`hasCorruptedCustomThemes()`）、写侧抛错拒绝、原始值备份到 `color_theme_custom_themes__corrupt_backup`；`theme-section.tsx` 的增/改/删补 try/catch 与可见提示，不再出现「调用抛错但 UI 报已保存」的假成功。
+  - 新增 `corrupt-data-guard.test.ts` 锁住三条路径的「损坏不得被空值覆盖」契约。
+- **P1 device_id 全仓收口（上一批「全入口」名不副实，11 处只改了 4 处）**：
+  - `context.rs` 新增 `require_device_id()` 作为唯一云端写入口径（返回 `[config]` 可操作错误），`get_device_id()` 注释改为分级口径（事件元数据可空、云端写入绝不可空）。
+  - `cloud_sync/push.rs` 增加 `ensure_device_id` 最终防线，置于 `push_all_impl` 任何副作用（读账本 / 取密钥 / 构造适配器）之前，覆盖漏网与新增调用点；`CloudSyncError` 新增 `Config` 变体并在 `category_tag()` 映射为 `config`，避免被当成网络故障无限重试或引导跳解锁页。
+  - 写入链路全部改为 `require_device_id` / `?` 传播：桌面 `sync_runtime::engine_config_of_record`（返回 `Result`，`cloud_sync_cmd` 4 处 + `sync_crypto_cmd` 2 处传播）、`sync_scheduler` 两个后台入口（另补 `log::warn!/error!` 留痕，不再「定时同步无声无息一直失败」）、移动端 `orbit-flutter` 的 `engine_config_of_record` / `full_sync_backup.rs`。仅用于展示与备份 manifest 元数据的两处保留空串兜底，并逐一注明不参与云端 manifest / 检查点。
+  - **更正一处技术口径错误**：多份注释与上一批 CHANGELOG 称「device_id 为空会让 `generic_repo` 跳过 Lamport 版本号写入」——不成立。v1 架构已移除 `lamport_version` 列，版本号由 SQL `version = version + 1` 维护，`generic_repo::current_device_id()` 只用于 `DbEvent.device_id`。真正受影响的是 `push.rs` 的 `manifest.device_id`、`touch_device()` 的 DeviceCheckpoint 与 `verify_manifest_write()` 的 CAS 比对，相关文案已全部改正。
+  - `mobile-device-id-guard.test.ts` 护栏从「只读 `sync.rs` 一个文件」扩到 core + 桌面壳 + 移动桥三层，锁住「写入链路无 `unwrap_or_default`」「桌面 `engine_config_of_record` 返回 `Result` 且 6 个调用点带 `?`」「`push_all_impl` 首行调用 `ensure_device_id`」「展示类空串兜底必须带注释」。
+- **P2 同步冲突页解析失败静默吞掉字段差异（双端）**：`sync-conflict-section.tsx::parsePayload` 与 `sync_conflicts_page.dart::_parse` 解析失败都回落空对象，`diffFields` 拿到两个空对象产出空差异表——用户在**看不到任何内容**时点「恢复」，可能把错误版本写回。现两侧都返回 `null`，渲染层显示「载荷损坏」并禁用展开与恢复（`parsePayload` 的行为测试同步改为断言 `null`，并保留「合法空对象 `{}` 仍返回 `{}`」）。
+- **P3 损坏留痕与可见性**：`applySavedFilter` / 分页下推在条件损坏时是「忽略条件」，列表看着正常实际是全量数据——`task-panel.tsx` 标题旁新增常驻「条件损坏」徽标（含 `data-testid` 供 e2e 断言）。`day_planner_api::get_day_plan_prefs` 非法 JSON 回落默认后，UI 回显再保存会把损坏值整键覆盖，现首次读到损坏值时先原样备份到 `day_plan_prefs.corrupt`（新增 1 例 core 测试）。
+- **发布构建显式置空 mock 开关**：`release.yml` 桌面构建步增加 `VITE_E2E_MOCK: ""`，覆盖可能从仓库/组织级 Actions Variables 继承的同名开关——原护栏只断言「文件里不含该字符串」，若组织级变量为 `1`，正式包会带 `window.__orbitMock` 而护栏仍全绿。`ipc-contract.test.ts` 改为「必须显式置空且不得为 `1`」，`docs/08` 同步更新措辞。
+- **验证**：`tsc --noEmit` 绿；vitest **75 文件 / 818 例**全绿（新增 2 例损坏留痕护栏、1 例 core 行为对齐）；`cargo check --workspace --all-targets` 与桌面壳 `--all-targets` 均 exit 0；`cargo clippy --workspace --all-targets -- -D warnings` 绿；`cargo test --workspace --tests` 全部 `test result: ok`（`orbit-core` 982 例、`sync_fault_matrix` 14 例单独补跑 306s 全绿）；`flutter analyze` 零问题、`flutter test` **1316 例**全绿；Playwright **85 例**全绿；FRB 重生成后差异仅为 `full_sync_backup.dart` 一行文档注释（对应桥层文案改动，已入库）；`audit-unbounded` / `mobile-bridge-audit` / `bridge-parity` / `bump-version --check`（`VERSION_SYNC_OK: 0.1.0`）全绿；无开关的正式构建 `✓ built in 4.93s` 且 `dist` 中 `__orbitMock` **零命中**。**本批不含任何 tag、Secrets、dry_run、真机验收动作。**
+
 ### 修复：CI 双红灯 / 读取失败伪装业务状态 / device_id 全入口收口（2026-11-14）
 
 - **P0 CI 两个 job 红灯（推 tag 会被发布链的 `needs: [audit, ci]` 直接挡住）**：`8746af50` 的 `ci` run `43579100108` 里 `rust-core` / `web` / `desktop-shell` 绿，`perf-gate` step 9「内存增长曲线与泄漏门禁」4 秒失败、`flutter-mobile` step 7「FRB codegen 一致性校验」失败。
