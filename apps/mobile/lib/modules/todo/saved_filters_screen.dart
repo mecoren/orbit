@@ -166,23 +166,36 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
     TodoSavedFilter? existing,
     Map<String, dynamic>? initialConditions,
   }) async {
-    final nameCtl = TextEditingController(text: existing?.name ?? '');
+    // 条件解析失败绝不能回落成空 Map：编辑态保存会用空条件覆盖原筛选器，
+    // 且不可逆。宁可拒绝打开编辑器，让用户删除后重建。
     Map<String, dynamic> init = {};
-    try {
-      if (existing != null) {
+    if (existing != null) {
+      try {
         init = jsonDecode(existing.conditions) as Map<String, dynamic>;
-      } else if (initialConditions != null) {
-        init = initialConditions;
+      } catch (_) {
+        if (mounted) {
+          WaitToast.destructive('筛选条件已损坏，无法编辑；请删除后重建，避免覆盖原条件');
+        }
+        return;
       }
-    } catch (_) {}
-    String? status = init['status'] as String?;
-    int priorityMin = (init['priority_min'] as num?)?.toInt() ?? 0;
-    List<TodoProject> projects = const [];
-    List<TodoLabel> labels = const [];
+    } else if (initialConditions != null) {
+      init = initialConditions;
+    }
+    // 项目/标签加载失败同样不能静默回落成空列表：下拉无选项时保存会把
+    // 原有的 project_ids / label_ids 选择一并清掉，等于静默改条件。
+    final List<TodoProject> projects;
+    final List<TodoLabel> labels;
     try {
       projects = await ref.read(todoProjectsProvider.future);
       labels = await ref.read(todoLabelsProvider.future);
-    } catch (_) {}
+    } catch (e) {
+      if (mounted) WaitToast.destructive('项目或标签加载失败，已取消编辑：$e');
+      return;
+    }
+    // 任何提前 return 都发生在创建 Controller 之前，避免泄漏。
+    final nameCtl = TextEditingController(text: existing?.name ?? '');
+    String? status = init['status'] as String?;
+    int priorityMin = (init['priority_min'] as num?)?.toInt() ?? 0;
     final projectIds = <int>{
       for (final v in (init['project_ids'] as List? ?? const []))
         if (v is num) v.toInt(),
