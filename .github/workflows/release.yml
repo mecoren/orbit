@@ -113,16 +113,18 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      # 观察期门禁：先把基线打出来，确认真实漏洞口径后再把 continue-on-error 去掉转硬拦截
-      # （promote 时机与口径见 docs/08_发布与更新流程.md §6）。
+      # 观察期门禁：只保留外层 continue-on-error 这一个开关，内层不得再吞错。
+      # 此前 cargo install / cargo audit 各自带 `|| true`，等于双重放水——
+      # 即使按 docs/08 §6 去掉外层开关，漏洞失败仍会被静默吞掉、job 依旧绿。
+      # promote 成硬拦截时只需删除两个 continue-on-error（口径见 docs/08 §6）。
       - name: cargo audit（观察期，不拦截）
         continue-on-error: true
         run: |
           set -euo pipefail
-          cargo install cargo-audit --locked || true
+          cargo install cargo-audit --locked
           for lock in Cargo.lock apps/desktop/src-tauri/Cargo.lock; do
             echo "--- audit ${lock} ---"
-            cargo audit --file "$(pwd)/${lock}" || true
+            cargo audit --file "$(pwd)/${lock}"
           done
 
       - name: pnpm audit（观察期，不拦截）

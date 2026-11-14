@@ -32,4 +32,15 @@ describe("发布流水线 latest.json 合成", () => {
     expect(workflow).toMatch(/\|\|\s*\{[\s\S]*?exit 1/);
     expect(workflow).not.toMatch(/done < <\(\s*gh api/);
   });
+
+  it("依赖审计只保留外层观察期开关，内层不得用 || true 二次吞错", () => {
+    const start = workflow.indexOf("- name: cargo audit");
+    expect(start).toBeGreaterThan(-1);
+    // 覆盖 cargo audit 与 pnpm audit 两段；转硬拦截只需删掉外层
+    // continue-on-error，本用例不依赖观察期是否结束，无需同步修改。
+    const auditBlock = workflow.slice(start, start + 900);
+    expect(auditBlock).not.toContain("|| true");
+    expect(auditBlock).toContain("cargo audit --file");
+    expect(auditBlock).toContain("pnpm audit");
+  });
 });
