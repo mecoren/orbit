@@ -17,6 +17,16 @@
 
 ## [Unreleased]
 
+### 修复：上线就绪评估第二批整改 · 索引自愈 / 崩溃留痕 / 错误可见性（2026-11-14）
+
+- **P2 拼音索引补偿写失败不置脏**：`todo_api.rs` 三处裸 INSERT（子任务提升为任务、重复任务下一实例、复制任务）在事务提交后调 `search_pinyin::sync_row`，失败只 `log::warn!`；注释声称「置脏兜底」但并无调用。哨兵行停在 `dirty=0` → `ensure_fresh` 走 O(1) 快路径跳过 `reconcile`，该任务在拼音搜索里长期不可见，直到下一次云同步/全量备份/导入恰好置脏。现统一走新增的 `sync_row_or_mark_dirty`：补偿写失败即 `mark_dirty`，下一次拼音查询必定对账补齐；`mark_dirty` 也失败时记 `error` 但不回抛（业务写已提交，回抛会被误判成整单失败）。新增 `sync_row_failure_marks_dirty_so_reconcile_can_repair_it` 锁住行为；`search_index_guard` 台账说明同步更新（SQL 语句条数不变，仍为 3）。
+- **P2 崩溃日志超限整体清库**：桌面 `append_crash_log` 原在 `crash.log` 超 1MB 时用 `std::fs::write` 整体重建，一次崩溃就抹掉此前全部现场——排障最需要的「同一 panic 是否反复出现」序列丢失。现抽为 `append_bounded_crash_entry`：超限先轮转为 `crash.log.1`（保留上一代、覆盖更旧一代）再新建写入，磁盘占用上界约 2MB；轮转失败退回追加，宁可暂时超限也绝不覆盖历史。`PRIVACY.md §五` 同步披露轮转口径；新增 2 例桌面壳单测（未超限不轮转 / 超限保留上一代）。
+- **P2 状态假成功**：分享建任务（`share_receiver.dart`）与任务表单（`form_bottom_sheet.dart`）的标签/子/模板子任务逐条挂载失败一律空 catch，最后仍弹「已从分享创建任务」或静默关闭面板。现累计失败数，关闭前用 `WaitToast.warning` 如实提示「有 N 项未创建成功，可在详情中补建」；主任务落库仍不被附属项失败阻断（部分成功口径不变）。
+- **P2 静默吞错留痕**：`reminder_snooze.dart` 的推迟意图落盘 / drain 读取失败，`notification_service.dart` 的通知初始化降级、完成动作取消与确认横幅、pending 列表读取（影响启动补齐）、闹钟取消（可能残留僵尸闹钟）等空 catch 改为 `debugPrint` 留日志；容错语义与降级行为全部不变（后台 isolate 仍不弹 UI）。`BootGate._landSpooledSnoozes` 原已有日志，未改。
+- **P2 桌面错误可见性**：`sync-section.tsx` 把「读取失败」伪装成「空列表」的三处（同步历史、本地备份历史、云端备份列表）改为 `toast.error` + 保留空列表（不卡加载态）——用户据这份列表决策「有没有备份可恢复」，静默失败会直接误导；`syncCryptoLock()` 的 `.catch(() => {})` 改为可见错误，避免用户以为 Data Key 已清出内存而实际仍可解密。新增 `error-visibility.test.ts` 3 例静态护栏锁住口径。
+- **核验结论修正（Tauri fs scope）**：前批 CHANGELOG 记「零 scope 语义需真机核验」。本次核对 Tauri 2 官方 API 文档：`open()` / `save()` 返回的路径会**自动加入 filesystem scope**（会话级、重启清空）；而项目内 5 处 `@tauri-apps/plugin-fs` 调用（`sync-recovery-page.tsx` ×1、`sync-section.tsx` ×4）的路径**全部**来自 dialog。因此 `capabilities/default.json` 无静态 `allow` scope 并不导致 `forbidden path`，静态放通 `$HOME` 等反而扩大攻击面。决定**不改权限集**，只在 `description` 写入口径与「新增非 dialog 路径须补 `fs:scope` + 真机冒烟」的约束，并由静态护栏锁住「fs 权限不得配宽泛 allow scope」。**仍需真机权限冒烟**作为发布前验收项（浏览器 mock / 静态检查不能替代 WebView2 运行时）。
+- **验证**：`cargo test -p orbit-core --lib` 979 绿（含新增置脏用例，468s）；`cargo test -p orbit-core --test search_index_guard` 1 绿；桌面壳 `cargo test --lib crash_log_tests` 2 绿、`cargo check --all-targets` 绿（仅增量锁文件 os error 5 环境噪声）；`tsc --noEmit` 绿；vitest 72 文件 / 792 例绿（含新增 3 例护栏）；`flutter analyze` 四个改动文件零问题；`flutter test` 定向 6 个文件 63 例全绿。
+
 ### 修复：上线就绪评估代码层整改 · 数据空洞 / 静默损坏 / 发布门禁（2026-11-14）
 
 - **P1 墓碑静默空洞**：`cloud_sync/merge.rs` 旧格式墓碑（无整行快照且子表含必填外键）无法物化时此前只 `log::warn`，`errors` 为空 → `pull.rs` F86 不登记 `failed_modules` → 本轮 commit、桶指纹被记成已消费、epoch 推进，下轮命中跳过，该软删行永久不落库且不再重试。现登记行级错误，让 push 跳过本表、桶指纹回滚、下轮强制重拉；`legacy_tombstone_on_child_table_reports_failure` 锁住行为（含错误条数与 uuid 断言）。
