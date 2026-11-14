@@ -17,6 +17,13 @@
 
 ## [Unreleased]
 
+### 修复：代码-only 复核整改 · IPC 错误 tag 通道 / device_id 前置校验 / 解析上下文（2026-11-14）
+
+- **P1 回归（第三批引入）IPC 包装打断 `[tag]` 错误通道**：`OrbitIpcError` 原先把 message 写成 `IPC 命令 xxx 失败：${detail}`，而 Rust 侧 `cloud_sync_cmd::err_tagged` 用 `[tag] message` 前缀、`syncErrorTag` 用 `/^\[(\w+)\]/` 从开头解析 → 6 个调用点全部失配：启动同步的 `key_mismatch` 不再跳恢复页、`cancelled` 从「已取消同步」变红色故障、解锁 / 改密的 `wrong_password` 文案失效、两处 `errMsg` 剥不掉 tag。与 2026-09-10 的 `[[key_mismatch]]` 双括号事故（见 `cloud_sync/error.rs::category_tag` 注释）同型。现让 detail 原样开头、命令名后置；`syncErrorTag` 另加从 `OrbitIpcError.reason` 解包的结构化兜底，不再单纯依赖字符串排列顺序。新增 `ipc-error-tag.test.ts` 9 例覆盖 5 类 tag 经包装后的解析与 `syncErrorAction` 路由，`ipc-contract.test.ts` 补静态反例护栏。
+- **P2 移动端 device_id 静默降级**：`boot_gate.dart` 注释谎称「桌面同口径」，但桌面已是 await 的启动门控 + 回读断言，移动端因 fake_async 下 path_provider 永不 resolve 只能不 await、失败仅 `debugPrint`。现修正注释写明两端口径差异，并在 Rust 桥层新增 `current_device_id()`：`cloud_sync_now` / `cloud_sync_force` 两个无副作用的同步执行入口不再 `unwrap_or_default()` 回落空串（会跳过 Lamport 版本号写入、深层 `validate_config` 只报一句「device_id 不能为空」），改为 `[config]` 可操作错误「请重启应用后再同步」。rekey / 改密 / 升级 v2 三条路径在本机密钥已变更后才取 device_id，提前 `?` 会跳过既有失败补偿文案，故刻意保持原口径。
+- **P3 解析与可见性收口**：`tauri.ts` 六处同步返回值的 `JSON.parse` 与 `cloud_sync_get_state` 原先挂在 `.then()` 里，invoke 包装只覆盖 reject，resolve 后的解析失败会抛裸 `SyntaxError`（既无命令名也无 tag）；现统一包装成带命令名的 `OrbitIpcError`。`sync-section.tsx` 的 `errMsg` 注释「保留 tag 前缀」与实现（剥前缀）不一致，已改正。`App.tsx` 启动门控错误页补「重启应用并重试」按钮——`useEffect([])` 不会重跑，此前用户只看到一行错误文字却没有可操作入口。
+- **验证**：`tsc --noEmit` 绿；vitest 73 文件 / 805 例绿（新增 9 例 tag 回归 + 1 例静态护栏；首次与 cargo/flutter 并发跑时出现 forks worker 启动超时的环境噪声，串行重跑全绿）；`cargo check -p orbit-flutter --lib` 与 `cargo test -p orbit-flutter --lib` 绿（该 crate 无库单测，仅编译校验），本批改动段落经 `rustfmt --edition 2024 --check` 无差异（文件里另有两处**既有**格式差异，未动）；`flutter analyze lib/modules/shell/boot_gate.dart` 零问题；`flutter test` BootGate 两个文件 5 例全绿；Playwright `e2e/smoke.spec.ts` 36 例全绿（EXIT 0）。**core 与桌面壳 Rust 本批零改动**。
+
 ### 修复：上线就绪评估第三批整改 · 启动标识 / 发布硬门禁 / 错误可见性收口（2026-11-14）
 
 - **P0 发布链此前没有真正的门禁**：`release.yml` 的 `audit` job 里 `cargo audit` / `pnpm audit` 都带 `continue-on-error: true`（第一批只删掉内层 `|| true`），且 `desktop` / `android` 仅 `needs: [audit]`，整条链与 `ci.yml` 无依赖 → tag 一推，即便 CI 全红、依赖有 CVE 也照常构建并公开 Release。现删掉两处观察期开关（审计转硬拦截），给 `ci.yml` 加 `workflow_call:` 后由 `release.yml` 以官方 reusable workflow 复用成 `ci` job，`desktop` / `android` 改为 `needs: [audit, ci]`。**口径说明**：跨 workflow 没有 `needs: ci` 语法；改用 `workflow_run` 会改变「tag 推送即发布 / dry_run / 手动 dispatch」的触发语义，风险更高，故选 reusable workflow（代价是发版时重跑一次 CI，正是「CI 不绿不得发版」的应有成本）。`release-workflow.test.ts` 新增用例锁住「审计不得再放水」与「两个构建作业必须等 CI」。转硬拦截前需先跑一次 audit 拿依赖基线，避免被存量告警卡住发版。
