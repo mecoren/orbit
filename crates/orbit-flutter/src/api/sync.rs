@@ -64,7 +64,9 @@ use tokio::sync::broadcast;
 
 use crate::frb_generated::StreamSink;
 
-use super::dto::{CloudUnusedDeleteResult, CloudUnusedScanResult, OrphanChunkGcResult, SyncProgressDto};
+use super::dto::{
+    CloudUnusedDeleteResult, CloudUnusedScanResult, OrphanChunkGcResult, SyncProgressDto,
+};
 use super::state::with_state;
 
 // ============================================================================
@@ -100,7 +102,6 @@ impl ProgressSender for FrboProgressSender {
         let _ = SYNC_PROGRESS_TX.send(progress);
     }
 }
-
 
 // ============================================================================
 // 同步域进程级单例（替代桌面 app.manage(SyncRuntime::default())）
@@ -203,16 +204,17 @@ async fn active_config() -> Result<Option<SyncConfigRecord>, String> {
         .map_err(|e| format!("[database] 读取同步配置失败: {e}"))
 }
 
-/// 同步执行入口的 device_id 前置校验。
+/// 云同步入口的 device_id 前置校验。
 ///
 /// `db_set_device_id` 写的是进程级 OnceCell；启动期写入失败时它是空的。
-/// 过去这里 `unwrap_or_default()` 回落空串：`generic_repo` 会跳过 Lamport
+/// 过去各处 `unwrap_or_default()` 回落空串：`generic_repo` 会跳过 Lamport
 /// 版本号写入，且深层 `validate_config` 只抛一句「device_id 不能为空」，
 /// 用户无从区分「启动接线失败」与「配置填错」。改成显式、可操作的错误。
 ///
-/// 只用于无副作用的同步执行入口（cloud_sync_now / cloud_sync_force）：
-/// rekey / 改密 / 升级 v2 这几条路径在本机密钥已变更后才取 device_id，
-/// 提前 `?` 会跳过既有的失败补偿文案，故仍沿用原口径。
+/// `engine_config_of_record` 统一在构造 SyncConfig 时调用，所有云同步入口
+/// （含 rekey / v2 改密 / 升级 v2 / 孤儿清理）都先经过它，且都在本机状态
+/// 变更或云端写入之前，因此不会跳过既有的 rekey 失败补偿文案。v1 改密只换
+/// 本机包装、不构造 SyncConfig，故不受此校验影响。
 fn current_device_id() -> Result<String, String> {
     context::get_device_id()
         .map(|id| id.to_string())
@@ -229,13 +231,13 @@ fn current_device_id() -> Result<String, String> {
 /// record.device_id 列；credential 列存 WebDAV 密码 / S3 secret_key。
 fn engine_config_of_record(
     record: &SyncConfigRecord,
-) -> Option<orbit_core::sync::engine::SyncConfig> {
+) -> Result<Option<orbit_core::sync::engine::SyncConfig>, String> {
     let adapter_type = record.protocol.to_lowercase();
     if adapter_type == "local" || adapter_type.is_empty() {
-        return None;
+        return Ok(None);
     }
-    let device_id = context::get_device_id().unwrap_or_default().to_string();
-    Some(orbit_core::sync::engine::SyncConfig {
+    let device_id = current_device_id()?;
+    Ok(Some(orbit_core::sync::engine::SyncConfig {
         adapter_type,
         endpoint: record.endpoint.clone(),
         bucket: record.bucket.clone(),
@@ -248,7 +250,7 @@ fn engine_config_of_record(
         timeout_secs: record.timeout.max(0) as u64,
         skip_tls_verify: record.skip_tls_verify != 0,
         session_token: record.session_token.clone(),
-    })
+    }))
 }
 
 /// 附件目录（照抄桌面 sync_runtime::attachments_dir；MVP 占位实现）
@@ -555,7 +557,7 @@ async fn run_sync(origin: SyncOrigin, action: SyncAction) -> Result<String, Stri
     let record = active_config()
         .await?
         .ok_or_else(|| "[config] 尚未配置同步，请先在设置中填写连接信息".to_string())?;
-    let config = engine_config_of_record(&record)
+    let config = engine_config_of_record(&record)?
         .ok_or_else(|| "[config] 当前为本地同步配置，不参与云同步".to_string())?;
 
     let crypto = runtime_crypto()?;
@@ -615,7 +617,7 @@ pub async fn cloud_sync_force(origin: String, wait_for_idle_ms: u64) -> Result<S
     let record = active_config()
         .await?
         .ok_or_else(|| "[config] 尚未配置同步，请先在设置中填写连接信息".to_string())?;
-    let config = engine_config_of_record(&record)
+    let config = engine_config_of_record(&record)?
         .ok_or_else(|| "[config] 当前为本地同步配置，不参与云同步".to_string())?;
 
     let crypto = runtime_crypto()?;
@@ -682,7 +684,7 @@ pub async fn cloud_unused_attachments_scan() -> Result<CloudUnusedScanResult, St
     let record = active_config()
         .await?
         .ok_or_else(|| "[config] 尚未配置同步，请先在设置中填写连接信息".to_string())?;
-    let config = engine_config_of_record(&record)
+    let config = engine_config_of_record(&record)?
         .ok_or_else(|| "[config] 当前为本地同步配置，不参与云同步".to_string())?;
 
     let crypto = runtime_crypto()?;
@@ -707,7 +709,7 @@ pub async fn cloud_unused_attachments_delete(
     let record = active_config()
         .await?
         .ok_or_else(|| "[config] 尚未配置同步，请先在设置中填写连接信息".to_string())?;
-    let config = engine_config_of_record(&record)
+    let config = engine_config_of_record(&record)?
         .ok_or_else(|| "[config] 当前为本地同步配置，不参与云同步".to_string())?;
 
     let crypto = runtime_crypto()?;
@@ -740,7 +742,7 @@ pub async fn cloud_orphan_chunks_gc() -> Result<OrphanChunkGcResult, String> {
     let record = active_config()
         .await?
         .ok_or_else(|| "[config] 尚未配置同步，请先在设置中填写连接信息".to_string())?;
-    let config = engine_config_of_record(&record)
+    let config = engine_config_of_record(&record)?
         .ok_or_else(|| "[config] 当前为本地同步配置，不参与云同步".to_string())?;
 
     let crypto = runtime_crypto()?;
@@ -914,7 +916,7 @@ pub async fn sync_crypto_upgrade_v2(sync_password: String) -> Result<(), String>
     let record = active_config()
         .await?
         .ok_or_else(|| "[config] 迁移需要重传云端数据：尚未配置云同步".to_string())?;
-    let config = engine_config_of_record(&record)
+    let config = engine_config_of_record(&record)?
         .ok_or_else(|| "[config] 迁移需要重传云端数据：当前为本地同步配置".to_string())?;
 
     svc.upgrade_to_v2(&sync_password)
@@ -924,7 +926,7 @@ pub async fn sync_crypto_upgrade_v2(sync_password: String) -> Result<(), String>
     let engine = runtime_engine()?;
     let base_dir = with_state(|s| Ok(s.base_dir.clone()))?;
     let attachments = attachments_dir(&base_dir);
-    let device_id = context::get_device_id().unwrap_or_default().to_string();
+    let device_id = current_device_id()?;
 
     match cloud_sync_api::rekey_cloud(
         &engine,
@@ -951,7 +953,7 @@ pub async fn cloud_sync_rekey() -> Result<String, String> {
     let record = active_config()
         .await?
         .ok_or_else(|| "[config] 尚未配置同步，请先在设置中填写连接信息".to_string())?;
-    let config = engine_config_of_record(&record)
+    let config = engine_config_of_record(&record)?
         .ok_or_else(|| "[config] 当前为本地同步配置，不参与云同步".to_string())?;
 
     let crypto = runtime_crypto()?;
@@ -962,7 +964,7 @@ pub async fn cloud_sync_rekey() -> Result<String, String> {
     let engine = runtime_engine()?;
     let base_dir = with_state(|s| Ok(s.base_dir.clone()))?;
     let attachments = attachments_dir(&base_dir);
-    let device_id = context::get_device_id().unwrap_or_default().to_string();
+    let device_id = current_device_id()?;
 
     let result = cloud_sync_api::rekey_cloud(
         &engine,
@@ -1038,7 +1040,7 @@ pub async fn sync_crypto_change_password(
     let record = active_config()
         .await?
         .ok_or_else(|| "[config] v2 改密需要重传云端数据：尚未配置云同步".to_string())?;
-    let config = engine_config_of_record(&record)
+    let config = engine_config_of_record(&record)?
         .ok_or_else(|| "[config] v2 改密需要重传云端数据：当前为本地同步配置".to_string())?;
 
     svc.change_sync_password(&old_password, &new_password)
@@ -1048,7 +1050,7 @@ pub async fn sync_crypto_change_password(
     let engine = runtime_engine()?;
     let base_dir = with_state(|s| Ok(s.base_dir.clone()))?;
     let attachments = attachments_dir(&base_dir);
-    let device_id = context::get_device_id().unwrap_or_default().to_string();
+    let device_id = current_device_id()?;
 
     if let Err(e) = cloud_sync_api::rekey_cloud(
         &engine,
