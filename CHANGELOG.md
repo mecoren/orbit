@@ -17,6 +17,18 @@
 
 ## [Unreleased]
 
+### 修复：上线就绪评估代码层整改 · 数据空洞 / 静默损坏 / 发布门禁（2026-11-14）
+
+- **P1 墓碑静默空洞**：`cloud_sync/merge.rs` 旧格式墓碑（无整行快照且子表含必填外键）无法物化时此前只 `log::warn`，`errors` 为空 → `pull.rs` F86 不登记 `failed_modules` → 本轮 commit、桶指纹被记成已消费、epoch 推进，下轮命中跳过，该软删行永久不落库且不再重试。现登记行级错误，让 push 跳过本表、桶指纹回滚、下轮强制重拉；`legacy_tombstone_on_child_table_reports_failure` 锁住行为（含错误条数与 uuid 断言）。
+- **P1 筛选条件静默覆盖**：移动端 `saved_filters_screen.dart` 编辑态 `jsonDecode(conditions)` 失败回落 `{}`、项目/标签加载失败回落空列表，保存即用空条件覆盖原筛选器且不可逆。现两类失败一律提示并拒绝打开编辑器；Controller 创建移到所有提前 return 之后，避免泄漏。
+- **P1 发布审计双重放水**：`release.yml` 的 cargo audit 段除 `continue-on-error: true` 外，内层 `cargo install` / `cargo audit` 还各带 `|| true`——去掉外层也不会拦截。现只保留外层观察期开关；`release-workflow.test.ts` 新增用例锁住「审计段不得出现 `|| true`」。转硬拦截只需删两行 `continue-on-error`（口径见 `docs/08 §6`）。
+- **P2 去 panic**：`csv_import_api.rs` 的 `unreachable!("ICS preset 已分流")` 改为 `Err`，并在 pub 入口 `csv_import_rows` 直接拒绝 Ics 预设（新增单测）；`tray.rs` 托盘图标 `expect` 改 `tauri::Error::AssetNotFound` 向上抛（setup 已有 `if let Err` 记录）。二者在 `panic="abort"` 下原会让整个进程消失。
+- **P2 更新提示语义**：`updater-section.tsx` 拆分「下载安装」与 `relaunch` 的 catch；包已装好但重启失败时提示「手动重启」，不再误导用户重新下载。
+- **隐私披露**：`PRIVACY.md` 补 v2 确定性派生口径——密钥强度完全取决于同步密码、同口令用户密钥相同、可离线猜测（每轮 600k PBKDF2）、忘密不可恢复、改密需完成云端 rekey。
+- **生产入口**：`main.tsx` 的 mock IPC 安装加 `import.meta.env.DEV && !__TAURI_INTERNALS__` 守卫（保持同步调用不动启动时序；dist 产物实测已被 Rollup 摇掉 mock 模块）。
+- **刻意未改**：`capabilities/default.json` 的 fs/shell 权限零 scope 未收紧——收紧会破坏「用户自选任意路径导出明文/备份」，且 Tauri 2 空 scope 语义需真机核验，留到发布前权限冒烟再定。
+- **验证**：`cargo test -p orbit-core --lib` 978 绿；`cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets` 绿；`tsc --noEmit` 绿；vitest 71 文件 / 789 例绿（含新增审计护栏）；`flutter analyze saved_filters_screen.dart` 无 issue。
+
 ### 修复：上线前代码收口 · 崩溃留痕 / 隐私边界 / 备份轮转 / 门禁补齐（2026-11-12）
 
 - **CI 恢复绿**：`trash_api` 复用 TTL 物理清理路径后，`search_index_guard` 台账仍记 3 处（实际 2 处）导致 `cargo test --workspace --tests` 红，CI `rust-core` 连续失败；台账按实际处数下调并写明收敛原因。新增 `desktop-shell` job（`cargo check --manifest-path apps/desktop/src-tauri`，带 Linux webkit2gtk 依赖）——壳层此前只在发版矩阵首次编译，改坏要等打 tag 才发现。
