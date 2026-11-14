@@ -17,6 +17,16 @@
 
 ## [Unreleased]
 
+### 修复：上线就绪评估第三批整改 · 启动标识 / 发布硬门禁 / 错误可见性收口（2026-11-14）
+
+- **P0 发布链此前没有真正的门禁**：`release.yml` 的 `audit` job 里 `cargo audit` / `pnpm audit` 都带 `continue-on-error: true`（第一批只删掉内层 `|| true`），且 `desktop` / `android` 仅 `needs: [audit]`，整条链与 `ci.yml` 无依赖 → tag 一推，即便 CI 全红、依赖有 CVE 也照常构建并公开 Release。现删掉两处观察期开关（审计转硬拦截），给 `ci.yml` 加 `workflow_call:` 后由 `release.yml` 以官方 reusable workflow 复用成 `ci` job，`desktop` / `android` 改为 `needs: [audit, ci]`。**口径说明**：跨 workflow 没有 `needs: ci` 语法；改用 `workflow_run` 会改变「tag 推送即发布 / dry_run / 手动 dispatch」的触发语义，风险更高，故选 reusable workflow（代价是发版时重跑一次 CI，正是「CI 不绿不得发版」的应有成本）。`release-workflow.test.ts` 新增用例锁住「审计不得再放水」与「两个构建作业必须等 CI」。转硬拦截前需先跑一次 audit 拿依赖基线，避免被存量告警卡住发版。
+- **P1 device_id 设置失败被静默吞掉**：`App.tsx:41` 原 `dbSetDeviceId(id).catch(() => {})`。后端 `context.rs` 的 `OnceCell` 未写入时 `get_device_id()` 返回 Err、调用方回退空串并**跳过 Lamport 版本号写入** → 本地改动照常落库、界面照常可用，但云同步 `DeviceCheckpoint` / 真并发冲突判定静默失真。现失败（除幂等的 `already set`）一律上抛成启动门控可见错误；新增 `db_get_device_id` 回读断言非空（后端 `db_cmd.rs:213` 已有该 command，未设置时返回空串）；解锁分支补 catch 回到启动错误页，避免变成未处理 rejection。浏览器 mock 同步补 `db_get_device_id`，冒烟启动链不断。
+- **P1 IPC 错误没有命令上下文**：`tauri.ts` 全部 `invoke<T>()` 只有编译期泛型断言、无运行时 schema（给几百个 command 全量加 zod/valibot 属 0.2 结构性改造）。首发版落零侵入第一层：把 `invoke` 改成本地包装，所有失败统一抛 `OrbitIpcError`（带 `command` 与原始 `reason`）；调用点形式不变，故 `ipc-contract` 的静态命令提取与 mock 契约不受影响。`playwright.config.ts` 明确写出 e2e「不覆盖真 Tauri 壳」的边界，`ipc-contract.test.ts` 新增 2 例护栏锁住包装与 DEV 守卫，防止把 mock IPC 全绿当成真壳验收证据。
+- **P2 剩余静默吞错清零**：桌面 `sync-section.tsx` 六处配置/状态读取的 `.catch(() => {})` 改为 `toast.error`；`AutoBackupCard` 读偏好失败与 `BackupCard` 读设备标识失败同步可见化；`use-global-quick-add.ts` 唤起主窗失败改 `console.error`。`perf-marker.ts` 的度量打点**刻意保留静默**（注释已写明「度量链路绝不影响启动」）。移动端最后 3 处空 catch（`boot_gate.dart` 僵尸行清理、`notification_service.dart` 时区 fallback / 僵尸行清理）补 `debugPrint`，降级语义不变。
+- **顺带清理**：`boot_gate.dart` 的 `Ref.exists` 在 Riverpod 3 被标 deprecated，analyzer 建议的 `provider.exist` 在 `FutureProvider` 上实测不存在（`undefined_getter`）；该处必须保留「不初始化 provider 就判断缓存是否就绪」的语义（直接 `ref.read` 会把万行任务全量拉回），故回退原写法 + 局部 `// ignore: deprecated_member_use` 并写明原因，`flutter analyze` 恢复零问题。
+- **审查结论（未改代码）**：`cloud_sync/push.rs` 的 10 处 `log::warn!` 逐处核对，均属带状态登记的降级（计入 `failed_modules` / 不推进水位线 / 保留条目下轮重试 / 空数据覆盖守卫返回 Err），不存在「失败即丢数据」的静默分支，故本批不动同步引擎。
+- **验证**：`tsc --noEmit` 绿；vitest 72 文件 / 795 例绿（含新增 3 例护栏）；`ci.yml` / `release.yml` 经 PyYAML `safe_load` 语法校验通过；`flutter analyze` 两个改动文件零问题；`flutter test` 定向 6 文件 63 例全绿；Playwright `e2e/smoke.spec.ts` 36 例全绿（新启动链含 `db_get_device_id` 断言在浏览器冒烟里跑通）。**core 与桌面壳 Rust 本批零改动**，沿用上一批 979 绿 / `cargo check --all-targets` 绿。
+
 ### 修复：上线就绪评估第二批整改 · 索引自愈 / 崩溃留痕 / 错误可见性（2026-11-14）
 
 - **P2 拼音索引补偿写失败不置脏**：`todo_api.rs` 三处裸 INSERT（子任务提升为任务、重复任务下一实例、复制任务）在事务提交后调 `search_pinyin::sync_row`，失败只 `log::warn!`；注释声称「置脏兜底」但并无调用。哨兵行停在 `dirty=0` → `ensure_fresh` 走 O(1) 快路径跳过 `reconcile`，该任务在拼音搜索里长期不可见，直到下一次云同步/全量备份/导入恰好置脏。现统一走新增的 `sync_row_or_mark_dirty`：补偿写失败即 `mark_dirty`，下一次拼音查询必定对账补齐；`mark_dirty` 也失败时记 `error` 但不回抛（业务写已提交，回抛会被误判成整单失败）。新增 `sync_row_failure_marks_dirty_so_reconcile_can_repair_it` 锁住行为；`search_index_guard` 台账说明同步更新（SQL 语句条数不变，仍为 3）。
