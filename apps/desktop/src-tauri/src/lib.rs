@@ -61,9 +61,11 @@ fn log_dir() -> Option<std::path::PathBuf> {
     }
 }
 
+/// 崩溃日志单文件上限（字节）；达到即轮转一代。
+const CRASH_LOG_MAX_BYTES: u64 = 1_000_000;
+
 /// 追加一条崩溃记录到 `{log_dir}/crash.log`（PRIVACY.md 承诺的本地崩溃留痕）
 ///
-/// 有界写入：超过 1MB 即整体重建，避免异常循环把磁盘写满。
 /// 本函数在 panic hook 内调用，**任何一步失败都只能放弃**（不能再 panic）。
 fn append_crash_log(message: &str) {
     let Some(dir) = log_dir() else {
@@ -72,21 +74,40 @@ fn append_crash_log(message: &str) {
     if std::fs::create_dir_all(&dir).is_err() {
         return;
     }
-    let path = dir.join("crash.log");
-    let too_large = std::fs::metadata(&path)
-        .map(|m| m.len() > 1_000_000)
-        .unwrap_or(false);
     let ts = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
     let entry = format!("=== {ts} ===\n{message}\n\n");
+    append_bounded_crash_entry(&dir.join("crash.log"), &entry);
+}
+
+/// 有界追加：超过上限先把 `crash.log` 轮转为 `crash.log.1`，再新建写入。
+///
+/// 旧实现「超限即整体重建」会把此前所有崩溃现场一次抹掉——而排障时最
+/// 需要的恰恰是「同一 panic 是否反复出现」的历史序列。轮转保留上一代，
+/// 磁盘占用有上界（约 2MB），且不丢最近现场。
+///
+/// 轮转失败（文件被占用 / 只读目录）时退回直接追加：宁可暂时超上限，
+/// 也绝不覆盖历史；下一轮仍会再次尝试轮转。
+fn append_bounded_crash_entry(path: &std::path::Path, entry: &str) {
+    let too_large = std::fs::metadata(path)
+        .map(|m| m.len() > CRASH_LOG_MAX_BYTES)
+        .unwrap_or(false);
     if too_large {
-        let _ = std::fs::write(&path, &entry);
-    } else if let Ok(mut f) = std::fs::OpenOptions::new()
+        let backup = path.with_file_name(
+            path.file_name()
+                .map(|n| format!("{}.1", n.to_string_lossy()))
+                .unwrap_or_else(|| "crash.log.1".to_string()),
+        );
+        // Windows 的 rename 不覆盖已存在目标，先清掉更旧的一代
+        let _ = std::fs::remove_file(&backup);
+        let _ = std::fs::rename(path, &backup);
+    }
+    if let Ok(mut f) = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(&path)
+        .open(path)
     {
         use std::io::Write as _;
         let _ = f.write_all(entry.as_bytes());
@@ -670,4 +691,55 @@ pub fn run() {
                 api.prevent_exit();
             }
         });
+}
+
+#[cfg(test)]
+mod crash_log_tests {
+    use super::*;
+
+    fn temp_log(tag: &str) -> std::path::PathBuf {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        std::env::temp_dir().join(format!(
+            "orbit-crash-{tag}-{}-{nanos}.log",
+            std::process::id()
+        ))
+    }
+
+    fn backup_of(path: &std::path::Path) -> std::path::PathBuf {
+        path.with_file_name(format!("{}.1", path.file_name().unwrap().to_string_lossy()))
+    }
+
+    #[test]
+    fn under_limit_appends_without_rotating() {
+        let path = temp_log("under");
+        append_bounded_crash_entry(&path, "=== 1 ===\nfirst\n\n");
+        append_bounded_crash_entry(&path, "=== 2 ===\nsecond\n\n");
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.contains("first") && text.contains("second"));
+        assert!(!backup_of(&path).exists(), "未超上限不应产生轮转文件");
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn over_limit_rotates_and_keeps_previous_generation() {
+        let path = temp_log("over");
+        let backup = backup_of(&path);
+        let big = "x".repeat(CRASH_LOG_MAX_BYTES as usize + 1);
+        std::fs::write(&path, format!("OLD-MARKER\n{big}")).unwrap();
+        std::fs::write(&backup, "STALE-BACKUP").unwrap();
+
+        append_bounded_crash_entry(&path, "=== new ===\nLATEST\n\n");
+
+        let rotated = std::fs::read_to_string(&backup).unwrap();
+        assert!(rotated.contains("OLD-MARKER"), "上一代崩溃现场必须保留");
+        assert!(!rotated.contains("STALE-BACKUP"), "更旧一代被覆盖");
+        let current = std::fs::read_to_string(&path).unwrap();
+        assert!(current.contains("LATEST"));
+        assert!(!current.contains("OLD-MARKER"), "新文件只含本次记录");
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(&backup);
+    }
 }
