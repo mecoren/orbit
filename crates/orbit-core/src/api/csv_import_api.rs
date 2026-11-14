@@ -364,6 +364,13 @@ pub fn csv_import_rows<'a>(
     content: &'a str,
     preset: CsvImportPreset,
 ) -> CoreResult<CsvImportRows<'a>> {
+    // ICS 走 VTODO 解析（stream_csv_rows 已分流）；这里是 pub 入口，桥层若
+    // 绕过分流直传 Ics，也必须在构造期返回错误，而不是留到迭代器里 panic。
+    if preset == CsvImportPreset::Ics {
+        return Err(crate::error::CoreError::Other(
+            "ICS 预设应走 VTODO 解析（stream_csv_rows / ics_import_api），不进入 CSV 行映射".into(),
+        ));
+    }
     check_import_bytes(content.len())?;
     let mut iter = CsvRows::new(content);
     let Some(header_row) = iter.next() else {
@@ -407,8 +414,14 @@ impl Iterator for CsvImportRows<'_> {
             CsvImportPreset::Orbit => map_orbit_row(&self.header, &row, source_line),
             CsvImportPreset::Todoist => map_todoist_row(&self.header, &row, source_line),
             CsvImportPreset::TickTick => map_ticktick_row(&self.header, &row, source_line),
-            // ICS 已在入口分流到 VTODO 解析，不会走到 CSV 行映射
-            CsvImportPreset::Ics => unreachable!("ICS preset 已分流"),
+            // ICS 已在入口分流到 VTODO 解析，且 csv_import_rows 会直接拒绝该预设。
+            // 这里仍留兜底 Err：csv_import_rows 是 pub，桥层绕过入口时必须返回错误，
+            // 不能用 unreachable! —— 桌面壳 panic = "abort"，触发即整个进程消失。
+            CsvImportPreset::Ics => {
+                return Some(Err(crate::error::CoreError::Other(
+                    "ICS 预设不支持 CSV 行映射，请走 VTODO 解析入口".into(),
+                )))
+            }
         };
         Some(Ok(mapped))
     }
@@ -1074,6 +1087,16 @@ mod tests {
     #[test]
     fn empty_csv_rejected() {
         assert!(map_csv_rows("", CsvImportPreset::Orbit).is_err());
+    }
+
+    /// ICS 预设绕过 stream_csv_rows 分流直传 pub 入口时必须返回错误，
+    /// 不得 panic——桌面壳 panic = "abort"，unreachable! 会让整个进程消失。
+    #[test]
+    fn ics_preset_returns_error_instead_of_panicking() {
+        let err = csv_import_rows("title\nfoo\n", CsvImportPreset::Ics)
+            .err()
+            .expect("ICS 预设必须被 pub 入口拒绝");
+        assert!(err.to_string().contains("ICS"), "{err}");
     }
 
     // ---------- 执行（内存库） ----------
