@@ -1941,6 +1941,9 @@ export interface MicaDiagnostics {
   applyResult: string;
 }
 export const micaDiagnostics = () => invoke<MicaDiagnostics>("mica_diagnostics");
+/** 主题联动的 Mica 材质切换（非 Windows 由 Rust 侧 no-op）；统一走包装层以便错误带命令名 */
+export const micaApply = () => invoke<void>("apply_mica");
+export const micaDisable = () => invoke<void>("disable_mica");
 
 // ========== 测试数据（仅开发构建；release 命令返回不可用，前端入口 DEV 门禁）==========
 /** 生成规模（镜像 orbit_core::api::dev_seed_api::DevSeedPlan；只暴露任务条数） */

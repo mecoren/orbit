@@ -11,7 +11,8 @@
 // 诊断探针类型与命令包装见 `lib/tauri.ts`（micaDiagnostics）；
 // 本文件只负责主题联动的副作用，不持有 DTO 定义（避免两份字段名漂移）。
 import { useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
+
+import { micaApply, micaDisable } from "@/lib/tauri";
 
 /** 当前是否处于暗色模式（依据 <html>.dark class） */
 function isDarkMode(): boolean {
@@ -21,11 +22,11 @@ function isDarkMode(): boolean {
 /** 按当前主题模式应用或关闭 Mica：亮色开、暗色关 */
 function syncMicaWithTheme() {
   if (isDarkMode()) {
-    invoke("disable_mica").catch((err) =>
+    micaDisable().catch((err) =>
       console.error("[mica] disable_mica failed", err),
     );
   } else {
-    invoke("apply_mica").catch((err) =>
+    micaApply().catch((err) =>
       console.error("[mica] apply_mica failed", err),
     );
   }
