@@ -143,6 +143,14 @@ describe("IPC 包装与 e2e 覆盖边界", () => {
     expect(src).not.toMatch(/tauriInvoke<[^>]*>\("[^"]+"\)/);
   });
 
+  it("OrbitIpcError 不得把命令名放到 [tag] 前缀之前", () => {
+    const src = readFileSync(path.join(TEST_DIR, "../lib/tauri.ts"), "utf8");
+    // Rust 侧 `[tag] message` 必须原样开头，否则 syncErrorTag 的 ^\[(\w+)\]
+    // 失配（2026-09-10 双括号事故同型）；命令名只能后置。
+    expect(src).toContain("super(`${detail}（IPC 命令 ${command} 失败）`)");
+    expect(src).not.toContain("super(`IPC 命令 ${command} 失败：${detail}`)");
+  });
+
   it("mock IPC 只在 DEV 生效，且 e2e 明确声明不覆盖真 Tauri 壳", () => {
     const main = readFileSync(path.join(TEST_DIR, "../main.tsx"), "utf8");
     expect(main).toContain(

@@ -163,9 +163,20 @@ export default function App() {
 
   if (boot === "checking") {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
+      <div className="flex h-screen items-center justify-center bg-background p-8">
         {bootError ? (
-          <p className="text-sm text-destructive">{bootError}</p>
+          // 启动门控失败后 useEffect([]) 不会重跑：必须给一个可操作入口，
+          // 否则用户只看到一行错误文字却无法重试（device_id 写入失败即此类）。
+          <div className="flex max-w-md flex-col items-center gap-3 text-center">
+            <p className="text-sm text-destructive">{bootError}</p>
+            <button
+              type="button"
+              className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent"
+              onClick={() => window.location.reload()}
+            >
+              重启应用并重试
+            </button>
+          </div>
         ) : (
           <Spinner size={32} />
         )}

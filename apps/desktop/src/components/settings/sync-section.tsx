@@ -124,7 +124,7 @@ function SectionHeader({ title, desc }: { title: string; desc: string }) {
   );
 }
 
-/** 错误消息转用户文案（保留 tag 前缀供开发排查） */
+/** 错误消息转用户文案（剥掉 `[tag] ` 前缀；命令名由 OrbitIpcError 保留在尾部供定位） */
 function errMsg(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err);
   return msg.replace(/^\[\w+\]\s*/, "");

@@ -21,6 +21,13 @@ import { invoke as tauriInvoke } from "@tauri-apps/api/core";
  *
  * 调用点形式不变（仍是 `invoke<T>("cmd", args)`），故 ipc-contract 的静态
  * 命令提取与 mock 契约不受影响。
+ *
+ * ⚠️ message 必须由原始 detail **原样开头**，命令名只能后置：Rust 侧同步域
+ * 错误用 `[tag] message` 前缀（`cloud_sync_cmd::err_tagged`），前端
+ * `syncErrorTag` / `errMsg` 都靠 `^\[\w+\]` 解析。2026-09-10 曾因桥层重复
+ * 加括号产出 `[[key_mismatch]]` 导致恢复页引导失效（见
+ * `cloud_sync/error.rs::category_tag` 注释）；把中文前缀加在 detail 前面
+ * 是同一型事故，会让 6 个错误路由调用点全部失配。
  */
 export class OrbitIpcError extends Error {
   readonly command: string;
@@ -28,7 +35,7 @@ export class OrbitIpcError extends Error {
 
   constructor(command: string, reason: unknown) {
     const detail = reason instanceof Error ? reason.message : String(reason);
-    super(`IPC 命令 ${command} 失败：${detail}`);
+    super(`${detail}（IPC 命令 ${command} 失败）`);
     this.name = "OrbitIpcError";
     this.command = command;
     this.reason = reason;
@@ -790,7 +797,10 @@ export const taskDescriptionFlags = () => invoke<TaskExistenceFlag[]>("task_desc
  *   处置动作是「升级应用」：既不跳恢复页也不跳解锁页，toast 直给 message
  */
 export function syncErrorTag(err: unknown): string | null {
-  const m = /^\[(\w+)\]/.exec(err instanceof Error ? err.message : String(err));
+  // 结构化兜底：即便日后 OrbitIpcError.message 的格式被改回「中文前缀在前」，
+  // 也从 reason（原始 Rust 字符串）取 tag，不再单纯依赖字符串排列顺序。
+  const raw = err instanceof OrbitIpcError ? err.reason : err;
+  const m = /^\[(\w+)\]/.exec(raw instanceof Error ? raw.message : String(raw));
   return m ? m[1] : null;
 }
 
@@ -900,14 +910,28 @@ export interface SyncResultJson {
   changed_tables?: string[];
 }
 
-const parseResult = (json: string): SyncResultJson => JSON.parse(json);
+/**
+ * 同步返回值解析：invoke 的包装只覆盖 reject，resolve 之后的 JSON.parse
+ * 失败会抛裸 SyntaxError（既无命令名也无 tag，用户只看到 "Unexpected token"）。
+ * 这里补上命令上下文，让坏返回值和 IPC 失败走同一条可定位链路。
+ */
+const parseResult =
+  (command: string) =>
+  (json: string): SyncResultJson => {
+    try {
+      return JSON.parse(json) as SyncResultJson;
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : String(e);
+      throw new OrbitIpcError(command, `同步返回值不是合法 JSON：${detail}`);
+    }
+  };
 
 export const cloudSyncNow = (origin: "manual" | "background" | "exit" = "manual") =>
-  invoke<string>("cloud_sync_now", { origin }).then(parseResult);
+  invoke<string>("cloud_sync_now", { origin }).then(parseResult("cloud_sync_now"));
 export const cloudSyncPushOnly = (origin: "manual" | "background" | "exit" = "manual") =>
-  invoke<string>("cloud_sync_push_only", { origin }).then(parseResult);
+  invoke<string>("cloud_sync_push_only", { origin }).then(parseResult("cloud_sync_push_only"));
 export const cloudSyncPullThenPush = (origin: "manual" | "background" | "exit" = "manual") =>
-  invoke<string>("cloud_sync_pull_then_push", { origin }).then(parseResult);
+  invoke<string>("cloud_sync_pull_then_push", { origin }).then(parseResult("cloud_sync_pull_then_push"));
 /**
  * 本地同步账本（core `SyncState` 镜像；`sync_state.json`，只有指纹元数据）
  *
@@ -930,7 +954,17 @@ export interface SyncStateJson {
   remote_tombstones: Record<string, Record<string, string>>;
 }
 export const cloudSyncGetState = (): Promise<SyncStateJson> =>
-  invoke<string>("cloud_sync_get_state").then((s) => JSON.parse(s) as SyncStateJson);
+  invoke<string>("cloud_sync_get_state").then((s) => {
+    try {
+      return JSON.parse(s) as SyncStateJson;
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : String(e);
+      throw new OrbitIpcError(
+        "cloud_sync_get_state",
+        `同步状态返回值不是合法 JSON：${detail}`,
+      );
+    }
+  });
 /**
  * 强制同步（进入 / 退出应用生命周期钩子专用）
  *
@@ -944,7 +978,9 @@ export const cloudSyncForce = (
   // 调用方（启动同步 3000 / BootGate 同款）始终显式传参，默认值只是契约口径
   waitForIdleMs = 3000,
 ) =>
-  invoke<string>("cloud_sync_force", { origin, waitForIdleMs }).then(parseResult);
+  invoke<string>("cloud_sync_force", { origin, waitForIdleMs }).then(
+    parseResult("cloud_sync_force"),
+  );
 export const cloudSyncIsRunning = () => invoke<boolean>("cloud_sync_is_running");
 /**
  * 请求取消正在进行的增量同步（N33 协作式分片取消）
@@ -959,7 +995,8 @@ export const cloudSyncCancel = () => invoke<boolean>("cloud_sync_cancel");
  * rekey 全量重传：以本机为准，用当前 Data Key 重加密覆盖云端全部数据。
  * 危险操作（恢复页「以本机为准」），UI 二次确认后调用。
  */
-export const cloudSyncRekey = () => invoke<string>("cloud_sync_rekey").then(parseResult);
+export const cloudSyncRekey = () =>
+  invoke<string>("cloud_sync_rekey").then(parseResult("cloud_sync_rekey"));
 export const syncDisconnect = () => invoke<void>("sync_disconnect");
 
 // ---------- 增量同步历史（P1-17：设置页同步历史卡） ----------
