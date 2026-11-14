@@ -71,6 +71,11 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: 生产构建(门禁量的是构建产物口径)
+        env:
+          # growth-curve 需要 window.__orbitMock 预置万行数据；正式发布构建
+          # 不设此变量，mock 分支会被 Rollup 摇掉（见 main.tsx 注释）。
+          # 只加 DEV 守卫会让门禁在生产产物里找不到 mock 而秒失败。
+          VITE_E2E_MOCK: "1"
         run: pnpm --filter orbit build
 
       - name: 安装 Playwright 浏览器

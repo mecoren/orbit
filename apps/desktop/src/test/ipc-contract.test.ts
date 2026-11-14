@@ -151,11 +151,25 @@ describe("IPC 包装与 e2e 覆盖边界", () => {
     expect(src).not.toContain("super(`IPC 命令 ${command} 失败：${detail}`)");
   });
 
-  it("mock IPC 只在 DEV 生效，且 e2e 明确声明不覆盖真 Tauri 壳", () => {
+  it("mock IPC 只在 DEV / 显式内存门禁构建生效，发布包不得带 mock", () => {
     const main = readFileSync(path.join(TEST_DIR, "../main.tsx"), "utf8");
+    // 只加 DEV 守卫会让 growth-curve 在生产 dist 里找不到 window.__orbitMock，
+    // CI 的 perf-gate 会秒失败（2026-11-14 连续 5 次红灯的根因）。
     expect(main).toContain(
-      'import.meta.env.DEV && !("__TAURI_INTERNALS__" in window)',
+      'import.meta.env.DEV || import.meta.env.VITE_E2E_MOCK === "1"',
     );
+    expect(main).toContain('!("__TAURI_INTERNALS__" in window)');
+
+    const ci = readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
+    const release = readFileSync(
+      path.join(ROOT, ".github/workflows/release.yml"),
+      "utf8",
+    );
+    expect(ci).toContain('VITE_E2E_MOCK: "1"');
+    expect(release, "发布构建绝不能注入 mock IPC").not.toContain(
+      "VITE_E2E_MOCK",
+    );
+
     const cfg = readFileSync(path.join(ROOT, "playwright.config.ts"), "utf8");
     expect(cfg).toContain("不覆盖真 Tauri 壳");
     expect(cfg).toContain("vite dev");

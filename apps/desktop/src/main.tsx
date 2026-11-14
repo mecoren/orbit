@@ -9,12 +9,20 @@ import { installBrowserIpc } from "./test/ipc-mock";
 import "./index.css";
 
 // 纯浏览器环境（Playwright 冒烟，#19）：伪造 __TAURI_INTERNALS__ 接管
-// invoke/listen。生产构建下 import.meta.env.DEV 被静态折叠为 false，
-// Rollup 会一并摇掉未被调用的 ipc-mock 模块（实测 dist 产物无 mock 特征字符串）；
-// dev + 真实 Tauri WebView 也不调用，不对已注入的 internals 做任何处理。
+// invoke/listen。两种情形需要 mock：
+//  1) vite dev（DEV=true）—— Playwright e2e；
+//  2) 生产构建 + VITE_E2E_MOCK=1 —— CI 的 growth-curve 内存门禁要拿
+//     window.__orbitMock 预置万行数据，且它量的是**构建产物口径**（不能用
+//     dev server 替代，否则 baselines.json 的历史数值失去可比性）。
+// 正式发布构建两者皆 false：Rollup 静态折叠掉整个分支，dist 无 mock 特征
+// 字符串（安全口径不变）。真实 Tauri WebView 已注入 internals，任何情况下
+// 都不覆盖。⚠️ 只加 DEV 守卫会让内存门禁在生产产物里找不到 mock 而立刻失败。
 // 刻意保持同步调用：mock 必须在 React 首帧渲染前装好，改成动态 import + await
 // 会改变启动时序，需重跑 e2e 全量冒烟后再评估。
-if (import.meta.env.DEV && !("__TAURI_INTERNALS__" in window)) {
+if (
+  (import.meta.env.DEV || import.meta.env.VITE_E2E_MOCK === "1") &&
+  !("__TAURI_INTERNALS__" in window)
+) {
   installBrowserIpc();
 }
 
