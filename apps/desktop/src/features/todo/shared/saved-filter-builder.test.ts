@@ -15,7 +15,8 @@ describe("parseConditions", () => {
       due_overdue: true,
       favorite_only: true,
     });
-    const f = parseConditions(raw);
+    const f = parseConditions(raw)!;
+    expect(f).not.toBeNull();
     expect(f.status).toBe("pending");
     expect(f.priorityMin).toBe(3);
     expect(f.projectIds).toEqual([1, 2]);
@@ -38,7 +39,8 @@ describe("parseConditions", () => {
       has_attachment: false,
       has_open_subtask: true,
     });
-    const f = parseConditions(raw);
+    const f = parseConditions(raw)!;
+    expect(f).not.toBeNull();
     expect(f.dueFrom).toBe(1000);
     expect(f.dueUntil).toBe(2000);
     expect(f.createdFrom).toBe(3000);
@@ -48,9 +50,12 @@ describe("parseConditions", () => {
     expect(f.hasOpenSubtask).toBe(true);
   });
 
-  it("缺键回退空表单、损坏 JSON 防御回退", () => {
+  it("合法空条件 {} 回退空表单；损坏 JSON 返回 null（编辑态据此禁止保存）", () => {
     expect(parseConditions("{}")).toEqual(EMPTY_FILTER_FORM);
-    expect(parseConditions("not-json")).toEqual(EMPTY_FILTER_FORM);
+    expect(parseConditions("not-json")).toBeNull();
+    expect(parseConditions("null")).toBeNull();
+    expect(parseConditions("[]")).toBeNull();
+    expect(parseConditions("42")).toBeNull();
   });
 });
 

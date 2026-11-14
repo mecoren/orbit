@@ -64,13 +64,23 @@ const emptyDraft: TemplateDraft = {
   subtasks: "",
 };
 
-function draftOf(t: TodoTemplate): TemplateDraft {
-  let payload: Record<string, unknown> = {};
+/**
+ * payload JSON → 编辑草稿；**非法 JSON / 非对象返回 null**。
+ *
+ * ⚠️ 不能「损坏按空编辑」：`openEdit` 之后点保存会走 `draftToPayload(draft)`
+ * + `templateUpdate`，把空 payload 写回覆盖原模板且不可逆。列表摘要
+ * `payloadSummary` 会显示「（内容损坏）」，编辑态必须与它同口径拒绝打开。
+ */
+function draftOf(t: TodoTemplate): TemplateDraft | null {
+  let payload: Record<string, unknown>;
   try {
-    const parsed = JSON.parse(t.payload);
-    if (parsed && typeof parsed === "object") payload = parsed as Record<string, unknown>;
+    const parsed: unknown = JSON.parse(t.payload);
+    if (parsed == null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return null;
+    }
+    payload = parsed as Record<string, unknown>;
   } catch {
-    /* 损坏 payload 按空编辑 */
+    return null;
   }
   const num = (v: unknown) => (typeof v === "number" ? String(v) : "");
   const sub = Array.isArray(payload.subtasks) && payload.subtasks.every((x) => typeof x === "string")
@@ -167,8 +177,13 @@ export function TemplatesSection() {
     setDialogOpen(true);
   };
   const openEdit = (t: TodoTemplate) => {
+    const draft = draftOf(t);
+    if (draft === null) {
+      toast.error("模板内容已损坏，为避免用空白内容覆盖原模板，已禁止编辑；请删除后重建");
+      return;
+    }
     setEditing(t.id);
-    setDraft(draftOf(t));
+    setDraft(draft);
     setDialogOpen(true);
   };
 

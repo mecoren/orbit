@@ -58,20 +58,57 @@ export interface CustomTheme {
 
 export const CUSTOM_THEMES_KEY = "color_theme_custom_themes";
 export const CURRENT_CUSTOM_THEME_ID_KEY = "color_theme_current_custom_id";
+/** 检测到非法 JSON 时把原始值备份到此处，绝不直接覆盖掉用户已有主题 */
+export const CUSTOM_THEMES_CORRUPT_BACKUP_KEY =
+  "color_theme_custom_themes__corrupt_backup";
+
+/**
+ * 本次会话读到的损坏原始值（null = 数据正常）。
+ *
+ * 历史缺陷：`readCustomThemes` 解析失败一律回落 `[]`，而 add/rename/update/
+ * remove 都会先读再 `writeCustomThemes` 整体写回 —— 一次新增就把损坏前的
+ * **全部**自定义主题覆盖没了。现在读侧留痕、写侧拒绝，并备份原始字节。
+ */
+let corruptedCustomThemesRaw: string | null = null;
+
+/** 自定义主题列表是否损坏（供设置页给出可见提示） */
+export function hasCorruptedCustomThemes(): boolean {
+  return corruptedCustomThemesRaw !== null;
+}
 
 function readCustomThemes(): CustomTheme[] {
-  try {
-    const raw = localStorage.getItem(CUSTOM_THEMES_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) return parsed as CustomTheme[];
-  } catch {
-    /* 忽略损坏数据 */
+  const raw = localStorage.getItem(CUSTOM_THEMES_KEY);
+  if (!raw) {
+    corruptedCustomThemesRaw = null;
+    return [];
   }
-  return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) throw new Error("自定义主题列表不是数组");
+    corruptedCustomThemesRaw = null;
+    return parsed as CustomTheme[];
+  } catch (err) {
+    corruptedCustomThemesRaw = raw;
+    console.error("[color-theme] 自定义主题数据损坏，已阻止写入以免覆盖原数据", err);
+    return [];
+  }
 }
 
 function writeCustomThemes(themes: CustomTheme[]): void {
+  if (corruptedCustomThemesRaw !== null) {
+    try {
+      localStorage.setItem(
+        CUSTOM_THEMES_CORRUPT_BACKUP_KEY,
+        corruptedCustomThemesRaw,
+      );
+    } catch (backupErr) {
+      console.error("[color-theme] 损坏数据备份失败", backupErr);
+    }
+    // 必须抛错：静默 no-op 会让调用方误报「已添加/已保存」的假成功
+    throw new Error(
+      "自定义主题数据损坏，已阻止写入（原始数据已备份，请清除站点数据后重建）",
+    );
+  }
   localStorage.setItem(CUSTOM_THEMES_KEY, JSON.stringify(themes));
 }
 

@@ -35,6 +35,7 @@ import {
   getCurrentCustomThemeId,
   getStoredPaletteId,
   getStoredThemeMode,
+  hasCorruptedCustomThemes,
   removeCustomTheme,
   selectCustomTheme,
   setPalette,
@@ -116,6 +117,11 @@ export function ThemeSection() {
   const refreshCustoms = () => {
     setCustoms(getCustomThemes());
     setCurrentCustomId(getCurrentCustomThemeId());
+    if (hasCorruptedCustomThemes()) {
+      toast.error(
+        "自定义主题数据损坏：为避免覆盖已禁止新增/修改/删除，原始值已备份",
+      );
+    }
   };
 
   useEffect(() => {
@@ -168,13 +174,18 @@ export function ThemeSection() {
   };
 
   const submitEditor = () => {
-    if (editingId == null) {
-      const t = addCustomTheme(draftName, draftAccent, draftMode);
-      selectCustomTheme(t.id);
-      toast.success("已添加自定义主题");
-    } else {
-      updateCustomTheme(editingId, { name: draftName, accent: draftAccent, mode: draftMode });
-      toast.success("已保存修改");
+    try {
+      if (editingId == null) {
+        const t = addCustomTheme(draftName, draftAccent, draftMode);
+        selectCustomTheme(t.id);
+        toast.success("已添加自定义主题");
+      } else {
+        updateCustomTheme(editingId, { name: draftName, accent: draftAccent, mode: draftMode });
+        toast.success("已保存修改");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+      return;
     }
     refreshCustoms();
     setPaletteIdState("custom");
@@ -182,7 +193,12 @@ export function ThemeSection() {
   };
 
   const deleteCustom = (t: CustomTheme) => {
-    removeCustomTheme(t.id);
+    try {
+      removeCustomTheme(t.id);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+      return;
+    }
     refreshCustoms();
     if (getCurrentCustomThemeId() === null && paletteIdState === "custom") {
       setPaletteIdState("system");

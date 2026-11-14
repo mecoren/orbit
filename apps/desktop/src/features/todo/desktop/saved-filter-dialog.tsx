@@ -16,6 +16,7 @@
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { Star, TriangleAlert } from "lucide-react";
+import { toast } from "sonner";
 import { format } from "date-fns";
 
 import { cn } from "@/lib/utils";
@@ -179,12 +180,17 @@ export function SavedFilterDialog({
 }: SavedFilterDialogProps) {
   const [name, setName] = useState("");
   const [form, setForm] = useState<FilterFormState>(EMPTY_FILTER_FORM);
+  // 条件 JSON 损坏时禁止提交：绝不能用空表单经 buildConditions 变成 "{}"
+  // 覆盖原筛选器（不可逆）。合法空条件 "{}" 不算损坏。
+  const [conditionsBroken, setConditionsBroken] = useState(false);
 
   // 打开时重置表单 + 预填（initialConditions/initialName 变化即新一轮）
   useEffect(() => {
     if (open) {
       setName(initialName);
-      setForm(parseConditions(initialConditions));
+      const parsed = parseConditions(initialConditions);
+      setConditionsBroken(parsed === null);
+      setForm(parsed ?? EMPTY_FILTER_FORM);
     }
   }, [open, initialConditions, initialName]);
 
@@ -215,6 +221,10 @@ export function SavedFilterDialog({
   const [saving, setSaving] = useState(false);
   const submit = async () => {
     if (!name.trim() || saving) return;
+    if (conditionsBroken) {
+      toast.error("筛选条件数据损坏，已禁止保存；请删除后重新创建该筛选器");
+      return;
+    }
     setSaving(true);
     try {
       await onSubmit(name.trim(), buildConditions(form));
@@ -250,6 +260,15 @@ export function SavedFilterDialog({
             填写名称即可保存；条件不选即不限，随时从左侧「筛选器」回到这个切片
           </p>
         </DialogHeader>
+
+        {conditionsBroken && (
+          <div className="flex shrink-0 items-start gap-2 border-b border-destructive/40 bg-destructive/10 px-6 py-3 text-sm text-destructive">
+            <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+            <span>
+              该筛选器的条件数据已损坏。为避免用空条件覆盖原设置，已禁止保存；请删除后重新创建。
+            </span>
+          </div>
+        )}
 
         {/* 只有中段滚动：头部与底部动作条常驻，长表单不会把「保存」顶出视口 */}
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
@@ -499,7 +518,10 @@ export function SavedFilterDialog({
           <Button variant="outline" onClick={onCancel}>
             取消
           </Button>
-          <Button disabled={!name.trim() || saving} onClick={() => void submit()}>
+          <Button
+            disabled={!name.trim() || saving || conditionsBroken}
+            onClick={() => void submit()}
+          >
             {mode === "edit" ? "保存修改" : "保存"}
           </Button>
         </DialogFooter>

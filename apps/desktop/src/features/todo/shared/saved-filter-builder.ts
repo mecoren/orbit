@@ -60,13 +60,25 @@ export const EMPTY_FILTER_FORM: FilterFormState = {
   hasOpenSubtask: null,
 };
 
-/** 条件 JSON → 表单态（缺键/损坏回退空表单——与 applySavedFilter 防御同口径） */
-export function parseConditions(raw: string): FilterFormState {
+/**
+ * 条件 JSON → 表单态；**非法 JSON / 非对象返回 `null`**。
+ *
+ * ⚠️ 不能回退空表单：编辑态（`saved-filter-dialog.tsx`）会把表单经
+ * `buildConditions` 变成 `"{}"` 提交，静默用空条件覆盖原筛选器且不可逆
+ * （与移动端 `saved_filters_screen.dart` 2026-11-14 修的是同型问题）。
+ * 调用方必须区分「合法空条件 `{}`」与「数据已损坏 null」，后者禁止保存。
+ * 应用筛选器时的防御性降级另走 `saved-filter.ts::applySavedFilter`。
+ */
+export function parseConditions(raw: string): FilterFormState | null {
   let c: SavedFilterConditions;
   try {
-    c = JSON.parse(raw) as SavedFilterConditions;
+    const parsed: unknown = JSON.parse(raw);
+    if (parsed == null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return null;
+    }
+    c = parsed as SavedFilterConditions;
   } catch {
-    return { ...EMPTY_FILTER_FORM, projectIds: [], labelIds: [] };
+    return null;
   }
   return {
     status: c.status ?? null,
