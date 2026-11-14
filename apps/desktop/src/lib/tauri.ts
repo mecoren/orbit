@@ -8,7 +8,43 @@
  * - 命令多词参数用 camelCase（Tauri 自动映射 snake_case）；
  * - 模型字段保持 snake_case 直传（与 Rust serde 一致）。
  */
-import { invoke } from "@tauri-apps/api/core";
+import { invoke as tauriInvoke } from "@tauri-apps/api/core";
+
+/**
+ * 统一 IPC 包装（首发版最小护栏）。
+ *
+ * `invoke<T>()` 只有编译期泛型断言、没有运行时 schema：Rust 侧返回形状漂移
+ * 时 TS 不会报错，错数据会被直接渲染。给几百个 command 全量加 zod/valibot
+ * 是 0.2 的结构性改造；首发版先落零侵入的第一层——把裸错误统一包装成
+ * [OrbitIpcError] 并带上命令名，保证 toast / 日志能直接定位失败的是哪个
+ * command，而不是只剩一句来自 Rust 的字符串。
+ *
+ * 调用点形式不变（仍是 `invoke<T>("cmd", args)`），故 ipc-contract 的静态
+ * 命令提取与 mock 契约不受影响。
+ */
+export class OrbitIpcError extends Error {
+  readonly command: string;
+  readonly reason: unknown;
+
+  constructor(command: string, reason: unknown) {
+    const detail = reason instanceof Error ? reason.message : String(reason);
+    super(`IPC 命令 ${command} 失败：${detail}`);
+    this.name = "OrbitIpcError";
+    this.command = command;
+    this.reason = reason;
+  }
+}
+
+async function invoke<T>(
+  command: string,
+  args?: Record<string, unknown>,
+): Promise<T> {
+  try {
+    return await tauriInvoke<T>(command, args);
+  } catch (err) {
+    throw new OrbitIpcError(command, err);
+  }
+}
 
 // ---------- 通用列表过滤条件 ----------
 
@@ -250,6 +286,17 @@ export async function dbMigrateToPlaintext(): Promise<void> {
 /** 写入当前设备 ID（进程级 OnceCell，DB 初始化后调用一次） */
 export async function dbSetDeviceId(deviceId: string): Promise<void> {
   return invoke<void>("db_set_device_id", { deviceId });
+}
+
+/**
+ * 回读当前设备 ID（启动链断言用；未设置时后端返回空串）。
+ *
+ * [context.rs] 的 get_device_id 在 OnceCell 未写入时返回 Err，调用方据此
+ * 跳过 Lamport 版本号写入——所以启动后必须确认它真的非空，不能只信一次
+ * `db_set_device_id` 的 Ok。
+ */
+export async function dbGetDeviceId(): Promise<string> {
+  return invoke<string>("db_get_device_id");
 }
 
 // ========== todo_projects ==========

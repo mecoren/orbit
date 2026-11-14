@@ -960,6 +960,8 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   master_auth_has: () => false,
   db_init_plaintext: () => undefined,
   db_set_device_id: () => undefined,
+  // 启动链回读断言：返回非空 id，保证浏览器冒烟也能走完 ensureDeviceId
+  db_get_device_id: () => "browser-smoke-device",
   // 冷启动首屏标记（真桥 ORBIT_PERF_MARKER 未设置时 no-op，mock 恒成功）
   perf_first_screen_mark: () => undefined,
   // 关于页更新日志（真实数据在 orbit-core；mock 只保证头部版本 = 清单版本，

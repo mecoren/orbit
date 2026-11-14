@@ -14,6 +14,7 @@ import { UndoStackProvider } from "@/hooks/use-undo-stack";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { markFirstScreenReady } from "@/lib/perf-marker";
 import {
+  dbGetDeviceId,
   dbInitEncrypted,
   dbInitPlaintext,
   dbSetDeviceId,
@@ -38,7 +39,27 @@ async function ensureDeviceId() {
     id = crypto.randomUUID();
     localStorage.setItem(key, id);
   }
-  await dbSetDeviceId(id).catch(() => {});
+  // device_id 是 generic_repo 写操作自动填充 device_id 列、以及 Lamport
+  // 版本号推进的前置条件（context.rs：未设置时调用方回退空串并跳过版本号
+  // 写入）。此前 `.catch(() => {})` 把失败彻底吞掉：本地改动照常落库、
+  // 界面照常可用，但云同步的 DeviceCheckpoint / 真并发冲突判定静默失真。
+  try {
+    await dbSetDeviceId(id);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // OnceCell 已写入属于热重载 / 重复启动，幂等且无副作用，放行；
+    // 其余失败一律上抛，由启动门控显示成可见错误而非静默降级。
+    if (!msg.includes("already set")) {
+      throw new Error(
+        `设备标识写入失败（${msg}）：本地改动将无法正确参与云同步，请重启应用`,
+      );
+    }
+  }
+  // 回读断言：确认 Rust 侧 OnceCell 真的持有非空 id，不能只信一次 Ok
+  const actual = await dbGetDeviceId();
+  if (!actual) {
+    throw new Error("设备标识未生效：本地改动将无法正确参与云同步，请重启应用");
+  }
 }
 
 /** 主界面壳：挂载 db-change / sync-finished 全局失效（须在 DB 就绪后渲染） */
@@ -121,9 +142,16 @@ export default function App() {
 
   // F80：key 留在 Rust 侧（PendingDbKey），解锁成功后无需传参
   const handleUnlocked = async () => {
-    await dbInitEncrypted();
-    await ensureDeviceId();
-    setBoot("ready");
+    try {
+      await dbInitEncrypted();
+      await ensureDeviceId();
+      setBoot("ready");
+    } catch (err) {
+      // 解锁页没有 Toaster；回到启动门控页用 bootError 呈现，避免变成
+      // 未处理的 Promise rejection（用户只看到解锁页卡住）。
+      setBootError(err instanceof Error ? err.message : String(err));
+      setBoot("checking");
+    }
   };
 
   // 冷启动度量（docs/09 §六）：boot 门控落到持续画面（解锁页/主界面）后

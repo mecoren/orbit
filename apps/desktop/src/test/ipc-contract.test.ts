@@ -125,6 +125,35 @@ function list(filter: Record<string, unknown>) {
   return impl({ filter }, { db });
 }
 
+/**
+ * 首发版 IPC 护栏：统一错误包装 + e2e 覆盖边界。
+ *
+ * 这批用例不验证 Rust 返回值的运行时形状（那需要全量 zod/valibot，属 0.2），
+ * 只锁住两件不能被悄悄改掉的事：所有调用点仍走带命令名的包装；e2e 的
+ * mock 性质被显式声明，免得有人把「全绿」当成真 Tauri 壳的验收证据。
+ */
+describe("IPC 包装与 e2e 覆盖边界", () => {
+  const ROOT = path.resolve(TEST_DIR, "../../../..");
+
+  it("统一 invoke 包装保留调用点形式，错误带命令名", () => {
+    const src = readFileSync(path.join(TEST_DIR, "../lib/tauri.ts"), "utf8");
+    expect(src).toContain("import { invoke as tauriInvoke }");
+    expect(src).toContain("export class OrbitIpcError");
+    // 调用点必须仍走本地 invoke<T>；改成裸 tauriInvoke 会让包装整层失效
+    expect(src).not.toMatch(/tauriInvoke<[^>]*>\("[^"]+"\)/);
+  });
+
+  it("mock IPC 只在 DEV 生效，且 e2e 明确声明不覆盖真 Tauri 壳", () => {
+    const main = readFileSync(path.join(TEST_DIR, "../main.tsx"), "utf8");
+    expect(main).toContain(
+      'import.meta.env.DEV && !("__TAURI_INTERNALS__" in window)',
+    );
+    const cfg = readFileSync(path.join(ROOT, "playwright.config.ts"), "utf8");
+    expect(cfg).toContain("不覆盖真 Tauri 壳");
+    expect(cfg).toContain("vite dev");
+  });
+});
+
 describe("mock IPC 契约", () => {
   it("① 前端 invoke 命令 ⊆ mock 注册键 ∪ 有意 allowlist（新命令忘分类当场红）", () => {
     const mockKeys = new Set(Object.keys(mockCommands));

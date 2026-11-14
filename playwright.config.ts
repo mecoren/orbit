@@ -5,6 +5,11 @@
 // Rust 后端。这样 e2e 只依赖 vite dev server（CI 上免 Rust 工具链），
 // 与 web job 同一依赖面。
 //
+// ⚠️ 覆盖边界：这批 e2e 跑的是 mock IPC + 内存库，**不覆盖真 Tauri 壳**。
+// 全绿不能证明 IPC 契约、Tauri 权限 scope、更新器 relaunch、崩溃日志轮转
+// 在 WebView2 运行时正确；发布前仍需单独做真机 / 真壳冒烟（docs/08 §7）。
+// 这条边界由 src/test/ipc-contract.test.ts 的静态用例锁住，别误当验收证据。
+//
 // - webServer：自动起 apps/desktop 的 vite dev——专用端口 5273，
 //   不用 vite 默认 5173：reuseExistingServer 在本地会直连已监听端口，
 //   若恰被同机其他项目的 dev server 占用（实测踩过），测试会全程跑在
