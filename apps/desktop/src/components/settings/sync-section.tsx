@@ -208,7 +208,7 @@ function ConnectionCard() {
         setTimeoutSecs(c.timeout_seconds || 30);
         // session_token 打码不下发，输入框保持空 = 保存时沿用已存令牌
       })
-      .catch(() => {});
+      .catch((err) => toast.error(`读取同步/备份设置失败：${errMsg(err)}`));
   }, []);
 
   /** 密码留空 = 沿用已保存凭据（后端语义：空串不覆盖 credential 列） */
@@ -506,7 +506,7 @@ function SyncPasswordCard() {
   const [forgetOpen, setForgetOpen] = useState(false);
 
   const refresh = () => {
-    syncCryptoStatus().then(setStatus).catch(() => {});
+    syncCryptoStatus().then(setStatus).catch((err) => toast.error(`读取同步/备份设置失败：${errMsg(err)}`));
   };
   useEffect(refresh, []);
 
@@ -819,13 +819,13 @@ function SyncRunCard() {
   const [progressText, setProgressText] = useState<string | null>(null);
 
   useEffect(() => {
-    syncConfigGet().then(setConfig).catch(() => {});
+    syncConfigGet().then(setConfig).catch((err) => toast.error(`读取同步/备份设置失败：${errMsg(err)}`));
   }, []);
 
   // 后台同步完成（含定时触发）→ 刷新上次同步时间展示
   useEffect(() => {
     const unlisten = listen("sync-finished", () => {
-      syncConfigGet().then(setConfig).catch(() => {});
+      syncConfigGet().then(setConfig).catch((err) => toast.error(`读取同步/备份设置失败：${errMsg(err)}`));
     });
     return () => {
       unlisten.then((fn) => fn());
@@ -885,7 +885,7 @@ function SyncRunCard() {
       setCancelling(false);
       setProgressText(null);
       void qc.invalidateQueries();
-      syncConfigGet().then(setConfig).catch(() => {});
+      syncConfigGet().then(setConfig).catch((err) => toast.error(`读取同步/备份设置失败：${errMsg(err)}`));
     }
   };
 
@@ -1330,7 +1330,10 @@ function AutoBackupCard() {
   useEffect(() => {
     backupPrefsGet()
       .then(setPrefs)
-      .catch(() => setPrefs(null));
+      .catch((err) => {
+        toast.error(`读取定时备份设置失败：${errMsg(err)}`);
+        setPrefs(null);
+      });
   }, []);
 
   /**
@@ -1347,7 +1350,7 @@ function AutoBackupCard() {
   // 定时备份完成事件 → 刷新上次/下次展示 + toast 提示
   useEffect(() => {
     const unlisten = listen<AutoBackupFinishedEvent>("auto-backup-finished", (evt) => {
-      backupPrefsGet().then(setPrefs).catch(() => {});
+      backupPrefsGet().then(setPrefs).catch((err) => toast.error(`读取同步/备份设置失败：${errMsg(err)}`));
       const p = evt.payload;
       if (!p.ok) {
         toast.warning(`自动备份失败：${p.error ?? "未知错误"}`);
@@ -1648,8 +1651,10 @@ function BackupCard() {
       .then((r) => {
         if (!cancelled) setDeviceId(r.device_id);
       })
-      .catch(() => {
-        /* 设备标识非必需：失败则不渲染该行 */
+      .catch((err) => {
+        // 设备标识非必需：UI 不渲染该行即可，但留错误日志便于排障，
+        // 不能让「读不到」和「本来就没有」在日志里一样安静。
+        console.error("[BackupCard] 读取本机设备标识失败", err);
       });
     return () => {
       cancelled = true;

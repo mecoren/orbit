@@ -30,7 +30,11 @@ export function useGlobalQuickAdd() {
         const plugin = await import("@tauri-apps/plugin-global-shortcut");
         await plugin.register(QUICK_ADD_SHORTCUT, async () => {
           // 唤起主窗（隐藏驻留 → 显示聚焦；被回收 → 重建），再触发快速新建
-          await showMainWindow().catch(() => {});
+          // 唤起主窗失败不能静默：快捷键按了却没反应、日志里也没有线索。
+          // 仍继续 bumpQuickAddIntent，下次窗口可见时会补上快速新建。
+          await showMainWindow().catch((err) => {
+            console.error("[QuickAdd] 唤起主窗失败", err);
+          });
           bumpQuickAddIntent();
         });
         unregister = () => void plugin.unregister(QUICK_ADD_SHORTCUT);
