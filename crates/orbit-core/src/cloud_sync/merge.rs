@@ -843,10 +843,19 @@ async fn apply_tombstones_in_tx(
                 deleted_count += 1;
             }
             Ok(false) => {
+                // 不能只记 warn：errors 是 pull 侧登记 failed_modules 的唯一判据
+                // （见 pull.rs F86）。空 errors 会让本轮 commit、桶指纹记成已消费、
+                // epoch 照常推进，下轮 remote_chunk_fp 命中跳过 → 这条软删行
+                // 永久不落库且不再重试（静默空洞）。登记 errors 后该表进
+                // failed_modules：push 跳过本表、桶指纹回滚，下轮强制重拉。
                 log::warn!(
                     "[merge] 墓碑无法物化（旧版墓碑无整行快照且该表有必填外键）：\
-                     表 {table} uuid={uuid}。升级写出方后重新同步即可补齐"
+                     表 {table} uuid={uuid}。登记行级失败以便下轮重试"
                 );
+                errors.push(format!(
+                    "表 {table}: 墓碑 uuid={uuid} 无整行快照且含必填外键，\
+                     无法物化；需写出方升级后重新同步"
+                ));
             }
             Err(e) => {
                 errors.push(format!("表 {table}: 物化墓碑 uuid={uuid} 失败: {e}"));
@@ -864,8 +873,9 @@ async fn apply_tombstones_in_tx(
 ///   解析成本端 id——子表（子任务/评论/提醒/关系/附件）也能正确物化。
 /// - **无快照**（历史墓碑/旧客户端）：仅当该表所有 NOT NULL 列都有 DEFAULT 时，
 ///   用 `uuid + 删除时间` 建一条最小占位行（项目/任务/标签/筛选器/模板属于此类）。
-///   子表需要 task_id 等现象外键，没有快照就无从还原，返回 `Ok(false)` 交给
-///   调用方记 warn。
+///   子表需要 task_id 等现象外键，没有快照就无从还原，返回 `Ok(false)`；
+///   调用方**必须**把它登记为行级错误（进 `failed_modules`），否则桶指纹会被
+///   记成已消费，这条软删行永远不再重试（静默空洞，见 pull.rs F86）。
 ///
 /// 返回 `Ok(true)` 表示确实插入了行。
 #[allow(clippy::too_many_arguments)] // 物化一条墓碑所需的最小上下文
@@ -1563,14 +1573,30 @@ mod tests {
             assert_eq!(row.deleted_at, 90);
         }
 
-        /// 旧墓碑 + 子表（task_id 等必填外键无默认值）：无从还原，跳过而不报错
+        /// 旧墓碑 + 子表（task_id 等必填外键无默认值）：不得凭空造行，
+        /// 且**必须登记行级错误**。只记 warn 会让本轮 commit、桶指纹记成已消费、
+        /// epoch 照常推进，下轮命中跳过 → 软删行永久不落库（静默空洞，pull.rs F86）。
         #[tokio::test]
-        async fn legacy_tombstone_on_child_table_is_skipped() {
+        async fn legacy_tombstone_on_child_table_reports_failure() {
             let pool = setup_pool().await;
             let tombstones = vec![TombstoneEntry::new("legacy-comment".to_string(), 90)];
-            let deleted =
-                apply_tombstones(&pool, "todo_comments", &tombstones, &HashMap::new()).await;
+            let (deleted, errors) = apply_tombstones_with_errors(
+                &pool,
+                "todo_comments",
+                &tombstones,
+                &HashMap::new(),
+            )
+            .await;
             assert_eq!(deleted, 0, "缺少父级信息时不得凭空造子行");
+            assert_eq!(
+                errors.len(),
+                1,
+                "无法物化的墓碑必须进 errors（failed_modules 判据），不得静默跳过: {errors:?}"
+            );
+            assert!(
+                errors[0].contains("legacy-comment"),
+                "错误信息应带上出问题的 uuid: {errors:?}"
+            );
             let (c,): (i64,) =
                 sqlx::query_as("SELECT COUNT(*) FROM todo_comments WHERE uuid='legacy-comment'")
                     .fetch_one(&pool)
@@ -1703,13 +1729,14 @@ mod tests {
             );
         }
 
-        /// 测试辅助：按生产口径（事务 + 列元数据 + 外键映射）应用一批墓碑
-        async fn apply_tombstones(
+        /// 测试辅助：按生产口径（事务 + 列元数据 + 外键映射）应用一批墓碑，
+        /// 返回删除数与行级错误（错误经 pull.rs F86 进 failed_modules）
+        async fn apply_tombstones_with_errors(
             pool: &SqlitePool,
             table: &str,
             tombstones: &[TombstoneEntry],
             parent_ids: &HashMap<&'static str, HashMap<String, i64>>,
-        ) -> u64 {
+        ) -> (u64, Vec<String>) {
             let columns = load_table_columns(pool, table).await.unwrap();
             let mut tx = pool.begin().await.unwrap();
             let (deleted, errors) =
@@ -1717,6 +1744,18 @@ mod tests {
                     .await
                     .unwrap();
             tx.commit().await.unwrap();
+            (deleted, errors)
+        }
+
+        /// 常规用例：墓碑物化不应产生任何行级错误
+        async fn apply_tombstones(
+            pool: &SqlitePool,
+            table: &str,
+            tombstones: &[TombstoneEntry],
+            parent_ids: &HashMap<&'static str, HashMap<String, i64>>,
+        ) -> u64 {
+            let (deleted, errors) =
+                apply_tombstones_with_errors(pool, table, tombstones, parent_ids).await;
             assert!(errors.is_empty(), "墓碑物化不应产生错误: {errors:?}");
             deleted
         }
