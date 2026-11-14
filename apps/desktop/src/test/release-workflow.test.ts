@@ -33,14 +33,28 @@ describe("发布流水线 latest.json 合成", () => {
     expect(workflow).not.toMatch(/done < <\(\s*gh api/);
   });
 
-  it("依赖审计只保留外层观察期开关，内层不得用 || true 二次吞错", () => {
+  it("依赖审计是硬拦截：既不得 || true，也不得 continue-on-error 放水", () => {
     const start = workflow.indexOf("- name: cargo audit");
     expect(start).toBeGreaterThan(-1);
-    // 覆盖 cargo audit 与 pnpm audit 两段；转硬拦截只需删掉外层
-    // continue-on-error，本用例不依赖观察期是否结束，无需同步修改。
+    // 覆盖 cargo audit 与 pnpm audit 两段。第一批删了内层 `|| true`，
+    // 第三批删了外层 continue-on-error —— 任一回归都会让 audit 假绿。
     const auditBlock = workflow.slice(start, start + 900);
     expect(auditBlock).not.toContain("|| true");
+    expect(auditBlock).not.toContain("continue-on-error");
     expect(auditBlock).toContain("cargo audit --file");
     expect(auditBlock).toContain("pnpm audit");
+  });
+
+  it("发布链硬依赖 CI：reusable workflow + 构建作业 needs 含 ci", () => {
+    const ciWorkflow = readFileSync(
+      path.join(ROOT, ".github/workflows/ci.yml"),
+      "utf8",
+    );
+    expect(ciWorkflow).toContain("workflow_call:");
+    expect(workflow).toMatch(/uses: \.\/\.github\/workflows\/ci\.yml/);
+    expect(workflow).toContain("secrets: inherit");
+    // desktop 与 android 两个构建作业都必须等 CI 与 audit 全绿
+    const needs = [...workflow.matchAll(/^    needs: \[audit, ci\]$/gm)];
+    expect(needs).toHaveLength(2);
   });
 });

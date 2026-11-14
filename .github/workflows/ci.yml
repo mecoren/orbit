@@ -6,6 +6,10 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # 供 release.yml 复用：发布链把「CI 全绿」做成硬门禁（needs: [audit, ci]）。
+  # 复用时 github.event_name = workflow_call；本文件各 job 不依赖 push / PR
+  # 专有上下文，故无需额外分支判断。
+  workflow_call:
 
 jobs:
   web:

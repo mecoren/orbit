@@ -45,6 +45,19 @@ env:
 
 jobs:
   # ────────────────────────────────────────────────────────────────────────
+  # CI 门禁：复用 ci.yml 全量检查（typecheck / vitest / web 构建 / Rust core /
+  # 桌面壳 / Flutter）。跨 workflow 没有 `needs: ci` 这种语法，也不改
+  # 「tag 推送 → workflow_run」的触发语义（会破坏 dry_run 与手动 dispatch），
+  # 故用官方 reusable workflow 把 CI 拉成本 workflow 的一个 job，让构建作业
+  # 显式 needs 依赖。代价是发版时重跑一次 CI——这正是「CI 不绿不得发版」
+  # 的应有成本。
+  # ────────────────────────────────────────────────────────────────────────
+  ci:
+    name: CI 门禁（复用 ci.yml）
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
+  # ────────────────────────────────────────────────────────────────────────
   # 发版前置门禁：版本一致性 / tag 对齐 / 签名密钥就位 / 依赖安全审计。
   # 全部在廉价 job 里失败，避免矩阵构建 20 分钟后才发现版本号手滑。
   # ────────────────────────────────────────────────────────────────────────
@@ -113,12 +126,11 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      # 观察期门禁：只保留外层 continue-on-error 这一个开关，内层不得再吞错。
-      # 此前 cargo install / cargo audit 各自带 `|| true`，等于双重放水——
-      # 即使按 docs/08 §6 去掉外层开关，漏洞失败仍会被静默吞掉、job 依旧绿。
-      # promote 成硬拦截时只需删除两个 continue-on-error（口径见 docs/08 §6）。
-      - name: cargo audit（观察期，不拦截）
-        continue-on-error: true
+      # 依赖审计硬拦截：第一批删掉了内层双重放水（cargo install / cargo audit
+      # 各自的 `|| true`），本次再删掉外层 continue-on-error 观察期开关。
+      # 两段任一失败即 audit job 失败 → desktop/android 不会启动。
+      # 注意：转硬拦截前需先跑一次拿到依赖基线，避免被存量告警卡住发版。
+      - name: cargo audit
         run: |
           set -euo pipefail
           cargo install cargo-audit --locked
@@ -127,8 +139,7 @@ jobs:
             cargo audit --file "$(pwd)/${lock}"
           done
 
-      - name: pnpm audit（观察期，不拦截）
-        continue-on-error: true
+      - name: pnpm audit
         run: pnpm audit --prod --audit-level moderate
 
   # ────────────────────────────────────────────────────────────────────────
@@ -140,7 +151,7 @@ jobs:
   # ────────────────────────────────────────────────────────────────────────
   desktop:
     name: desktop (${{ matrix.settings.label }})
-    needs: [audit]
+    needs: [audit, ci]
     runs-on: ${{ matrix.settings.os }}
     permissions:
       contents: write # 创建 Release 并上传资产
@@ -239,7 +250,7 @@ jobs:
   # ────────────────────────────────────────────────────────────────────────
   android:
     name: android apk
-    needs: [audit]
+    needs: [audit, ci]
     runs-on: ubuntu-latest
     defaults:
       run:
