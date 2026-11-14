@@ -263,10 +263,10 @@ pub struct DeviceInfo {
     pub device_id: String,
 }
 
-/// 读取设备 ID（未初始化返回空串）
+/// 读取设备 ID（未初始化返回 `[config]` 可操作错误，不再静默给空串）
 #[tauri::command]
 pub async fn full_backup_device_info() -> Result<DeviceInfo, String> {
     Ok(DeviceInfo {
-        device_id: context::get_device_id().unwrap_or_default().to_string(),
+        device_id: context::require_device_id()?,
     })
 }

@@ -361,7 +361,14 @@ fn emit_full_change() {
         record_id: 0,
         record_uuid: String::new(),
         payload: None,
-        device_id: context::get_device_id().unwrap_or_default().to_string(),
+        // 只是 db-change 事件的来源元数据，不进云端写入；空标识留痕即可，
+        // 云端写入侧的防线在 cloud_sync::push::ensure_device_id。
+        device_id: context::get_device_id()
+            .map(str::to_string)
+            .unwrap_or_else(|_| {
+                log::warn!("[full-backup] device_id 未初始化，db-change 事件来源设备为空");
+                String::new()
+            }),
         timestamp: chrono::Utc::now().timestamp_millis(),
     });
 }
@@ -567,10 +574,10 @@ pub async fn full_backup_peek_cloud(cloud_path: String) -> Result<BackupPreviewV
         .map(BackupPreviewView::from)
 }
 
-/// 当前设备 ID（导出预览展示用；未初始化返回空串）
+/// 当前设备 ID（导出预览展示用；未初始化返回 `[config]` 可操作错误）
 pub async fn full_backup_device_info() -> Result<BackupDeviceInfo, String> {
     Ok(BackupDeviceInfo {
-        device_id: context::get_device_id().unwrap_or_default().to_string(),
+        device_id: context::require_device_id()?,
     })
 }
 

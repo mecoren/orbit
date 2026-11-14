@@ -1,31 +1,43 @@
 /**
- * 移动端云同步桥 device_id 前置校验护栏。
+ * device_id 空标识防线护栏（双端 + core）。
  *
  * 背景（2026-11-14）：BootGate 在 fake_async 下不 await device_id 写入，启动期
- * 失败时 OnceCell 为空。此前 sync.rs 四处用
- * `context::get_device_id().unwrap_or_default()` 回落空串：generic_repo 会跳过
- * Lamport 版本号写入，深层 validate_config 只丢一句「device_id 不能为空」，
- * 用户无从区分「启动接线失败」与「配置填错」。第四批只修了 cloud_sync_now /
- * cloud_sync_force 两条入口，rekey / v2 改密 / 升级 v2 仍会带着空 device_id
- * 做云端全量重传。
+ * 失败时 OnceCell 为空。此前各处 `context::get_device_id().unwrap_or_default()`
+ * 回落空串：空标识会写进云端 manifest.device_id / touch_device() 检查点，
+ * 并让 verify_manifest_write() 的 CAS 比对退化成「所有未初始化设备共用一个
+ * 标识」。⚠️ 旧注释写「generic_repo 会跳过 Lamport 版本号写入」是**错误口径**：
+ * v1 架构已移除 lamport_version 列，版本号由 `version = version + 1` 维护，
+ * generic_repo 的 device_id 只用于 DbEvent 来源元数据。
  *
- * 现在统一由 engine_config_of_record 在构造 SyncConfig 时取 current_device_id()?，
- * 所有云端入口都在本机状态变更/云端写入之前经过它；v1 改密只换本机包装、
- * 不构造 SyncConfig，故不被拦。这里锁住「没有静默回落」与「每个调用点都传播 ?」，
- * 防止后续改签名时漏掉一条入口。
+ * 第五批只修了 orbit-flutter/sync.rs 一个文件，第六轮复核发现全仓共 11 处。
+ * 现在：core 提供 require_device_id() + push::ensure_device_id 最终防线；
+ * 桌面 sync_runtime / 后台调度器 / 两端设备信息查询统一走 helper；仅剩
+ * 「DbEvent 事件来源」与「全量备份 manifest 元数据」两处保留空串白名单。
+ *
+ * 这里锁住：① 同步桥层调用点全部传播 ?；② 全仓静默回落只在白名单；
+ * ③ core 的 helper 与最终防线不被删掉。防止后来者改签名时漏一处。
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const ROOT = path.join(import.meta.dirname, "../../../..");
-const SRC = readFileSync(
-  path.join(ROOT, "crates/orbit-flutter/src/api/sync.rs"),
-  "utf8",
-);
+const read = (rel: string) => readFileSync(path.join(ROOT, rel), "utf8");
+const SRC = read("crates/orbit-flutter/src/api/sync.rs");
+
+/** 递归收集 Rust 源码（跳过构建产物与依赖目录） */
+function rustSources(dir: string, out: string[] = []): string[] {
+  for (const ent of readdirSync(dir, { withFileTypes: true })) {
+    if (["target", ".git", "node_modules"].includes(ent.name)) continue;
+    const p = path.join(dir, ent.name);
+    if (ent.isDirectory()) rustSources(p, out);
+    else if (ent.name.endsWith(".rs")) out.push(p);
+  }
+  return out;
+}
 
 describe("移动端同步桥不得静默降级 device_id", () => {
-  it("不再用 unwrap_or_default 回落空 device_id", () => {
+  it("同步桥层不再用 unwrap_or_default 回落空 device_id", () => {
     expect(SRC).not.toContain("context::get_device_id().unwrap_or_default()");
   });
 
@@ -56,5 +68,48 @@ describe("移动端同步桥不得静默降级 device_id", () => {
     expect(fn.slice(0, v2)).toContain("if !is_v2");
     expect(fn.slice(0, v2)).not.toContain("engine_config_of_record");
     expect(fn.slice(v2)).toContain("engine_config_of_record(&record)?");
+  });
+});
+
+describe("全仓 device_id 空标识防线", () => {
+  it("静默回落只剩事件来源 / 备份元数据两个白名单文件", () => {
+    const hits = new Set<string>();
+    for (const dir of ["crates", "apps/desktop/src-tauri/src"]) {
+      for (const file of rustSources(path.join(ROOT, dir))) {
+        if (
+          readFileSync(file, "utf8").includes(
+            "get_device_id().unwrap_or_default()",
+          )
+        ) {
+          hits.add(path.relative(ROOT, file).replace(/\\/g, "/"));
+        }
+      }
+    }
+    expect([...hits].sort()).toEqual([
+      "crates/orbit-core/src/api/full_sync_backup_api.rs",
+      "crates/orbit-core/src/db/repository/generic_repo.rs",
+    ]);
+  });
+
+  it("core 统一 helper + push 最终防线 + config 错误通道", () => {
+    expect(read("crates/orbit-core/src/context.rs")).toContain(
+      "pub fn require_device_id()",
+    );
+    const push = read("crates/orbit-core/src/cloud_sync/push.rs");
+    expect(push).toContain("fn ensure_device_id(device_id: &str)");
+    expect(push).toContain("ensure_device_id(device_id)?;");
+    const err = read("crates/orbit-core/src/cloud_sync/error.rs");
+    expect(err).toContain("Config { message: String }");
+    expect(err).toContain('"config"');
+  });
+
+  it("桌面壳的同步配置与后台调度改用 helper", () => {
+    const runtime = read("apps/desktop/src-tauri/src/commands/sync_runtime.rs");
+    expect(runtime).toContain("context::require_device_id()?");
+    const scheduler = read("apps/desktop/src-tauri/src/commands/sync_scheduler.rs");
+    const calls = [
+      ...scheduler.matchAll(/context::require_device_id\(\)/g),
+    ];
+    expect(calls.length).toBeGreaterThanOrEqual(2);
   });
 });

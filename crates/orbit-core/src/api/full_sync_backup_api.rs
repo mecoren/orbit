@@ -188,6 +188,8 @@ async fn export_full_sync_backup_inner(
     // 1. 读取 device_id / device_name
     //    （解锁校验与密码读取由上层 export_full_sync_backup 完成，
     //     内层仅消费已解锁态缓存的原始密码做编码）
+    //    这里的空串只作为备份 manifest 的来源元数据，不进 cloud_sync 的
+    //    manifest/Checkpoint；云端增量写入另有 push::ensure_device_id 防线。
     let device_id = context::get_device_id().unwrap_or_default().to_string();
     let device_name = read_device_name_from_config(app_data_dir);
 
@@ -373,6 +375,10 @@ pub fn engine_config_from_record(record: &SyncConfigRecord) -> Option<EngineSync
     if adapter_type == "local" {
         return None;
     }
+    // 全量备份云端副本走自己的上传链路，此 device_id 只用于 manifest 元数据
+    // 与 device_name 兜底；云端**增量同步**的配置构造已统一走
+    // require_device_id（桌面 sync_runtime / 移动 orbit-flutter），写入侧另有
+    // push::ensure_device_id 最终防线。
     let device_id = context::get_device_id().unwrap_or_default().to_string();
     Some(EngineSyncConfig {
         adapter_type,

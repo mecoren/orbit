@@ -204,25 +204,23 @@ async fn active_config() -> Result<Option<SyncConfigRecord>, String> {
         .map_err(|e| format!("[database] 读取同步配置失败: {e}"))
 }
 
-/// 云同步入口的 device_id 前置校验。
+/// 云同步入口的 device_id 前置校验（统一委托 core，避免双端文案漂移）。
 ///
 /// `db_set_device_id` 写的是进程级 OnceCell；启动期写入失败时它是空的。
-/// 过去各处 `unwrap_or_default()` 回落空串：`generic_repo` 会跳过 Lamport
-/// 版本号写入，且深层 `validate_config` 只抛一句「device_id 不能为空」，
-/// 用户无从区分「启动接线失败」与「配置填错」。改成显式、可操作的错误。
+/// 过去各处 `unwrap_or_default()` 回落空串，空标识会写进云端
+/// `manifest.device_id` / `touch_device()` 检查点，并让
+/// `verify_manifest_write()` 的 CAS 比对退化成「所有未初始化设备共用一个
+/// 标识」；深层 `validate_config` 又只抛一句「device_id 不能为空」，用户
+/// 无从区分「启动接线失败」与「配置填错」。现统一由
+/// `orbit_core::context::require_device_id()` 给出 `[config]` 可操作错误，
+/// core 侧 `push::ensure_device_id` 另有最终防线。
 ///
-/// `engine_config_of_record` 统一在构造 SyncConfig 时调用，所有云同步入口
+/// `engine_config_of_record` 在构造 SyncConfig 时调用它，所有云同步入口
 /// （含 rekey / v2 改密 / 升级 v2 / 孤儿清理）都先经过它，且都在本机状态
 /// 变更或云端写入之前，因此不会跳过既有的 rekey 失败补偿文案。v1 改密只换
 /// 本机包装、不构造 SyncConfig，故不受此校验影响。
 fn current_device_id() -> Result<String, String> {
-    context::get_device_id()
-        .map(|id| id.to_string())
-        .map_err(|_| {
-            "[config] 设备标识未初始化（启动期写入失败），请重启应用后再同步；\
-             此状态下本地改动可能缺少版本号"
-                .to_string()
-        })
+    context::require_device_id()
 }
 
 /// 将 DB 记录转换为引擎配置（照抄桌面 sync_runtime::engine_config_of_record）
@@ -236,6 +234,8 @@ fn engine_config_of_record(
     if adapter_type == "local" || adapter_type.is_empty() {
         return Ok(None);
     }
+    // 唯一的 device_id 读取点：所有云同步入口都先经此处，且都早于本机
+    // 密钥变更与云端写入，因此校验失败不会落在「本机已改、云端未改」之后。
     let device_id = current_device_id()?;
     Ok(Some(orbit_core::sync::engine::SyncConfig {
         adapter_type,
@@ -568,7 +568,8 @@ async fn run_sync(origin: SyncOrigin, action: SyncAction) -> Result<String, Stri
     let engine = runtime_engine()?;
     let base_dir = with_state(|s| Ok(s.base_dir.clone()))?;
     let attachments = attachments_dir(&base_dir);
-    let device_id = current_device_id()?;
+    // 复用 config 里已校验过的 device_id（同一入口只读一次，避免校验时机漂移）
+    let device_id = config.device_id.clone();
 
     let result = match action {
         SyncAction::Now => {
@@ -628,7 +629,8 @@ pub async fn cloud_sync_force(origin: String, wait_for_idle_ms: u64) -> Result<S
     let engine = runtime_engine()?;
     let base_dir = with_state(|s| Ok(s.base_dir.clone()))?;
     let attachments = attachments_dir(&base_dir);
-    let device_id = current_device_id()?;
+    // 复用 config 里已校验过的 device_id（同一入口只读一次，避免校验时机漂移）
+    let device_id = config.device_id.clone();
 
     let result = cloud_sync_api::force_sync(
         &engine,
@@ -926,7 +928,10 @@ pub async fn sync_crypto_upgrade_v2(sync_password: String) -> Result<(), String>
     let engine = runtime_engine()?;
     let base_dir = with_state(|s| Ok(s.base_dir.clone()))?;
     let attachments = attachments_dir(&base_dir);
-    let device_id = current_device_id()?;
+    // 复用 config 里已校验过的 device_id：再调一次 current_device_id() 在
+    // upgrade_v2 / change_sync_password 之后，本机密钥已换，校验失败会变成
+    // 「迁移成功但报错」的错位状态。
+    let device_id = config.device_id.clone();
 
     match cloud_sync_api::rekey_cloud(
         &engine,
@@ -964,7 +969,8 @@ pub async fn cloud_sync_rekey() -> Result<String, String> {
     let engine = runtime_engine()?;
     let base_dir = with_state(|s| Ok(s.base_dir.clone()))?;
     let attachments = attachments_dir(&base_dir);
-    let device_id = current_device_id()?;
+    // 复用 config 里已校验过的 device_id（同一入口只读一次，避免校验时机漂移）
+    let device_id = config.device_id.clone();
 
     let result = cloud_sync_api::rekey_cloud(
         &engine,
@@ -1050,7 +1056,10 @@ pub async fn sync_crypto_change_password(
     let engine = runtime_engine()?;
     let base_dir = with_state(|s| Ok(s.base_dir.clone()))?;
     let attachments = attachments_dir(&base_dir);
-    let device_id = current_device_id()?;
+    // 复用 config 里已校验过的 device_id：再调一次 current_device_id() 在
+    // upgrade_v2 / change_sync_password 之后，本机密钥已换，校验失败会变成
+    // 「迁移成功但报错」的错位状态。
+    let device_id = config.device_id.clone();
 
     if let Err(e) = cloud_sync_api::rekey_cloud(
         &engine,

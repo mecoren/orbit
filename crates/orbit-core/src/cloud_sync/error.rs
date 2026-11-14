@@ -103,6 +103,13 @@ pub enum CloudSyncError {
     #[error("序列化错误: {message}")]
     Serialize { message: String },
 
+    /// 本地配置 / 启动接线错误（典型：device_id 未初始化）。
+    ///
+    /// 重试必然同错，也不能跳解锁页或密钥恢复页；单独成变体是为了让
+    /// `category_tag()` 报 `config`，UI 直接展示「请重启应用」的可操作文案。
+    #[error("配置错误: {message}")]
+    Config { message: String },
+
     #[error("其他错误: {message}")]
     Other { message: String },
 }
@@ -342,6 +349,9 @@ impl CloudSyncError {
             // 限流归类 network（可重试），长退避由 with_retry 的
             // is_rate_limited 分支处理；tag 供 UI 展示具体原因
             "rate_limited"
+        } else if matches!(self, CloudSyncError::Config { .. }) {
+            // 启动接线失败：重试必然同错，也不能被读成网络故障引导离线进入
+            "config"
         } else if self.is_network_error() {
             "network"
         } else {
@@ -534,5 +544,20 @@ mod tests {
         assert!(!err.is_password_error());
         assert_eq!(err.category_tag(), "cancelled");
         assert!(err.to_string().contains("取消"));
+    }
+
+    // ========================================================================
+    // device_id 未初始化：不得被当成网络故障重试
+    // ========================================================================
+
+    #[test]
+    fn config_error_has_config_tag_and_is_not_network() {
+        let err = CloudSyncError::Config {
+            message: "设备标识未初始化".to_string(),
+        };
+        assert_eq!(err.category_tag(), "config");
+        assert!(!err.is_network_error());
+        assert!(!err.is_password_error());
+        assert!(!err.is_database_error());
     }
 }

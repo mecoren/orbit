@@ -116,10 +116,20 @@ async fn run_on_change_sync(app: &AppHandle) {
     if cloud_sync_api::is_running(&engine) {
         return; // 全量同步进行中，无需重复推
     }
-    let Some(config) = sync_runtime::engine_config_of_record(&record) else {
+    let config = match sync_runtime::engine_config_of_record(&record) {
+        Ok(Some(c)) => c,
+        Ok(None) => return, // 本地同步配置，不参与云端
+        Err(e) => {
+            log::warn!("[sync-scheduler] 同步配置不可用，跳过本轮：{e}");
+            return;
+        }
+    };
+    // 后台调度不经前端启动门控：空标识会被 core 的 push_all_impl 拦下，
+    // 这里提前留痕，避免「定时同步无声无息地一直失败」。
+    let Ok(device_id) = context::require_device_id() else {
+        log::error!("[sync-scheduler] 设备标识未初始化，跳过本轮后台同步（请重启应用）");
         return;
     };
-    let device_id = context::get_device_id().unwrap_or_default().to_string();
     let attachments = match resolve_app_data_dir(app) {
         Ok(dir) => sync_runtime::attachments_dir(&dir),
         Err(_) => return,
@@ -193,10 +203,20 @@ async fn tick(app: &AppHandle) {
     }
 
     // 组装并后台执行
-    let Some(config) = sync_runtime::engine_config_of_record(&record) else {
+    let config = match sync_runtime::engine_config_of_record(&record) {
+        Ok(Some(c)) => c,
+        Ok(None) => return, // 本地同步配置，不参与云端
+        Err(e) => {
+            log::warn!("[sync-scheduler] 同步配置不可用，跳过本轮：{e}");
+            return;
+        }
+    };
+    // 后台调度不经前端启动门控：空标识会被 core 的 push_all_impl 拦下，
+    // 这里提前留痕，避免「定时同步无声无息地一直失败」。
+    let Ok(device_id) = context::require_device_id() else {
+        log::error!("[sync-scheduler] 设备标识未初始化，跳过本轮后台同步（请重启应用）");
         return;
     };
-    let device_id = context::get_device_id().unwrap_or_default().to_string();
     let attachments = match resolve_app_data_dir(app) {
         Ok(dir) => sync_runtime::attachments_dir(&dir),
         Err(_) => return,

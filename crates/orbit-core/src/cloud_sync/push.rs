@@ -154,6 +154,23 @@ fn is_full_compare_round(force: bool, pushed_watermark_ms: i64) -> bool {
     force || pushed_watermark_ms <= 0
 }
 
+/// 云端写入前的 device_id 防线（纯函数，便于单测）。
+///
+/// 空标识会被写进 `new_manifest.device_id` 与 `touch_device()` 的
+/// DeviceCheckpoint，并让 `verify_manifest_write()` 的 CAS 比对退化成
+/// 「所有未初始化设备共用同一个标识」。上层桥接/后台调度器应先走
+/// `context::require_device_id()` 给出 `[config]` 可操作错误；这里是**最后
+/// 一道防线**，覆盖任何漏网或新增的调用点（全仓历史上有 11 处
+/// `unwrap_or_default()` 静默放行）。
+fn ensure_device_id(device_id: &str) -> Result<(), CloudSyncError> {
+    if device_id.trim().is_empty() {
+        return Err(CloudSyncError::Config {
+            message: "设备标识未初始化（启动期写入失败），请重启应用后再同步".to_string(),
+        });
+    }
+    Ok(())
+}
+
 #[allow(clippy::too_many_arguments)] // 内部实现：对外两入口的全部入参 + 两个开关，收组会让调用侧多一层解构
 async fn push_all_impl(
     db_pool: &SqlitePool,
@@ -167,6 +184,10 @@ async fn push_all_impl(
     force: bool,
     require_all_tables_ok: bool,
 ) -> Result<PushResult, CloudSyncError> {
+    // 任何云端写入都必须带非空设备标识；放在任何副作用（读账本、取密钥、
+    // 构造适配器）之前，保证失败时云端与本机状态都没被改动。
+    ensure_device_id(device_id)?;
+
     let state = match state_store.load() {
         Ok(s) => s,
         Err(e) => {
@@ -1248,6 +1269,17 @@ mod tests {
     use async_trait::async_trait;
     use std::collections::HashMap;
     use std::sync::Mutex;
+
+    #[test]
+    fn empty_device_id_is_rejected_before_any_cloud_write() {
+        for id in ["", "   ", "\t"] {
+            let err = ensure_device_id(id).unwrap_err();
+            assert!(matches!(err, CloudSyncError::Config { .. }));
+            assert_eq!(err.category_tag(), "config");
+            assert!(!err.is_network_error());
+        }
+        assert!(ensure_device_id("device-a").is_ok());
+    }
 
     /// 内存适配器：支持条件写与令牌（模拟 S3/WebDAV 能力）
     struct MemAdapter {

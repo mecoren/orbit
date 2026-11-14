@@ -273,13 +273,16 @@ pub async fn get_active_config(app: &AppHandle) -> Result<Option<SyncConfigRecor
 /// record.device_id 列——沿袭 wait-home 移动端列复用约定），device_id 取进程上下文。
 pub fn engine_config_of_record(
     record: &SyncConfigRecord,
-) -> Option<orbit_core::sync::engine::SyncConfig> {
+) -> Result<Option<orbit_core::sync::engine::SyncConfig>, String> {
     let adapter_type = record.protocol.to_lowercase();
     if adapter_type == "local" || adapter_type.is_empty() {
-        return None;
+        return Ok(None);
     }
-    let device_id = context::get_device_id().unwrap_or_default().to_string();
-    Some(orbit_core::sync::engine::SyncConfig {
+    // 与移动端 orbit-flutter 桥层同口径：空标识会写进云端 manifest /
+    // DeviceCheckpoint，且 CAS 比对会退化成「所有未初始化设备共用一个标识」。
+    // core 的 push::ensure_device_id 是最后防线，这里在副作用前给出可操作错误。
+    let device_id = context::require_device_id()?;
+    Ok(Some(orbit_core::sync::engine::SyncConfig {
         adapter_type,
         endpoint: record.endpoint.clone(),
         bucket: record.bucket.clone(),
@@ -292,7 +295,7 @@ pub fn engine_config_of_record(
         timeout_secs: record.timeout.max(0) as u64,
         skip_tls_verify: record.skip_tls_verify != 0,
         session_token: record.session_token.clone(),
-    })
+    }))
 }
 
 /// 附件目录占位（MVP：todos has_attachments=false，仅满足引擎签名）

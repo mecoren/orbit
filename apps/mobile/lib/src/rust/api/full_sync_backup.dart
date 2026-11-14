@@ -84,7 +84,7 @@ Future<BackupPreviewView> fullBackupPeekCloud({required String cloudPath}) =>
       cloudPath: cloudPath,
     );
 
-/// 当前设备 ID（导出预览展示用；未初始化返回空串）
+/// 当前设备 ID（导出预览展示用；未初始化返回 `[config]` 可操作错误）
 Future<BackupDeviceInfo> fullBackupDeviceInfo() =>
     RustLib.instance.api.crateApiFullSyncBackupFullBackupDeviceInfo();
 

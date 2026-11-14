@@ -43,7 +43,7 @@ async fn run_sync(
     let record = sync_runtime::get_active_config(app)
         .await?
         .ok_or_else(|| "[config] 尚未配置同步，请先在设置中填写连接信息".to_string())?;
-    let config = sync_runtime::engine_config_of_record(&record)
+    let config = sync_runtime::engine_config_of_record(&record)?
         .ok_or_else(|| "[config] 当前为本地同步配置，不参与云同步".to_string())?;
 
     let engine = sync_runtime::sync_engine(app)?;
@@ -127,7 +127,7 @@ pub async fn cloud_sync_force(
     let record = sync_runtime::get_active_config(&app)
         .await?
         .ok_or_else(|| "[config] 尚未配置同步".to_string())?;
-    let config = sync_runtime::engine_config_of_record(&record)
+    let config = sync_runtime::engine_config_of_record(&record)?
         .ok_or_else(|| "[config] 当前为本地同步配置，不参与云同步".to_string())?;
 
     let engine = sync_runtime::sync_engine(&app)?;
@@ -213,7 +213,7 @@ pub async fn cloud_sync_rekey(app: AppHandle) -> Result<String, String> {
     let record = sync_runtime::get_active_config(&app)
         .await?
         .ok_or_else(|| "[config] 尚未配置同步，请先在设置中填写连接信息".to_string())?;
-    let config = sync_runtime::engine_config_of_record(&record)
+    let config = sync_runtime::engine_config_of_record(&record)?
         .ok_or_else(|| "[config] 当前为本地同步配置，不参与云同步".to_string())?;
 
     let engine = sync_runtime::sync_engine(&app)?;
@@ -306,7 +306,7 @@ async fn sync_target(
     let record = sync_runtime::get_active_config(app)
         .await?
         .ok_or_else(|| "[config] 尚未配置同步，请先在设置中填写连接信息".to_string())?;
-    let config = sync_runtime::engine_config_of_record(&record)
+    let config = sync_runtime::engine_config_of_record(&record)?
         .ok_or_else(|| "[config] 当前为本地同步配置，不参与云同步".to_string())?;
 
     let engine = sync_runtime::sync_engine(app)?;

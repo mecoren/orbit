@@ -26,10 +26,15 @@ use crate::models::business::{
 };
 
 // =============================================================================
-// 上下文辅助：安全读取 device_id（未设置时回退，不阻断业务写操作）
+// 上下文辅助：DbEvent 来源设备（未设置时回退空串，不阻断业务写操作）
 // =============================================================================
 
-/// 读取当前 device_id；未设置返回空串（兼容早期未调用 set_device_id 的场景）
+/// 读取当前 device_id 作为 **DbEvent 来源元数据**；未设置返回空串。
+///
+/// ⚠️ 这里**不参与** Lamport 版本号（v1 架构已移除 `lamport_version` 列，
+/// 版本号由 `version = version + 1` 维护），也**不得**用于任何云端写入：
+/// 后者必须走 `context::require_device_id()` / `push::ensure_device_id`，
+/// 否则 manifest.device_id、DeviceCheckpoint 与 CAS 比对会退化成空标识。
 pub(crate) fn current_device_id() -> String {
     context::get_device_id().unwrap_or_default().to_string()
 }

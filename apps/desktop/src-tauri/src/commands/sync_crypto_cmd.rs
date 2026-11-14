@@ -136,7 +136,7 @@ pub async fn sync_crypto_change_password(
         .ok_or_else(|| {
             "[config] v2 改密需要重传云端数据：尚未配置云同步，请先配置连接信息".to_string()
         })?;
-    let config = sync_runtime::engine_config_of_record(&record)
+    let config = sync_runtime::engine_config_of_record(&record)?
         .ok_or_else(|| "[config] v2 改密需要重传云端数据：当前为本地同步配置".to_string())?;
     let engine = sync_runtime::sync_engine(&app)?;
 
@@ -208,7 +208,7 @@ pub async fn sync_crypto_upgrade_v2(app: AppHandle, sync_password: String) -> Re
     let record = sync_runtime::get_active_config(&app)
         .await?
         .ok_or_else(|| "[config] 迁移需要重传云端数据：尚未配置云同步".to_string())?;
-    let config = sync_runtime::engine_config_of_record(&record)
+    let config = sync_runtime::engine_config_of_record(&record)?
         .ok_or_else(|| "[config] 迁移需要重传云端数据：当前为本地同步配置".to_string())?;
 
     // 验证密码并升级本机 meta 到 v2
