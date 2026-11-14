@@ -44,8 +44,21 @@ function SectionHeader({ title, desc }: { title: string; desc: string }) {
 
 export function SecuritySection() {
   const [hasMasterAuth, setHasMasterAuth] = useState<boolean | null>(null);
+  const [statusFailed, setStatusFailed] = useState(false);
   const refreshStatus = () => {
-    masterAuthHas().then(setHasMasterAuth).catch(() => setHasMasterAuth(false));
+    setStatusFailed(false);
+    masterAuthHas()
+      .then(setHasMasterAuth)
+      .catch((err) => {
+        // 读取失败不能回落 false：那会显示「未设置主密码」并给出设置按钮，
+        // 在加密库上诱导用户重跑迁移。保持 null + 显式错误卡。
+        console.error("[SecuritySection] 读取主密码状态失败", err);
+        toast.error(
+          `读取主密码状态失败：${err instanceof Error ? err.message : String(err)}`,
+        );
+        setHasMasterAuth(null);
+        setStatusFailed(true);
+      });
   };
   useEffect(() => {
     refreshStatus();
@@ -158,6 +171,21 @@ export function SecuritySection() {
   return (
     <div className="space-y-4">
       <SectionHeader title="安全" desc="管理主密码与数据库加密" />
+
+      {statusFailed && (
+        <div className="flex items-center gap-4 rounded-lg border border-destructive/50 p-5">
+          <TriangleAlert className="size-5 shrink-0 text-destructive" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium">无法读取主密码状态</p>
+            <p className="text-xs text-muted-foreground">
+              为避免误显示「未设置主密码」，此处不显示加密状态；请重试。
+            </p>
+          </div>
+          <Button variant="outline" onClick={refreshStatus}>
+            重试
+          </Button>
+        </div>
+      )}
 
       {/* 状态卡：两态 */}
       {hasMasterAuth === false && (

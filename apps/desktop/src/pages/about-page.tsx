@@ -45,15 +45,26 @@ const categories: { key: AboutCategory; label: string; icon: LucideIcon }[] = [
 /* ================= 应用信息 ================= */
 
 function InfoSection() {
-  const [hasMasterAuth, setHasMasterAuth] = useState(false);
+  const [hasMasterAuth, setHasMasterAuth] = useState<boolean | null>(null);
+  const [statusFailed, setStatusFailed] = useState(false);
   useEffect(() => {
-    masterAuthHas().then(setHasMasterAuth).catch(() => setHasMasterAuth(false));
+    masterAuthHas()
+      .then(setHasMasterAuth)
+      .catch((err) => {
+        // 读取失败不能显示成「明文」——那是加密库的安全状态误报。
+        console.error("[AboutPage] 读取主密码状态失败", err);
+        setStatusFailed(true);
+      });
   }, []);
+
+  let dbMode = "读取中…";
+  if (statusFailed) dbMode = "读取失败";
+  else if (hasMasterAuth !== null) dbMode = hasMasterAuth ? "加密" : "明文";
 
   const infoItems = [
     { label: "应用名称", value: "循迹（Orbit）" },
     { label: "版本号", value: APP_VERSION },
-    { label: "数据库模式", value: hasMasterAuth ? "加密" : "明文" },
+    { label: "数据库模式", value: dbMode },
     { label: "技术栈", value: "Tauri 2.0 + React 19 + Rust" },
     { label: "UI 框架", value: "shadcn/ui + Tailwind CSS v4" },
   ];

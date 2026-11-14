@@ -41,16 +41,13 @@ import {
   syncConfigGet,
   syncCryptoStatus,
   syncErrorTag,
+  type SyncCryptoStatus,
 } from "@/lib/tauri";
+
+import { errMsg } from "@/lib/error-text";
 
 /** 成功态停留时长：对勾回弹展示后回落待命态 */
 const SUCCESS_HOLD_MS = 1800;
-
-/** 错误消息去 `[tag] ` 前缀（与设置页同步卡同口径） */
-function errMsg(err: unknown): string {
-  const msg = err instanceof Error ? err.message : String(err);
-  return msg.replace(/^\[\w+\]\s*/, "");
-}
 
 export function SyncStatusButton() {
   const navigate = useNavigate();
@@ -146,10 +143,17 @@ export function SyncStatusButton() {
       navigate("/settings");
       return;
     }
-    // 权威复核：设置页刚解锁/加锁时缓存可能仍在 staleTime 内
-    const cryptoNow = await syncCryptoStatus().catch(() => null);
-    if (cryptoNow) qc.setQueryData(["sync-crypto-status"], cryptoNow);
-    if (!cryptoNow?.has_password || !cryptoNow.is_unlocked) {
+    // 权威复核：设置页刚解锁/加锁时缓存可能仍在 staleTime 内。
+    // 读取失败不能塌进「未解锁」分支把用户莫名带去设置页——那是另一个问题的假答案。
+    let cryptoNow: SyncCryptoStatus;
+    try {
+      cryptoNow = await syncCryptoStatus();
+    } catch (err) {
+      toast.error(`读取同步加密状态失败，无法启动同步：${errMsg(err)}`);
+      return;
+    }
+    qc.setQueryData(["sync-crypto-status"], cryptoNow);
+    if (!cryptoNow.has_password || !cryptoNow.is_unlocked) {
       navigate("/settings");
       return;
     }

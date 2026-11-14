@@ -34,9 +34,16 @@ export function useStartupSync() {
     let cancelled = false;
     const timer = setTimeout(() => {
       void (async () => {
-        const config = await syncConfigGet().catch(() => null);
+        const config = await syncConfigGet().catch((err) => {
+          // 保留「不阻断启动」的降级语义，但不能连日志都不留。
+          console.error("[StartupSync] 读取同步配置失败，跳过启动同步", err);
+          return null;
+        });
         if (!config || cancelled) return;
-        const restored = await syncCryptoRestoreSession().catch(() => false);
+        const restored = await syncCryptoRestoreSession().catch((err) => {
+          console.error("[StartupSync] 恢复同步会话失败，跳过启动同步", err);
+          return false;
+        });
         if (!restored || cancelled) return;
         try {
           await cloudSyncForce("background", STARTUP_SYNC_WAIT_IDLE_MS);

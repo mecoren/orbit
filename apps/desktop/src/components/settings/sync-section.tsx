@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { errMsg } from "@/lib/error-text";
 import {
   countBuckets,
   formatClockMs,
@@ -122,12 +123,6 @@ function SectionHeader({ title, desc }: { title: string; desc: string }) {
       <p className="mt-0.5 text-sm text-muted-foreground">{desc}</p>
     </div>
   );
-}
-
-/** 错误消息转用户文案（剥掉 `[tag] ` 前缀；命令名由 OrbitIpcError 保留在尾部供定位） */
-function errMsg(err: unknown): string {
-  const msg = err instanceof Error ? err.message : String(err);
-  return msg.replace(/^\[\w+\]\s*/, "");
 }
 
 function formatBytes(n: number): string {

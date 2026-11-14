@@ -8,8 +8,9 @@
  * 与 2026-09-10 的 `[[key_mismatch]]` 双括号事故同型（见
  * crates/orbit-core/src/cloud_sync/error.rs::category_tag 注释）。
  *
- * 这里用行为测试锁住「包装之后 tag 仍可解析」，静态测试只补 errMsg 口径，
- * 因为两处 errMsg 都是组件内的私有函数。
+ * 这里用行为测试锁住「包装之后 tag 仍可解析」，静态测试另核对 errMsg 口径：
+ * 原实现分散在两个组件里各一份、注释还相反，现已抽到 `@/lib/error-text`，
+ * 护栏要求两个组件都从共享模块导入，避免再次分叉。
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -17,6 +18,7 @@ import { describe, expect, it } from "vitest";
 
 import { OrbitIpcError, syncErrorTag } from "@/lib/tauri";
 import { syncErrorAction, type SyncErrorAction } from "@/lib/sync-status";
+import { errMsg } from "@/lib/error-text";
 
 const TEST_DIR = import.meta.dirname;
 
@@ -69,13 +71,21 @@ describe("OrbitIpcError 包装不得打断同步域 [tag] 路由", () => {
     expect(syncErrorTag(new OrbitIpcError("db_set_device_id", "写入失败"))).toBeNull();
   });
 
-  it("两处 errMsg 仍按 ^\\[\\w+\\] 剥前缀，toast 不残留 tag", () => {
+  it("两处组件共用一份 errMsg 清洗实现，toast 不残留 tag", () => {
+    const shared = readFileSync(
+      path.join(TEST_DIR, "../lib/error-text.ts"),
+      "utf8",
+    );
+    expect(shared).toContain('msg.replace(/^\\[\\w+\\]\\s*/, "")');
     for (const file of [
       "../components/layout/sync-status-button.tsx",
       "../components/settings/sync-section.tsx",
     ]) {
       const src = readFileSync(path.join(TEST_DIR, file), "utf8");
-      expect(src, file).toContain('msg.replace(/^\\[\\w+\\]\\s*/, "")');
+      expect(src, file).toContain('from "@/lib/error-text"');
     }
+    expect(
+      errMsg(new OrbitIpcError("cloud_sync_now", "[key_mismatch] 云端密钥不一致")),
+    ).not.toContain("[key_mismatch]");
   });
 });
