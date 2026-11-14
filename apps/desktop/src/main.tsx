@@ -9,8 +9,14 @@ import { installBrowserIpc } from "./test/ipc-mock";
 import "./index.css";
 
 // 纯浏览器环境（Playwright 冒烟，#19）：伪造 __TAURI_INTERNALS__ 接管
-// invoke/listen（真实 Tauri WebView 已注入 internals 时为 no-op）
-installBrowserIpc();
+// invoke/listen。生产构建下 import.meta.env.DEV 被静态折叠为 false，
+// Rollup 会一并摇掉未被调用的 ipc-mock 模块（实测 dist 产物无 mock 特征字符串）；
+// dev + 真实 Tauri WebView 也不调用，不对已注入的 internals 做任何处理。
+// 刻意保持同步调用：mock 必须在 React 首帧渲染前装好，改成动态 import + await
+// 会改变启动时序，需重跑 e2e 全量冒烟后再评估。
+if (import.meta.env.DEV && !("__TAURI_INTERNALS__" in window)) {
+  installBrowserIpc();
+}
 
 // 启动时初始化主题：在 React 渲染前应用持久化主题，避免主题闪烁（FOUC）
 initThemeOnStartup();

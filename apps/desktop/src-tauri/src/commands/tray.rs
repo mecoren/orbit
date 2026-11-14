@@ -228,8 +228,14 @@ pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
         .collect();
     let menu = Menu::with_items(app, &item_refs)?;
 
-    let tray_img =
-        tray_icon_bitmap(app).expect("default_window_icon 未配置（tauri.conf bundle.icon）");
+    // 不用 expect：panic = "abort" 下图标缺失会让整个进程在 setup 阶段消失，
+    // 而调用方 lib.rs 的 `if let Err(e) = setup_tray(..)` 捕不到 panic。
+    // 改为向上抛 tauri::Error，由 setup 记录「托盘初始化失败（不影响主功能）」。
+    let tray_img = tray_icon_bitmap(app).ok_or_else(|| {
+        tauri::Error::AssetNotFound(
+            "default_window_icon（tauri.conf.json bundle.icon）未配置或解码失败".into(),
+        )
+    })?;
     let mut builder = TrayIconBuilder::with_id("orbit-tray")
         .icon(tray_img)
         // 悬停名与通知横幅同口径（用户可见名「循迹」；进程/英文名才是 orbit）

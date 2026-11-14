@@ -80,20 +80,32 @@ export function UpdaterSection() {
     if (!pendingInstall || downloading) return;
     setDownloading(true);
     try {
-      await pendingInstall();
-      toast.success("更新已下载，即将重启");
-      const process: ProcessModule = await import("@tauri-apps/plugin-process");
-      await process.relaunch();
-    } catch (e) {
-      // 下载/安装失败（签名校验、当前安装方式不被清单覆盖、权限）同样给出口：
-      // 复制该版本的 Release tag 链接，用户可手动下载对应安装包
-      toast.error("更新失败", {
-        description: `${e instanceof Error ? e.message : String(e)}——可复制该版本下载链接后手动安装。`,
-        action: {
-          label: "复制下载链接",
-          onClick: () => void copyFallbackLink(version),
-        },
-      });
+      // 下载/安装与重启必须分开处理：包已安装但 relaunch 失败时，旧实现
+      // 共用同一个 catch 弹「更新失败 / 去手动下载」，会误导用户重新下载。
+      try {
+        await pendingInstall();
+      } catch (e) {
+        // 签名校验、当前安装方式不被清单覆盖、权限等失败给 Release 页出口
+        toast.error("更新失败", {
+          description: `${e instanceof Error ? e.message : String(e)}——可复制该版本下载链接后手动安装。`,
+          action: {
+            label: "复制下载链接",
+            onClick: () => void copyFallbackLink(version),
+          },
+        });
+        return;
+      }
+
+      try {
+        const process: ProcessModule = await import("@tauri-apps/plugin-process");
+        await process.relaunch();
+        toast.success("更新已安装，正在重启");
+      } catch (e) {
+        // 包已装好，只是自动重启没成功；提示手动重启，不要再引导重新下载
+        toast.warning("更新已安装，自动重启失败", {
+          description: `请退出并重新打开应用以完成升级（${e instanceof Error ? e.message : String(e)}）。`,
+        });
+      }
     } finally {
       setDownloading(false);
     }
