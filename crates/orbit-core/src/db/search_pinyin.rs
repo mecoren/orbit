@@ -97,6 +97,36 @@ pub async fn sync_row(pool: &SqlitePool, kind: &str, uuid: &str, text: &str) -> 
     Ok(())
 }
 
+/// 裸 INSERT 后的索引补偿写入口：失败则置脏，交由查询入口对账补齐。
+///
+/// 适用 [todo_api] 里绕开 `generic_repo` 钩子的直写路径（子任务提升为任务、
+/// 重复任务生成下一实例、复制任务）。这些路径在事务提交后才补索引行，
+/// **不能阻断已完成提交的业务写**，所以调用方只记录日志、不返回错误。
+///
+/// 但只 `log::warn!` 是不够的：哨兵行仍为 `dirty = 0`，[ensure_fresh]
+/// 走 O(1) 快路径跳过对账，这一行在拼音搜索里会长期不可见，直到下一次
+/// 云同步/全量备份/导入恰好置脏（可能永远不出现）。失败后补一次
+/// [mark_dirty] 才能保证「下一次拼音查询必定对账补齐」。
+pub async fn sync_row_or_mark_dirty(
+    pool: &SqlitePool,
+    kind: &str,
+    uuid: &str,
+    text: &str,
+    context: &str,
+) {
+    if let Err(e) = sync_row(pool, kind, uuid, text).await {
+        log::warn!("search_pinyin sync({context}) failed: {e}; 置脏等待查询入口对账");
+        if let Err(dirty_err) = mark_dirty(pool).await {
+            // 两条兜底都失败：只留日志，绝不回抛（业务写已提交，回抛会被
+            // 调用方当成整单失败，反而更糟）。运维线索指向哨兵行所在表。
+            log::error!(
+                "search_pinyin mark_dirty({context}) failed: {dirty_err}; \
+                 uuid={uuid} 可能长期缺失拼音索引，需检查 search_pinyin_state 表"
+            );
+        }
+    }
+}
+
 /// 移除单行索引（软删/清空文本；uuid 不存在时静默幂等）
 pub async fn remove_row(pool: &SqlitePool, uuid: &str) -> CoreResult<()> {
     sqlx::query("DELETE FROM search_pinyin WHERE uuid = ?")
@@ -699,6 +729,33 @@ mod integration_tests {
         let r = search_all(&pool, "gzzj", 20).await.unwrap();
         assert!(r.tasks.iter().any(|t| t.uuid == "direct-1"));
         assert_eq!(state_row(&pool).await.0, 0);
+    }
+
+    /// 裸 INSERT 的索引补偿写失败时，必须置脏让查询入口对账补齐。
+    ///
+    /// 上线前代码层整改：todo_api 三处直写路径原先只 `log::warn!`，
+    /// 哨兵行停在 dirty=0，ensure_fresh 走快路径跳过对账 → 该任务在
+    /// 拼音搜索里长期不可见，且没有任何重试触发点。
+    #[tokio::test]
+    async fn sync_row_failure_marks_dirty_so_reconcile_can_repair_it() {
+        let pool = setup_db().await;
+        // 迁移种子 dirty=1；先对账清零，隔离本次断言
+        ensure_fresh(&pool).await.unwrap();
+        assert_eq!(state_row(&pool).await.0, 0);
+
+        // 删除索引表制造 UPSERT 失败；哨兵行表独立存在，置脏仍可成功
+        sqlx::query("DROP TABLE search_pinyin")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        sync_row_or_mark_dirty(&pool, KIND_TASK, "broken-1", "工作总结", "test").await;
+
+        assert_eq!(
+            state_row(&pool).await.0,
+            1,
+            "补偿写失败只 warn 会让 dirty 停在 0，ensure_fresh 永不对账"
+        );
     }
 
     /// 置脏代数单调递增；对账清零只在「代数未被推进」时生效（乐观锁）

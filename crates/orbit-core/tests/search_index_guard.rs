@@ -87,7 +87,7 @@ const LEDGER: &[(&str, &str, &str, usize, &str)] = &[
         "INSERT INTO",
         "TODO_TASKS",
         3,
-        "子任务转出 / 重复任务下次实例 / 复制任务——三处均已提交后 sync_row",
+        "子任务转出 / 重复任务下次实例 / 复制任务——三处提交后统一走 sync_row_or_mark_dirty（失败自动置脏，ensure_fresh 下次对账补齐）",
     ),
     (
         "api/todo_api.rs",
