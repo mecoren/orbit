@@ -339,7 +339,10 @@ class NotificationService {
       try {
         final local = await FlutterTimezone.getLocalTimezone();
         tz.setLocalLocation(tz.getLocation(local.identifier));
-      } catch (_) {}
+      } catch (e) {
+        // fallback UTC 会让提醒按错时区触发，必须留日志；不阻断初始化
+        debugPrint('[NotificationService] 本地时区获取失败，按 UTC 排程: $e');
+      }
 
       // Android 13+ 运行时请求；13 以下由系统视为已授权返回 true。
       // 用户拒绝 → false，调用方静默降级 toast，不再二次骚扰。
@@ -383,10 +386,12 @@ class NotificationService {
     final isSnoozed = await _isSnoozedOut(event.taskId, event.remindAt);
     if (isSnoozed) {
       // 推迟产物：新时间闹钟已在系统侧，旧行到期不弹——交给调用方删行
-      //（删行失败静默：下次到期再判一次，不产生循环弹）
+      //（删行失败不阻断：下次到期再判一次，不产生循环弹，但留日志）
       try {
         await onZombieCleanup?.call(event.id);
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('[NotificationService] 清理推迟残留提醒行失败: $e');
+      }
       return;
     }
     if (!_granted) {

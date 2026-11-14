@@ -298,6 +298,11 @@ class _BootGateState extends ConsumerState<BootGate>
       // 只在缓存已存在时取快照：`ref.read` 会初始化 provider，若列表页
       // 从未打开过，这里读一次就等于把万行全量拉回来。缓存缺失时调度器
       // 自行回落直拉（提醒重排本来就要标题，一次定向查询可接受）。
+      // Riverpod 3 把 Ref.exists 标为 deprecated，建议改用 provider.exist；
+      // 但 `exist` 在 FutureProvider 上并不存在（实测 undefined_getter）。
+      // 这里必须保留「不初始化 provider 就判断缓存是否就绪」的语义——
+      // 直接 ref.read 会把万行任务全量拉回来（见上方注释），故局部抑制。
+      // ignore: deprecated_member_use
       taskSnapshot: () => ref.exists(todoTasksProvider)
           ? ref.read(todoTasksProvider).value
           : null,
@@ -424,7 +429,10 @@ class _BootGateState extends ConsumerState<BootGate>
         if (task.done == 1 || task.isDeleted == 1) {
           try {
             await bridge.todoReminderDelete(e.id);
-          } catch (_) {}
+          } catch (e) {
+            // 僵尸行删不掉会在下次到期再判一次（不循环弹），但留日志
+            debugPrint('[BootGate] 清理已完成任务的到期提醒失败: $e');
+          }
           return;
         }
       } catch (_) {
