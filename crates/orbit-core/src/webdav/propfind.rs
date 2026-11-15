@@ -69,8 +69,8 @@ pub fn parse_propfind_response(xml: &str) -> Result<Vec<WebDavFileEntry>, WebDav
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => {
-                let local = local_name(e.name().as_ref());
-                match local.as_str() {
+                let local = e.local_name().into_inner();
+                match local {
                     "response" => {
                         current_entry = Some(WebDavFileEntry::default());
                         props = WebDavFileEntry::default();
@@ -98,20 +98,27 @@ pub fn parse_propfind_response(xml: &str) -> Result<Vec<WebDavFileEntry>, WebDav
             }
             Ok(Event::Empty(e)) => {
                 // <D:collection/> 可能以自闭合空元素出现（部分服务器序列化风格）
-                let local = local_name(e.name().as_ref());
+                let local = e.local_name().into_inner();
                 if local == "collection" && in_resourcetype {
                     props.is_collection = true;
                     props_dirty = true;
                 }
             }
             Ok(Event::Text(e)) => {
-                if let Ok(t) = e.unescape() {
-                    current_text.push_str(&t);
+                current_text.push_str(&e.xml10_content());
+            }
+            // quick-xml 0.42 起实体引用（`&amp;` / `&#38;`）单独发 GeneralRef 事件，
+            // 不再随 Text 一起给出；不接这一支会让 href 里的实体原样留在文本里。
+            Ok(Event::GeneralRef(e)) => {
+                if let Ok(Some(ch)) = e.resolve_char_ref() {
+                    current_text.push(ch);
+                } else if let Some(v) = quick_xml::escape::resolve_predefined_entity(e.as_ref()) {
+                    current_text.push_str(v);
                 }
             }
             Ok(Event::End(e)) => {
-                let local = local_name(e.name().as_ref());
-                match local.as_str() {
+                let local = e.local_name().into_inner();
+                match local {
                     "resourcetype" => in_resourcetype = false,
                     "status" => {
                         if in_propstat {
@@ -138,7 +145,7 @@ pub fn parse_propfind_response(xml: &str) -> Result<Vec<WebDavFileEntry>, WebDav
                     }
                     _ => {
                         if let Some(entry) = current_entry.as_mut() {
-                            match local.as_str() {
+                            match local {
                                 // href 挂在 response 直属层，不属于任何 propstat，
                                 // 因此不受属性状态码取舍影响
                                 "href" => entry.href = decode_href(&current_text),
@@ -247,16 +254,6 @@ fn decode_href(raw: &str) -> String {
     urlencoding::decode(trimmed)
         .map(|decoded| decoded.into_owned())
         .unwrap_or_else(|_| trimmed.to_string())
-}
-
-/// 提取命名空间本地名（DAV: 命名空间的元素名形如 "D:href"）
-fn local_name(name: &[u8]) -> String {
-    let s = std::str::from_utf8(name).unwrap_or("");
-    if let Some(idx) = s.find(':') {
-        s[idx + 1..].to_string()
-    } else {
-        s.to_string()
-    }
 }
 
 #[cfg(test)]
@@ -404,6 +401,23 @@ mod tests {
         assert_eq!(entries.len(), 1);
         assert!(entries[0].is_collection);
         assert_eq!(entries[0].href, "/dir/");
+    }
+
+    /// quick-xml 0.42 起实体引用单独发 `Event::GeneralRef`：href 里的 `&amp;`
+    /// 必须还原，否则 `&` 会以 `&amp;` 字面量进入文件名。
+    #[test]
+    fn href_entities_are_decoded() {
+        let xml = r#"<?xml version="1.0"?>
+<D:multistatus xmlns:D="DAV:">
+  <D:response>
+    <D:href>/dav/a&amp;b&#47;c.orsync</D:href>
+    <D:propstat><D:prop><D:getcontentlength>1</D:getcontentlength></D:prop>
+      <D:status>HTTP/1.1 200 OK</D:status></D:propstat>
+  </D:response>
+</D:multistatus>"#;
+        let entries = parse_propfind_response(xml).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].href, "/dav/a&b/c.orsync");
     }
 
     /// F30：href 是 URI 路径，中文/空格须百分号解码后才能当文件名用

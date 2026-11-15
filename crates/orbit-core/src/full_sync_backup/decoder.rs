@@ -79,7 +79,12 @@ pub fn decode_backup(bytes: &[u8], sync_password: &str) -> FullSyncBackupResult<
         let mut file = archive
             .by_index(i)
             .map_err(|e| FullSyncBackupError::Zip(e.to_string()))?;
-        let name = file.name().to_string();
+        // zip 9 起 `name()` 返回 `ZipResult<Cow<str>>`（旧版是 `&str`）：
+        // 文件名可能带编码转换/CP437 回退，失败要按坏包处理而不是静默空名。
+        let name = file
+            .name()
+            .map_err(|e| FullSyncBackupError::Zip(e.to_string()))?
+            .to_string();
 
         let buf = read_entry_bounded(
             &mut file,

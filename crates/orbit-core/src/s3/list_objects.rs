@@ -96,25 +96,35 @@ pub fn parse_list_objects_xml(xml: &str, prefix: &str) -> Result<ListPage, S3Err
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => {
-                let local = local_name(e.name().as_ref());
+                let local = e.local_name().into_inner();
                 if local == "Contents" {
                     cur = ListEntry::default();
                     field = Field::None;
                 } else {
-                    field = field_of(&local);
+                    field = field_of(local);
                 }
                 text.clear();
             }
             Ok(Event::Text(e)) => {
-                if field != Field::None
-                    && let Ok(t) = e.unescape()
-                {
-                    text.push_str(&t);
+                if field != Field::None {
+                    text.push_str(&e.xml10_content());
+                }
+            }
+            // quick-xml 0.42 起实体引用（`&amp;` / `&#38;`）不再混在 Text 里，
+            // 而是单独发 GeneralRef 事件；不接这一支会把 S3 键里的 `&` 丢掉。
+            Ok(Event::GeneralRef(e)) => {
+                if field != Field::None {
+                    if let Ok(Some(ch)) = e.resolve_char_ref() {
+                        text.push(ch);
+                    } else if let Some(v) = quick_xml::escape::resolve_predefined_entity(e.as_ref())
+                    {
+                        text.push_str(v);
+                    }
                 }
             }
             Ok(Event::End(e)) => {
-                let local = local_name(e.name().as_ref());
-                match field_of(&local) {
+                let local = e.local_name().into_inner();
+                match field_of(local) {
                     Field::Key => {
                         let raw = text.trim();
                         cur.key = raw
@@ -190,16 +200,6 @@ pub fn parse_list_objects_xml(xml: &str, prefix: &str) -> Result<ListPage, S3Err
         next_token,
         truncated,
     })
-}
-
-/// 提取命名空间本地名（处理形如 "s3:Key" 的带命名空间元素）
-fn local_name(name: &[u8]) -> String {
-    let s = std::str::from_utf8(name).unwrap_or("");
-    if let Some(idx) = s.find(':') {
-        s[idx + 1..].to_string()
-    } else {
-        s.to_string()
-    }
 }
 
 #[cfg(test)]
@@ -387,6 +387,19 @@ mod tests {
         let page = parse_list_objects_xml(xml, "sync").unwrap();
         assert_eq!(page.next_token.as_deref(), Some("tok-2"));
         assert!(!page.truncated, "服务端未报 IsTruncated 时为 false");
+    }
+
+    /// quick-xml 0.42 起实体引用单独发 `Event::GeneralRef`：S3 键里的 `&` / `<`
+    /// 若不接这一支会被静默吞掉，键名与实际对象对不上（下载 404 的静默数据面错误）。
+    #[test]
+    fn key_entities_are_decoded() {
+        let xml = r#"<?xml version="1.0"?>
+<ListBucketResult>
+  <Name>b</Name><Prefix></Prefix>
+  <Contents><Key>a&amp;b &lt;x&gt; &#65;&#x42;.orsync</Key></Contents>
+</ListBucketResult>"#;
+        let page = parse_list_objects_xml(xml, "").unwrap();
+        assert_eq!(page.entries[0].key, "a&b <x> AB.orsync");
     }
 
     /// `IsTruncated` 文本的大小写与空白不敏感（兼容实现的写法差异）
