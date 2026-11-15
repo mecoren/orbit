@@ -29,6 +29,22 @@
 
 ## [0.1.0] - 2026-11-15
 
+### 构建：依赖审计门禁通过首发基线（2026-11-15）
+
+- **首发卡点**：首次推 `v0.1.0` tag 时 release 流水线的 `audit` job 当场失败——根 `Cargo.lock`
+  24 条、桌面壳 `Cargo.lock` 29 条 RUSTSEC 告警，`desktop` / `android` 构建与 Release 创建全部未启动；
+- **升级消除**：`zip 2.4.2→9.5.1`、`quick-xml 0.36.2→0.42.0`、`rustls 0.23.43→0.23.46`、
+  `rustls-webpki 0.103.15→0.103.17`、`webpki-roots 1.0.9→1.0.12`、`zstd 0.13.3→0.13.5`、
+  `zstd-safe 7.2.4→7.4.1`、`zstd-sys 2.0.16→2.1.3`、`quinn-proto 0.11.17→0.11.19`、
+  `quinn-udp 0.5.15→0.5.16`、`webpki-root-certs 1.0.9→1.0.12`——两份 lock 的审计从 24 / 29 条降到 0 条；
+- **API 迁移**：quick-xml 0.42 移除 `BytesText::unescape()`（改 `xml10_content()`）、实体引用改为独立的
+  `Event::GeneralRef` 事件、`QName::as_ref()` 由 `&[u8]` 变 `&str`——`s3::list_objects` 与 `webdav::propfind`
+  补 `GeneralRef` 分支（否则 S3 键 / WebDAV href 里的 `&` 会被静默吞掉），并各补一条实体解码回归用例；
+  zip 9 的 `ZipFile::name()` 返回 `ZipResult<Cow<str>>`，`full_sync_backup::decoder` 按坏包处理而非静默空名；
+- **登记例外**：新增 `.cargo/audit.toml`，逐条登记 6 个上游受限项（`libsqlite3-sys` 的 sqlcipher-src 未跟进
+  SQLite 3.54、`sqlx-mysql` 传递引入的 `rsa 0.9`、`tauri-plugin-updater` 2.11 锁定的 `zip 4.6`），每条附解除
+  条件，基线结论写入 `docs/08` §「依赖审计基线」。
+
 ### 验证：同步功能 WebDAV / S3 端到端测试报告 run7（2026-11-15）
 
 - **报告落库**：`docs/同步功能WebDAV端到端测试报告-2026-11-09.md` 与

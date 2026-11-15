@@ -1,0 +1,25 @@
+# cargo-audit 例外基线（release.yml 的 audit job 硬拦截读取本文件）
+#
+# 只登记「上游尚未修复 / 修复成本超出本次发版范围」的告警，每条都要在
+# docs/08_发布与更新流程.md 的「审计门禁现状」节留可复核的理由与解除条件。
+# 新增条目必须同时更新该节，否则下一次发版无人知道为什么可以忽略。
+
+[advisories]
+ignore = [
+    # libsqlite3-sys 0.30.1 → 0.39 修的是 bundled SQLite；本项目走 bundled-sqlcipher，
+    # 0.39.x 的 sqlcipher-src 419.0.6 仍 bundle SQLite 3.53.4（同样受影响）。
+    # 解除条件：sqlcipher-src 跟进到 SQLite >= 3.54。
+    "RUSTSEC-2026-0459",
+    # rsa 0.9.10 由 sqlx-mysql 传递引入（sqlx 0.8 声明 optional 但 lock 恒在），
+    # 本项目只用 sqlite 后端，MySQL 代码路径不参与编译产物。
+    # 解除条件：sqlx 0.9 升级（sqlx-mysql 换 rsa 0.10）。
+    "RUSTSEC-2023-0071",
+    # zip 4.6.1 由 tauri-plugin-updater 2.11.0 的 `zip = "4"` 锁定；升到 zip 9
+    # 需要 tauri-plugin-updater 2.14 + tauri 2.12 整套栈，超出本次发版范围。
+    # 四条都只在 `ZipArchive::extract()` 路径触发，且 updater 的归档来自本仓
+    # 已签名 Release（签名先校验再解包）。
+    "RUSTSEC-2026-0367",
+    "RUSTSEC-2026-0368",
+    "RUSTSEC-2026-0369",
+    "RUSTSEC-2026-0429",
+]
