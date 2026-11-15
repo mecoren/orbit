@@ -45,7 +45,7 @@ void main() {
     expect(find.text('更新日志'), findsOneWidget);
     expect(find.text('v0.1.0'), findsOneWidget);
     expect(find.textContaining('Mock 桥占位更新日志'), findsOneWidget);
-    expect(find.text('2026-09-26'), findsOneWidget);
+    expect(find.text('2026-11-15'), findsOneWidget);
     expect(find.text('0 项更新'), findsOneWidget);
   });
 
@@ -57,7 +57,7 @@ void main() {
 
     // 页头 + 标题区 + 信息行各一次
     expect(find.text('v0.1.0'), findsNWidgets(3));
-    expect(find.text('发布于 2026-09-26'), findsOneWidget);
+    expect(find.text('发布于 2026-11-15'), findsOneWidget);
     expect(find.text('信息'), findsOneWidget);
     expect(find.text('发布日期'), findsOneWidget);
     expect(find.text('0 项'), findsOneWidget);

@@ -969,7 +969,7 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   changelog_versions: () => [
     {
       version: __APP_VERSION__,
-      date: "2026-09-26",
+      date: "2026-11-15",
       summary: "浏览器 mock 占位更新日志（真实数据源在 orbit-core）",
       changes: [{ category: "feature", description: "同上" }],
     },

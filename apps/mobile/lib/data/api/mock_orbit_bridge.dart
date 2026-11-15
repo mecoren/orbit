@@ -3940,7 +3940,7 @@ class MockOrbitBridge implements OrbitBridge {
     () => const [
       ChangelogVersionInfo(
         version: '0.1.0',
-        date: '2026-09-26',
+        date: '2026-11-15',
         summary: 'Mock 桥占位更新日志（真实数据源在 orbit-core）',
         changes: [],
       ),
