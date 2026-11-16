@@ -1,0 +1,10 @@
+# 本机 / 沙箱环境把 cargo 派生的编译进程降到 Low 完整性级别（S-1-16-4096），而 %TEMP%、
+# %LOCALAPPDATA%、用户主目录是默认 Medium 完整性且无标签——低完整性进程对它们只能读不能写，
+# MSVC 没法创建临时文件与调试记录，构建就以
+#   cl : Command line error D8050 : cannot execute '...\c1.dll': failed to get command line into debug records
+# 这种极具误导性的文案失败（实测：cargo 子进程 whoami 仍是 WAIT\wait，但写 %TEMP% 报 Access denied）。
+# 工作区目录带 Low 完整性标签，对构建进程可写，因此把编译器临时目录固定到 target/ 内。
+# force = true：覆盖从父进程继承的 TEMP/TMP（cargo 的 [env] 默认只在变量未设置时才生效）。
+[env]
+TEMP = { value = "target", relative = true, force = true }
+TMP = { value = "target", relative = true, force = true }
