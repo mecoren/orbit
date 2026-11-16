@@ -17,7 +17,7 @@ members = [
 [workspace.package]
 edition = "2024"
 rust-version = "1.96"
-version = "0.1.0"
+version = "0.1.1"
 
 # 内部 crate 统一注册（omnipass 模式）：成员用 `xxx.workspace = true` 引用
 # 命名约定：包名/目录 kebab-case；依赖键随包名（orbit-core），代码 import 用 lib 名 orbit_core
