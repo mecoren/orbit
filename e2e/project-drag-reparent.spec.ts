@@ -78,15 +78,29 @@ async function projectRow(page: Page, uuid: string) {
  *   判定为落点行；
  * - **横向终点 = 起点 x + dx**（不是落点行中心 + dx），dx 语义与行宽解耦。
  * 按下后必须静止等过 delay（250ms）再动——约束期位移超 tolerance(8px) 直接取消。
+ *
+ * **起拖前必须把两行滚进视口再量框**（2026-11-16）：侧栏是一条滚动列，快捷视图
+ * 每加一行就把项目区整体下推。「计划内」入列后，5 行项目里的序末行整块落到
+ * 720 高视口折线以下——dnd-kit 的碰撞是纯矩形运算，**落点行**折在视口外照样能
+ * 命中（左拖用例就一直这么过的），但**按下点**必须真的落在行上：`elementFromPoint`
+ * 返回 null 时 press 打在空白处，整段手势等于没拖，表现是「拖完层级没变」。
  */
 async function dragProject(page: Page, active: string, over: string, dx: number) {
-  const from = await page.locator(ROW, { hasText: active }).boundingBox();
-  const to = await page.locator(ROW, { hasText: over }).boundingBox();
+  const activeRow = page.locator(ROW, { hasText: active });
+  const overRow = page.locator(ROW, { hasText: over });
+  await activeRow.scrollIntoViewIfNeeded();
+  await overRow.scrollIntoViewIfNeeded();
+  const from = await activeRow.boundingBox();
+  const to = await overRow.boundingBox();
   if (!from || !to) throw new Error("拖拽元素不可见");
 
   const startX = from.x + from.width / 2;
   const startY = from.y + from.height / 2;
   const endY = to.y + to.height / 2;
+  const viewport = page.viewportSize();
+  if (viewport && (startY < 0 || startY > viewport.height)) {
+    throw new Error(`起拖行中心不在视口内：y=${startY}，视口高=${viewport.height}`);
+  }
   await page.mouse.move(startX, startY);
   await page.mouse.down();
   await page.waitForTimeout(350);
