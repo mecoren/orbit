@@ -33,7 +33,9 @@ MVP 发布（06 文档 §二 M5）要求五端产物签名/分发就绪。现状
   月牙形行星（被环咬出缺口）、彗星自中心越环、环内柔光 glow。全族无
   底板（用户口径「扣成透明背景」）：桌面任务栏/Android 桌面/关于页
   背景由宿主提供；Android 启动屏白底由 `launch_background.xml` 的
-  `launch_bg` 承载，图标层透明直贴（2026-09-19 白底口径）。
+  `launch_bg` 承载，图标层透明直贴（2026-09-19 白底口径）。**注意「全族
+  无底板」仅对桌面与启动屏图成立**：Android 自适应图标背景层已于 2026-11-16
+  改白底板（见下文「Android 启动器」条），换版只覆盖位图、不动该口径。
   - 源图：`scripts/icon-source-2026-09-08b.png`（1254²，ChatGPT 生图
     自带透明通道）。质量实测后**直接栅格使用、不重描**：主环外缘段内
     圆度 ±1px（左右长轴椭圆 rx 364 / ry 347，段内 std≤1.2）、主体蓝
@@ -67,22 +69,23 @@ MVP 发布（06 文档 §二 M5）要求五端产物签名/分发就绪。现状
   - 移动端 Flutter 资产 `apps/mobile/assets/app_icon.png`（512，启动等待
     画面白底居中显示；与桌面端同一枚图标）；
   - Android `mipmap-*/ic_launcher.png`（48–192 五密度）+ 自适应图标
-    `mipmap-anydpi-v26/{ic_launcher,ic_launcher_round}.xml`（**透明**背景层
+    `mipmap-anydpi-v26/{ic_launcher,ic_launcher_round}.xml`（**白色**背景层
     `@color/ic_launcher_background` + 前景层 `mipmap-*/ic_launcher_foreground.png`，
-    108dp 画布、内容缩入 60% 安全区）——透明底与桌面端口径一致；缺分层
-    时系统会给 legacy 位图自造模糊底板（脏底），铺白底则出现白色圆角
-    方块（2026-09-19 两次实测反馈），Manifest 同步声明 `roundIcon`；
-    **像素按 2x 规格给**（48dp 图标 96px、108dp 画布 216px，同族翻倍）：
-    启动器与系统/OEM 启动画面都会放大绘制（API 31+ 图标区 288dp、
-    可见 192dp），1x 像素放大即糊；
-  - 已知 ROM 行为（2026-11-13 评估后决定不处理）：部分 ROM（反馈机型：应用信息 /
-    「闹钟和提醒」权限页）把 adaptive icon 画在**不透光的黑色圆角底板**上，
-    透明背景处露出黑底（「黑图标」观感），桌面启动器上则正常透壁纸。
-    当日三种方案均被拒或无效：实色白底板（启动器全平台变白方块，偏离「全族
-    透明底」口径）、`#00FFFFFF`（alpha=0 的透明白，该 ROM 仍黑——按 alpha
-    合成，RGB 不参与）、深浅双底板（需给启动屏拆独立色资源，且启动器图标
-    在深色系统变成深色卡）。结论：**保持透明底不动**，归因 ROM 渲染、不属
-    本仓可修范围；将来若要消除，只能接受全 Android 设备启动器带底板；
+    108dp 画布、内容缩入 60% 安全区；背景层口径见下条）——缺分层时系统会给
+    legacy 位图自造模糊底板（脏底），故分层写法必须保留，Manifest 同步声明
+    `roundIcon`；**像素按 2x 规格给**（48dp 图标 96px、108dp 画布 216px，
+    同族翻倍）：启动器与系统/OEM 启动画面都会放大绘制（API 31+ 图标区
+    288dp、可见 192dp），1x 像素放大即糊；
+  - 已知 ROM 行为与处置（2026-11-16 收口）：部分 ROM（反馈机型：应用信息 /
+    「闹钟和提醒」权限页 / 个别启动器）把 adaptive icon 画在**不透光的黑色
+    圆角底板**上，透明背景处露出黑底（「黑图标」观感）。2026-11-13 曾按
+    「透明底与桌面口径一致」不处理；2026-11-16 用户口径改为**「宁要白底，
+    不要黑底」**，背景层改 `#FFFFFFFF`——黑底在各 ROM/各系统页上确定性消失，
+    代价是启动器上出现白色（圆角）方块，已被接受。仍无效/不采用的方案留档：
+    `#00FFFFFF`（alpha=0 的透明白）该 ROM 仍黑（合成按 alpha 判可见、RGB
+    不参与）；深浅双底板（需给启动屏拆独立色资源，且深色系统下启动器图标
+    变深卡）。`windowSplashScreenIconBackgroundColor` 与背景层共用该色——
+    白圆底压在白启动屏上不可见，口径自洽；
   - 通知小图标 `drawable-*/ic_stat_orbit.png`（主体白色剪影，
     API 21+ alpha 语义），`notification_service.dart` 已接线（初始化
     小图标 + 文档注明 22.x 无 channelIcon 参数）。
@@ -94,7 +97,7 @@ MVP 发布（06 文档 §二 M5）要求五端产物签名/分发就绪。现状
   变黑，且 night 限定符优先于 version 故两份都要写），并同组显式指定
   `windowSplashScreenAnimatedIcon`（自适应图标前景层）+ 
   `windowSplashScreenIconBackgroundColor`（同 `@color/ic_launcher_background`，
-  即透明，与桌面端一致不铺底板）——缺省时系统会给 legacy 位图自造
+  即白色——白圆底压在白启动屏上不可见）——缺省时系统会给 legacy 位图自造
   模糊底板；Flutter 侧首帧前的
   等待画面（`BootGate` booting 态）同为白底 + 居中 `assets/app_icon.png`，
   与原生启动屏无缝衔接（口径见 `AGENTS.md` 移动端约定）；桌面

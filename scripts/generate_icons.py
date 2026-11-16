@@ -11,8 +11,9 @@
 - Android 启动器：apps/mobile/android/app/src/main/res/mipmap-{m,hdpi,xhdpi,
   xxhdpi,xxxhdpi}/ic_launcher.png（Flutter 模板同尺寸族）
 - Android 自适应图标（API 26+）：mipmap-anydpi-v26/{ic_launcher,
-  ic_launcher_round}.xml（透明底 @color/ic_launcher_background + 前景分层）
-  + mipmap-*/ic_launcher_foreground.png（108dp 画布，内容缩入安全区）
+  ic_launcher_round}.xml（**白色**背景层 @color/ic_launcher_background
+  + 前景分层）+ mipmap-*/ic_launcher_foreground.png（108dp 画布，
+  内容缩入安全区）
 - Android 启动屏：mipmap-xxxhdpi/launch_image.png（512，无圆角全出血）
 - 移动端 Flutter 资产：apps/mobile/assets/app_icon.png（512，启动等待
   画面白底居中显示，与桌面同源图标）
@@ -22,8 +23,12 @@
 设计 v6（源：scripts/icon-asset-2026-11-11.png，1080² 透明底扁平图）：
 深蓝 #126FFD 的 C 形粗环 + 中心对勾 + 右上卫星球 + 浅蓝斜向轨道带；
 无 glow、无底板。源图自带透明通道，脚本按 alpha>16 裁紧框后直接使用；
-**全族透明底**（用户口径「扣成透明背景」）——深色底由宿主环境提供；
-Android 启动屏为白底 + 居中本图（launch_background.xml 的 launch_bg）。
+**桌面全族与移动端启动屏图透明底**（用户口径「扣成透明背景」）——深色底
+由宿主环境提供；Android 启动屏为白底 + 居中本图（launch_background.xml
+的 launch_bg）。**唯一例外：Android 自适应图标背景层为白色底板**——透明
+背景层在部分 ROM 的系统页/启动器上会被合成到不透光黑底（2026-11-16 用户
+反馈「图标背景是黑的」），改白是唯一确定性消除手段（详见
+`res/values/colors.xml` 的 ic_launcher_background 注释）。
 
 图标口径（2026-09-19）：移动端与桌面端**同一枚图标**——launcher 图标、
 原生启动屏图、Flutter 等待画面资产三处全部出自本脚本的 render_master，
@@ -176,11 +181,13 @@ def render_adaptive_foreground(size: int) -> Image.Image:
 def write_adaptive_icons(res: Path) -> None:
     """写自适应图标族：前景层密度族 + mipmap-anydpi-v26 分层描述。
 
-    背景层取 `@color/ic_launcher_background`（**透明**，见
-    res/values/colors.xml）——与桌面端口径一致：图标即透明底品牌图形，
-    不铺白底/底板。缺分层时系统启动画面会给 legacy 位图自造一层模糊
-    底板（观感发灰、图标被放大），这正是 2026-09-19 移动端「图标带
-    模糊背景」的根因；铺白底则会出现白色圆角方块（同日二次反馈）。
+    背景层取 `@color/ic_launcher_background`（**白色底板**，见
+    res/values/colors.xml）。历史上的透明底（#00000000）会让部分 ROM 把
+    图标合成到不透光黑底上（系统页/启动器「黑背景」观感，2026-11-16 反馈），
+    且按 alpha 合成、改 #00FFFFFF 无效——要确定性消除只能给不透明底板；
+    用户口径为「宁要白底，不要黑底」。缺分层时系统还会给 legacy 位图自造
+    一层模糊底板（观感发灰、图标被放大），这正是 2026-09-19 移动端「图标
+    带模糊背景」的根因，故分层写法保留。
     """
     for bucket, size in ADAPTIVE_DENSITIES.items():
         render_adaptive_foreground(size).save(
@@ -189,7 +196,7 @@ def write_adaptive_icons(res: Path) -> None:
     anydpi.mkdir(parents=True, exist_ok=True)
     xml = (
         '<?xml version="1.0" encoding="utf-8"?>\n'
-        "<!-- Orbit 自适应图标（API 26+）：透明底 + 品牌前景层；"
+        "<!-- Orbit 自适应图标（API 26+）：白色背景层 + 品牌前景层；"
         "脚本产出（scripts/generate_icons.py），勿手改。 -->\n"
         '<adaptive-icon xmlns:android='
         '"http://schemas.android.com/apk/res/android">\n'

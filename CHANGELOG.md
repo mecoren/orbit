@@ -27,6 +27,22 @@
 
 ## [Unreleased]
 
+### 修复：Android 启动器图标黑底——自适应背景层改白底板（2026-11-16）
+
+- **现象与归因**：移动端图标背景是黑的——自适应图标背景层为全透明（`ic_launcher_background
+  = #00000000`），部分 ROM 的系统页（应用信息 / 最近任务 / 权限页）与启动器在绘制图标前会
+  先铺一层不透光黑底，透明处即露黑；该合成按 alpha 判可见，改 `#00FFFFFF` 无效。
+  2026-11-13 曾归因 ROM 并保持透明，本次按用户新口径「如果实在不行，改成白色的背景」收口。
+- **改动**：`res/values{,-night}/colors.xml` 的 `ic_launcher_background` 改 `#FFFFFFFF`
+  （亮暗同值，深色系统也不转深卡）；`values-v31`/`values-night-v31` 共用的
+  `windowSplashScreenIconBackgroundColor` 随之变白（白圆底压在白启动屏上不可见，口径自洽）。
+  `scripts/generate_icons.py` 与 `mipmap-anydpi-v26/{ic_launcher,ic_launcher_round}.xml`
+  的产出注释同步改为白底板，重生成不会退回透明。
+- **代价**：启动器上图标显示为白色（圆角）方块——2026-09-19 曾因该观感拒绝白底，现按用户
+  口径接受；桌面图标、启动屏图、`assets/app_icon.png` 不受影响，仍为透明底。
+- **验证**：白底 + 前景层（60% 安全区）按圆形/圆角方遮罩合成预览无裁切；纯资源改动，
+  不涉 Dart/Rust 代码，无单测关联。
+
 ## [0.1.0] - 2026-11-15
 
 ### 构建：依赖审计门禁通过首发基线（2026-11-15）
