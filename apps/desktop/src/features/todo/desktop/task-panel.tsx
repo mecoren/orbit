@@ -253,6 +253,10 @@ export default function TaskPanel() {
   // done 快捷视图 + 列表档 → LogbookView 接管（隐藏开关在 done 视图不剔除，
   // 下方 filterTasks 已保证）；其余视图照旧走列表/看板/日历/表格
   const isLogbook = quickView === "done" && projectId == null && !ungrouped && savedFilterId == null;
+  // 计划内（微软 To Do 同款）：列表档按先前/今天/明天/稍后四段分组，
+  // 不叠逾期处置条、不做拖拽重排（分组顺序由截止日决定）
+  const isPlanned =
+    quickView === "planned" && projectId == null && !ungrouped && savedFilterId == null;
 
   // ===========================================================================
   // P1 窗口化：列表/表格改走键集分页
@@ -301,8 +305,9 @@ export default function TaskPanel() {
     return () => window.clearInterval(timer);
   }, []);
 
-  // 逾期置顶段单独取（主列表用 exclude_due_before 把逾期行排除，避免重复渲染）
-  const overdueEnabled = pagedMode && viewMode === "list";
+  // 逾期置顶段单独取（主列表用 exclude_due_before 把逾期行排除，避免重复渲染）。
+  // 计划内自带「先前」段，不再叠逾期处置条
+  const overdueEnabled = pagedMode && viewMode === "list" && !isPlanned;
 
   const pageFilter = useMemo(
     () =>
@@ -779,7 +784,7 @@ export default function TaskPanel() {
           <MoreMenuButton
             hideDone={hideDone}
             onHideDoneChange={setHideDone}
-            hideDoneDisabled={isLogbook || statusFilterOf(statusFilters) === "done"}
+            hideDoneDisabled={isLogbook || isPlanned || statusFilterOf(statusFilters) === "done"}
             onSaveAsView={() =>
               createSavedFilterWith(
                 buildConditions(
@@ -956,9 +961,11 @@ export default function TaskPanel() {
             onLoadMore={loadMore}
             hasMore={pagedMode && pagedQuery.hasNextPage}
             // #26：仅拖拽顺序档显示拖拽把手；该档逾期行也不抽段置顶（否则置顶段不可拖），
-            // 处置条的计数/顺延仍取壳层全局逾期集
-            sortable={sortKey === "manual"}
-            pinOverdue={sortKey !== "manual"}
+            // 处置条的计数/顺延仍取壳层全局逾期集。计划内禁用拖拽（段序由截止日决定）
+            sortable={sortKey === "manual" && !isPlanned}
+            pinOverdue={sortKey !== "manual" && !isPlanned}
+            planned={isPlanned}
+            nowMs={nowTick}
             overdueAll={overdueQuery.data}
             onCreateClick={() => {
               openCreateForm();

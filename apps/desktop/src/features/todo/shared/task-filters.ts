@@ -139,6 +139,11 @@ export function filterTasks(tasks: TodoTaskListItem[], input: TaskFilterInput): 
         // 逾期置顶段自然承接渲染
         list = list.filter((t) => t.due_date != null && t.due_date < todayEnd);
         break;
+      case "planned":
+        // 计划内（微软 To Do 同款）= 全部有截止的未完成任务，含逾期；
+        // 先前/今天/明天/稍后四段分组在渲染层做（groupPlannedByDay）
+        list = list.filter((t) => !t.done && t.due_date != null);
+        break;
       case "week":
         // 近 7 天 = 逾期 + 未来 7 天到期（同口径去掉下界）
         list = list.filter((t) => t.due_date != null && t.due_date < weekEnd);
@@ -270,6 +275,77 @@ export function groupOverdueFirst(
     else rest.push(t);
   }
   return { overdue, rest };
+}
+
+// ---------- 计划内分组（微软 To Do「计划内」四段） ----------
+
+/** 计划内视图的日期桶（展示顺序即声明序：先前 → 今天 → 明天 → 稍后） */
+export type PlannedBucket = "earlier" | "today" | "tomorrow" | "later";
+
+/** 桶位展示名（对齐微软 To Do：Earlier / Today / Tomorrow / Later） */
+export const PLANNED_BUCKET_LABELS: Record<PlannedBucket, string> = {
+  earlier: "先前",
+  today: "今天",
+  tomorrow: "明天",
+  later: "稍后",
+};
+
+/** 计划内单个分组（组内按截止时刻升序，同刻回落拖拽序） */
+export interface PlannedGroup {
+  bucket: PlannedBucket;
+  tasks: TodoTaskListItem[];
+}
+
+/**
+ * 计划内分组：按**本地自然日**把带截止的未完成任务分成先前/今天/明天/稍后
+ * （微软 To Do 同款）。判据用日界而不是时刻——今天 18:00 到期的任务在今天
+ * 下午不算「先前」（`groupOverdueFirst` 是时刻级判定，语义不同，勿互换）。
+ * 空桶不返回；组内按 due_date 升序（同刻回落 position，再回落创建时间倒序）。
+ * 与移动端 `groupPlannedByDay` 逐字同义，两端只允许一份语义。
+ */
+export function groupPlannedByDay(
+  tasks: TodoTaskListItem[],
+  now = new Date(),
+): PlannedGroup[] {
+  const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const todayStart = dayStart.getTime();
+  const tomorrowStart = todayStart + 86_400_000;
+  const dayAfterStart = tomorrowStart + 86_400_000;
+
+  const buckets: Record<PlannedBucket, TodoTaskListItem[]> = {
+    earlier: [],
+    today: [],
+    tomorrow: [],
+    later: [],
+  };
+  for (const t of tasks) {
+    const due = t.due_date;
+    if (t.done || due == null) continue;
+    const bucket: PlannedBucket =
+      due < todayStart
+        ? "earlier"
+        : due < tomorrowStart
+          ? "today"
+          : due < dayAfterStart
+            ? "tomorrow"
+            : "later";
+    buckets[bucket].push(t);
+  }
+
+  for (const list of Object.values(buckets)) {
+    list.sort((a, b) => {
+      const byDue = a.due_date! - b.due_date!;
+      if (byDue !== 0) return byDue;
+      const pa = a.position ?? 0;
+      const pb = b.position ?? 0;
+      if (pa !== pb) return pa - pb;
+      return b.created_at - a.created_at;
+    });
+  }
+
+  return (Object.keys(buckets) as PlannedBucket[])
+    .filter((bucket) => buckets[bucket].length > 0)
+    .map((bucket) => ({ bucket, tasks: buckets[bucket] }));
 }
 
 // =============================================================================

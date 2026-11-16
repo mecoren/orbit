@@ -10,11 +10,13 @@ import type { QuickViewKey } from "./constants";
 
 export type QuickViewCounts = Record<QuickViewKey, number>;
 
-/** 六路 overview COUNT 的原始读数（全部与未完成共用 undone） */
+/** 七路 overview COUNT 的原始读数（全部与未完成共用 undone） */
 export interface QuickViewCountInput {
   undone: number;
   done: number;
   today: number;
+  /** 计划内：全部有截止的未完成任务（与谓词 has_due + done=false 同口径） */
+  planned: number;
   week: number;
   favorite: number;
   myDay: number;
@@ -26,6 +28,7 @@ export function buildQuickViewCounts(input: QuickViewCountInput): QuickViewCount
     undone: input.undone,
     done: input.done,
     today: input.today,
+    planned: input.planned,
     week: input.week,
     favorite: input.favorite,
     my_day: input.myDay,

@@ -137,6 +137,10 @@ PagedTaskQuery? buildPagedQuery({
       // 今天 = 逾期 + 今日到期（due < 明日零点）；due_to 的 NULL 不命中
       // 正好与 filterTasks 的「要求 due 非空」同口径
       dueTo = dayEnd;
+    case QuickViewKey.planned:
+      // 计划内 = 全部有截止的未完成任务（含逾期）；四段分组在渲染层按
+      // 本地日界做（groupPlannedByDay），这里只下推「有截止」谓词
+      hasDue = true;
     case QuickViewKey.week:
       dueTo = dayEnd + 6 * 86400000;
     case QuickViewKey.favorite:

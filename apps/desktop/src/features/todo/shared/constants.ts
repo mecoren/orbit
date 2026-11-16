@@ -2,6 +2,7 @@
  * 待办模块共享常量（04 文档 §5.2 语义色 / §二 快捷视图定义）
  */
 import {
+  CalendarClock,
   CalendarDays,
   CalendarRange,
   CheckCircle2,
@@ -76,8 +77,17 @@ export const PRESET_10 = [
   "#EC4899", "#14B8A6", "#F97316", "#6366F1", "#6B7280",
 ];
 
-/** 快捷视图 key（my_day = 我的一天，07 报告新增项，对标微软 To Do） */
-export type QuickViewKey = "all" | "undone" | "done" | "today" | "week" | "favorite" | "my_day";
+/** 快捷视图 key（my_day = 我的一天，07 报告新增项，对标微软 To Do；
+ *  planned = 计划内，四段按截止日分桶，与移动端 `QuickViewKey.planned` 同源） */
+export type QuickViewKey =
+  | "all"
+  | "undone"
+  | "done"
+  | "today"
+  | "planned"
+  | "week"
+  | "favorite"
+  | "my_day";
 
 export interface QuickViewDef {
   key: QuickViewKey;
@@ -93,6 +103,9 @@ export const QUICK_VIEWS: QuickViewDef[] = [
   { key: "undone", label: "未完成", icon: CircleDot, color: "#F59E0B" },
   { key: "done", label: "已完成", icon: CheckCircle2, color: "#22C55E" },
   { key: "today", label: "今天", icon: CalendarDays, color: "#EF4444" },
+  // 计划内（微软 To Do 同款）：全部有截止的未完成任务，列表按
+  // 先前 / 今天 / 明天 / 稍后四段分组
+  { key: "planned", label: "计划内", icon: CalendarClock, color: "#3B82F6" },
   { key: "week", label: "近7天", icon: CalendarRange, color: "#F59E0B" },
   { key: "favorite", label: "收藏", icon: Star, color: "#8B5CF6" },
 ];

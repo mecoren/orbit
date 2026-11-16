@@ -205,6 +205,36 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     TaskSortKey.created: '创建时间',
   };
 
+  // ── 计划内四段（先前/今天/明天/稍后）的折叠态 ──
+
+  /// 折叠态持久化键（本机偏好；键名与桌面 `todo_planned_collapsed` 同族）
+  static const _plannedCollapsedKey = 'todo_planned_collapsed';
+
+  /// 折叠的分组（默认全展开；与微软 To Do「计划内」同一交互）
+  final Set<PlannedBucket> _plannedCollapsed = _loadPlannedCollapsed();
+
+  static Set<PlannedBucket> _loadPlannedCollapsed() {
+    final raw = LocalPrefs.getString(_plannedCollapsedKey) ?? '';
+    final names = raw.split(',').map((s) => s.trim()).toSet();
+    return {
+      for (final b in PlannedBucket.values)
+        if (names.contains(b.name)) b,
+    };
+  }
+
+  void _togglePlannedGroup(PlannedBucket bucket) {
+    if (!mounted) return;
+    setState(() {
+      if (!_plannedCollapsed.remove(bucket)) _plannedCollapsed.add(bucket);
+    });
+    unawaited(
+      LocalPrefs.setString(
+        _plannedCollapsedKey,
+        _plannedCollapsed.map((b) => b.name).join(','),
+      ),
+    );
+  }
+
   /// 优先级等值档位（对齐桌面工具栏优先级筛选下拉的七档：无优先级 / 低 /
   /// 中 / 高 / 紧急 / 立即处理；文案走 [priorityLabel] 全应用同源）
   static const _priorityChoices = [0, 1, 2, 3, 4, 5];
@@ -394,7 +424,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     }));
   }
 
-  /// 视图菜单的条目（八档单选，当前档打勾；图标与清单页快捷行同源
+  /// 视图菜单的条目（九档单选，当前档打勾；图标与清单页快捷行同源
   /// `QuickViewKey.icon` + `colorHex`）
   List<List<OrbitPanelItem>> _quickViewGroups() {
     final current = _effectiveQuery.quickView ?? QuickViewKey.today;
@@ -1721,6 +1751,9 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     // 其余视图照旧平铺 + 逾期置顶
     // （今天页签切换到已完成同样进 Logbook：标题与分组同步跟随覆写视图）
     final isLogbook = _effectiveQuery.quickView == QuickViewKey.done;
+    // 计划内（对齐微软 To Do）：未完成 + 有截止，列表档按先前/今天/明天/
+    // 稍后四段分组；看板/表格/矩阵档仍按原分列逻辑，分组只在列表档生效
+    final isPlanned = _effectiveQuery.quickView == QuickViewKey.planned;
     // 看板/表格/矩阵仅在非 Logbook 态生效：完成历史按日分组的语义在分列/
     // 表格/象限里会丢失（桌面同口径）
     final showKanban = _viewMode == TaskViewMode.kanban && !isLogbook;
@@ -1798,8 +1831,10 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
         ? null
         : ref.watch(taskWindowTotalProvider(windowQuery)).value;
 
-    // 逾期置顶段：独立查询（按 id 去重合并），仅列表/表格需要
-    final overdueItems = (windowed && !isLogbook && !showKanban && !showMatrix)
+    // 逾期置顶段：独立查询（按 id 去重合并），仅列表/表格需要。
+    // 计划内自带「先前」段，不叠逾期置顶（否则逾期行会重复出现两处）
+    final overdueItems =
+        (windowed && !isLogbook && !isPlanned && !showKanban && !showMatrix)
         ? ref
                   .watch(
                     taskOverdueProvider((query: pagedQuery, nowMs: _nowTick)),
@@ -1928,9 +1963,16 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
 
     // 逾期置顶分组（性能批次 UX 优化，与桌面同口径）：逾期行渲染在列表
     // 顶部的红调区块，其余照旧——长按拖拽语义不受影响（重排走下方
-    // manualUndone 同口径平铺流）
-    final overdueGroups = groupOverdueFirst(undone, _nowTick);
+    // manualUndone 同口径平铺流）。计划内不叠逾期置顶段（自带「先前」段）
+    final overdueGroups = isPlanned
+        ? OverdueGroups(overdue: const [], rest: undone)
+        : groupOverdueFirst(undone, _nowTick);
     final manualUndone = _manualReorderStream(undone, grouped: overdueGroups);
+
+    // 计划内四段（先前/今天/明天/稍后）：空桶不返回，组内按截止时刻升序
+    final plannedGroups = isPlanned
+        ? groupPlannedByDay(undone, _nowTick)
+        : const <PlannedGroup>[];
 
     // Logbook 分组（done 视图）：按完成日倒序，组内完成时刻倒序
     final doneGroups = isLogbook ? groupDoneByDay(visible) : <DoneDayGroup>[];
@@ -1961,7 +2003,9 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     // 长按拖拽（#37）：仅 manual 档（拖拽顺序档）启用重排；其余档
     // 顺序由排序键决定，拖了也会被覆盖（与桌面 sortable 同口径）。
     // 选择态强制回落普通列表：整行长按拾起与「点行切换选中」抢同一手势
-    final reorderable = _sortKey == TaskSortKey.manual && !_selectionMode;
+    // 计划内四段按日期分组，拖拽重排会与组间/组内时间线语义冲突——禁用
+    final reorderable =
+        _sortKey == TaskSortKey.manual && !_selectionMode && !isPlanned;
 
     // 窗口化续拉进度（已加载 X / 共 Y）并进页头计数，不单独占一条（2026-11-07
     // 真机反馈：页头下方再挂一条进度条既占首屏又和计数重复）；回退全量命中
@@ -1980,7 +2024,8 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
         MediaQuery.of(context).padding.top + OrbitPageHeader.rowHeight;
     // 今日上下文条（G2 正反馈 + G4 容量）：有内容才显示（今日已达成/
     // 今日已排/已设预算三者其一），列表顶部按其让位——与截断条幅同款约定
-    final showTodayStrip = !isLogbook && _hasTodayStripContent(todayStripTasks);
+    final showTodayStrip =
+        !isLogbook && !isPlanned && _hasTodayStripContent(todayStripTasks);
     // 底栏是悬浮胶囊（壳层 extendBody）：页尾先让出栏体净空 + 呼吸留白；选择态
     // 再让出批量工具条整段占位（条体 + 底距 + 呼吸），末行不被浮层遮住
     final listPadding = EdgeInsets.only(
@@ -2222,6 +2267,17 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
             groups: doneGroups,
             padding: listPadding,
             buildTile: buildTile,
+          )
+        : isPlanned
+        // 计划内：先前 / 今天 / 明天 / 稍后四段（微软 To Do 同款），
+        // 组头可折叠；完成行不在此视图出现（语义是「还没做的安排」）
+        ? _PlannedList(
+            groups: plannedGroups,
+            collapsed: _plannedCollapsed,
+            onToggle: _togglePlannedGroup,
+            padding: cardListPadding,
+            buildRow: (task, edge) =>
+                _withEntrance(task, buildTile(task, edge: edge)),
           )
         : reorderable
         ? Column(
@@ -3535,6 +3591,170 @@ class _LogbookList extends StatelessWidget {
     String p2(int n) => n.toString().padLeft(2, '0');
     return '${d.year}-${p2(d.month)}-${p2(d.day)}';
   }
+}
+
+/// 计划内四段分组列表（微软 To Do「计划内」）：先前 / 今天 / 明天 / 稍后。
+///
+/// 每组是一张卡（组头 + 任务行，段位同源），组间留 [AppDimens.cardGap]；
+/// 组头整行可点折叠，折叠态由宿主持久化。空桶已在 `groupPlannedByDay`
+/// 里剔除，不会出现空段头。
+class _PlannedList extends StatelessWidget {
+  const _PlannedList({
+    required this.groups,
+    required this.collapsed,
+    required this.onToggle,
+    required this.padding,
+    required this.buildRow,
+  });
+
+  final List<PlannedGroup> groups;
+  final Set<PlannedBucket> collapsed;
+  final ValueChanged<PlannedBucket> onToggle;
+  final EdgeInsets padding;
+  final Widget Function(TodoTask task, OrbitCardEdge edge) buildRow;
+
+  @override
+  Widget build(BuildContext context) {
+    // 打平进单一 ListView.builder：组头与任务行各成一条，保持懒加载
+    //（与 Logbook/逾期分组的落地手法一致）
+    final entries = <_PlannedEntry>[];
+    for (var gi = 0; gi < groups.length; gi++) {
+      final group = groups[gi];
+      final isCollapsed = collapsed.contains(group.bucket);
+      final size = 1 + (isCollapsed ? 0 : group.tasks.length);
+      entries.add(
+        _PlannedEntry(
+          bucket: group.bucket,
+          groupIndex: gi,
+          indexInGroup: 0,
+          groupSize: size,
+          count: group.tasks.length,
+          isCollapsed: isCollapsed,
+        ),
+      );
+      if (isCollapsed) continue;
+      for (var i = 0; i < group.tasks.length; i++) {
+        entries.add(
+          _PlannedEntry(
+            bucket: group.bucket,
+            groupIndex: gi,
+            indexInGroup: i + 1,
+            groupSize: size,
+            task: group.tasks[i],
+          ),
+        );
+      }
+    }
+
+    return ListView.builder(
+      padding: padding,
+      itemCount: entries.length,
+      itemBuilder: (context, index) {
+        final entry = entries[index];
+        // 段位按「组内下标 + 组内条目数」推：组头圆上角、末行圆下角
+        final edge = OrbitCardEdge.of(entry.indexInGroup, entry.groupSize);
+        final task = entry.task;
+        if (task != null) return buildRow(task, edge);
+        return Padding(
+          // 组间一档卡距；首组贴列表顶（列表自带顶部让位）
+          padding: EdgeInsets.only(
+            top: entry.groupIndex == 0 ? 0 : AppDimens.cardGap,
+          ),
+          child: OrbitCardSegment(
+            edge: edge,
+            child: _PlannedHeadRow(
+              bucket: entry.bucket,
+              count: entry.count,
+              collapsed: entry.isCollapsed,
+              onTap: () => onToggle(entry.bucket),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// 计划内分组头：折叠箭头 + 段名 + 条数（整行即折叠开关）
+class _PlannedHeadRow extends StatelessWidget {
+  const _PlannedHeadRow({
+    required this.bucket,
+    required this.count,
+    required this.collapsed,
+    required this.onTap,
+  });
+
+  final PlannedBucket bucket;
+  final int count;
+  final bool collapsed;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.ofContext(context);
+    // 先前=逾期红、今天=待办强调蓝、明天/稍后=正文/次级：
+    // 段头只借既有语义色，不引入新色值
+    final tint = switch (bucket) {
+      PlannedBucket.earlier => OrbitAccents.overdueRed,
+      PlannedBucket.today => OrbitAccents.todoAccent,
+      PlannedBucket.tomorrow => colors.bodyText,
+      PlannedBucket.later => colors.secondaryText,
+    };
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: AppDimens.touchTarget),
+        padding: const EdgeInsets.symmetric(horizontal: AppDimens.space16),
+        child: Row(
+          children: [
+            Icon(
+              collapsed ? OrbitIcons.expandMore : OrbitIcons.expandLess,
+              size: AppDimens.iconSizeSm,
+              color: colors.iconText,
+            ),
+            const SizedBox(width: AppDimens.space4),
+            Text(
+              bucket.label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: tint,
+              ),
+            ),
+            const SizedBox(width: AppDimens.space6),
+            Text(
+              '$count',
+              style: TextStyle(
+                fontSize: 12,
+                color: colors.secondaryText.withValues(alpha: 0.7),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 计划内列表的打平条目：组头（task 为 null）或任务行
+class _PlannedEntry {
+  const _PlannedEntry({
+    required this.bucket,
+    required this.groupIndex,
+    required this.indexInGroup,
+    required this.groupSize,
+    this.task,
+    this.count = 0,
+    this.isCollapsed = false,
+  });
+
+  final PlannedBucket bucket;
+  final int groupIndex;
+  final int indexInGroup;
+  final int groupSize;
+  final TodoTask? task;
+  final int count;
+  final bool isCollapsed;
 }
 
 /// 命中上限条幅（A5）：回退全量（标题排序/标签看板）时单份任务缓存命中

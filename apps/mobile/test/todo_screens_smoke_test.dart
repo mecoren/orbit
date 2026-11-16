@@ -105,6 +105,126 @@ void main() {
     expect(find.text('完成移动端重构方案评审'), findsOneWidget);
   });
 
+  testWidgets('任务子列表：计划内按先前/今天/明天/稍后四段分组', (tester) async {
+    final bridge = MockOrbitBridge();
+    final now = DateTime.now();
+    final dayStart =
+        DateTime(now.year, now.month, now.day).millisecondsSinceEpoch;
+    const day = 86400000;
+
+    void seed(String title, int? due) {
+      final t = <String, dynamic>{
+        ...Map<String, dynamic>.from(bridge.store.newEntity('t')),
+        'title': title,
+        'description': null,
+        'project_id': null,
+        'priority': 0,
+        'status': 'pending',
+        'done': 0,
+        'done_at': null,
+        'due_date': due,
+        'start_date': null,
+        'repeat_after': 1,
+        'repeat_mode': 0,
+        'repeat_weekdays': 0,
+        'repeat_end_type': 0,
+        'repeat_end_param': 0,
+        'repeat_from_done': 0,
+        'repeat_month_mode': 0,
+        'repeat_nth_week': 0,
+        'percent_done': 0,
+        'position': bridge.store.tasks.length * 1000.0,
+        'is_favorite': 0,
+        'my_day_date': null,
+        'duration_minutes': null,
+        'is_deleted': 0,
+        'created_at': bridge.store.now(),
+        'updated_at': bridge.store.now(),
+        'deleted_at': null,
+        'version': 1,
+      };
+      bridge.store.tasks[t['id'] as int] = t;
+    }
+
+    seed('先前任务', dayStart - 3600000);
+    seed('今天任务', dayStart + 18 * 3600000);
+    seed('明天任务', dayStart + day + 9 * 3600000);
+    seed('稍后任务', dayStart + day * 3);
+    seed('无日期任务', null);
+
+    await tester.pumpWidget(_wrap(
+      const SubListScreen(
+        query: TaskFilterInput(quickView: QuickViewKey.planned),
+      ),
+      bridge,
+    ));
+    await _settlePastMockLatency(tester);
+
+    // 四段段头 + 行；无日期任务不进计划内。
+    // 「今天/明天」也是行内日期列文案，段头断言用 findsWidgets
+    expect(find.text('计划内'), findsOneWidget);
+    expect(find.text('先前'), findsOneWidget);
+    expect(find.text('今天'), findsWidgets);
+    expect(find.text('明天'), findsWidgets);
+    expect(find.text('稍后'), findsOneWidget);
+    expect(find.text('先前任务'), findsOneWidget);
+    expect(find.text('无日期任务'), findsNothing);
+  });
+
+  testWidgets('任务子列表：计划内段头折叠（只留一段，段头在首屏内）', (tester) async {
+    final bridge = MockOrbitBridge();
+    final now = DateTime.now();
+    final dayStart =
+        DateTime(now.year, now.month, now.day).millisecondsSinceEpoch;
+    final t = <String, dynamic>{
+      ...Map<String, dynamic>.from(bridge.store.newEntity('t')),
+      'title': '稍后任务',
+      'description': null,
+      'project_id': null,
+      'priority': 0,
+      'status': 'pending',
+      'done': 0,
+      'done_at': null,
+      'due_date': dayStart + 3 * 86400000,
+      'start_date': null,
+      'repeat_after': 1,
+      'repeat_mode': 0,
+      'repeat_weekdays': 0,
+      'repeat_end_type': 0,
+      'repeat_end_param': 0,
+      'repeat_from_done': 0,
+      'repeat_month_mode': 0,
+      'repeat_nth_week': 0,
+      'percent_done': 0,
+      'position': 0.0,
+      'is_favorite': 0,
+      'my_day_date': null,
+      'duration_minutes': null,
+      'is_deleted': 0,
+      'created_at': bridge.store.now(),
+      'updated_at': bridge.store.now(),
+      'deleted_at': null,
+      'version': 1,
+    };
+    bridge.store.tasks[t['id'] as int] = t;
+
+    await tester.pumpWidget(_wrap(
+      const SubListScreen(
+        query: TaskFilterInput(quickView: QuickViewKey.planned),
+      ),
+      bridge,
+    ));
+    await _settlePastMockLatency(tester);
+
+    expect(find.text('稍后任务'), findsOneWidget);
+    await tester.tap(find.text('稍后'));
+    await tester.pumpAndSettle();
+    expect(find.text('稍后任务'), findsNothing);
+    await tester.tap(find.text('稍后'));
+    await tester.pumpAndSettle();
+    expect(find.text('稍后任务'), findsOneWidget);
+  });
+
   testWidgets('日历页签：快加面板可唤出且页头无返回键（页签根语义）', (tester) async {
     final bridge = MockOrbitBridge();
     await tester.pumpWidget(_wrap(const CalendarScreen(), bridge));

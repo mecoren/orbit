@@ -255,6 +255,7 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
       final viewDefaults = quickViewCreateDefaults(widget.quickView);
       final inDueView =
           widget.quickView == QuickViewKey.today ||
+          widget.quickView == QuickViewKey.planned ||
           widget.quickView == QuickViewKey.week;
       // F4：NLP 显式时刻原样落库（勿归一零点/视图 18 点），无时刻沿用零点口径
       final nlpHasTime = parsed.dueHasTime && parsed.dueDate != null;

@@ -196,6 +196,10 @@ export default function TodoShell() {
         return { favorite_only: true };
       case "my_day":
         return { my_day_today: todayZero };
+      case "planned":
+        // 计划内（微软 To Do 同款）= 全部有截止的未完成任务，含逾期；
+        // 先前/今天/明天/稍后的四段分组在列表渲染层做（日界口径）
+        return { done: false, has_due: true };
       default:
         return {};
     }
@@ -239,7 +243,7 @@ export default function TodoShell() {
     placeholderData: (prev) => prev,
   });
 
-  // 侧栏快捷视图角标（与移动端 sidebarCountsProvider 同口径）：六路
+  // 侧栏快捷视图角标（与移动端 sidebarCountsProvider 同口径）：七路
   // `todo_task_overview` 各自谓词下推只做 COUNT，不拉行。全部/未完成共用
   // 未完成总数（角标答「还剩多少要做」），今天/近7天含逾期。挂在
   // ["todo_tasks"] 前缀下随任务写事件失效；项目角标仍复用上面的
@@ -250,10 +254,11 @@ export default function TodoShell() {
       const todayEnd = todayZero + 86_400_000;
       const weekEnd = todayEnd + 6 * 86_400_000;
       const base = { page: 1, page_size: 0 };
-      const [undone, done, today, week, favorite, myDay] = await Promise.all([
+      const [undone, done, today, planned, week, favorite, myDay] = await Promise.all([
         todoTaskOverview({ ...base, done: false }),
         todoTaskOverview({ ...base, done: true }),
         todoTaskOverview({ ...base, done: false, due_to: todayEnd }),
+        todoTaskOverview({ ...base, done: false, has_due: true }),
         todoTaskOverview({ ...base, done: false, due_to: weekEnd }),
         todoTaskOverview({ ...base, done: false, favorite_only: true }),
         todoTaskOverview({ ...base, done: false, my_day_today: todayZero }),
@@ -262,6 +267,7 @@ export default function TodoShell() {
         undone: undone.total,
         done: done.total,
         today: today.total,
+        planned: planned.total,
         week: week.total,
         favorite: favorite.total,
         myDay: myDay.total,

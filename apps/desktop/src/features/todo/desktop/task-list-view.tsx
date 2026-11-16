@@ -64,8 +64,11 @@ import { EmptyState } from "@/components/business/empty-state";
 import { completeTask } from "../shared/task-actions";
 import {
   groupOverdueFirst,
+  groupPlannedByDay,
+  PLANNED_BUCKET_LABELS,
   todayStartMs,
   toggleMyDayValue,
+  type PlannedBucket,
 } from "../shared/task-filters";
 import { isListActivationKey, listNavDirection } from "../shared/list-keyboard";
 import { midpoint } from "../shared/position";
@@ -106,6 +109,13 @@ interface TaskListViewProps {
    * 用户拖拽结果，逾期行留在原位由行级「已逾期」徽标与处置条承担提示。
    */
   pinOverdue?: boolean;
+  /**
+   * 计划内视图（微软 To Do 同款）：按「先前 / 今天 / 明天 / 稍后」四段分组，
+   * 段头可折叠；此档不叠逾期处置条（「先前」段即逾期集），也不做拖拽重排。
+   */
+  planned?: boolean;
+  /** 分组的本地时间基准（毫秒；每分钟走一格，跨零点后「今天/明天」段自动换桶） */
+  nowMs?: number;
   /**
    * 全局逾期集（壳层独立查询，上限 `OVERDUE_PAGE_LIMIT`）：不置顶时用于
    * 「已逾期 N」处置条的计数与「顺延」写入集——不置顶时窗口内的逾期行
@@ -156,15 +166,35 @@ function loadOverdueCollapsed(): boolean {
   return raw.split(",").some((s) => s.trim() === "overdue");
 }
 
-/** 虚拟流条目：逾期处置条（仅逾期集非空时出现）+ 任务行（同一条虚拟流） */
+/** 计划内段头的折叠态持久化键（与移动端 `todo_planned_collapsed` 同族） */
+const LS_PLANNED_COLLAPSED = "todo_planned_collapsed";
+
+/** 计划内段头的语义色（先前红 / 今天主题蓝 / 明天正文 / 稍后次级） */
+const PLANNED_BUCKET_CLASS: Record<PlannedBucket, string> = {
+  earlier: "text-destructive",
+  today: "text-primary",
+  tomorrow: "text-foreground",
+  later: "text-muted-foreground",
+};
+
+function loadPlannedCollapsed(): Set<PlannedBucket> {
+  const raw = localStorage.getItem(LS_PLANNED_COLLAPSED) ?? "";
+  const names = new Set(raw.split(",").map((s) => s.trim()));
+  return new Set(
+    (Object.keys(PLANNED_BUCKET_LABELS) as PlannedBucket[]).filter((b) => names.has(b)),
+  );
+}
+
+/** 虚拟流条目：段头（逾期处置条 / 计划内日期段）+ 任务行（同一条虚拟流） */
 type SectionRow =
-  | { kind: "section"; key: string; count: number }
+  | { kind: "section"; key: string; count: number; bucket?: PlannedBucket }
   | { kind: "task"; key: string; task: TodoTaskListItem; taskIndex: number };
 
-export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, dependenciesByTask, loading, error, onCreateClick, onOpenDetail, sortable = true, pinOverdue = true, overdueAll, onLoadMore, hasMore = false }: TaskListViewProps) {
+export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, dependenciesByTask, loading, error, onCreateClick, onOpenDetail, sortable = true, pinOverdue = true, planned = false, nowMs, overdueAll, onLoadMore, hasMore = false }: TaskListViewProps) {
   const qc = useQueryClient();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [overdueCollapsed, setOverdueCollapsed] = useState(loadOverdueCollapsed);
+  const [plannedCollapsed, setPlannedCollapsed] = useState<Set<PlannedBucket>>(loadPlannedCollapsed);
 
   // 项目索引表只在 projects 换引用时重建（滚动每帧都重跑本组件，不能每帧 new Map）
   const projectById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
@@ -197,18 +227,41 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, d
     const isDone = (t: TodoTaskListItem) => !!t.done || t.status === "done";
     const undone = tasks.filter((t) => !isDone(t));
     const done = tasks.filter(isDone);
-    const { overdue: localOverdue, rest } = groupOverdueFirst(undone, Date.now());
-    // 置顶档只能用窗口内的行渲染；不置顶档改用壳层全局逾期集（计数/顺延口径不随滚动漂移）
-    const overdue = pinOverdue ? localOverdue : (overdueAll ?? localOverdue);
     const rows: SectionRow[] = [];
     const stream: TodoTaskListItem[] = [];
-    // 虚拟行号（含处置条占位）只用于 scrollToIndex，不能当任务序号用
+    // 虚拟行号（含段头占位）只用于 scrollToIndex，不能当任务序号用
     const rowIndexByTaskId = new Map<number, number>();
     const pushTask = (t: TodoTaskListItem) => {
       rowIndexByTaskId.set(t.id, rows.length);
       stream.push(t);
       rows.push({ kind: "task", key: `t-${t.id}`, task: t, taskIndex: stream.length - 1 });
     };
+
+    // 计划内（微软 To Do 同款）：先前 / 今天 / 明天 / 稍后四段，空桶不出现；
+    // 段头可折叠（折叠态持久化）。此档不叠逾期处置条（「先前」段即逾期集），
+    // 也不沉尾已完成（谓词已排除完成行）
+    if (planned) {
+      for (const group of groupPlannedByDay(undone, new Date(nowMs ?? Date.now()))) {
+        rows.push({
+          kind: "section",
+          key: `s-${group.bucket}`,
+          count: group.tasks.length,
+          bucket: group.bucket,
+        });
+        if (!plannedCollapsed.has(group.bucket)) group.tasks.forEach(pushTask);
+      }
+      return {
+        rows,
+        stream,
+        overdueTasks: [] as TodoTaskListItem[],
+        overdueIds: new Set<number>(),
+        rowIndexByTaskId,
+      };
+    }
+
+    const { overdue: localOverdue, rest } = groupOverdueFirst(undone, Date.now());
+    // 置顶档只能用窗口内的行渲染；不置顶档改用壳层全局逾期集（计数/顺延口径不随滚动漂移）
+    const overdue = pinOverdue ? localOverdue : (overdueAll ?? localOverdue);
     // 处置条：两种档位都出现（逾期集非空时），manual 档下只做总览 + 顺延、不折叠
     if (overdue.length > 0) {
       rows.push({ kind: "section", key: "s-overdue", count: overdue.length });
@@ -231,7 +284,12 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, d
       overdueIds: pinOverdue ? new Set(overdue.map((t) => t.id)) : new Set<number>(),
       rowIndexByTaskId,
     };
-  }, [tasks, overdueCollapsed, pinOverdue, overdueAll]);
+  }, [tasks, overdueCollapsed, plannedCollapsed, pinOverdue, overdueAll, planned, nowMs]);
+
+  // 计划内折叠态写本机（与 overdueCollapsed 同口径：只在 toggle 后落盘）
+  useEffect(() => {
+    localStorage.setItem(LS_PLANNED_COLLAPSED, [...plannedCollapsed].join(","));
+  }, [plannedCollapsed]);
 
   /**
    * 行内提醒徽标：按任务缓存（与看板 KanbanColumnBody 同口径）。
@@ -486,8 +544,12 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, d
       <div className="flex flex-1 items-center justify-center overflow-y-auto">
         <EmptyState
           icon={Inbox}
-          title="暂无任务"
-          hint="用底部输入栏快速记录，或点击下方按钮"
+          title={planned ? "暂无计划任务" : "暂无任务"}
+          hint={
+            planned
+              ? "给任务加上截止日期后，会按先前 / 今天 / 明天 / 稍后归到这里"
+              : "用底部输入栏快速记录，或点击下方按钮"
+          }
           action={
             onCreateClick ? (
               <Button size="sm" variant="outline" onClick={onCreateClick}>
@@ -578,8 +640,45 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, d
     );
   };
 
-  /** 逾期处置条（仅逾期集非空时出现）：折叠开关 + 计数 + 一键顺延 */
-  const renderOverdueHead = (row: Extract<SectionRow, { kind: "section" }>, vi: { index: number; start: number }) => {
+  /** 段头：计划内日期段（可折叠）或逾期处置条 */
+  const renderSection = (row: Extract<SectionRow, { kind: "section" }>, vi: { index: number; start: number }) => {
+    // 计划内四段（先前 / 今天 / 明天 / 稍后）：整行即折叠开关
+    if (row.bucket) {
+      const bucket = row.bucket;
+      const collapsed = plannedCollapsed.has(bucket);
+      return (
+        <div
+          key={row.key}
+          data-index={vi.index}
+          style={{ position: "absolute", top: vi.start, left: 0, width: "100%" }}
+          className="flex h-[33px] items-center bg-muted/30"
+        >
+          <button
+            type="button"
+            aria-expanded={!collapsed}
+            aria-label={`${PLANNED_BUCKET_LABELS[bucket]} ${row.count} 条`}
+            onClick={() =>
+              setPlannedCollapsed((prev) => {
+                const next = new Set(prev);
+                if (next.has(bucket)) next.delete(bucket);
+                else next.add(bucket);
+                return next;
+              })
+            }
+            className="flex h-full min-w-0 flex-1 items-center gap-1.5 px-4 text-left hover:bg-accent/30"
+          >
+            <ChevronRight
+              size={14}
+              className={cn("shrink-0 text-muted-foreground transition-transform", !collapsed && "rotate-90")}
+            />
+            <span className={cn("text-xs font-semibold", PLANNED_BUCKET_CLASS[bucket])}>
+              {PLANNED_BUCKET_LABELS[bucket]}
+            </span>
+            <span className="text-xs text-muted-foreground/70 tabular-nums">{row.count}</span>
+          </button>
+        </div>
+      );
+    }
     return (
       <div
         key={row.key}
@@ -654,7 +753,7 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, d
           {virtualItems.map((vi) => {
             const row = rows[vi.index];
             return row.kind === "section"
-              ? renderOverdueHead(row, vi)
+              ? renderSection(row, vi)
               : renderRow(row.task, row.taskIndex, vi);
           })}
         </RowContainerDropZone>

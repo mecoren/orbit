@@ -499,6 +499,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
         // 来源只表达日期；NLP 显式时刻（F4，未被取消且未被手动改期）跳过归一
         final inDueView =
             widget.quickView == QuickViewKey.today ||
+            widget.quickView == QuickViewKey.planned ||
             widget.quickView == QuickViewKey.week;
         final tp = _titleParse;
         final nlpDueHasTime =

@@ -6,6 +6,7 @@ const INPUT = {
   undone: 28,
   done: 9,
   today: 3,
+  planned: 12,
   week: 7,
   favorite: 2,
   myDay: 4,
@@ -22,6 +23,8 @@ describe("buildQuickViewCounts 侧栏角标口径", () => {
     const counts = buildQuickViewCounts(INPUT);
     expect(counts.done).toBe(9);
     expect(counts.today).toBe(3);
+    // 计划内：全部有截止的未完成数（含逾期）
+    expect(counts.planned).toBe(12);
     expect(counts.week).toBe(7);
     expect(counts.favorite).toBe(2);
     expect(counts.my_day).toBe(4);

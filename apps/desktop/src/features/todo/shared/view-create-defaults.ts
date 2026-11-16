@@ -48,7 +48,9 @@ export function quickViewCreateDefaults(
   switch (view) {
     case "my_day":
       return { myDayMs: midnight };
+    // 计划内只收有截止的任务：新建默认落今天 18:00，否则建完即从视图消失
     case "today":
+    case "planned":
       return { dueMs: atViewDueHour(midnight) };
     case "week":
       return { dueMs: weekDefaultDueMs(now) };

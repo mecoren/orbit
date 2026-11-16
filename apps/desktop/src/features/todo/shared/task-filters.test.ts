@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { type TodoTask } from "@/lib/tauri";
-import { BASE_SORT_DIR, buildPagedFilter, filterTasks, groupDoneByDay, groupEisenhower, groupOverdueFirst, sortTasks, statusFilterOf, todayStartMs, toggleMyDayValue } from "./task-filters";
+import { BASE_SORT_DIR, buildPagedFilter, filterTasks, groupDoneByDay, groupEisenhower, groupOverdueFirst, groupPlannedByDay, sortTasks, statusFilterOf, todayStartMs, toggleMyDayValue } from "./task-filters";
 
 /** 补齐 TodoTask 全部必填字段的工厂 */
 function mk(partial: Partial<TodoTask>): TodoTask {
@@ -505,6 +505,62 @@ describe("statusFilterOf 多选集合 → 单档兼容出口", () => {
   it("跨完成态的多选回落 all（调用点只关心「是否明确只看完成集」）", () => {
     expect(statusFilterOf(["pending", "done"])).toBe("all");
     expect(statusFilterOf(["pending", "doing", "done"])).toBe("all");
+  });
+});
+
+describe("filterTasks - quickView planned（计划内：有截止的未完成）", () => {
+  it("含有截止未完成（含逾期），排除无截止与已完成", () => {
+    const tasks = [
+      mk({ id: 1, due_date: T0 - DAY_MS }),
+      mk({ id: 2, due_date: T0 + DAY_MS }),
+      mk({ id: 3, due_date: null }),
+      mk({ id: 4, done: 1, due_date: T0 }),
+    ];
+    const out = filterTasks(tasks, { quickView: "planned" });
+    expect(out.map((t) => t.id)).toEqual([1, 2]);
+  });
+});
+
+describe("groupPlannedByDay 计划内四段（先前/今天/明天/稍后）", () => {
+  // 固定基准：本地 2026-09-12 10:00（日界口径，与运行日期无关）
+  const now = new Date(2026, 8, 12, 10, 0);
+  const dayStart = new Date(2026, 8, 12).getTime();
+  const DAY = 86_400_000;
+
+  it("按本地日界分桶：今天晚些时候不算「先前」", () => {
+    const tasks = [
+      mk({ id: 1, due_date: dayStart - 3_600_000 }),
+      mk({ id: 2, due_date: dayStart + 18 * 3_600_000 }),
+      mk({ id: 3, due_date: dayStart + DAY + 9 * 3_600_000 }),
+      mk({ id: 4, due_date: dayStart + 3 * DAY }),
+      mk({ id: 5, due_date: null }),
+      mk({ id: 6, done: 1, due_date: dayStart + DAY }),
+    ];
+    const groups = groupPlannedByDay(tasks, now);
+    expect(groups.map((g) => g.bucket)).toEqual(["earlier", "today", "tomorrow", "later"]);
+    expect(groups.map((g) => g.tasks.map((t) => t.id))).toEqual([[1], [2], [3], [4]]);
+  });
+
+  it("空桶不出现；组内按截止时刻升序，同刻回落 position", () => {
+    const tasks = [
+      mk({ id: 1, due_date: dayStart + 5 * DAY, position: 2 }),
+      mk({ id: 2, due_date: dayStart + 3 * DAY, position: 2 }),
+      mk({ id: 3, due_date: dayStart + 3 * DAY, position: 1 }),
+    ];
+    const groups = groupPlannedByDay(tasks, now);
+    expect(groups.map((g) => g.bucket)).toEqual(["later"]);
+    expect(groups[0].tasks.map((t) => t.id)).toEqual([3, 2, 1]);
+  });
+
+  it("边界：今日零点归今天，明日零点归明天", () => {
+    const groups = groupPlannedByDay(
+      [mk({ id: 1, due_date: dayStart }), mk({ id: 2, due_date: dayStart + DAY })],
+      now,
+    );
+    expect(groups[0].bucket).toBe("today");
+    expect(groups[0].tasks[0].id).toBe(1);
+    expect(groups[1].bucket).toBe("tomorrow");
+    expect(groups[1].tasks[0].id).toBe(2);
   });
 });
 

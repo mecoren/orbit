@@ -465,7 +465,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                           AppDimens.space16,
                     ),
                     children: [
-                      // 一、快捷视图卡（今天任务列表同款卡片化：六行共拼一张卡——
+                      // 一、快捷视图卡（今天任务列表同款卡片化：九行共拼一张卡——
                       // 首段圆上角 / 末段圆下角 / 段间 1px divider；卡片外缘
                       // 左右各让 space12，与任务子列表 cardListPadding 同口径）
                       // 区块标题「快捷视图」已去除：底部导航直达后无需重复标注

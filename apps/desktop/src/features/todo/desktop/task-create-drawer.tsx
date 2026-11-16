@@ -308,7 +308,8 @@ export function TaskCreateDrawer({
     try {
       // 视图标记在提交瞬间重算（表单跨零点长开时不落昨天）
       const viewDefaults = quickViewCreateDefaults(quickView);
-      const inDueView = quickView === "today" || quickView === "week";
+      const inDueView =
+        quickView === "today" || quickView === "planned" || quickView === "week";
       const duration = parseDurationMinutes(draft.durationText);
       const repeat = draft.repeat;
 

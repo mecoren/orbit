@@ -149,6 +149,13 @@ void main() {
       expect(result.map((t) => t.id), [2, 3, 5]);
     });
 
+    test('view=planned 只含有截止的未完成任务（含逾期）', () {
+      final result = filterTasks(
+          tasks, const TaskFilterInput(quickView: QuickViewKey.planned));
+      // 1（今天）、4（后天）、6（昨天逾期）；无截止与已完成不入
+      expect(result.map((t) => t.id), [1, 4, 6]);
+    });
+
     // ---- 清单聚合（M8+ 清单文件夹）：projectIds 集合替代 projectId 等值 ----
 
     test('projectIds 集合覆盖多个清单（父清单聚合子清单任务）', () {
@@ -188,6 +195,55 @@ void main() {
         const TaskFilterInput(ungrouped: true, projectIds: [10]),
       );
       expect(result.map((t) => t.id), [3, 5]);
+    });
+  });
+
+  group('groupPlannedByDay 计划内四段（先前/今天/明天/稍后）', () {
+    // 今天 10:00 的基准：逾期判据走日界，与时刻无关
+    final nowMs = todayStart + 10 * 3600000;
+
+    test('按本地日界分桶：今天晚些时候不算「先前」', () {
+      final tasks = [
+        _task(id: 1, dueDate: todayStart - 3600000), // 今天零点前 → 先前
+        _task(id: 2, dueDate: todayStart + 18 * 3600000), // 今天 18:00 → 今天
+        _task(id: 3, dueDate: todayStart + day + 9 * 3600000), // 明天 09:00
+        _task(id: 4, dueDate: todayStart + day * 3), // 三天后 → 稍后
+        _task(id: 5), // 无日期不入
+        _task(id: 6, dueDate: todayStart + day, done: 1, status: 'done'),
+      ];
+      final groups = groupPlannedByDay(tasks, nowMs);
+      expect(groups.map((g) => g.bucket), [
+        PlannedBucket.earlier,
+        PlannedBucket.today,
+        PlannedBucket.tomorrow,
+        PlannedBucket.later,
+      ]);
+      expect(groups[0].tasks.map((t) => t.id), [1]);
+      expect(groups[1].tasks.map((t) => t.id), [2]);
+      expect(groups[2].tasks.map((t) => t.id), [3]);
+      expect(groups[3].tasks.map((t) => t.id), [4]);
+    });
+
+    test('空桶不出现；组内按截止时刻升序（同刻回落 position）', () {
+      final tasks = [
+        _task(id: 1, dueDate: todayStart + day * 5, position: 2),
+        _task(id: 2, dueDate: todayStart + day * 3, position: 2),
+        _task(id: 3, dueDate: todayStart + day * 3, position: 1),
+      ];
+      final groups = groupPlannedByDay(tasks, nowMs);
+      expect(groups.map((g) => g.bucket), [PlannedBucket.later]);
+      expect(groups.single.tasks.map((t) => t.id), [3, 2, 1]);
+    });
+
+    test('边界：今日零点归今天，明日零点归明天', () {
+      final groups = groupPlannedByDay([
+        _task(id: 1, dueDate: todayStart),
+        _task(id: 2, dueDate: todayStart + day),
+      ], nowMs);
+      expect(groups[0].bucket, PlannedBucket.today);
+      expect(groups[0].tasks.single.id, 1);
+      expect(groups[1].bucket, PlannedBucket.tomorrow);
+      expect(groups[1].tasks.single.id, 2);
     });
   });
 
@@ -437,6 +493,11 @@ void main() {
       expect(
         emptyMessageFor(const TaskFilterInput(quickView: QuickViewKey.week)),
         '近7天没有截止的任务',
+      );
+      expect(
+        emptyMessageFor(
+            const TaskFilterInput(quickView: QuickViewKey.planned)),
+        '暂无计划任务，先给任务加上日期吧',
       );
       expect(
         emptyMessageFor(const TaskFilterInput(quickView: QuickViewKey.done)),

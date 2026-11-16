@@ -166,7 +166,12 @@ export interface TodoTaskOverview {
  */
 export type TaskListPredicate = Pick<
   ListFilter,
-  "done" | "project_id" | "project_ids" | "favorite_only" | "my_day_today"
+  | "done"
+  | "project_id"
+  | "project_ids"
+  | "favorite_only"
+  | "my_day_today"
+  | "has_due"
 >;
 
 // ---------- 通用业务 ----------

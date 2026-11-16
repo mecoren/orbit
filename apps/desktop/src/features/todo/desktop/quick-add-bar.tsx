@@ -217,7 +217,8 @@ export function QuickAddBar({ projects, defaultProjectId, quickView }: QuickAddB
     // 今日/本周视图内截止时刻归一 18:00（用户口径）：手动 Popover 与视图默认
     // 仍只表达日期；NLP 显式时刻（F4）跳过归一原样落库
     const viewDefaults = quickViewCreateDefaults(quickView);
-    const inDueView = quickView === "today" || quickView === "week";
+    const inDueView =
+      quickView === "today" || quickView === "planned" || quickView === "week";
     const resolvedDue = nlpDueMs ?? dueDate?.getTime() ?? viewDefaults.dueMs ?? null;
     const skipViewHour = nlpDueMs != null && p.dueHasTime;
     try {

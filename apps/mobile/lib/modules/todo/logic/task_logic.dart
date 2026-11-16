@@ -14,20 +14,34 @@ import '../../../core/theme/icon_map.dart';
 ///   取消一律回 pending 并清空 done_at；
 /// - `shared/time.ts` —— 相对时间分档与 yyyy-MM-dd 格式化。
 ///
-/// 快捷视图八键（docs/05 §4.1 + 07 报告新增「我的一天」置顶 + 对齐桌面补「未完成」）：
-/// 我的一天 / 今天 / 近7天 / 全部 / 未完成 / 已完成 / 收藏 / 无日期。
+/// 快捷视图九键（docs/05 §4.1 + 07 报告新增「我的一天」置顶 + 对齐桌面补「未完成」）：
+/// 我的一天 / 今天 / 计划内 / 近7天 / 全部 / 未完成 / 已完成 / 收藏 / 无日期。
 
 // ---------- 快捷视图定义 ----------
 
 /// 快捷视图 key
-enum QuickViewKey { myDay, today, week, all, undone, done, favorite, nodate }
+///
+/// `planned`（计划内）对齐微软 To Do：所有带截止日期的未完成任务，按
+/// 「先前 / 今天 / 明天 / 稍后」四段呈现（分组见 [groupPlannedByDay]）。
+enum QuickViewKey {
+  myDay,
+  today,
+  planned,
+  week,
+  all,
+  undone,
+  done,
+  favorite,
+  nodate,
+}
 
 /// [QuickViewKey] 的展示元数据（标签 / 语义色，色值对齐 docs/05 §2.2 quickView 板）
 extension QuickViewMeta on QuickViewKey {
-  /// 侧栏行文案（today/week 视图含逾期任务，命名不带「截止」限定）
+  /// 侧栏行文案（today/week/planned 视图含逾期任务，命名不带「截止」限定）
   String get label => switch (this) {
         QuickViewKey.myDay => '我的一天',
         QuickViewKey.today => '今天',
+        QuickViewKey.planned => '计划内',
         QuickViewKey.week => '近7天',
         QuickViewKey.all => '全部任务',
         QuickViewKey.undone => '未完成',
@@ -40,6 +54,7 @@ extension QuickViewMeta on QuickViewKey {
   String get colorHex => switch (this) {
         QuickViewKey.myDay => '#F59E0B',
         QuickViewKey.today => '#EF4444',
+        QuickViewKey.planned => '#3B82F6',
         QuickViewKey.week => '#F59E0B',
         QuickViewKey.all => '#3B82F6',
         QuickViewKey.undone => '#F59E0B',
@@ -49,10 +64,11 @@ extension QuickViewMeta on QuickViewKey {
       };
 
   /// Material Rounded 图标（docs/05 §4.1 图标映射 + nodate 补充；
-  /// undone 对齐桌面 CircleDot）
+  /// undone 对齐桌面 CircleDot；planned 用日历页（微软 To Do 计划内同语义）
   IconData get icon => switch (this) {
         QuickViewKey.myDay => OrbitIcons.sun,
         QuickViewKey.today => OrbitIcons.calendar,
+        QuickViewKey.planned => OrbitIcons.calendarDays,
         QuickViewKey.week => OrbitIcons.calendarRange,
         QuickViewKey.all => OrbitIcons.list,
         QuickViewKey.undone => OrbitIcons.circleDot,
@@ -130,6 +146,11 @@ List<TodoTask> filterTasks(List<TodoTask> tasks, TaskFilterInput input,
         list = list.where(
           (t) => t.dueDate != null && t.dueDate! < todayEnd,
         );
+      case QuickViewKey.planned:
+        // 计划内（对齐微软 To Do）= 全部有截止日期的未完成任务，含逾期；
+        // 列表按 [groupPlannedByDay] 分成先前/今天/明天/稍后四段。
+        // 完成态强制排除：分页通道的 done=false 与这里同口径。
+        list = list.where((t) => !t.isDone && t.dueDate != null);
       case QuickViewKey.week:
         // 近 7 天 = 逾期 + 未来 7 天到期（同口径去掉下界）
         list = list.where(
@@ -207,7 +228,7 @@ SidebarCounts computeSidebarCounts(
   final todayEnd = todayStart + 86400000;
   final weekEnd = todayEnd + 6 * 86400000;
 
-  var all = 0, done = 0, today = 0, week = 0, favorite = 0, myDay = 0, nodate = 0;
+  var all = 0, done = 0, today = 0, planned = 0, week = 0, favorite = 0, myDay = 0, nodate = 0;
   final byProject = <int, int>{};
 
   for (final t in tasks) {
@@ -226,6 +247,8 @@ SidebarCounts computeSidebarCounts(
       // today/week 含逾期（截止 < 窗口上界即命中，与 filterTasks 同口径）
       if (t.dueDate! < todayEnd) today++;
       if (t.dueDate! < weekEnd) week++;
+      // planned = 全部有截止的未完成任务（与分页通道 has_due + done=false 同口径）
+      planned++;
     } else {
       nodate++;
     }
@@ -239,6 +262,7 @@ SidebarCounts computeSidebarCounts(
       QuickViewKey.undone: all,
       QuickViewKey.done: done,
       QuickViewKey.today: today,
+      QuickViewKey.planned: planned,
       QuickViewKey.week: week,
       QuickViewKey.favorite: favorite,
       QuickViewKey.myDay: myDay,
@@ -364,6 +388,80 @@ OverdueGroups groupOverdueFirst(List<TodoTask> tasks, [int? nowMs]) {
     }
   }
   return OverdueGroups(overdue: overdue, rest: rest);
+}
+
+// ---------- 计划内分组（微软 To Do「计划内」四段） ----------
+
+/// 计划内视图的日期桶（展示顺序即枚举序：先前 → 今天 → 明天 → 稍后）
+enum PlannedBucket { earlier, today, tomorrow, later }
+
+/// 桶位展示名（对齐微软 To Do：Earlier / Today / Tomorrow / Later）
+extension PlannedBucketMeta on PlannedBucket {
+  String get label => switch (this) {
+        PlannedBucket.earlier => '先前',
+        PlannedBucket.today => '今天',
+        PlannedBucket.tomorrow => '明天',
+        PlannedBucket.later => '稍后',
+      };
+}
+
+/// 计划内单个分组（组内按截止时刻升序，同刻回落拖拽序）
+class PlannedGroup {
+  final PlannedBucket bucket;
+  final List<TodoTask> tasks;
+
+  const PlannedGroup({required this.bucket, required this.tasks});
+}
+
+/// 计划内分组纯函数：按**本地自然日**把带截止的未完成任务分成
+/// 先前 / 今天 / 明天 / 稍后 四段（微软 To Do 同款）。
+///
+/// 判据用日界而不是时刻：今天 18:00 到期的任务在今天下午不算「先前」
+/// （[groupOverdueFirst] 是时刻级判定，两者语义不同，勿互换）。
+/// 空桶不返回——与微软 To Do 一致，没有内容的段不占位。
+List<PlannedGroup> groupPlannedByDay(List<TodoTask> tasks, [int? nowMs]) {
+  final now = DateTime.fromMillisecondsSinceEpoch(
+    nowMs ?? DateTime.now().millisecondsSinceEpoch,
+  );
+  final dayStart = DateTime(now.year, now.month, now.day).millisecondsSinceEpoch;
+  final tomorrowStart = dayStart + 86400000;
+  final dayAfterStart = tomorrowStart + 86400000;
+
+  final buckets = <PlannedBucket, List<TodoTask>>{
+    PlannedBucket.earlier: <TodoTask>[],
+    PlannedBucket.today: <TodoTask>[],
+    PlannedBucket.tomorrow: <TodoTask>[],
+    PlannedBucket.later: <TodoTask>[],
+  };
+  for (final t in tasks) {
+    final due = t.dueDate;
+    if (t.isDone || due == null) continue;
+    final bucket = due < dayStart
+        ? PlannedBucket.earlier
+        : due < tomorrowStart
+            ? PlannedBucket.today
+            : due < dayAfterStart
+                ? PlannedBucket.tomorrow
+                : PlannedBucket.later;
+    buckets[bucket]!.add(t);
+  }
+
+  // 组内按截止时刻升序（同刻回落拖拽序，再回落创建时间倒序）：
+  // 计划内是「按日期阅读」的视图，组内保持时间线才读得顺
+  for (final list in buckets.values) {
+    list.sort((a, b) {
+      final byDue = a.dueDate!.compareTo(b.dueDate!);
+      if (byDue != 0) return byDue;
+      if (a.position != b.position) return a.position.compareTo(b.position);
+      return b.createdAt.compareTo(a.createdAt);
+    });
+  }
+
+  return [
+    for (final bucket in PlannedBucket.values)
+      if (buckets[bucket]!.isNotEmpty)
+        PlannedGroup(bucket: bucket, tasks: buckets[bucket]!),
+  ];
 }
 
 // ---------- 四象限分组（Eisenhower Matrix） ----------
@@ -899,6 +997,7 @@ String emptyMessageFor(TaskFilterInput input) {
     QuickViewKey.done => '暂无已完成任务',
     QuickViewKey.undone => '暂无未完成任务',
     QuickViewKey.today => '今天没有到期的任务',
+    QuickViewKey.planned => '暂无计划任务，先给任务加上日期吧',
     QuickViewKey.week => '近7天没有截止的任务',
     QuickViewKey.favorite => '暂无收藏任务',
     QuickViewKey.nodate => '暂无无日期的任务',
@@ -956,7 +1055,8 @@ QuickViewCreateDefaults quickViewCreateDefaults(
   switch (view) {
     case QuickViewKey.myDay:
       return QuickViewCreateDefaults(myDayMs: midnight);
-    case QuickViewKey.today:
+    // 计划内只收有截止的任务：新建默认落今天 18:00，否则建完即从视图消失
+    case QuickViewKey.today || QuickViewKey.planned:
       return QuickViewCreateDefaults(dueMs: atViewDueHour(midnight));
     case QuickViewKey.week:
       return QuickViewCreateDefaults(dueMs: weekDefaultDueMs(n));

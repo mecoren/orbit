@@ -113,11 +113,12 @@ void main() {
     await tester.tap(find.text('今天'));
     await tester.pumpAndSettle();
 
-    // 八键全出（菜单挂在根 Overlay 的玻璃形变弹层里）
+    // 九键全出（菜单挂在根 Overlay 的玻璃形变弹层里；2026-11-16 增「计划内」）
     expect(find.text('我的一天'), findsOneWidget);
+    expect(find.text('计划内'), findsOneWidget);
     expect(find.text('近7天'), findsOneWidget);
     expect(find.text('全部任务'), findsOneWidget);
-    expect(find.byType(MiuixGlassPopupItem), findsNWidgets(8));
+    expect(find.byType(MiuixGlassPopupItem), findsNWidgets(9));
 
     await tester.tap(find.text('近7天'));
     await tester.pumpAndSettle();

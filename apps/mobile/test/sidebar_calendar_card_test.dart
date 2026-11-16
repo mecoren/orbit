@@ -71,12 +71,16 @@ void main() {
     await tester.pumpWidget(_wrap(bridge));
     await _settle(tester);
 
-    // 快捷视图卡：8 行（首段 / 中段 / 末段齐全）
+    // 快捷视图卡：9 行（首段 / 中段 / 末段齐全；2026-11-16 增「计划内」）
     _expectInSegment(tester, find.text('我的一天'), OrbitCardEdge.first);
     _expectInSegment(tester, find.text('今天'));
+    _expectInSegment(tester, find.text('计划内'));
     _expectInSegment(tester, find.text('未完成'));
     _expectInSegment(tester, find.text('无日期'), OrbitCardEdge.last);
-    // 功能入口卡：搜索 / 筛选器 / 回收站同卡三段
+    // 功能入口卡：搜索 / 筛选器 / 回收站同卡三段。
+    // 快捷卡增至 9 行后功能入口落到首屏视口之外（ListView 懒挂载），先滚到可见
+    await tester.scrollUntilVisible(find.text('搜索'), 200,
+        scrollable: find.byType(Scrollable).first);
     _expectInSegment(tester, find.text('搜索'), OrbitCardEdge.first);
     _expectInSegment(tester, find.text('筛选器'));
     _expectInSegment(tester, find.text('回收站'), OrbitCardEdge.last);

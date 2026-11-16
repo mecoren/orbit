@@ -256,7 +256,7 @@ final taskOverviewProvider = FutureProvider.autoDispose
 
 /// 侧栏计数（A5 收敛）：此前由万行全量数组单遍聚合，窗口化后改 SQL 聚合。
 ///
-/// 7 次 COUNT 聚合并行（都走 `is_deleted` 基线索引），换取常驻内存里
+/// 8 次 COUNT 聚合并行（都走 `is_deleted` 基线索引），换取常驻内存里
 /// 不再有一份万行任务数组。`undoneByProject` 取其中任意一次（接口口径为
 /// 全局未完成，不受 filter 影响）。
 final sidebarCountsProvider = FutureProvider<SidebarCounts>((ref) async {
@@ -270,6 +270,8 @@ final sidebarCountsProvider = FutureProvider<SidebarCounts>((ref) async {
     bridge.todoTaskOverview(const ListFilter(done: false)),
     bridge.todoTaskOverview(const ListFilter(done: true)),
     bridge.todoTaskOverview(ListFilter(done: false, dueTo: dayEnd)),
+    // 计划内：全部有截止的未完成任务（与 buildPagedQuery 的 hasDue 同口径）
+    bridge.todoTaskOverview(const ListFilter(done: false, hasDue: true)),
     bridge.todoTaskOverview(ListFilter(done: false, dueTo: weekEnd)),
     bridge.todoTaskOverview(
         const ListFilter(done: false, favoriteOnly: true)),
@@ -288,10 +290,11 @@ final sidebarCountsProvider = FutureProvider<SidebarCounts>((ref) async {
       QuickViewKey.undone: all,
       QuickViewKey.done: counts[1].total,
       QuickViewKey.today: counts[2].total,
-      QuickViewKey.week: counts[3].total,
-      QuickViewKey.favorite: counts[4].total,
-      QuickViewKey.myDay: counts[5].total,
-      QuickViewKey.nodate: counts[6].total,
+      QuickViewKey.planned: counts[3].total,
+      QuickViewKey.week: counts[4].total,
+      QuickViewKey.favorite: counts[5].total,
+      QuickViewKey.myDay: counts[6].total,
+      QuickViewKey.nodate: counts[7].total,
     },
     undoneByProject: byProject,
   );
