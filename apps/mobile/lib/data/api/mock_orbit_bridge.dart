@@ -1713,6 +1713,10 @@ class MockOrbitBridge implements OrbitBridge {
           'task_id': input.taskId,
           'remind_at': input.remindAt,
           'is_constant': input.isConstant,
+          // 与 Rust create_todo_reminder 同口径：0/缺省 = 默认 5 分钟
+          'constant_interval_ms': input.constantIntervalMs == 0
+              ? 5 * 60 * 1000
+              : input.constantIntervalMs,
           'is_deleted': 0,
           'created_at': store.now(),
           'updated_at': store.now(),

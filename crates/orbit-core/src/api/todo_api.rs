@@ -1111,16 +1111,18 @@ pub async fn complete_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<Comple
     // bounded-by-data: 按 task_id 取单任务提醒（个位数）
     // 元组带 is_constant（G2）：持续提醒标记随系列跨实例延续，
     // 否则「吃药」这类持续提醒在完成后就被降级成一次性。
+    // 元组带 constant_interval_ms：用户设定的间隔也随系列延续，
+    // 下一期不该被重置回默认 5 分钟。
     let old_reminders: Vec<TodoReminder> =
         sqlx::query_as("SELECT * FROM todo_reminders WHERE task_id = ? AND is_deleted = 0")
             .bind(id)
             .fetch_all(pool)
             .await?;
-    let new_reminder_ats: Vec<(i64, i32)> = match &plan {
+    let new_reminder_ats: Vec<(i64, i32, i64)> = match &plan {
         None => Vec::new(),
         Some(plan) => old_reminders
             .iter()
-            .map(|r| (r.remind_at + plan.delta_ms, r.is_constant))
+            .map(|r| (r.remind_at + plan.delta_ms, r.is_constant, r.constant_interval_ms))
             .collect(),
     };
     // 事务内写、提交后发的事件队列（todo_reminders 增删为本命令新增发射点）
@@ -1190,16 +1192,17 @@ pub async fn complete_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<Comple
         }
         // 提醒行平移克隆到下一实例（与 due/start 同 delta；锚点口径一致）。
         // 事件先收集，事务提交后统一发射（提交前发射会让消费者读到未提交数据）
-        for (remind_at, is_constant) in &new_reminder_ats {
+        for (remind_at, is_constant, constant_interval_ms) in &new_reminder_ats {
             let rem_uuid = uuid::Uuid::new_v4().to_string();
             let created_reminder: TodoReminder = sqlx::query_as(
-                "INSERT INTO todo_reminders (uuid, task_id, remind_at, is_constant, is_deleted, created_at, updated_at, version)
-                 VALUES (?, ?, ?, ?, 0, ?, ?, 1) RETURNING *",
+                "INSERT INTO todo_reminders (uuid, task_id, remind_at, is_constant, constant_interval_ms, is_deleted, created_at, updated_at, version)
+                 VALUES (?, ?, ?, ?, ?, 0, ?, ?, 1) RETURNING *",
             )
             .bind(&rem_uuid)
             .bind(created.id)
             .bind(*remind_at)
             .bind(*is_constant)
+            .bind(*constant_interval_ms)
             .bind(now)
             .bind(now)
             .fetch_one(&mut *tx)
@@ -2568,6 +2571,7 @@ mod repeat_tests {
                 task_id: t.id,
                 remind_at: chrono::Utc::now().timestamp_millis() + HOUR,
                 is_constant: 0, // G2：测试夹具按一次性提醒落地
+                constant_interval_ms: 0, // 0 = 落地按默认 5 分钟
             },
         )
         .await
@@ -2619,6 +2623,7 @@ mod repeat_tests {
                 task_id: t.id,
                 remind_at,
                 is_constant: 0, // G2：测试夹具按一次性提醒落地
+                constant_interval_ms: 0, // 0 = 落地按默认 5 分钟
             },
         )
         .await
@@ -2661,6 +2666,7 @@ mod repeat_tests {
                 task_id: t.id,
                 remind_at: local_midnight_days_ago(1) - HOUR,
                 is_constant: 0, // G2：测试夹具按一次性提醒落地
+                constant_interval_ms: 0, // 0 = 落地按默认 5 分钟
             },
         )
         .await
@@ -2882,7 +2888,7 @@ pub async fn list_due_reminders(
     limit: i64,
 ) -> CoreResult<Vec<DueReminderRow>> {
     let rows = sqlx::query_as::<_, DueReminderRow>(
-        "SELECT r.id, r.task_id, t.title, r.remind_at, r.is_constant \
+        "SELECT r.id, r.task_id, t.title, r.remind_at, r.is_constant, r.constant_interval_ms \
          FROM todo_reminders r \
          JOIN todo_tasks t ON t.id = r.task_id \
          WHERE r.is_deleted = 0 AND t.is_deleted = 0 AND t.done = 0 \
@@ -2897,7 +2903,7 @@ pub async fn list_due_reminders(
     Ok(rows)
 }
 
-/// 到期提醒行（id/标题/时刻/持续标记——两壳通知通道的最小载荷）
+/// 到期提醒行（id/标题/时刻/持续标记/间隔——两壳通知通道的最小载荷）
 #[derive(Debug, Clone, sqlx::FromRow, Serialize, Deserialize)]
 pub struct DueReminderRow {
     pub id: i64,
@@ -2906,18 +2912,21 @@ pub struct DueReminderRow {
     pub remind_at: i64,
     /// 持续提醒标记：1 = 未完成则间隔顺延重排（两壳据此加「完成」action 与文案）
     pub is_constant: i32,
+    /// 持续提醒间隔（毫秒）：两壳通知正文展示 + 推迟时随行传递（不回落默认）
+    pub constant_interval_ms: i64,
 }
 
-/// 持续提醒顺延间隔（G2）：到期后任务仍未完成时，隔 5 分钟再次提醒。
+/// 持续提醒默认顺延间隔（G2）：到期后任务仍未完成时，隔 5 分钟再次提醒。
 ///
-/// 取 5 分钟而非更短：既满足「响到完成为止」的紧迫感，又不至于在专注场景下
-/// 变成骚扰；两壳通知通道无需改动节奏（各自 20s 轮询/闹钟重排自然命中）。
-pub const CONSTANT_REARM_INTERVAL_MS: i64 = 5 * 60 * 1000;
+/// 0002 迁移起间隔改为行级可配（[`DueReminderRow::constant_interval_ms`]），
+/// 本常量只作为新建行的默认值与老数据回落值保留。
+pub const CONSTANT_REARM_INTERVAL_MS: i64 = crate::models::business::DEFAULT_CONSTANT_INTERVAL_MS;
 
 /// 到期后的提醒处置（原桌面端前端 JS 续排逻辑下沉引擎，窗口隐藏也照常）：
 ///
-/// - 持续提醒（G2，`is_constant = 1`）：任务存活且未完成 → 同一行顺延
-///   [`CONSTANT_REARM_INTERVAL_MS`] 重排（**不软删、不克隆**）：删旧建新会
+/// - 持续提醒（G2，`is_constant = 1`）：任务存活且未完成 → 同一行按
+///   [`DueReminderRow::constant_interval_ms`]（默认 5 分钟，写入侧已钳制）
+///   顺延重排（**不软删、不克隆**）：删旧建新会
 ///   在云同步下产生 uuid 漂移与僵尸行，原地 UPDATE 更稳，且天然不带雪球
 ///   ——优先级高于重复续排（重复任务的持续提醒在**本实例内**反复提醒，
 ///   完成时才由完成命令把存活行平移到下一实例）；
@@ -2951,11 +2960,15 @@ pub async fn advance_fired_reminder(
             .await?;
 
     // ① 持续提醒分支：未完成 → 同一行顺延，本轮到此为止
+    // 间隔取行级配置（读库后的 row 最新值；越界/脏值就地归一），
+    // 不再用写死的 5 分钟——用户可按时长档位调整提醒节奏
     if reminder.is_constant != 0 && task.is_deleted == 0 && task.done == 0 {
         let Some(row) = row else {
             return Ok(false);
         };
-        return rearm_constant_reminder(pool, &row, now + CONSTANT_REARM_INTERVAL_MS, now).await;
+        let interval_ms =
+            crate::models::business::clamp_constant_interval_ms(row.constant_interval_ms);
+        return rearm_constant_reminder(pool, &row, now + interval_ms, now).await;
     }
 
     // ② 既有路径：重复任务删旧建新续排；非重复/已完成/已删只清理
@@ -3004,6 +3017,8 @@ pub async fn advance_fired_reminder(
             remind_at: next,
             // 持续标记随系列传递：重复任务的持续提醒在下一实例继续生效
             is_constant: reminder.is_constant,
+            // 用户设定的间隔同样随系列传递（不回落默认 5 分钟）
+            constant_interval_ms: reminder.constant_interval_ms,
         },
     )
     .await?;
@@ -3013,7 +3028,7 @@ pub async fn advance_fired_reminder(
 /// 持续提醒顺延（G2）：原地把 `remind_at` 推到 `next_at` + Update 事件。
 ///
 /// 锚点取 `now + 间隔` 而非「原 remind_at + 间隔」：应用离线数小时后补扫时
-/// 不会连发（否则 24h 窗口内的陈旧行会按 5 分钟一批批量补给用户）。
+/// 不会连发（否则 24h 窗口内的陈旧行会按一个间隔批量补给用户）。
 async fn rearm_constant_reminder(
     pool: &SqlitePool,
     row: &TodoReminder,
@@ -3143,6 +3158,7 @@ mod reminder_poll_tests {
                     task_id: t.id,
                     remind_at: now - HOUR,
                     is_constant: 0, // G2：测试夹具按一次性提醒落地
+                    constant_interval_ms: 0, // 0 = 落地按默认 5 分钟
                 },
             )
             .await
@@ -3202,6 +3218,7 @@ mod reminder_poll_tests {
                 task_id: past_window.id,
                 remind_at: now - DAY - HOUR,
                 is_constant: 0, // G2：测试夹具按一次性提醒落地
+                constant_interval_ms: 0, // 0 = 落地按默认 5 分钟
             },
         )
         .await
@@ -3212,6 +3229,7 @@ mod reminder_poll_tests {
                 task_id: future.id,
                 remind_at: now + HOUR,
                 is_constant: 0, // G2：测试夹具按一次性提醒落地
+                constant_interval_ms: 0, // 0 = 落地按默认 5 分钟
             },
         )
         .await
@@ -3222,6 +3240,7 @@ mod reminder_poll_tests {
                 task_id: due.id,
                 remind_at: now - HOUR,
                 is_constant: 0, // G2：测试夹具按一次性提醒落地
+                constant_interval_ms: 0, // 0 = 落地按默认 5 分钟
             },
         )
         .await
@@ -3241,6 +3260,7 @@ mod reminder_poll_tests {
             title: title.into(),
             remind_at: r.remind_at,
             is_constant: r.is_constant,
+            constant_interval_ms: r.constant_interval_ms,
         }
     }
 
@@ -3270,6 +3290,7 @@ mod reminder_poll_tests {
                 task_id: t.id,
                 remind_at: now - HOUR,
                 is_constant: 0, // G2：测试夹具按一次性提醒落地
+                constant_interval_ms: 0, // 0 = 落地按默认 5 分钟
             },
         )
         .await
@@ -3309,6 +3330,7 @@ mod reminder_poll_tests {
                 task_id: t.id,
                 remind_at: now - HOUR,
                 is_constant: 0, // G2：测试夹具按一次性提醒落地
+                constant_interval_ms: 0, // 0 = 落地按默认 5 分钟
             },
         )
         .await
@@ -3348,6 +3370,7 @@ mod reminder_poll_tests {
                 task_id: t.id,
                 remind_at: now - HOUR,
                 is_constant: 0, // G2：测试夹具按一次性提醒落地
+                constant_interval_ms: 0, // 0 = 落地按默认 5 分钟
             },
         )
         .await
@@ -3359,6 +3382,7 @@ mod reminder_poll_tests {
                 task_id: t.id,
                 remind_at: now + 2 * HOUR,
                 is_constant: 0, // G2：测试夹具按一次性提醒落地
+                constant_interval_ms: 0, // 0 = 落地按默认 5 分钟
             },
         )
         .await
@@ -3400,6 +3424,7 @@ mod reminder_poll_tests {
                 task_id: t.id,
                 remind_at: now - HOUR,
                 is_constant: 0, // G2：测试夹具按一次性提醒落地
+                constant_interval_ms: 0, // 0 = 落地按默认 5 分钟
             },
         )
         .await
@@ -3437,6 +3462,7 @@ mod reminder_poll_tests {
                 task_id: t.id,
                 remind_at: now - 60_000,
                 is_constant: 1,
+                constant_interval_ms: 0, // 0 = 落地按默认 5 分钟
             },
         )
         .await
@@ -3507,7 +3533,90 @@ mod reminder_poll_tests {
         );
     }
 
-    /// 完成重复任务的实例：持续标记随序列平移到下一实例（不被降级为一次性）
+    /// 持续提醒按「行级间隔」顺延（0002 迁移：不再写死 5 分钟）
+    #[tokio::test]
+    async fn constant_reminder_honors_custom_interval() {
+        let pool = setup_db().await;
+        let now = chrono::Utc::now().timestamp_millis();
+        let t = create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "吃药（15 分钟档）".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        let custom = 15 * 60_000;
+        create_todo_reminder(
+            &pool,
+            &TodoReminderCreateInput {
+                task_id: t.id,
+                remind_at: now - 60_000,
+                is_constant: 1,
+                constant_interval_ms: custom,
+            },
+        )
+        .await
+        .unwrap();
+
+        let rows = due_rows(&pool, now).await;
+        assert_eq!(rows[0].constant_interval_ms, custom, "扫描带出行级间隔");
+        advance_fired_reminder(&pool, &rows[0]).await.unwrap();
+
+        let live = live_reminders(&pool, t.id).await;
+        assert_eq!(live.len(), 1);
+        assert!(
+            live[0].remind_at >= now + custom - 1_000,
+            "按用户设定间隔顺延（实际 {}，期望 ≈ now + {custom}）",
+            live[0].remind_at - now
+        );
+    }
+
+    /// 间隔写入归一：0/负值回落默认 5 分钟，越界钳到 [1 分钟, 24 小时]
+    #[tokio::test]
+    async fn constant_interval_is_clamped_on_write() {
+        let pool = setup_db().await;
+        let t = create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "间隔钳制".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        let now = chrono::Utc::now().timestamp_millis();
+        let cases = [
+            (0, crate::models::business::DEFAULT_CONSTANT_INTERVAL_MS),
+            (-5, crate::models::business::DEFAULT_CONSTANT_INTERVAL_MS),
+            (1_000, crate::models::business::MIN_CONSTANT_INTERVAL_MS),
+            (
+                7 * 24 * 3600_000,
+                crate::models::business::MAX_CONSTANT_INTERVAL_MS,
+            ),
+            (20 * 60_000, 20 * 60_000),
+        ];
+        for (input, expected) in cases {
+            let r = create_todo_reminder(
+                &pool,
+                &TodoReminderCreateInput {
+                    task_id: t.id,
+                    remind_at: now + input, // 时刻互不相同，便于逐条核对
+                    is_constant: 1,
+                    constant_interval_ms: input,
+                },
+            )
+            .await
+            .unwrap();
+            assert_eq!(
+                r.constant_interval_ms, expected,
+                "输入 {input}ms 应归一为 {expected}ms"
+            );
+        }
+    }
+
+    /// 完成重复任务的实例：持续标记与间隔随序列平移到下一实例（不被降级为一次性）
     #[tokio::test]
     async fn constant_flag_carries_to_next_recurring_instance() {
         let pool = setup_db().await;
@@ -3530,6 +3639,7 @@ mod reminder_poll_tests {
                 task_id: t.id,
                 remind_at: now + HOUR,
                 is_constant: 1,
+                constant_interval_ms: 15 * 60_000, // 自定义间隔也须随实例延续
             },
         )
         .await
@@ -3546,6 +3656,11 @@ mod reminder_poll_tests {
         let cloned = live_reminders(&pool, next_task_id).await;
         assert_eq!(cloned.len(), 1, "提醒随实例平移");
         assert_eq!(cloned[0].is_constant, 1, "持续标记跨实例延续");
+        assert_eq!(
+            cloned[0].constant_interval_ms,
+            15 * 60_000,
+            "用户设定的持续间隔跨实例延续（不回落默认 5 分钟）"
+        );
     }
 }
 
@@ -3925,6 +4040,7 @@ mod predicate_pushdown_tests {
                 task_id: second,
                 remind_at: base,
                 is_constant: 0,
+                constant_interval_ms: 0, // 0 = 落地按默认 5 分钟
             },
         )
         .await
@@ -4249,6 +4365,7 @@ mod task_projection_tests {
                 task_id,
                 remind_at,
                 is_constant: 0,
+                constant_interval_ms: 0, // 0 = 落地按默认 5 分钟
             },
         )
         .await

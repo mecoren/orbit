@@ -1145,8 +1145,11 @@ class TodoReminder {
   final int taskId;
   final int remindAt;
 
-  /// 持续提醒标记（G2）：1 = 未完成则按 5 分钟间隔顺延重排（响到完成为止）
+  /// 持续提醒标记（G2）：1 = 未完成则按间隔顺延重排（响到完成为止）
   final int isConstant;
+
+  /// 持续提醒间隔（毫秒）：is_constant=1 时的顺延节奏，默认 300000（5 分钟）
+  final int constantIntervalMs;
   final int isDeleted;
   final int createdAt;
   final int updatedAt;
@@ -1164,6 +1167,7 @@ class TodoReminder {
     required this.taskId,
     required this.remindAt,
     required this.isConstant,
+    this.constantIntervalMs = 0,
     required this.isDeleted,
     required this.createdAt,
     required this.updatedAt,
@@ -1181,6 +1185,7 @@ class TodoReminder {
     taskId: j['task_id'] as int,
     remindAt: j['remind_at'] as int,
     isConstant: (j['is_constant'] as int?) ?? 0,
+    constantIntervalMs: (j['constant_interval_ms'] as int?) ?? 0,
     isDeleted: j['is_deleted'] as int,
     createdAt: j['created_at'] as int,
     updatedAt: j['updated_at'] as int,
@@ -1196,6 +1201,7 @@ class TodoReminder {
     taskId: taskId,
     remindAt: remindAt,
     isConstant: isConstant,
+    constantIntervalMs: constantIntervalMs,
     isDeleted: isDeleted,
     createdAt: createdAt,
     updatedAt: updatedAt,
@@ -1212,10 +1218,14 @@ class TodoReminderCreateInput {
   /// 持续提醒标记（G2）；默认 0 = 一次性
   final int isConstant;
 
+  /// 持续提醒间隔（毫秒）；0 = 由 core 回落默认 5 分钟
+  final int constantIntervalMs;
+
   const TodoReminderCreateInput({
     required this.taskId,
     required this.remindAt,
     this.isConstant = 0,
+    this.constantIntervalMs = 0,
   });
 }
 

@@ -60,6 +60,8 @@ pub struct ReminderDueDto {
     pub remind_at: i64,
     /// 持续提醒标记（G2）：1 = 响到完成为止，前端据此标注文案
     pub is_constant: i32,
+    /// 持续提醒间隔（毫秒）：前端标注「每 N 分钟」+ 推迟时随行传递
+    pub constant_interval_ms: i64,
 }
 
 const POLL_INTERVAL_SECS: u64 = 20;
@@ -178,6 +180,7 @@ async fn poll_once(sink: &StreamSink<ReminderDueDto>) {
             title: row.title.clone(),
             remind_at: row.remind_at,
             is_constant: row.is_constant,
+            constant_interval_ms: row.constant_interval_ms,
         }) {
             // sink 已关闭（壳层退订）：记下来，别让「提醒事件丢失」无迹可查
             log::warn!("[reminder] 提醒事件推送失败（sink 已关闭）: {e}");

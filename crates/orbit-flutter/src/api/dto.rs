@@ -842,6 +842,8 @@ pub struct TodoReminder {
     pub remind_at: i64,
     /// 持续提醒标记（G2）：1 = 未完成则按间隔顺延重排（响到完成为止）
     pub is_constant: i32,
+    /// 持续提醒间隔（毫秒）：is_constant=1 时的顺延节奏，默认 300000（5 分钟）
+    pub constant_interval_ms: i64,
     pub is_deleted: i32,
     pub created_at: i64,
     pub updated_at: i64,
@@ -857,6 +859,7 @@ impl From<orbit_core::models::business::TodoReminder> for TodoReminder {
             task_id: r.task_id,
             remind_at: r.remind_at,
             is_constant: r.is_constant,
+            constant_interval_ms: r.constant_interval_ms,
             is_deleted: r.is_deleted,
             created_at: r.created_at,
             updated_at: r.updated_at,
@@ -873,6 +876,8 @@ pub struct TodoReminderCreateInput {
     pub remind_at: i64,
     /// 省略 = 0（一次性）——移动端表单未开持续提醒时传 0
     pub is_constant: i32,
+    /// 持续提醒间隔（毫秒）：0/缺省 = 默认 5 分钟；core 写入侧钳到 [1 分钟, 24 小时]
+    pub constant_interval_ms: i64,
 }
 
 impl From<TodoReminderCreateInput> for orbit_core::models::business::TodoReminderCreateInput {
@@ -881,6 +886,7 @@ impl From<TodoReminderCreateInput> for orbit_core::models::business::TodoReminde
             task_id: i.task_id,
             remind_at: i.remind_at,
             is_constant: i.is_constant,
+            constant_interval_ms: i.constant_interval_ms,
         }
     }
 }

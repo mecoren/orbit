@@ -1574,6 +1574,9 @@ class TodoReminder {
 
   /// 持续提醒标记（G2）：1 = 未完成则按间隔顺延重排（响到完成为止）
   final int isConstant;
+
+  /// 持续提醒间隔（毫秒）：is_constant=1 时的顺延节奏，默认 300000（5 分钟）
+  final PlatformInt64 constantIntervalMs;
   final int isDeleted;
   final PlatformInt64 createdAt;
   final PlatformInt64 updatedAt;
@@ -1586,6 +1589,7 @@ class TodoReminder {
     required this.taskId,
     required this.remindAt,
     required this.isConstant,
+    required this.constantIntervalMs,
     required this.isDeleted,
     required this.createdAt,
     required this.updatedAt,
@@ -1600,6 +1604,7 @@ class TodoReminder {
       taskId.hashCode ^
       remindAt.hashCode ^
       isConstant.hashCode ^
+      constantIntervalMs.hashCode ^
       isDeleted.hashCode ^
       createdAt.hashCode ^
       updatedAt.hashCode ^
@@ -1616,6 +1621,7 @@ class TodoReminder {
           taskId == other.taskId &&
           remindAt == other.remindAt &&
           isConstant == other.isConstant &&
+          constantIntervalMs == other.constantIntervalMs &&
           isDeleted == other.isDeleted &&
           createdAt == other.createdAt &&
           updatedAt == other.updatedAt &&
@@ -1631,14 +1637,22 @@ class TodoReminderCreateInput {
   /// 省略 = 0（一次性）——移动端表单未开持续提醒时传 0
   final int isConstant;
 
+  /// 持续提醒间隔（毫秒）：0/缺省 = 默认 5 分钟；core 写入侧钳到 [1 分钟, 24 小时]
+  final PlatformInt64 constantIntervalMs;
+
   const TodoReminderCreateInput({
     required this.taskId,
     required this.remindAt,
     required this.isConstant,
+    required this.constantIntervalMs,
   });
 
   @override
-  int get hashCode => taskId.hashCode ^ remindAt.hashCode ^ isConstant.hashCode;
+  int get hashCode =>
+      taskId.hashCode ^
+      remindAt.hashCode ^
+      isConstant.hashCode ^
+      constantIntervalMs.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -1647,7 +1661,8 @@ class TodoReminderCreateInput {
           runtimeType == other.runtimeType &&
           taskId == other.taskId &&
           remindAt == other.remindAt &&
-          isConstant == other.isConstant;
+          isConstant == other.isConstant &&
+          constantIntervalMs == other.constantIntervalMs;
 }
 
 class TodoSavedFilter {

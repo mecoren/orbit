@@ -2295,6 +2295,7 @@ mod activity_detail_tests {
                 task_id: t.id,
                 remind_at,
                 is_constant: 0, // G2：测试夹具按一次性提醒落地
+                constant_interval_ms: 0, // 0 = 落地按默认 5 分钟
             },
         )
         .await

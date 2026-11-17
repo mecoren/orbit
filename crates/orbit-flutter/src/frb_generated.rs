@@ -9392,12 +9392,14 @@ impl SseDecode for crate::api::events::ReminderDueDto {
         let mut var_title = <String>::sse_decode(deserializer);
         let mut var_remindAt = <i64>::sse_decode(deserializer);
         let mut var_isConstant = <i32>::sse_decode(deserializer);
+        let mut var_constantIntervalMs = <i64>::sse_decode(deserializer);
         return crate::api::events::ReminderDueDto {
             id: var_id,
             task_id: var_taskId,
             title: var_title,
             remind_at: var_remindAt,
             is_constant: var_isConstant,
+            constant_interval_ms: var_constantIntervalMs,
         };
     }
 }
@@ -9985,6 +9987,7 @@ impl SseDecode for crate::api::dto::TodoReminder {
         let mut var_taskId = <i64>::sse_decode(deserializer);
         let mut var_remindAt = <i64>::sse_decode(deserializer);
         let mut var_isConstant = <i32>::sse_decode(deserializer);
+        let mut var_constantIntervalMs = <i64>::sse_decode(deserializer);
         let mut var_isDeleted = <i32>::sse_decode(deserializer);
         let mut var_createdAt = <i64>::sse_decode(deserializer);
         let mut var_updatedAt = <i64>::sse_decode(deserializer);
@@ -9996,6 +9999,7 @@ impl SseDecode for crate::api::dto::TodoReminder {
             task_id: var_taskId,
             remind_at: var_remindAt,
             is_constant: var_isConstant,
+            constant_interval_ms: var_constantIntervalMs,
             is_deleted: var_isDeleted,
             created_at: var_createdAt,
             updated_at: var_updatedAt,
@@ -10011,10 +10015,12 @@ impl SseDecode for crate::api::dto::TodoReminderCreateInput {
         let mut var_taskId = <i64>::sse_decode(deserializer);
         let mut var_remindAt = <i64>::sse_decode(deserializer);
         let mut var_isConstant = <i32>::sse_decode(deserializer);
+        let mut var_constantIntervalMs = <i64>::sse_decode(deserializer);
         return crate::api::dto::TodoReminderCreateInput {
             task_id: var_taskId,
             remind_at: var_remindAt,
             is_constant: var_isConstant,
+            constant_interval_ms: var_constantIntervalMs,
         };
     }
 }
@@ -12642,6 +12648,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::events::ReminderDueDto {
             self.title.into_into_dart().into_dart(),
             self.remind_at.into_into_dart().into_dart(),
             self.is_constant.into_into_dart().into_dart(),
+            self.constant_interval_ms.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -13383,6 +13390,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::dto::TodoReminder {
             self.task_id.into_into_dart().into_dart(),
             self.remind_at.into_into_dart().into_dart(),
             self.is_constant.into_into_dart().into_dart(),
+            self.constant_interval_ms.into_into_dart().into_dart(),
             self.is_deleted.into_into_dart().into_dart(),
             self.created_at.into_into_dart().into_dart(),
             self.updated_at.into_into_dart().into_dart(),
@@ -13407,6 +13415,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::dto::TodoReminderCreateInput 
             self.task_id.into_into_dart().into_dart(),
             self.remind_at.into_into_dart().into_dart(),
             self.is_constant.into_into_dart().into_dart(),
+            self.constant_interval_ms.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -15503,6 +15512,7 @@ impl SseEncode for crate::api::events::ReminderDueDto {
         <String>::sse_encode(self.title, serializer);
         <i64>::sse_encode(self.remind_at, serializer);
         <i32>::sse_encode(self.is_constant, serializer);
+        <i64>::sse_encode(self.constant_interval_ms, serializer);
     }
 }
 
@@ -15861,6 +15871,7 @@ impl SseEncode for crate::api::dto::TodoReminder {
         <i64>::sse_encode(self.task_id, serializer);
         <i64>::sse_encode(self.remind_at, serializer);
         <i32>::sse_encode(self.is_constant, serializer);
+        <i64>::sse_encode(self.constant_interval_ms, serializer);
         <i32>::sse_encode(self.is_deleted, serializer);
         <i64>::sse_encode(self.created_at, serializer);
         <i64>::sse_encode(self.updated_at, serializer);
@@ -15875,6 +15886,7 @@ impl SseEncode for crate::api::dto::TodoReminderCreateInput {
         <i64>::sse_encode(self.task_id, serializer);
         <i64>::sse_encode(self.remind_at, serializer);
         <i32>::sse_encode(self.is_constant, serializer);
+        <i64>::sse_encode(self.constant_interval_ms, serializer);
     }
 }
 

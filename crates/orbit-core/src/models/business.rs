@@ -672,6 +672,33 @@ pub struct TodoTaskRelationCreateInput {
 }
 
 // ---------- todo_reminders ----------
+
+/// 持续提醒默认顺延间隔（毫秒）：5 分钟。
+///
+/// 历史口径（0001 基线）写死该值；迁移 0002 起改由行级
+/// [`TodoReminder::constant_interval_ms`] 承载，本常量退化为默认值。
+pub const DEFAULT_CONSTANT_INTERVAL_MS: i64 = 5 * 60 * 1000;
+/// 持续提醒间隔下限（1 分钟）：再短就变成骚扰，且与 20s 轮询粒度接近无意义。
+pub const MIN_CONSTANT_INTERVAL_MS: i64 = 60 * 1000;
+/// 持续提醒间隔上限（24 小时）：再长就失去「响到完成」的紧迫性。
+pub const MAX_CONSTANT_INTERVAL_MS: i64 = 24 * 60 * 60 * 1000;
+
+/// 归一持续提醒间隔（毫秒）：
+/// - `<= 0` 视为未设置（老壳 JSON / 老备份缺列）→ 回落默认 5 分钟；
+/// - 其余钳到 [1 分钟, 24 小时]，防手滑/脏数据把顺延变成连环轰炸或永不提醒。
+pub fn clamp_constant_interval_ms(ms: i64) -> i64 {
+    if ms <= 0 {
+        DEFAULT_CONSTANT_INTERVAL_MS
+    } else {
+        ms.clamp(MIN_CONSTANT_INTERVAL_MS, MAX_CONSTANT_INTERVAL_MS)
+    }
+}
+
+/// 持续提醒间隔的 serde 缺省值（老壳 JSON 不带 `constant_interval_ms` 时使用）
+fn default_constant_interval_ms() -> i64 {
+    DEFAULT_CONSTANT_INTERVAL_MS
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct TodoReminder {
     pub id: i64,
@@ -680,6 +707,9 @@ pub struct TodoReminder {
     pub remind_at: i64,
     /// 持续提醒标记（G2）：1 = 未完成则按间隔顺延重排（响到完成为止），0 = 一次性
     pub is_constant: i32,
+    /// 持续提醒间隔（毫秒）：`is_constant = 1` 时到期未完成按此间隔原地顺延；
+    /// 写入侧经 [`clamp_constant_interval_ms`] 归一，默认 5 分钟
+    pub constant_interval_ms: i64,
     pub is_deleted: i32,
     pub created_at: i64,
     pub updated_at: i64,
@@ -691,12 +721,15 @@ pub struct TodoReminder {
 ///
 /// `is_constant` 带 `#[serde(default)]`：老壳（未升级的桌面/移动端调用方）
 /// 传旧 JSON 时按 0（一次性）落地，不因缺字段反序列化失败。
+/// `constant_interval_ms` 同理——缺省 = 5 分钟（升级前写死的节奏）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TodoReminderCreateInput {
     pub task_id: i64,
     pub remind_at: i64,
     #[serde(default)]
     pub is_constant: i32,
+    #[serde(default = "default_constant_interval_ms")]
+    pub constant_interval_ms: i64,
 }
 
 // ---------- todo_task_attachments（任务-附件关联，引用 sys_attachments.hash）----------

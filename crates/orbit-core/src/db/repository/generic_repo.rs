@@ -1760,12 +1760,17 @@ pub async fn create_todo_reminder(
 ) -> CoreResult<TodoReminder> {
     let now = crate::db::clock::next_ms();
     let uuid = uuid::Uuid::new_v4().to_string();
+    // 间隔在此归一（0/负值 = 老壳未传 → 默认 5 分钟；越界钳制）：
+    // 调用点（两壳 UI / 调度器 / 引擎克隆）不再各自夹一遍
+    let interval_ms =
+        crate::models::business::clamp_constant_interval_ms(input.constant_interval_ms);
     let row = sqlx::query_as::<_, TodoReminder>(
-        "INSERT INTO todo_reminders (uuid, task_id, remind_at, is_constant, is_deleted, created_at, updated_at, version)
-         VALUES (?, ?, ?, ?, 0, ?, ?, 1) RETURNING *",
+        "INSERT INTO todo_reminders (uuid, task_id, remind_at, is_constant, constant_interval_ms, is_deleted, created_at, updated_at, version)
+         VALUES (?, ?, ?, ?, ?, 0, ?, ?, 1) RETURNING *",
     )
     .bind(&uuid).bind(input.task_id).bind(input.remind_at)
     .bind(input.is_constant)
+    .bind(interval_ms)
     .bind(now).bind(now).fetch_one(pool).await?;
     emit_event("todo_reminders", row.id, &row.uuid, DbOp::Insert, now);
     Ok(row)

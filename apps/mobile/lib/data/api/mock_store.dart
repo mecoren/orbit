@@ -265,6 +265,7 @@ class MockStore {
       'task_id': t1['id'],
       'remind_at': now() + day ~/ 2,
       'is_constant': 1,
+      'constant_interval_ms': 5 * 60 * 1000,
       'is_deleted': 0,
       'created_at': now(),
       'updated_at': now(),

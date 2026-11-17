@@ -77,12 +77,16 @@ class ReminderDueDto {
   /// 持续提醒标记（G2）：1 = 响到完成为止，前端据此标注文案
   final int isConstant;
 
+  /// 持续提醒间隔（毫秒）：前端标注「每 N 分钟」+ 推迟时随行传递
+  final PlatformInt64 constantIntervalMs;
+
   const ReminderDueDto({
     required this.id,
     required this.taskId,
     required this.title,
     required this.remindAt,
     required this.isConstant,
+    required this.constantIntervalMs,
   });
 
   @override
@@ -91,7 +95,8 @@ class ReminderDueDto {
       taskId.hashCode ^
       title.hashCode ^
       remindAt.hashCode ^
-      isConstant.hashCode;
+      isConstant.hashCode ^
+      constantIntervalMs.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -102,5 +107,6 @@ class ReminderDueDto {
           taskId == other.taskId &&
           title == other.title &&
           remindAt == other.remindAt &&
-          isConstant == other.isConstant;
+          isConstant == other.isConstant &&
+          constantIntervalMs == other.constantIntervalMs;
 }

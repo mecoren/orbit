@@ -750,6 +750,7 @@ class RustOrbitBridge implements OrbitBridge {
         taskId: input.taskId,
         remindAt: input.remindAt,
         isConstant: input.isConstant,
+        constantIntervalMs: input.constantIntervalMs,
       ),
     ),
   );
@@ -2316,6 +2317,7 @@ class RustOrbitBridge implements OrbitBridge {
     taskId: r.taskId,
     remindAt: r.remindAt,
     isConstant: r.isConstant,
+    constantIntervalMs: r.constantIntervalMs,
     isDeleted: r.isDeleted,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,

@@ -112,6 +112,18 @@ async fn reminder_constant_column_backfills_zero() {
             .await
             .unwrap();
     assert_eq!(constant, 0, "存量提醒行应回填 0（一次性），语义零变化");
+
+    // 0002 增量列同批落地：老行（未写 constant_interval_ms）按 5 分钟回填，
+    // 与升级前写死的顺延间隔一致（语义零变化）
+    let (interval,): (i64,) =
+        sqlx::query_as("SELECT constant_interval_ms FROM todo_reminders WHERE uuid='u-r1'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        interval, 300_000,
+        "存量提醒行的持续间隔应回填默认 5 分钟"
+    );
 }
 
 /// 基线 schema：todo_projects.parent_uuid 带 DEFAULT NULL，未写该列的项目行回落顶层
