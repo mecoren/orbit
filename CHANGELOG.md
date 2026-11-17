@@ -25,6 +25,29 @@
 
 ## [Unreleased]
 
+### 新增：持续提醒可设置「提醒间隔」（2026-11-17）
+
+- **此前写死 5 分钟**：`is_constant=1` 的提醒到期未完成时按 `CONSTANT_REARM_INTERVAL_MS`
+  原地顺延，用户对节奏无任何控制权——「吃药每 15 分钟催」与「周报每小时催」只能二选一。
+- **行级间隔落库**：`todo_reminders.constant_interval_ms`（迁移
+  `0002_reminder_constant_interval.sql`，`DEFAULT 300000`，存量行语义零变化）；core
+  写入侧 `clamp_constant_interval_ms` 钳到 [1 分钟, 24 小时]，`0/负值` 回落 5 分钟。
+- **全链路随行传递**：到期扫描 `list_due_reminders` 带出行级间隔 → `advance_fired_reminder`
+  按行间隔顺延 → 重复任务实例平移时间隔随 `is_constant` 一并复制 → 双端推迟（桌面
+  `snoozeReminder` / 系统通知推迟、移动 `landSnoozeInDb`）与移动后台补齐计划均继承原间隔，
+  不会因点了一次推迟回落默认档。
+- **桌面 UI**：详情/新建抽屉「持续提醒」开关下方新增「提醒间隔」档位（1/5/10/15/30/60
+  分钟，shadcn Select 原语，共用 `ReminderConstantFields`）；行内徽标改「持续 · 每 15 分钟」，
+  悬停与系统通知正文同步真实间隔。
+- **移动 UI**：表单抽屉在开关下方给出「提醒间隔」行（`showOrbitSelectMenu` 档位菜单）；
+  详情页「持续」徽标点按改为间隔菜单（间隔档 + 「关闭持续提醒」），未开启时预设指向设置页默认档。
+- **设置页默认值（只作新建初值）**：桌面 设置 → 待办、移动 设置 → 持续提醒 各加「默认提醒间隔」
+  （本机 localStorage / `LocalPrefs`，`todo_constant_interval_default`，不随云同步）；改它
+  不回改已有提醒——单条间隔始终在行上显式可见、可单独调整。
+- **验证**：core 新增 2 例（自定义间隔顺延 / 写入归一钳制）+ 迁移守护补 1 断言；
+  桌面 vitest 830 绿、`tsc --noEmit` 通过、壳层 `cargo check` 通过；移动 `flutter analyze`
+  零告警、全量单测绿（新增 `constant_interval_test`，推迟继承间隔补断言）。
+
 ### 修复：桌面端多实例——每次双击 exe 都在托盘里多出一个「循迹」图标（2026-11-17）
 
 - **根因**：桌面壳从未注册单实例插件（`tauri-plugin-single-instance` 既不在
