@@ -99,6 +99,8 @@ struct ReminderDueEvent {
     remind_at: i64,
     /// 持续提醒标记（1 = 响到完成为止）：前端 toast 据此显示徽标/文案
     is_constant: i32,
+    /// 持续提醒间隔（毫秒）：前端 toast 标注「每 N 分钟」+ 推迟时随行传递
+    constant_interval_ms: i64,
 }
 
 /// 推迟完成事件（前端按 reminder_id 关闭对应 in-app toast +
@@ -207,6 +209,7 @@ async fn poll_once(app: &AppHandle) {
             &row.title,
             row.remind_at,
             row.is_constant,
+            row.constant_interval_ms,
         );
 
         // ② 无论成功与否 emit 事件 → 前端 sonner toast 兜底
@@ -218,6 +221,7 @@ async fn poll_once(app: &AppHandle) {
                 title: row.title.clone(),
                 remind_at: row.remind_at,
                 is_constant: row.is_constant,
+                constant_interval_ms: row.constant_interval_ms,
             },
         );
 
@@ -260,9 +264,15 @@ fn notify_system(
     title: &str,
     remind_at: i64,
     is_constant: i32,
+    constant_interval_ms: i64,
 ) {
     let body = if is_constant != 0 {
-        format!("持续提醒 · 完成后停止 · {}", fmt_time(remind_at))
+        // 间隔由行级配置决定（0002 迁移后可按提醒调整，默认 5 分钟）
+        let minutes = (constant_interval_ms.max(60_000) / 60_000).max(1);
+        format!(
+            "持续提醒 · 每 {minutes} 分钟 · 完成后停止 · {}",
+            fmt_time(remind_at)
+        )
     } else {
         format!("待办提醒 · {}", fmt_time(remind_at))
     };
@@ -412,6 +422,8 @@ fn notify_system(
                             task_id,
                             remind_at: next_at,
                             is_constant,
+                            // 用户设定的持续间隔随行传递（推迟不回落默认 5 分钟）
+                            constant_interval_ms,
                         },
                     )
                     .await;

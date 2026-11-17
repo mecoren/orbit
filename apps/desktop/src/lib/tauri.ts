@@ -723,6 +723,8 @@ export interface TodoReminder {
   remind_at: number;
   /** 持续提醒标记（G2）：1 = 未完成则按间隔顺延重排（响到完成为止），0 = 一次性 */
   is_constant: number;
+  /** 持续提醒间隔（毫秒）：is_constant=1 时未完成按此间隔顺延，默认 300000（5 分钟） */
+  constant_interval_ms: number;
   is_deleted: number;
   created_at: number;
   updated_at: number;
@@ -734,6 +736,8 @@ export interface TodoReminderCreateInput {
   remind_at: number;
   /** 省略 = 0（一次性）；老调用方 JSON 不带该字段由 core serde default 兜底 */
   is_constant?: number;
+  /** 持续提醒间隔（毫秒）：省略/0 = 默认 5 分钟；写入侧 core 钳到 [1 分钟, 24 小时] */
+  constant_interval_ms?: number;
 }
 export const todoReminderList = (filter: ListFilter) => invoke<TodoReminder[]>("todo_reminders_list", { filter });
 export const todoReminderGet = (id: number) => invoke<TodoReminder>("todo_reminders_get", { id });

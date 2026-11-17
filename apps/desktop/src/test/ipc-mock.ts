@@ -149,6 +149,8 @@ interface MockReminder {
   remind_at: number;
   /** 持续提醒标记（G2）：1 = 未完成则按间隔顺延重排（响到完成为止） */
   is_constant: number;
+  /** 持续提醒间隔（毫秒）：is_constant=1 时的顺延节奏，默认 5 分钟 */
+  constant_interval_ms: number;
   is_deleted: number;
   created_at: number;
   updated_at: number;
@@ -1955,6 +1957,8 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       task_id: input.task_id,
       remind_at: input.remind_at,
       is_constant: input.is_constant ?? 0,
+      // 与 Rust create_todo_reminder 同口径：0/缺省 = 默认 5 分钟
+      constant_interval_ms: input.constant_interval_ms || 300_000,
       is_deleted: 0,
       created_at: now,
       updated_at: now,

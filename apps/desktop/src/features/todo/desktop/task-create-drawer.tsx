@@ -54,7 +54,6 @@ import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { Spinner } from "@/components/ui/spinner";
 import { ErrorState } from "@/components/business/error-state";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -86,6 +85,12 @@ import { formatCnDate, REPEAT_MODE } from "../shared/repeat";
 import { renderMarkdown } from "../shared/markdown-lite";
 import { atViewDueHour, quickViewCreateDefaults } from "../shared/view-create-defaults";
 import { templateDueDate, type TemplatePayload } from "../shared/template-apply";
+import { ReminderConstantFields } from "./reminder-constant-fields";
+import {
+  formatConstantInterval,
+  getDefaultConstantIntervalMs,
+  normalizeConstantIntervalMs,
+} from "../shared/constant-interval";
 import {
   DueDateEditor,
   InfoRow,
@@ -120,6 +125,8 @@ interface TagSelection {
 interface ReminderDraft {
   remindMs: number;
   isConstant: boolean;
+  /** 持续提醒间隔（毫秒）：isConstant 时随行落库，默认 5 分钟 */
+  constantIntervalMs: number;
 }
 
 /** 重复规则草稿（与详情 RepeatEditor 的 onChange 载荷同形） */
@@ -348,12 +355,15 @@ export function TaskCreateDrawer({
       for (const subtaskTitle of draft.subtasks) {
         await todoSubtaskCreate({ task_id: created.id, title: subtaskTitle });
       }
-      // 提醒：新建态单条；持续标记（G2）随行落库
+      // 提醒：新建态单条；持续标记与间隔（G2）随行落库
       if (draft.reminder) {
         await todoReminderCreate({
           task_id: created.id,
           remind_at: draft.reminder.remindMs,
           is_constant: draft.reminder.isConstant ? 1 : 0,
+          constant_interval_ms: normalizeConstantIntervalMs(
+            draft.reminder.constantIntervalMs,
+          ),
         });
       }
       // 新建即完成：子任务/标签挂载完再走完成引擎（重复任务的下一期才能承接）
@@ -837,14 +847,22 @@ function ReminderDraft({
   /** 结束时刻（ms）：选择器组首给「结束时」项（start/due + 时长派生） */
   endMs: number | null;
 }) {
-  const [editing, setEditing] = useState<{ draft: string; isConstant: boolean } | null>(
-    null,
-  );
+  const [editing, setEditing] = useState<{
+    draft: string;
+    isConstant: boolean;
+    intervalMs: number;
+  } | null>(null);
 
   const commit = () => {
     if (!editing) return;
     const ms = new Date(editing.draft.replace(" ", "T")).getTime();
-    if (!Number.isNaN(ms)) onChange({ remindMs: ms, isConstant: editing.isConstant });
+    if (!Number.isNaN(ms)) {
+      onChange({
+        remindMs: ms,
+        isConstant: editing.isConstant,
+        constantIntervalMs: normalizeConstantIntervalMs(editing.intervalMs),
+      });
+    }
     setEditing(null);
   };
 
@@ -863,6 +881,8 @@ function ReminderDraft({
               setEditing({
                 draft: format(new Date(Date.now() + 3600_000), "yyyy-MM-dd'T'HH:mm"),
                 isConstant: false,
+                // 设置页的默认间隔只作新建初值（单条仍可覆盖）
+                intervalMs: getDefaultConstantIntervalMs(),
               })
             }
           >
@@ -882,6 +902,7 @@ function ReminderDraft({
                 setEditing({
                   draft: format(new Date(value.remindMs), "yyyy-MM-dd'T'HH:mm"),
                   isConstant: value.isConstant,
+                  intervalMs: normalizeConstantIntervalMs(value.constantIntervalMs),
                 })
               }
             >
@@ -892,14 +913,16 @@ function ReminderDraft({
                 <TooltipTrigger asChild>
                   <button
                     type="button"
-                    aria-label="持续提醒：未完成则每 5 分钟再提醒，点击关闭"
+                    aria-label={`持续提醒：未完成则${formatConstantInterval(value.constantIntervalMs)}再提醒，点击关闭`}
                     onClick={() => onChange({ ...value, isConstant: false })}
                     className="shrink-0 rounded-full bg-warning/15 px-1.5 py-0.5 text-[10px] font-medium text-warning hover:bg-warning/25"
                   >
-                    持续
+                    持续 · {formatConstantInterval(value.constantIntervalMs)}
                   </button>
                 </TooltipTrigger>
-                <TooltipContent>持续提醒：未完成则每 5 分钟再提醒，点击关闭</TooltipContent>
+                <TooltipContent>
+                  持续提醒：未完成则{formatConstantInterval(value.constantIntervalMs)}再提醒，点击关闭
+                </TooltipContent>
               </Tooltip>
             )}
             <button
@@ -921,14 +944,14 @@ function ReminderDraft({
               endMs={endMs}
               onChange={(v) => setEditing({ ...editing, draft: v })}
             />
-            <label className="flex cursor-pointer items-center justify-between gap-2 text-xs text-muted-foreground">
-              <span>持续提醒（响到完成为止）</span>
-              <Switch
-                checked={editing.isConstant}
-                onCheckedChange={(v) => setEditing({ ...editing, isConstant: v })}
-                aria-label="持续提醒"
-              />
-            </label>
+            <ReminderConstantFields
+              enabled={editing.isConstant}
+              intervalMs={editing.intervalMs}
+              onEnabledChange={(v) => setEditing({ ...editing, isConstant: v })}
+              onIntervalChange={(ms) =>
+                setEditing({ ...editing, intervalMs: normalizeConstantIntervalMs(ms) })
+              }
+            />
             <div className="flex justify-end gap-1">
               <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
                 取消

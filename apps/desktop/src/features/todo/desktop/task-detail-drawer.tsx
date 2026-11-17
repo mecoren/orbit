@@ -50,8 +50,13 @@ import { NumberInput } from "@/components/ui/number-input";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
-import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ReminderConstantFields } from "./reminder-constant-fields";
+import {
+  formatConstantInterval,
+  getDefaultConstantIntervalMs,
+  normalizeConstantIntervalMs,
+} from "../shared/constant-interval";
 import {
   getDescPreviewDelayMs,
   getDescPreviewEnabled,
@@ -1834,12 +1839,14 @@ function RemindersSection({
   repeatNthWeek: number;
   onChanged: () => void;
 }) {
-  // 编辑态：{reminderId, draft, isConstant}——编辑=删旧建新（04 §3.4）；
-  // isConstant 为 G2 持续提醒标记，随行落库（勾选 = 响到完成为止）
+  // 编辑态：{reminderId, draft, isConstant, intervalMs}——编辑=删旧建新（04 §3.4）；
+  // isConstant 为 G2 持续提醒标记，intervalMs 为「响到完成为止」的顺延间隔
+  // （0002 迁移后行级可配，默认 5 分钟）
   const [editing, setEditing] = useState<{
     id: number | null;
     draft: string;
     isConstant: boolean;
+    intervalMs: number;
   } | null>(null);
   // 待删提醒（null = 关闭）：行内确认弹框（qraft tab 删除同款）
   const [confirmDelete, setConfirmDelete] = useState<Awaited<ReturnType<typeof todoTaskGetDetail>>["reminders"][number] | null>(null);
@@ -1853,13 +1860,16 @@ function RemindersSection({
         task_id: taskId,
         remind_at: ms,
         is_constant: editing.isConstant ? 1 : 0,
+        // 间隔随行落库（关闭持续提醒时保留用户上次选择，下次开启直接复用）
+        constant_interval_ms: normalizeConstantIntervalMs(editing.intervalMs),
       });
       onChanged();
     }
     setEditing(null);
   };
 
-  // 行内「持续」徽标点击：翻转持续标记（无 update 路径 → 删旧建新，时刻不变）
+  // 行内「持续」徽标点击：翻转持续标记（无 update 路径 → 删旧建新，时刻不变）。
+  // 间隔随行保留（不回落默认 5 分钟）：开着 15 分钟档关掉再开还是 15 分钟
   const toggleConstant = async (
     r: Awaited<ReturnType<typeof todoTaskGetDetail>>["reminders"][number],
   ) => {
@@ -1869,6 +1879,7 @@ function RemindersSection({
       task_id: taskId,
       remind_at: r.remind_at,
       is_constant: next,
+      constant_interval_ms: normalizeConstantIntervalMs(r.constant_interval_ms),
     });
     onChanged();
     toast.success(next === 1 ? "已开启持续提醒（响到完成为止）" : "已关闭持续提醒");
@@ -1883,7 +1894,13 @@ function RemindersSection({
       trailing={
         editing == null ? (
           <Button variant="link" size="sm" className="h-6 px-1 text-xs"
-            onClick={() => setEditing({ id: null, draft: format(new Date(Date.now() + 3600_000), "yyyy-MM-dd'T'HH:mm"), isConstant: false })}
+            onClick={() => setEditing({
+              id: null,
+              draft: format(new Date(Date.now() + 3600_000), "yyyy-MM-dd'T'HH:mm"),
+              isConstant: false,
+              // 设置页的默认间隔只作新建初值（单条仍可覆盖）
+              intervalMs: getDefaultConstantIntervalMs(),
+            })}
           >
             添加提醒
           </Button>
@@ -1900,14 +1917,14 @@ function RemindersSection({
                 endMs={endMs}
                 onChange={(v) => setEditing({ ...editing, draft: v })}
               />
-              <label className="flex cursor-pointer items-center justify-between gap-2 text-xs text-muted-foreground">
-                <span>持续提醒（响到完成为止）</span>
-                <Switch
-                  checked={editing.isConstant}
-                  onCheckedChange={(v) => setEditing({ ...editing, isConstant: v })}
-                  aria-label="持续提醒"
-                />
-              </label>
+              <ReminderConstantFields
+                enabled={editing.isConstant}
+                intervalMs={editing.intervalMs}
+                onEnabledChange={(v) => setEditing({ ...editing, isConstant: v })}
+                onIntervalChange={(ms) =>
+                  setEditing({ ...editing, intervalMs: normalizeConstantIntervalMs(ms) })
+                }
+              />
               <div className="flex justify-end gap-1">
                 <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>取消</Button>
                 <Button size="sm" onClick={() => void commitNew()}>保存</Button>
@@ -1946,7 +1963,12 @@ function RemindersSection({
                     "flex-1 truncate text-left hover:text-primary",
                     !taskDone && r.remind_at <= Date.now() && "text-destructive",
                   )}
-                  onClick={() => setEditing({ id: r.id, draft: fmt(r.remind_at), isConstant: r.is_constant === 1 })}
+                  onClick={() => setEditing({
+                    id: r.id,
+                    draft: fmt(r.remind_at),
+                    isConstant: r.is_constant === 1,
+                    intervalMs: normalizeConstantIntervalMs(r.constant_interval_ms),
+                  })}
                 >
                   {fmt(r.remind_at)}
                 </button>
@@ -1955,15 +1977,17 @@ function RemindersSection({
                     <TooltipTrigger asChild>
                       <button
                         type="button"
-                        aria-label="持续提醒：未完成则每 5 分钟再提醒，点击关闭"
+                        aria-label={`持续提醒：未完成则${formatConstantInterval(r.constant_interval_ms)}再提醒，点击关闭`}
                         data-testid={`constant-${r.id}`}
                         onClick={() => void toggleConstant(r)}
                         className="shrink-0 rounded-full bg-warning/15 px-1.5 py-0.5 text-[10px] font-medium text-warning hover:bg-warning/25"
                       >
-                        持续
+                        持续 · {formatConstantInterval(r.constant_interval_ms)}
                       </button>
                     </TooltipTrigger>
-                    <TooltipContent>持续提醒：未完成则每 5 分钟再提醒，点击关闭</TooltipContent>
+                    <TooltipContent>
+                      持续提醒：未完成则{formatConstantInterval(r.constant_interval_ms)}再提醒，点击关闭
+                    </TooltipContent>
                   </Tooltip>
                 )}
                 {repeatMode > 0 && (
@@ -1991,14 +2015,14 @@ function RemindersSection({
         {editing?.id === null && (
           <div className="max-w-xs space-y-1.5 rounded-lg bg-muted/40 p-2">
             <DateTimePicker value={editing.draft} onChange={(v) => setEditing({ ...editing, draft: v })} />
-            <label className="flex cursor-pointer items-center justify-between gap-2 text-xs text-muted-foreground">
-              <span>持续提醒（响到完成为止）</span>
-              <Switch
-                checked={editing.isConstant}
-                onCheckedChange={(v) => setEditing({ ...editing, isConstant: v })}
-                aria-label="持续提醒"
-              />
-            </label>
+            <ReminderConstantFields
+              enabled={editing.isConstant}
+              intervalMs={editing.intervalMs}
+              onEnabledChange={(v) => setEditing({ ...editing, isConstant: v })}
+              onIntervalChange={(ms) =>
+                setEditing({ ...editing, intervalMs: normalizeConstantIntervalMs(ms) })
+              }
+            />
             <div className="flex justify-end gap-1">
               <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>取消</Button>
               <Button size="sm" onClick={() => void commitNew()}>添加</Button>

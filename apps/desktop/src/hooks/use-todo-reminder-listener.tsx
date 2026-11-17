@@ -34,6 +34,8 @@ interface ReminderDuePayload {
   remind_at: number;
   /** 持续提醒标记（1 = 响到完成为止）——正文标注用 */
   is_constant: number;
+  /** 持续提醒间隔（毫秒）：正文标注「每 N 分钟」+ 推迟时随行传递 */
+  constant_interval_ms: number;
 }
 
 /** Rust 系统通知推迟完成事件（notify-rust action → 删旧建新后 emit） */
@@ -133,6 +135,7 @@ export function useTodoReminderListener() {
               title={r.title}
               remindAt={r.remind_at}
               isConstant={r.is_constant !== 0}
+              constantIntervalMs={r.constant_interval_ms}
               onSnooze={(minutes) =>
                 snoozeReminder(
                   r.id,
@@ -141,6 +144,7 @@ export function useTodoReminderListener() {
                   minutes,
                   qc,
                   r.is_constant,
+                  r.constant_interval_ms,
                 )
               }
               onViewTask={() => {

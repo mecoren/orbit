@@ -64,22 +64,24 @@ describe("snoozeReminder", () => {
       task_id: 3,
       remind_at: base + 10 * MIN,
       is_constant: 0,
+      constant_interval_ms: 0,
     });
     expect(qcLike.invalidateQueries).toHaveBeenCalled();
   });
 
-  it("持续提醒标记随行传递（G2）：推迟不把持续提醒降级成一次性", async () => {
+  it("持续提醒标记与间隔随行传递（G2）：推迟不降级、不回落默认 5 分钟", async () => {
     deleteMock.mockResolvedValue(undefined);
     createMock.mockResolvedValue({});
     const base = Date.now() + 60 * MIN;
 
-    const ok = await snoozeReminder(9, 5, base, 30, qcLike, 1);
+    const ok = await snoozeReminder(9, 5, base, 30, qcLike, 1, 15 * MIN);
 
     expect(ok).toBe(true);
     expect(createMock).toHaveBeenCalledWith({
       task_id: 5,
       remind_at: base + 30 * MIN,
       is_constant: 1,
+      constant_interval_ms: 15 * MIN,
     });
   });
 
@@ -95,6 +97,7 @@ describe("snoozeReminder", () => {
       task_id: 3,
       remind_at: base + 60 * MIN,
       is_constant: 0,
+      constant_interval_ms: 0,
     });
   });
 

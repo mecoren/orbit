@@ -118,6 +118,8 @@ export const LS_UNGROUPED_AFTER = "todo_sidebar_ungrouped_after";
 export const LS_DESC_PREVIEW_ENABLED = "desc_preview_enabled";
 /** 详情页描述悬浮预览延迟毫秒（默认 800） */
 export const LS_DESC_PREVIEW_DELAY = "desc_preview_delay";
+/** 持续提醒默认间隔毫秒（本机设置，新建提醒初值；行级可覆盖） */
+export const LS_CONSTANT_INTERVAL_DEFAULT = "todo_constant_interval_default";
 /** 隐藏已完成开关持久化键（Logbook 治理，默认开；"1"=开 "0"=关） */
 export const LS_HIDE_DONE = "todo_hide_done";
 /** 日历视图日期口径持久化键（"start"=按开始日期，缺省/其它=按截止日期） */

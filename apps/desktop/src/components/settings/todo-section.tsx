@@ -41,6 +41,13 @@ import {
   setDescPreviewDelayMs,
   setDescPreviewEnabled,
 } from "@/features/todo/shared/desc-preview-pref";
+import {
+  CONSTANT_INTERVAL_PRESETS_MIN,
+  DEFAULT_CONSTANT_INTERVAL_MS,
+  formatConstantInterval,
+  getDefaultConstantIntervalMs,
+  setDefaultConstantIntervalMs,
+} from "@/features/todo/shared/constant-interval";
 
 function SectionHeader({ title, desc }: { title: string; desc: string }) {
   return (
@@ -69,9 +76,15 @@ export function TodoSection() {
   const [previewEnabled, setPreviewEnabled] = useState(true);
   const [previewDelay, setPreviewDelay] = useState(DESC_PREVIEW_DELAY_DEFAULT);
 
+  // 持续提醒默认间隔（本机 localStorage；只作新建提醒初值）
+  const [constantInterval, setConstantInterval] = useState(
+    DEFAULT_CONSTANT_INTERVAL_MS,
+  );
+
   useEffect(() => {
     setPreviewEnabled(getDescPreviewEnabled());
     setPreviewDelay(getDescPreviewDelayMs());
+    setConstantInterval(getDefaultConstantIntervalMs());
   }, []);
 
   const metaQuery = useQuery({
@@ -191,6 +204,54 @@ export function TodoSection() {
 
         <p className="text-xs text-muted-foreground">
           提示：仅对被高度上限截断的描述生效；本机设置，不随云同步。
+        </p>
+      </div>
+
+      <div className="space-y-4 rounded-lg border p-5">
+        <div className="flex items-center gap-3">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted">
+            <BellRing className="size-4 text-muted-foreground" />
+          </div>
+          <div>
+            <p className="text-sm font-medium">持续提醒默认间隔</p>
+            <p className="text-xs text-muted-foreground">
+              新建提醒开启「持续提醒」时的初始间隔，到期未完成则按此节奏再提醒
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <Select
+            value={String(constantInterval)}
+            onValueChange={(v) => {
+              const ms = Number(v);
+              setConstantInterval(ms);
+              setDefaultConstantIntervalMs(ms);
+              toast.success(`持续提醒默认${formatConstantInterval(ms)}`);
+            }}
+          >
+            <SelectTrigger className="w-36" aria-label="持续提醒默认间隔">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CONSTANT_INTERVAL_PRESETS_MIN.map((m) => {
+                const ms = m * 60_000;
+                return (
+                  <SelectItem key={ms} value={String(ms)}>
+                    {formatConstantInterval(ms)}
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+          <span className="text-xs text-muted-foreground">
+            响到任务完成为止
+          </span>
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          提示：本机设置，不随云同步；只影响新建提醒，已有提醒的间隔在各自行的「持续」
+          徽标上单独调整。
         </p>
       </div>
 

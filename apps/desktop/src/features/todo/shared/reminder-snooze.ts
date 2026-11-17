@@ -46,6 +46,8 @@ type QueryClientLike = ReturnType<typeof useQueryClient>;
  *
  * `isConstant`（G2）随行传递：推迟一条持续提醒不该把它降级成一次性——
  * 新行的持续标记与原行一致，顺延链在推迟后继续生效。
+ * `constantIntervalMs` 同样随行传递：用户设的 15 分钟档不该因点了一次推迟
+ * 回落成默认 5 分钟。
  */
 export async function snoozeReminder(
   reminderId: number,
@@ -54,6 +56,7 @@ export async function snoozeReminder(
   minutes: number,
   qc: QueryClientLike,
   isConstant = 0,
+  constantIntervalMs = 0,
 ): Promise<boolean> {
   const nextAt = snoozeRemindAt(remindAt, minutes);
   try {
@@ -66,6 +69,7 @@ export async function snoozeReminder(
       task_id: taskId,
       remind_at: nextAt,
       is_constant: isConstant,
+      constant_interval_ms: constantIntervalMs,
     });
     void qc.invalidateQueries({ queryKey: ["todo-task-detail", taskId] });
     return true;
