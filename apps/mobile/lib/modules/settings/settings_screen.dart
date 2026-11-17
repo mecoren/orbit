@@ -37,6 +37,8 @@ import '../../shared/widgets/shadcn/orbit_progress_bar.dart';
 import '../../shared/widgets/shadcn/orbit_choice_grid.dart';
 import '../shell/db_invalidation.dart';
 import '../shell/nav_modules.dart';
+import '../todo/logic/constant_interval.dart';
+import '../todo/logic/reminder_prefs.dart';
 import '../todo/logic/task_logic.dart' show formatDateTime;
 import '../todo/providers/todo_providers.dart';
 import '../../core/theme/icon_map.dart';
@@ -639,6 +641,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         : (body.length > 60 ? '${body.substring(0, 60)}…' : body);
   }
 
+  /// 设置「持续提醒默认间隔」（本机偏好；只作新建提醒初值，不改已有提醒）
+  Future<void> _setConstantIntervalDefault(int ms) async {
+    await ref.read(constantIntervalDefaultProvider.notifier).set(ms);
+    WaitToast.success('持续提醒默认${formatConstantInterval(ms)}');
+  }
+
   /// 设置回收站保留档位（7/30/90/永久；本地偏好不同步）
   Future<void> _setTrashRetention(int days) async {
     final bridge = ref.read(orbitBridgeProvider);
@@ -1001,6 +1009,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final config = ref.watch(syncConfigProvider).value;
     // 回收站保留档位（下拉偏好行的尾随值与对勾同取这一份当前值）
     final retentionDays = ref.watch(trashMetaProvider).value?.retentionDays ?? 30;
+    // 持续提醒默认间隔（本机偏好，只作新建提醒初值）
+    final constantInterval = ref.watch(constantIntervalDefaultProvider);
     // 节假日自动更新总开关（core 缺省开启；记账未取到按开启显示）
     final holidayAuto =
         ref.watch(holidayMetaProvider).value?.autoEnabled ?? true;
@@ -1158,6 +1168,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 // 开关 + 时刻选择；到点由系统闹钟发一条汇总通知
                 MiuixSmallTitle('每日摘要提醒'),
                 _sectionCard(_buildDigestCard(context, colors)),
+                const SizedBox(height: AppDimens.space12),
+                // 持续提醒默认间隔（G2）：只作新建提醒初值——
+                // 单条提醒在详情页「持续」徽标上单独调整
+                MiuixSmallTitle('持续提醒'),
+                _sectionCard([
+                  _sectionDesc(
+                    colors,
+                    '新建提醒开启「持续提醒」时的初始间隔，到期未完成则按此节奏'
+                    '再提醒，直到完成。本机设置，不随云同步；已有提醒的间隔'
+                    '在详情页单独调整。',
+                  ),
+                  const _RowDivider(),
+                  OrbitDropdownPreference<int>(
+                    title: '默认提醒间隔',
+                    items: _constantIntervalItems(constantInterval),
+                    current: constantInterval,
+                    onSelect: _setConstantIntervalDefault,
+                    insideMargin: _rowMargin,
+                  ),
+                ]),
                 const SizedBox(height: AppDimens.space12),
                 // 三、安全卡：生物识别开关（无指纹硬件回退只读提示）
                 MiuixSmallTitle('安全'),
@@ -1837,6 +1867,13 @@ List<SelectItem<int>> _trashRetentionItems(int current) => [
   const SelectItem(value: 30, label: '30 天'),
   const SelectItem(value: 90, label: '90 天'),
   const SelectItem(value: 0, label: '永久'),
+];
+
+/// 持续提醒间隔下拉项：预设 ∪ 当前值（跨端写入的自定义分钟数补进档位，
+/// 保证尾随值与弹层对勾都在线）
+List<SelectItem<int>> _constantIntervalItems(int current) => [
+  for (final ms in constantIntervalOptions(current))
+    SelectItem(value: ms, label: formatConstantInterval(ms)),
 ];
 
 /// 引擎摘要（脱敏不显示凭据）：webdav → endpoint host；s3 → bucket

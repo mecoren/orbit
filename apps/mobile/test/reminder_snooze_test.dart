@@ -9,13 +9,14 @@ import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/services/reminder_snooze.dart';
 
 TodoReminder _row(int id, int taskId, int remindAt,
-        {int isDeleted = 0, int isConstant = 0}) =>
+        {int isDeleted = 0, int isConstant = 0, int constantIntervalMs = 0}) =>
     TodoReminder(
       id: id,
       uuid: 'uuid-$id',
       taskId: taskId,
       remindAt: remindAt,
       isConstant: isConstant,
+      constantIntervalMs: constantIntervalMs,
       isDeleted: isDeleted,
       createdAt: 0,
       updatedAt: 0,
@@ -31,7 +32,9 @@ void main() {
         reminders: [_row(10, 1, 1000)],
       );
       expect(plan.deleteIds, [10]);
-      expect(plan.creates, [(taskId: 1, remindAt: 2000, isConstant: 0)]);
+      expect(plan.creates, [
+        (taskId: 1, remindAt: 2000, isConstant: 0, constantIntervalMs: 0),
+      ]);
       expect(plan.isEmpty, isFalse);
       expect(plan.count, 2);
     });
@@ -42,17 +45,27 @@ void main() {
         reminders: [_row(10, 1, 1000), _row(11, 1, 2000)],
       );
       expect(plan.deleteIds, [11]);
-      expect(plan.creates, [(taskId: 1, remindAt: 3000, isConstant: 0)]);
+      expect(plan.creates, [
+        (taskId: 1, remindAt: 3000, isConstant: 0, constantIntervalMs: 0),
+      ]);
     });
 
-    test('G2：持续提醒行推迟不降级——isConstant 随被替换旧行继承', () {
+    test('G2：持续提醒行推迟不降级，且间隔随被替换旧行继承', () {
       final plan = planSnoozeLanding(
         pending: const [PendingAlarm(taskId: 1, remindAt: 3000)],
-        reminders: [_row(10, 1, 1000, isConstant: 1)],
+        reminders: [
+          _row(10, 1, 1000, isConstant: 1, constantIntervalMs: 15 * 60 * 1000),
+        ],
       );
       expect(plan.deleteIds, [10]);
-      expect(plan.creates, [(taskId: 1, remindAt: 3000, isConstant: 1)],
-          reason: '持续提醒的顺延链不得因推迟降级成一次性');
+      expect(plan.creates, [
+        (
+          taskId: 1,
+          remindAt: 3000,
+          isConstant: 1,
+          constantIntervalMs: 15 * 60 * 1000,
+        ),
+      ], reason: '持续提醒的顺延链不得因推迟降级成一次性或回落 5 分钟');
     });
 
     test('已有同刻行 → 已落地，空计划', () {
@@ -108,7 +121,14 @@ void main() {
         nowMs: nowMs,
       );
       expect(plan.deleteIds, isEmpty);
-      expect(plan.creates, [(taskId: 1, remindAt: nowMs + 600000, isConstant: 0)]);
+      expect(plan.creates, [
+        (
+          taskId: 1,
+          remindAt: nowMs + 600000,
+          isConstant: 0,
+          constantIntervalMs: 0,
+        ),
+      ]);
     });
 
     test('孤儿闹钟但未启用 activeTaskIds（日常重排）→ 保守不补建', () {
@@ -296,7 +316,14 @@ void main() {
         bridge,
         SnoozeLanding(
           deleteIds: [old.id],
-          creates: [(taskId: task.id, remindAt: 2000, isConstant: 0)],
+          creates: [
+            (
+              taskId: task.id,
+              remindAt: 2000,
+              isConstant: 0,
+              constantIntervalMs: 0,
+            ),
+          ],
         ),
       );
 
@@ -341,6 +368,7 @@ void main() {
           taskId: task.id,
           remindAt: future,
           isConstant: 1,
+          constantIntervalMs: 20 * 60 * 1000,
         ),
       );
       final nextAt = DateTime.now().millisecondsSinceEpoch + 600000;
@@ -358,6 +386,8 @@ void main() {
       expect(rows, hasLength(1), reason: '顺延链被替换，不留双份提醒');
       expect(rows.single.remindAt, nextAt);
       expect(rows.single.isConstant, 1, reason: '持续标记随行传递');
+      expect(rows.single.constantIntervalMs, 20 * 60 * 1000,
+          reason: '用户设定的间隔随行传递（不回落默认 5 分钟）');
       expect(rows.single.id, isNot(rearmed.id));
     });
   });

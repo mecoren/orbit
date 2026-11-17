@@ -55,7 +55,9 @@ import '../../shared/widgets/shadcn/orbit_text_field.dart';
 import 'form_bottom_sheet.dart' show showTodoDatePicker, syncTaskReminder;
 // as rep：规避 Flutter widgets 自带 RepeatMode 类名冲突
 import 'logic/activity_format.dart';
+import 'logic/constant_interval.dart';
 import 'logic/markdown_lite.dart';
+import 'logic/reminder_prefs.dart';
 import 'logic/repeat_logic.dart' as rep;
 import 'logic/subtask_tree.dart';
 import 'repeat_edit_sheet.dart';
@@ -2077,29 +2079,64 @@ class _RemindersSection extends ConsumerWidget {
           ms,
           reminder,
           isConstant: reminder.isConstant,
+          constantIntervalMs: normalizeConstantIntervalMs(
+            reminder.constantIntervalMs,
+          ),
         );
       }),
     );
   }
 
-  /// 翻转持续提醒标记（G2）：时刻不变，仅标记变更——删旧建新（对齐桌面
-  /// 详情抽屉的「持续」徽标；todo_reminders 无 update 路径）
-  Future<void> _toggleConstant(
+  /// 持续提醒配置（G2）：点「持续」徽标弹档位菜单（间隔档 + 关闭档）。
+  /// 时刻不变、只改标记/间隔——删旧建新（todo_reminders 无 update 路径）；
+  /// 关闭时保留原间隔，下次开启仍从同一档恢复
+  Future<void> _openConstantMenu(
     BuildContext context,
     WidgetRef ref,
     TodoReminder reminder,
   ) async {
-    await _mutate(context, ref, () async {
-      final bridge = ref.read(orbitBridgeProvider);
-      await bridge.todoReminderDelete(reminder.id);
-      await bridge.todoReminderCreate(
-        TodoReminderCreateInput(
-          taskId: taskId,
-          remindAt: reminder.remindAt,
-          isConstant: reminder.constant ? 0 : 1,
-        ),
-      );
-    });
+    const offValue = 'off';
+    // 已开启：用行上的间隔；未开启：预设指向设置页的默认档（一次点按即开启）
+    final storedInterval = normalizeConstantIntervalMs(
+      reminder.constantIntervalMs,
+    );
+    final currentInterval = reminder.constant
+        ? storedInterval
+        : ref.read(constantIntervalDefaultProvider);
+    await showSelectBottomSheet<String>(
+      context,
+      title: '持续提醒',
+      current: reminder.constant ? '$currentInterval' : offValue,
+      items: [
+        for (final ms in constantIntervalOptions(currentInterval))
+          SelectItem<String>(value: '$ms', label: formatConstantInterval(ms)),
+        const SelectItem<String>(value: offValue, label: '关闭持续提醒'),
+      ],
+      onSelect: (v) async {
+        final nextConstant = v == offValue ? 0 : 1;
+        final nextInterval = v == offValue
+            ? currentInterval
+            : normalizeConstantIntervalMs(int.parse(v));
+        // 无变化不重建（避免无意义的删除/新建与版本推进）；
+        // 关闭态只要仍是关闭就跳过（预设值可能与行上存量不同）
+        if (nextConstant == reminder.isConstant &&
+            (nextConstant == 0 || nextInterval == storedInterval)) {
+          return;
+        }
+        await _mutate(context, ref, () async {
+          final bridge = ref.read(orbitBridgeProvider);
+          await bridge.todoReminderDelete(reminder.id);
+          await bridge.todoReminderCreate(
+            TodoReminderCreateInput(
+              taskId: taskId,
+              remindAt: reminder.remindAt,
+              isConstant: nextConstant,
+              constantIntervalMs: nextInterval,
+            ),
+          );
+        });
+      },
+    );
   }
 
   @override
@@ -2177,12 +2214,15 @@ class _RemindersSection extends ConsumerWidget {
                                 const SizedBox(width: AppDimens.space8),
                                 Tooltip(
                                   message: reminder.constant
-                                      ? '关闭持续提醒（未完成则每 5 分钟再提醒）'
-                                      : '开启持续提醒（未完成则每 5 分钟再提醒）',
+                                      ? '持续提醒 · ${formatConstantInterval(reminder.constantIntervalMs)}（点按调整或关闭）'
+                                      : '开启持续提醒（未完成则按设定间隔再提醒）',
                                   child: InkWell(
                                     borderRadius: AppShapes.full,
-                                    onTap: () =>
-                                        _toggleConstant(context, ref, reminder),
+                                    onTap: () => _openConstantMenu(
+                                      context,
+                                      ref,
+                                      reminder,
+                                    ),
                                     child: SizedBox(
                                       height: AppDimens.touchTarget,
                                       child: Center(

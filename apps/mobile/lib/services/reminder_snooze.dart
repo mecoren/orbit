@@ -43,8 +43,10 @@ class SnoozeLanding {
 
   final List<int> deleteIds;
 
-  /// 待新建行；`isConstant` 从被替换的旧行继承（G2 持续提醒：推迟不降级）
-  final List<({int taskId, int remindAt, int isConstant})> creates;
+  /// 待新建行；`isConstant` / `constantIntervalMs` 从被替换的旧行继承
+  /// （G2 持续提醒：推迟不降级、间隔不回落默认 5 分钟）
+  final List<({int taskId, int remindAt, int isConstant, int constantIntervalMs})>
+  creates;
 
   bool get isEmpty => deleteIds.isEmpty && creates.isEmpty;
 
@@ -79,7 +81,8 @@ SnoozeLanding planSnoozeLanding({
   }
 
   final deleteIds = <int>[];
-  final creates = <({int taskId, int remindAt, int isConstant})>[];
+  final creates =
+      <({int taskId, int remindAt, int isConstant, int constantIntervalMs})>[];
   final handled = <int>{};
 
   for (final p in pending) {
@@ -94,7 +97,12 @@ SnoozeLanding planSnoozeLanding({
           p.remindAt > now + orphanWindow.inMilliseconds) {
         continue;
       }
-      creates.add((taskId: p.taskId, remindAt: p.remindAt, isConstant: 0));
+      creates.add((
+        taskId: p.taskId,
+        remindAt: p.remindAt,
+        isConstant: 0,
+        constantIntervalMs: 0,
+      ));
       continue;
     }
     if (rows.any((r) => r.remindAt == p.remindAt)) continue;
@@ -108,6 +116,8 @@ SnoozeLanding planSnoozeLanding({
       taskId: p.taskId,
       remindAt: p.remindAt,
       isConstant: older.first.isConstant,
+      // 间隔随行继承：推迟不把 15 分钟档回落成默认 5 分钟
+      constantIntervalMs: older.first.constantIntervalMs,
     ));
   }
   return SnoozeLanding(deleteIds: deleteIds, creates: creates);
@@ -150,13 +160,18 @@ Future<void> landSnoozeInDb(
     return;
   }
   int inheritedConstant = 0;
+  int inheritedIntervalMs = 0;
   for (final r in rows) {
     if (r.isDeleted != 0 || r.taskId != taskId) continue;
     // 同刻行（本次通知对应的行）/ 待替换的持续顺延链（未来时刻的持续行）
     final sameTick = r.remindAt == fromRemindAt;
     final rearmedConstant = r.constant && r.remindAt > fromRemindAt && r.remindAt > now;
     if (!sameTick && !rearmedConstant) continue;
-    if (r.constant) inheritedConstant = 1;
+    if (r.constant) {
+      inheritedConstant = 1;
+      // 间隔随行继承（0002 迁移后的行级配置；老行 0 = 默认 5 分钟）
+      inheritedIntervalMs = r.constantIntervalMs;
+    }
     try {
       await bridge.todoReminderDelete(r.id);
     } catch (e) {
@@ -170,6 +185,7 @@ Future<void> landSnoozeInDb(
         taskId: taskId,
         remindAt: nextAt,
         isConstant: inheritedConstant,
+        constantIntervalMs: inheritedIntervalMs,
       ),
     );
   } catch (e) {
@@ -281,6 +297,7 @@ Future<bool> applySnoozeLanding(OrbitBridge bridge, SnoozeLanding plan) async {
           taskId: c.taskId,
           remindAt: c.remindAt,
           isConstant: c.isConstant,
+          constantIntervalMs: c.constantIntervalMs,
         ),
       );
       changed = true;

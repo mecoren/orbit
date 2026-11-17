@@ -24,7 +24,9 @@ import '../../shared/widgets/shadcn/orbit_button.dart';
 import '../../shared/widgets/shadcn/orbit_icon_button.dart';
 import '../../shared/widgets/shadcn/orbit_text_field.dart';
 // as rep：规避 Flutter widgets 自带 RepeatMode 类名冲突
+import 'logic/constant_interval.dart';
 import 'logic/parse_quick_input.dart';
+import 'logic/reminder_prefs.dart';
 import 'logic/repeat_logic.dart' as rep;
 import 'logic/template_apply.dart';
 import 'logic/task_logic.dart'
@@ -171,22 +173,30 @@ Future<void> showTemplateCreateFlow(
 /// - 未动（同值）→ 跳过。
 /// 新建场景 existing 传 null：有值即建立。
 ///
-/// `isConstant`（G2 持续提醒）：1 = 到期后未完成则每 5 分钟再提醒，直至完成。
-/// 参与「未动」判定——只翻转开关而时刻不变时同样要删旧建新。
+/// `isConstant`（G2 持续提醒）：1 = 到期后未完成则按 `constantIntervalMs`
+/// 再提醒（默认 5 分钟，档位见 constant_interval.dart），直至完成。
+/// 参与「未动」判定——只翻转开关或只改间隔时同样要删旧建新。
 Future<void> syncTaskReminder(
   OrbitBridge bridge,
   int taskId,
   int? remindAt,
   TodoReminder? existing, {
   int isConstant = 0,
+  int constantIntervalMs = 0,
 }) async {
   if (remindAt == null) {
     if (existing != null) await bridge.todoReminderDelete(existing.id);
     return;
   }
+  // 传 0 = 「未指定」：沿用行上现有间隔（老调用方/未接间隔的表单不会
+  // 把用户的 15 分钟档悄悄重置回 5 分钟）；新建时 0 由后端回落默认
+  final targetInterval = constantIntervalMs == 0
+      ? (existing?.constantIntervalMs ?? 0)
+      : constantIntervalMs;
   if (existing != null &&
       existing.remindAt == remindAt &&
-      existing.isConstant == isConstant) {
+      existing.isConstant == isConstant &&
+      existing.constantIntervalMs == targetInterval) {
     return;
   }
   if (existing != null) await bridge.todoReminderDelete(existing.id);
@@ -195,6 +205,7 @@ Future<void> syncTaskReminder(
       taskId: taskId,
       remindAt: remindAt,
       isConstant: isConstant,
+      constantIntervalMs: targetInterval,
     ),
   );
 }
@@ -261,8 +272,12 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
   /// 预计时长（分钟，M9 阶段一）；null = 未设置
   int? _durationMinutes;
 
-  /// 持续提醒开关（G2）：到期未完成则每 5 分钟再提醒，直至完成
+  /// 持续提醒开关（G2）：到期未完成则按 [_remindConstantIntervalMs] 再提醒，直至完成
   bool _remindConstant = false;
+
+  /// 持续提醒间隔（毫秒）：档位见 constant_interval.dart（默认 5 分钟，
+  /// 单条可覆盖；设置页的默认值只在新建时作初值）
+  int _remindConstantIntervalMs = defaultConstantIntervalMs;
 
   /// 新建态手动选择的标签（G5，对齐桌面 TagsField；与 NLP 命中标签合并挂载）
   final List<TodoLabel> _pickedLabels = [];
@@ -374,6 +389,8 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
   void initState() {
     super.initState();
     _projectId = widget.defaultProjectId;
+    // 新建态：持续提醒间隔取设置页默认值（编辑态由 _loadEditing 用行上的间隔覆盖）
+    _remindConstantIntervalMs = ref.read(constantIntervalDefaultProvider);
     if (widget.editingTaskId != null) {
       _loadEditing(widget.editingTaskId!);
     } else {
@@ -446,6 +463,10 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
         _existingReminder = firstReminder;
         _remindAt = firstReminder?.remindAt;
         _remindConstant = firstReminder?.constant ?? false;
+        // 老行 0 = 未配置，按默认 5 分钟展示（不写库，保存时按归一值落地）
+        _remindConstantIntervalMs = normalizeConstantIntervalMs(
+          firstReminder?.constantIntervalMs,
+        );
         _durationMinutes = task.durationMinutes;
         _loaded = true;
       });
@@ -542,6 +563,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
             _remindAt,
             null,
             isConstant: _remindConstant ? 1 : 0,
+            constantIntervalMs: _remindConstantIntervalMs,
           );
         }
         // 新建：标签挂载（NLP 命中 ∪ 手动勾选，去重；失败不阻断保存——
@@ -631,6 +653,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
           _remindAt,
           _existingReminder,
           isConstant: _remindConstant ? 1 : 0,
+          constantIntervalMs: _remindConstantIntervalMs,
         );
         if (becomesDone) {
           try {
@@ -818,6 +841,26 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
       return;
     }
     setState(() => _durationMinutes = n);
+  }
+
+  /// 持续提醒间隔 → 档位单选菜单（1/5/10/15/30/60 分钟；
+  /// 跨端写入的自定义值由 constantIntervalOptions 补进档位）
+  Future<void> _pickConstantInterval() async {
+    final session = _openFieldMenu<int>(
+      title: '提醒间隔',
+      items: [
+        for (final ms in constantIntervalOptions(_remindConstantIntervalMs))
+          SelectItem(value: ms, label: formatConstantInterval(ms)),
+      ],
+      current: _remindConstantIntervalMs,
+      onSelect: (ms) {
+        if (!mounted) return;
+        setState(
+          () => _remindConstantIntervalMs = normalizeConstantIntervalMs(ms),
+        );
+      },
+    );
+    await session.closed;
   }
 
   // ── 字段行 → 底部选择抽屉（与详情页信息区同口径：行只显值，点行再选）──
@@ -1287,6 +1330,19 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                         ],
                                       ),
                                     ),
+                                    // 间隔档位：只在持续提醒开启时出现
+                                    // （一次性提醒没有顺延节奏）
+                                    if (_remindConstant) ...[
+                                      _tileDivider(colors),
+                                      _FormDateTile(
+                                        icon: OrbitIcons.clock,
+                                        label: '提醒间隔',
+                                        value: formatConstantInterval(
+                                          _remindConstantIntervalMs,
+                                        ),
+                                        onTap: _pickConstantInterval,
+                                      ),
+                                    ],
                                   ],
                                 ],
                               ),

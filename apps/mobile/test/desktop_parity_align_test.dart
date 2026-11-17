@@ -456,23 +456,34 @@ void main() {
 
     await _scrollTo(tester, find.text('持续'));
     expect(find.text('持续'), findsOneWidget, reason: '未激活也必须恒显可点');
+    // 点 chip → 间隔档菜单（默认 5 分钟档）；选中即开启持续提醒
     await tester.tap(find.text('持续'));
+    await _settle(tester);
+    await tester.tap(find.text('每 5 分钟'));
     await _settle(tester);
     expect(
       bridge.store.reminders.values
           .where((r) => r['task_id'] == 7 && r['is_constant'] == 1),
       hasLength(1),
-      reason: '点击未激活 chip 应开启持续提醒',
+      reason: '选择间隔档后应开启持续提醒',
+    );
+    expect(
+      bridge.store.reminders.values
+          .firstWhere((r) => r['task_id'] == 7 && r['is_constant'] == 1)['constant_interval_ms'],
+      5 * 60 * 1000,
+      reason: '默认档 5 分钟随行落库',
     );
 
     await _scrollTo(tester, find.text('持续'));
     await tester.tap(find.text('持续'));
     await _settle(tester);
+    await tester.tap(find.text('关闭持续提醒'));
+    await _settle(tester);
     expect(
       bridge.store.reminders.values
           .where((r) => r['task_id'] == 7 && r['is_constant'] == 1),
       isEmpty,
-      reason: '再次点击应关闭持续提醒',
+      reason: '菜单里选「关闭持续提醒」应关闭',
     );
     await drainToastTimers(tester);
   });
