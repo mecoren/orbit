@@ -25,6 +25,38 @@
 
 ## [Unreleased]
 
+### 修复：桌面端多实例——每次双击 exe 都在托盘里多出一个「循迹」图标（2026-11-17）
+
+- **根因**：桌面壳从未注册单实例插件（`tauri-plugin-single-instance` 既不在
+  `apps/desktop/src-tauri/Cargo.toml` 也不在 `lib.rs` 的 Builder 链上），而托盘在
+  `setup` 里由 `TrayIconBuilder::with_id("orbit-tray")` 无条件创建——该 id 只在
+  **单进程内**唯一，跨进程不构成互斥，双击 N 次就有 N 个进程、N 个托盘图标；
+  连带的同步 60s 调度器、提醒 20s 轮询、备份调度器、回收站 TTL 与 SQLCipher
+  连接池也全部成倍重复。
+- **修复**：`lib.rs` 在 Builder 链**最前面**注册 `tauri_plugin_single_instance`
+  （Windows = 命名互斥 + 隐藏消息窗 `WM_COPYDATA` 转发 argv；macOS = socket；
+  Linux = D-Bus）。第二实例在插件 setup 阶段就把命令行交给首实例并
+  `exit(0)`——早于 app `setup`，因此不会创建窗口、托盘与任何守护线程。
+- **第二实例处置**：唤起并聚焦首实例主窗（窗口已被 300s 超时回收则经
+  `window_recycler::show_or_create_main_window` 重建，与托盘单机/热键同一路径，
+  这也是「托盘常驻进程被回收后双击 exe 能找回界面」的新入口）；`--hidden`
+  自启姿态不抢焦点，首实例退出中（托盘「退出」的 15s 退出同步窗口期）不重建
+  窗口，避免闪一下白窗。
+- **已知边界**：单实例 key 取 `tauri.conf.json` 的 identifier（`cn.wait.orbit`），
+  dev 构建与安装版共用同一把锁——dev 实例常驻时双击安装版会唤起 dev 实例（Tauri
+  官方口径，不另作区分）。
+
+### 修复：`--hidden` 自启驻留后唤起主窗不出现（2026-11-17，与上一条同批排查）
+
+- **根因**：`startup_launched_hidden` 是 `setup` 阶段落定的进程级原子量，前端
+  `main.tsx` 只在它为 false 时 `getCurrentWindow().show()`。窗口被 300s 空闲回收
+  销毁后重建，新 webview 重跑启动链仍读到 true → 跳过 show，只剩后台 WebView；
+  托盘单击 / 全局热键唤起走同一重建路径，同样踩到。
+- **修复**：`window_recycler::show_or_create_main_window`（托盘、热键、重复双击 exe
+  的统一入口）先调 `startup_cmd::mark_activated()` 清除该标志——显式唤起即脱离
+  静默驻留姿态；8s 冷启动兜底 show 与「托盘不可用则关窗真退出」的判定随之读取
+  正确状态。新增单测 `mark_activated_clears_hidden_state`。
+
 ## [0.1.1] - 2026-11-16
 
 ### 新增：计划内视图——按「先前 / 今天 / 明天 / 稍后」四段查看（2026-11-16）

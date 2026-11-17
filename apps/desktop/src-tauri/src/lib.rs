@@ -209,9 +209,33 @@ pub fn run() {
         }
     }
 
+    // 单实例（2026-11-17）：**必须是第一个注册的插件**——它在 Builder 构建期
+    // 就探测既有实例，第二实例把 argv 交给首实例后立刻 `exit(0)`，根本走不到
+    // 窗口/托盘/守护线程的初始化。排在其它插件之后则先跑完它们的前置初始化
+    // 才退出，Tauri 官方亦要求本插件尽早注册。
+    //
+    // 缺此插件时的症状：每双击一次 exe 都起一个新进程，托盘里多一个「循迹」
+    // 图标（`TrayIconBuilder::with_id` 的 id 只在单进程内唯一），同步调度器 /
+    // 提醒轮询 / 备份调度器 / SQLCipher 连接池成倍重复。
+    //
+    // 第二实例的处置：唤起首实例主窗（窗口已被超时回收则重建，复用
+    // window_recycler 统一入口，与托盘/热键同一路径）；两种情形不打断：
+    // - `--hidden` 姿态（开机自启注册项的静默驻留）不抢焦点、不弹窗；
+    // - 首实例正在退出（托盘「退出」的 15s 同步窗口期）不重建窗口——
+    //   否则窗口刚长出来进程就走了，观感是闪一下白窗。
+    let builder = tauri::Builder::default();
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+        if commands::startup_cmd::launched_hidden(&argv) || commands::window_recycler::is_quitting()
+        {
+            return;
+        }
+        commands::window_recycler::show_or_create_main_window(app);
+    }));
+
     // 通用插件：双端无条件注册。
     // 日志插件（S10）不在此链上——见 setup 开头的运行时注册及其注释。
-    let builder = tauri::Builder::default()
+    let builder = builder
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -345,7 +369,9 @@ pub fn run() {
             // 冷启动显隐安全网：主窗 visible:false，显示完全依赖前端 main.tsx
             // 的 show()。前端链路任何一环失败（权限被拒 / JS 异常 / devUrl 不可达）
             // 窗口就永不出现——「不出现」比「迟 8 秒出现」严重得多，8 秒仍不可见
-            // 即由壳层兜底 show。--hidden 自启（静默驻留）不适用本兜底。
+            // 即由壳层兜底 show。--hidden 自启（静默驻留）不适用本兜底——
+            // 该标志会被 window_recycler 的显式唤起清除（startup_cmd::mark_activated），
+            // 因此「自启驻留 → 用户唤起」之后兜底重新生效，语义自动对齐。
             // 窗口重建路径无需覆盖：重建后 webview 重跑启动链，失败可经托盘/热键
             // 的 Rust 侧 show_main_window_cmd 唤起。
             #[cfg(desktop)]

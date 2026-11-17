@@ -8,7 +8,10 @@
 //!    - 窗口在（隐藏驻留态）→ show/unminimize/focus + 档位恢复 Normal；
 //!    - 窗口已被回收 → 按 tauri.conf 窗口配置重建 + Mica 重应用 +
 //!      意图补发（销毁期间托盘/热键的快速新建请求经 PENDING_QUICK_ADD
-//!      标志转交重建后的前端）。
+//!      标志转交重建后的前端）；
+//!    - 两条分支都先 `startup_cmd::mark_activated()` 清除「静默驻留」标志：
+//!      `--hidden` 自启的进程被唤起后，重建窗口的 webview 重跑 main.tsx
+//!      不得再跳过 show（否则只剩后台 WebView、界面永不出现）。
 //!    - 托盘单击/菜单、全局热键（前端 invoke）共用本入口，替代此前
 //!      「窗口 API 直接 show」的三处散落实现（热键路径原本无法处理窗口
 //!      不存在的场景）。
@@ -85,6 +88,11 @@ fn register_hotkey_fallback(app: &AppHandle) {
 ///   WindowConfig），Mica 重应用，如有补发意图则 postFrame 后 bump。
 pub fn show_or_create_main_window(app: &AppHandle) {
     cancel_recycle_on_show();
+
+    // 用户显式唤起（托盘/热键/重复双击 exe）即脱离「静默驻留」姿态：
+    // 重建路径下新 webview 会重跑 main.tsx 启动链，若仍按启动期 --hidden
+    // 判定就会跳过 show，界面永不出现（见 startup_cmd::mark_activated）。
+    crate::commands::startup_cmd::mark_activated();
 
     match app.get_webview_window("main") {
         Some(win) => {

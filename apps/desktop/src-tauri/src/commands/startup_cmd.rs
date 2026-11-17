@@ -20,7 +20,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 /// 自启注册项注入的隐藏启动标记（与 lib.rs 插件 args 单一同源）
 pub const HIDDEN_FLAG: &str = "--hidden";
 
-/// 本次进程是否由自启拉起（setup 阶段 `resolve_launch_mode` 落定）
+/// 本次进程是否仍处于「静默驻留」姿态（setup 阶段 `resolve_launch_mode`
+/// 落定；用户首次显式唤起后由 `mark_activated` 清除）
 static LAUNCHED_HIDDEN: AtomicBool = AtomicBool::new(false);
 
 /// 纯函数：命令行参数是否含隐藏启动标记
@@ -37,9 +38,20 @@ pub fn resolve_launch_mode() -> bool {
     hidden
 }
 
-/// 本次进程是否为自启拉起的隐藏形态
+/// 本次进程是否仍处于「静默驻留」姿态（自启拉起且尚未被用户显式唤起）
 pub fn is_launched_hidden() -> bool {
     LAUNCHED_HIDDEN.load(Ordering::SeqCst)
+}
+
+/// 标记进程已被用户显式唤起（托盘单击/菜单、全局热键、重复双击 exe）。
+///
+/// 一旦唤起，本进程就不再是「静默驻留」：主窗被超时回收后重建时，新 webview
+/// 会重跑 `main.tsx` 启动链——若仍读到 `is_launched_hidden() == true` 就跳过
+/// `show()`，界面永远不出现（2026-11-17 与单实例同批排查：`--hidden` 自启 +
+/// 托盘唤起 + 300s 回收 + 再唤起 = 只有后台 WebView、没有窗口）。故所有
+/// 「用户主动要界面」的入口统一先清本标志（window_recycler 单一收口）。
+pub fn mark_activated() {
+    LAUNCHED_HIDDEN.store(false, Ordering::SeqCst);
 }
 
 /// 启动形态探针：前端据此决定是否跳过主窗 show（纯浏览器 mock 恒 false）
@@ -71,5 +83,14 @@ mod tests {
     #[test]
     fn hidden_flag_contract() {
         assert_eq!(HIDDEN_FLAG, "--hidden");
+    }
+
+    /// 显式唤起后不再按 --hidden 跳过 show：窗口重建路径的启动链依赖此清除
+    #[test]
+    fn mark_activated_clears_hidden_state() {
+        LAUNCHED_HIDDEN.store(true, std::sync::atomic::Ordering::SeqCst);
+        assert!(is_launched_hidden());
+        mark_activated();
+        assert!(!is_launched_hidden(), "显式唤起后必须退出静默驻留姿态");
     }
 }
