@@ -16,10 +16,15 @@ ignore = [
     "RUSTSEC-2023-0071",
     # zip 4.6.1 由 tauri-plugin-updater 2.11.0 的 `zip = "4"` 锁定；升到 zip 9
     # 需要 tauri-plugin-updater 2.14 + tauri 2.12 整套栈，超出本次发版范围。
-    # 四条都只在 `ZipArchive::extract()` 路径触发，且 updater 的归档来自本仓
+    # 以下六条都只在读取/解包归档路径触发（SUID 保留、符号链接逃逸、大声明 abort、
+    # 本地头名与中央目录不一致、AES 条目认证码未校验），且 updater 的归档来自本仓
     # 已签名 Release（签名先校验再解包）。
     "RUSTSEC-2026-0367",
     "RUSTSEC-2026-0368",
     "RUSTSEC-2026-0369",
     "RUSTSEC-2026-0429",
+    # 2026-11-20 复跑新增（advisory-db 在 0.1.1 发布后补录）：同属 zip 4.6.1 读取路径，
+    # 解除条件与上面四条一致。
+    "RUSTSEC-2026-0545",
+    "RUSTSEC-2026-0548",
 ]
