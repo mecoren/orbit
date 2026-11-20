@@ -3592,7 +3592,7 @@ mod reminder_poll_tests {
             (-5, crate::models::business::DEFAULT_CONSTANT_INTERVAL_MS),
             (1_000, crate::models::business::MIN_CONSTANT_INTERVAL_MS),
             (
-                7 * 24 * 3600_000,
+                7 * 24 * 3_600_000,
                 crate::models::business::MAX_CONSTANT_INTERVAL_MS,
             ),
             (20 * 60_000, 20 * 60_000),
