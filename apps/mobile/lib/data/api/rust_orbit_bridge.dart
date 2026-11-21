@@ -1946,6 +1946,7 @@ class RustOrbitBridge implements OrbitBridge {
       pubDate: info.pubDate,
       notes: info.notes,
       downloadUrl: info.downloadUrl,
+      apkUrl: info.apkUrl,
     );
   }
 

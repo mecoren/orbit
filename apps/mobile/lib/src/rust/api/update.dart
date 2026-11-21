@@ -26,11 +26,15 @@ class UpdateInfo {
   /// 发布页地址（检查失败/需要手动下载时的兜底）
   final String downloadUrl;
 
+  /// Android APK 直链（应用内下载，失败仍可回退发布页）
+  final String apkUrl;
+
   const UpdateInfo({
     required this.version,
     this.pubDate,
     this.notes,
     required this.downloadUrl,
+    required this.apkUrl,
   });
 
   @override
@@ -38,7 +42,8 @@ class UpdateInfo {
       version.hashCode ^
       pubDate.hashCode ^
       notes.hashCode ^
-      downloadUrl.hashCode;
+      downloadUrl.hashCode ^
+      apkUrl.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -48,5 +53,6 @@ class UpdateInfo {
           version == other.version &&
           pubDate == other.pubDate &&
           notes == other.notes &&
-          downloadUrl == other.downloadUrl;
+          downloadUrl == other.downloadUrl &&
+          apkUrl == other.apkUrl;
 }

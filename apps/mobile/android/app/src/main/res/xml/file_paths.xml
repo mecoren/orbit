@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FileProvider 白名单：应用内更新把 APK 下载到 getTemporaryDirectory()/update/
+     （Android = cacheDir/update），安装时经 content:// 交给系统安装器。
+     **不要**放宽成 path="."：FileProvider 是跨应用可读的出口，只暴露更新包目录。 -->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <cache-path name="orbit_update" path="update/" />
+</paths>

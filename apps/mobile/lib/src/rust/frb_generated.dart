@@ -9513,13 +9513,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   UpdateInfo dco_decode_update_info(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
     return UpdateInfo(
       version: dco_decode_String(arr[0]),
       pubDate: dco_decode_opt_String(arr[1]),
       notes: dco_decode_opt_String(arr[2]),
       downloadUrl: dco_decode_String(arr[3]),
+      apkUrl: dco_decode_String(arr[4]),
     );
   }
 
@@ -12877,11 +12878,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_pubDate = sse_decode_opt_String(deserializer);
     var var_notes = sse_decode_opt_String(deserializer);
     var var_downloadUrl = sse_decode_String(deserializer);
+    var var_apkUrl = sse_decode_String(deserializer);
     return UpdateInfo(
       version: var_version,
       pubDate: var_pubDate,
       notes: var_notes,
       downloadUrl: var_downloadUrl,
+      apkUrl: var_apkUrl,
     );
   }
 
@@ -15576,6 +15579,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_String(self.pubDate, serializer);
     sse_encode_opt_String(self.notes, serializer);
     sse_encode_String(self.downloadUrl, serializer);
+    sse_encode_String(self.apkUrl, serializer);
   }
 
   @protected

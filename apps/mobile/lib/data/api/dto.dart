@@ -1721,11 +1721,15 @@ class UpdateInfo {
   /// 发布页地址（检查失败/需要手动下载时的兜底）
   final String downloadUrl;
 
+  /// Android APK 直链（应用内下载；失败仍可回退发布页）
+  final String apkUrl;
+
   const UpdateInfo({
     required this.version,
     required this.pubDate,
     required this.notes,
     required this.downloadUrl,
+    required this.apkUrl,
   });
 }
 

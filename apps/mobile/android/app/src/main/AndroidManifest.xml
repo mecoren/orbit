@@ -3,6 +3,10 @@
          仅在 debug/profile manifest 声明 INTERNET，release 构建不声明则
          app uid 的 socket 被内核 eBPF 拦截——云同步在真机全挂） -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- 应用内更新：从 GitHub Release 下载 APK 后交给系统安装器
+         （Android 8.0+ 需用户在系统设置里为本应用开启「安装未知应用」，
+         运行期经 UpdateInstallChannel 检查/跳转，无权限不静默失败） -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
     <!-- Phase 7 本地通知：Android 13+ 通知运行时权限声明（运行期经
          flutter_local_notifications requestNotificationsPermission 请求，
          用户拒绝则应用内静默降级为 toast 提示） -->
@@ -123,6 +127,17 @@
                 <action android:name="android.service.quicksettings.action.QS_TILE"/>
             </intent-filter>
         </service>
+        <!-- 应用内更新安装：APK 下载在 cacheDir/update/，经 FileProvider
+             以 content:// 交给系统安装器（Android 7.0+ 禁 file:// 跨应用共享） -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths"/>
+        </provider>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
@@ -138,6 +153,11 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- 应用内更新：Android 11+ 包可见性，允许查询/拉起 APK 安装器 -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:mimeType="application/vnd.android.package-archive"/>
         </intent>
     </queries>
 </manifest>

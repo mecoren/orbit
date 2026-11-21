@@ -886,9 +886,11 @@ abstract class OrbitBridge {
   /// 立即执行一次 TTL 过期清理（等价于后台守护的一轮，不等 tick）
   Future<TrashPurgeStats> trashPurgeExpired();
 
-  /// 检查最新版本（只在用户点击时调用；不轮询、不下载、不安装）
+  /// 检查最新版本（只在用户点击时调用；不轮询）
   ///
-  /// 失败原样抛出，调用方降级为「打开发布页」。
+  /// 清单含 Android APK 直链，下载与系统安装由移动壳的
+  /// `services/app_update_service.dart` 承担；失败原样抛出，调用方降级为
+  /// 「打开发布页」。
   Future<UpdateInfo> checkLatestRelease();
 
   /// 应用内更新日志（新版本在前；数据源在 orbit-core，与桌面同一份）

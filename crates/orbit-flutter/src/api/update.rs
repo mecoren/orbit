@@ -1,8 +1,8 @@
 //! update — 移动端桥接层「检查更新」域（#107）
 //!
-//! 只在用户点「检查更新」时拉一次 GitHub Releases 清单：不轮询、不后台下载、
-//! 不静默安装（与桌面 Tauri updater 的职责边界不同，移动端发版走 GitHub Release
-//! 的 APK，安装动作归系统）。
+//! 只在用户点「检查更新」时拉一次 GitHub Releases 清单：不轮询、不后台检查。
+//! 清单里的 `apk_url` 由 core 按 Release 资产命名约定拼出，供壳层应用内下载 +
+//! 交给系统安装器（Android）；iOS 无此形态，仍走发布页。
 //!
 //! ## DTO 镜像
 //! [UpdateInfo] 本地镜像 `orbit_core::api::update_api::LatestReleaseInfo`，
@@ -21,6 +21,8 @@ pub struct UpdateInfo {
     pub notes: Option<String>,
     /// 发布页地址（检查失败/需要手动下载时的兜底）
     pub download_url: String,
+    /// Android APK 直链（应用内下载，失败仍可回退发布页）
+    pub apk_url: String,
 }
 
 /// 拉取最新版本清单（失败原样透传，调用方降级为「打开发布页」）
@@ -31,5 +33,6 @@ pub async fn check_latest_release() -> Result<UpdateInfo, String> {
         pub_date: info.pub_date,
         notes: info.notes,
         download_url: info.download_url,
+        apk_url: info.apk_url,
     })
 }

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,7 +10,9 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../core/theme/icon_map.dart';
+import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
+import '../../services/app_update_service.dart';
 import '../../shared/widgets/shadcn/orbit_arrow_tile.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
@@ -17,6 +21,7 @@ import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../shared/widgets/shadcn/orbit_button.dart';
 import 'update_check.dart';
+import 'update_download_sheet.dart';
 
 /// 关于页 /about（设置页关于卡入口）
 ///
@@ -52,8 +57,8 @@ class _AboutPageState extends ConsumerState<AboutPage> {
         .catchError((_) {});
   }
 
-  /// 检查更新（#107）：只在点击时请求一次；有新版本给「打开发布页」，
-  /// 失败同样给发布页兜底——不做静默轮询、不下载安装包。
+  /// 检查更新（#107）：只在点击时请求一次；Android 有新版本时走应用内
+  /// 下载 APK + 系统安装器，其余平台仍打开发布页——不做静默轮询、不静默安装。
   Future<void> _checkUpdate() async {
     if (_checking) return;
     setState(() => _checking = true);
@@ -62,6 +67,7 @@ class _AboutPageState extends ConsumerState<AboutPage> {
       if (!mounted) return;
       if (isNewerVersion(info.version, _currentVersion)) {
         final notes = info.notes?.trim() ?? '';
+        final canInstallInApp = Platform.isAndroid && info.apkUrl.isNotEmpty;
         final ok = await showConfirmBottomSheet(
           context,
           title: '发现新版本 ${info.version}',
@@ -69,14 +75,19 @@ class _AboutPageState extends ConsumerState<AboutPage> {
             if (info.pubDate != null && info.pubDate!.isNotEmpty)
               '发布于 ${info.pubDate}',
             notes.isNotEmpty ? notes : '前往发布页查看更新说明与下载。',
+            if (canInstallInApp) '确认后在本应用内下载 APK 并调起系统安装器。',
           ].join('\n\n'),
-          confirmLabel: '打开发布页',
+          confirmLabel: canInstallInApp ? '下载并安装' : '打开发布页',
         );
         if (ok == true && mounted) {
-          await launchUrl(
-            Uri.parse(info.downloadUrl),
-            mode: LaunchMode.externalApplication,
-          );
+          if (canInstallInApp) {
+            await _downloadAndInstall(info);
+          } else {
+            await launchUrl(
+              Uri.parse(info.downloadUrl),
+              mode: LaunchMode.externalApplication,
+            );
+          }
         }
       } else {
         WaitToast.info('已是最新版本（$_currentVersion）');
@@ -97,6 +108,66 @@ class _AboutPageState extends ConsumerState<AboutPage> {
       }
     } finally {
       if (mounted) setState(() => _checking = false);
+    }
+  }
+
+  /// Android 应用内更新：权限闸门 → 下载进度弹层 → 系统安装器。
+  ///
+  /// 安装确认由系统接管（Android 不允许静默安装）；任何一步失败都把发布页
+  /// 作为兜底出口，保持与桌面端 `update-fallback` 同一诚实口径。
+  Future<void> _downloadAndInstall(UpdateInfo info) async {
+    void fallback() {
+      WaitToast.global(
+        '更新未能完成',
+        variant: WaitToastVariant.warning,
+        description: '可前往发布页手动下载安装包。',
+        actionLabel: '发布页',
+        onAction: () => launchUrl(
+          Uri.parse(info.downloadUrl),
+          mode: LaunchMode.externalApplication,
+        ),
+      );
+    }
+
+    try {
+      final granted = await AppUpdateService.canInstallPackages();
+      if (!mounted) return;
+      if (!granted) {
+        final go = await showConfirmBottomSheet(
+          context,
+          title: '需要安装权限',
+          message:
+              '系统尚未允许「循迹」安装应用。请在设置中开启「安装未知应用」，'
+              '回到本页重新检查更新即可继续。',
+          confirmLabel: '去设置',
+        );
+        if (go == true && mounted) {
+          await AppUpdateService.openInstallPermissionSettings();
+        }
+        return;
+      }
+
+      final path = await showApkDownloadSheet(
+        context,
+        version: info.version,
+        url: Uri.parse(info.apkUrl),
+      );
+      if (path == null || !mounted) return;
+
+      final install = await showConfirmBottomSheet(
+        context,
+        title: '下载完成',
+        message:
+            '${info.version} 安装包已就绪。安装过程由系统接管，'
+            '本应用可能被系统关闭，数据不受影响。',
+        confirmLabel: '立即安装',
+      );
+      if (install != true || !mounted) return;
+
+      final started = await AppUpdateService.installApk(path);
+      if (!started && mounted) fallback();
+    } catch (_) {
+      if (mounted) fallback();
     }
   }
 

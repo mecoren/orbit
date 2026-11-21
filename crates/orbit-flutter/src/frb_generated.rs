@@ -10633,11 +10633,13 @@ impl SseDecode for crate::api::update::UpdateInfo {
         let mut var_pubDate = <Option<String>>::sse_decode(deserializer);
         let mut var_notes = <Option<String>>::sse_decode(deserializer);
         let mut var_downloadUrl = <String>::sse_decode(deserializer);
+        let mut var_apkUrl = <String>::sse_decode(deserializer);
         return crate::api::update::UpdateInfo {
             version: var_version,
             pub_date: var_pubDate,
             notes: var_notes,
             download_url: var_downloadUrl,
+            apk_url: var_apkUrl,
         };
     }
 }
@@ -14069,6 +14071,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::update::UpdateInfo {
             self.pub_date.into_into_dart().into_dart(),
             self.notes.into_into_dart().into_dart(),
             self.download_url.into_into_dart().into_dart(),
+            self.apk_url.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -16258,6 +16261,7 @@ impl SseEncode for crate::api::update::UpdateInfo {
         <Option<String>>::sse_encode(self.pub_date, serializer);
         <Option<String>>::sse_encode(self.notes, serializer);
         <String>::sse_encode(self.download_url, serializer);
+        <String>::sse_encode(self.apk_url, serializer);
     }
 }
 

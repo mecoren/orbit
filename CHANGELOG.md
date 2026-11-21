@@ -25,6 +25,15 @@
 
 ## [Unreleased]
 
+### 新增：移动端应用内下载并安装 APK（2026-11-21）
+
+- **此前只能跳发布页**：移动端「检查更新」发现新版本后打开 GitHub Release，用户需在浏览器里下载 APK 再手动安装，网络受限时尤其难受；本次对齐 PiggyCount 的「应用内下载 → 交系统安装器」链路。
+- **core 给直链**：`update_api::LatestReleaseInfo` 新增 `apk_url`（`apk_download_url` 纯函数按 §3.4 的 `Orbit_<ver>.apk` 资产名与 `v<ver>` tag 拼出，容忍 `v` 前缀/空白），FRB `update.rs` DTO 镜像 + 移动 `UpdateInfo.apkUrl` 同步。
+- **Android 壳**：新增 `UpdateInstallChannel`（`canRequestPackageInstalls` 检查、未知来源授权页跳转、FileProvider `content://` + 安装器 Intent）与 `res/xml/file_paths.xml`（只白名单 `cacheDir/update/`），Manifest 补 `REQUEST_INSTALL_PACKAGES`、FileProvider 与 `application/vnd.android.package-archive` 的包可见性查询。
+- **下载与 UI**：`services/app_update_service.dart` 用 `HttpClient` 流式下载到 `getTemporaryDirectory()/update/`（200ms 节流进度、可取消、不完整/非 ZIP 头拒绝、版本串净化防路径穿越）；关于页新增权限闸门 → 下载进度弹层（浮起圆角卡片，失败可重试）→ 下载完成确认 → 调起系统安装器；未授权/下载失败/拉起失败均以发布页为兜底。
+- **边界不变**：仍只在用户点击「检查更新」时请求一次，不轮询、不静默安装、不上报设备标识；覆盖安装的签名一致性由 Android 安装器按固定 release keystore 判定（`docs/08` §3.6）。
+- **验证**：core `apk_download_url` 2 例、移动 `apkFileName`/`formatDownloadBytes` 5 例、`flutter analyze` 零问题。
+
 ### 构建：依赖审计基线补录两条 zip 4.6.1 advisory（2026-11-20）
 
 - `v0.1.2` 首发时 `release.yml` 的 audit job 被 `RUSTSEC-2026-0545`（AES 条目未校验

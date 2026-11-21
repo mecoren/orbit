@@ -4,7 +4,9 @@
 //! - **只在用户点「检查更新」时发一次请求**——不轮询、不后台定时、不上报设备标识，
 //!   与本地优先/零遥测的边界一致；
 //! - 清单复用桌面 updater 的 `latest.json`（GitHub Releases 单点合成），
-//!   这里只取 `version` / `pub_date` / `notes`，**不下载、不校验签名、不静默安装**；
+//!   这里只取 `version` / `pub_date` / `notes`，并给出 Android APK 直链；
+//!   **下载与安装归壳层**（移动端写应用缓存 + 系统安装器），core 不落文件、
+//!   不校验包签名、不静默安装；
 //! - 失败原样透传（调用方降级为「打开发布页」），不 panic、不重试。
 use serde::Serialize;
 
@@ -14,6 +16,20 @@ const LATEST_JSON_URL: &str =
 
 /// 发布页（检查失败/需要手动下载时给用户的兜底入口）
 pub const RELEASES_PAGE_URL: &str = "https://github.com/mecoren/orbit/releases/latest";
+
+/// Android APK 直链模板（与 `release.yml` 的产物命名/ tag 口径逐字一致）
+///
+/// Release 流程把 `flutter build apk` 的产物重命名为 `Orbit_<ver>.apk` 并以
+/// `v<ver>` 为 tag 上传（见 `docs/08` §3.4）。这里按同一约定拼直链，
+/// 不在清单里另存字段——版本号本身已能唯一确定资产名。
+const APK_URL_TEMPLATE: &str =
+    "https://github.com/mecoren/orbit/releases/download/v{version}/Orbit_{version}.apk";
+
+/// 由清单版本号拼 Android APK 直链（纯函数；容忍 `v` 前缀与首尾空白）
+pub fn apk_download_url(version: &str) -> String {
+    let normalized = version.trim().trim_start_matches(['v', 'V']).trim();
+    APK_URL_TEMPLATE.replace("{version}", normalized)
+}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct LatestReleaseInfo {
@@ -25,6 +41,8 @@ pub struct LatestReleaseInfo {
     pub notes: Option<String>,
     /// 发布页地址（始终可用）
     pub download_url: String,
+    /// Android APK 直链（应用内下载 + 系统安装；非 Android 端仅作展示/兜底）
+    pub apk_url: String,
 }
 
 /// 拉取最新版本清单（只读网络调用，无 DB 写入、不 emit 事件）
@@ -63,6 +81,7 @@ pub async fn check_latest_release() -> Result<LatestReleaseInfo, String> {
         .to_string();
 
     Ok(LatestReleaseInfo {
+        apk_url: apk_download_url(&version),
         version,
         pub_date: body
             .get("pub_date")
@@ -74,4 +93,23 @@ pub async fn check_latest_release() -> Result<LatestReleaseInfo, String> {
             .map(str::to_string),
         download_url: RELEASES_PAGE_URL.to_string(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::apk_download_url;
+
+    #[test]
+    fn apk_url_matches_release_asset_naming() {
+        assert_eq!(
+            apk_download_url("0.1.2"),
+            "https://github.com/mecoren/orbit/releases/download/v0.1.2/Orbit_0.1.2.apk"
+        );
+    }
+
+    #[test]
+    fn apk_url_tolerates_v_prefix_and_whitespace() {
+        assert_eq!(apk_download_url("v0.1.2"), apk_download_url("0.1.2"));
+        assert_eq!(apk_download_url("  V0.1.2 "), apk_download_url("0.1.2"));
+    }
 }

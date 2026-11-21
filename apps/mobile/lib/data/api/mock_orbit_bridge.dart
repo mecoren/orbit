@@ -4015,6 +4015,8 @@ class MockOrbitBridge implements OrbitBridge {
       pubDate: null,
       notes: null,
       downloadUrl: 'https://github.com/mecoren/orbit/releases/latest',
+      apkUrl:
+          'https://github.com/mecoren/orbit/releases/download/v0.0.0/Orbit_0.0.0.apk',
     ),
   );
 

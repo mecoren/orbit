@@ -39,6 +39,14 @@ class MainActivity : FlutterFragmentActivity() {
         ).setMethodCallHandler { call, result ->
             BadgeChannel.handle(this, call.method, call.arguments, result)
         }
+        // 应用内更新安装通道（未知来源权限 + FileProvider 安装器 Intent；
+        // 见 UpdateInstallChannel）
+        io.flutter.plugin.common.MethodChannel(
+            engine.dartExecutor.binaryMessenger,
+            UpdateInstallChannel.CHANNEL,
+        ).setMethodCallHandler { call, result ->
+            UpdateInstallChannel.handle(this, call.method, call.arguments, result)
+        }
         pendingText = readSharedText(intent)
         // 冷启动快捷方式：launch intent 携带动作 id（热运行一路在 onNewIntent）
         pendingShortcut = readShortcutAction(intent)
