@@ -1329,11 +1329,15 @@ test("连续删除点旧 Toast 撤销只恢复对应任务（2026-10-31）", asy
   await deleteTask("既有任务-今天截止");
   await deleteTask("连续删除任务B");
 
-  // 点第一笔删除的 Toast：它必须撤销自己，而不是取消第二笔
+  // 点第一笔删除的 Toast：它必须撤销自己，而不是取消第二笔。
+  // 必须 dispatchEvent 直投：sonner 的旧 toast 叠在新 toast 背后（同位置、带
+  // transform），`click({ force: true })` 跳过命中检测后按坐标派发，实际点到
+  // 上层的第二笔「撤销」——表现为随机恢复成「连续删除任务B」（2026-11-25
+  // 实测 repeat-each=3 失败 2 次）。
   const toastA = page
     .locator("[data-sonner-toast]")
     .filter({ hasText: "已删除任务「既有任务-今天截止」" });
-  await toastA.getByRole("button", { name: "撤销" }).click({ force: true });
+  await toastA.getByRole("button", { name: "撤销" }).dispatchEvent("click");
 
   await expect(
     page.getByRole("button", { name: "未完成任务：既有任务-今天截止" }),
