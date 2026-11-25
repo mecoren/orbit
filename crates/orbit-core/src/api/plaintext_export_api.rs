@@ -1,8 +1,9 @@
 //! 明文数据导出 API —— 07 报告 #15「数据主权」叙事的落地
 //!
 //! 与 `.orsync` 加密备份（全量覆盖语义）并列的**明文**导出通道：
-//! - `export_plaintext_json`：结构化 JSON 文档（8 张业务表全量，字段名
-//!   与 DDL 对齐，时间戳为 Unix 秒）
+//! - `export_plaintext_json`：结构化 JSON 文档（`SYNCABLE_TABLES` 全部 11 张
+//!   业务表全量，字段名与 DDL 对齐，**字段时间戳为毫秒**；只有 `exported_at`
+//!   是导出时刻的毫秒值）
 //! - `export_plaintext_csv`：任务主视图 CSV（UTF-8 with BOM，Excel 直开），
 //!   含项目名/标签聚合列，便于导入电子表格或第三方工具
 //!
@@ -88,7 +89,8 @@ pub async fn export_plaintext_json(
     let doc = serde_json::json!({
         "format": "orbit.plaintext-export",
         "version": 1,
-        "exported_at": chrono::Utc::now().timestamp(),
+        // 与全文字段口径一致用毫秒：此前是秒，同一份 JSON 里两套单位
+        "exported_at": chrono::Utc::now().timestamp_millis(),
         "tables": tables,
     });
 
