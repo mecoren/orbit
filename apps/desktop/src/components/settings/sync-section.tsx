@@ -267,6 +267,9 @@ function ConnectionCard() {
       await syncDisconnect();
       toast.success("已断开云同步（本地数据与云端文件均未删除）");
       setConfig(null);
+      // 断开不会产生 sync-progress/sync-finished 事件，标题栏云图标与诊断卡
+      // 的 ["sync-config"] 缓存只能靠这里显式失效（否则仍显示「已配置」）。
+      void qc.invalidateQueries({ queryKey: ["sync-config"] });
       setConfirmDisconnect(false);
     } catch (err) {
       toast.error(errMsg(err));
@@ -2317,11 +2320,14 @@ function CsvImportCard() {
     if (content == null) return;
     setBusy("execute");
     setProgress(null);
+    // 本轮任务 id：失败/异常路径也要回收（否则 job 与 jobRef 双残留，
+    // 下次「取消」会打到已结束的任务上）
+    let jobId: string | null = null;
     try {
       // 走可取消任务：先 start 拿 job_id，再轮询进度（docs/13 §6.2 M2 第 3/5 点）
       const { csvImportJobStart, csvImportJobStatus, csvImportJobDrop } =
         await import("@/lib/tauri");
-      const jobId = await csvImportJobStart(content, preset);
+      jobId = await csvImportJobStart(content, preset);
       jobRef.current = jobId;
       let status = await csvImportJobStatus(jobId);
       while (!status.finished) {
@@ -2358,6 +2364,15 @@ function CsvImportCard() {
     } catch (err) {
       toast.error(errMsg(err));
     } finally {
+      if (jobId != null && jobRef.current === jobId) {
+        try {
+          const { csvImportJobDrop } = await import("@/lib/tauri");
+          await csvImportJobDrop(jobId);
+        } catch {
+          /* 回收失败不影响用户可见结果，下次 start 会覆盖 jobRef */
+        }
+        jobRef.current = null;
+      }
       setBusy(null);
     }
   };

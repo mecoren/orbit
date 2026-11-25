@@ -46,9 +46,17 @@ export function GeneralSection() {
     try {
       const m: AutostartModule = await import("@tauri-apps/plugin-autostart");
       await (next ? m.enable() : m.disable());
-      // 回读系统真值（enable 写注册项后 isEnabled 才是准的）
-      setEnabled(await m.isEnabled().catch(() => next));
-      toast.success(next ? "已开启开机自启动" : "已关闭开机自启动");
+      // 回读系统真值（enable 写注册项后 isEnabled 才是准的）。回读失败时
+      // **不能拿假设值冒充系统真值**（文件头承诺「状态以系统为准」），
+      // 只能按提交结果展示并明确告知未核实。
+      const verified = await m.isEnabled().catch(() => null);
+      if (verified == null) {
+        setEnabled(next);
+        toast.info("已提交，但未能回读系统状态，请到系统设置确认");
+      } else {
+        setEnabled(verified);
+        toast.success(next ? "已开启开机自启动" : "已关闭开机自启动");
+      }
     } catch (e) {
       toast.error("设置开机自启动失败", {
         description: e instanceof Error ? e.message : String(e),

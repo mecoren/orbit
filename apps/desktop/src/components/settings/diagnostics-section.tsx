@@ -87,8 +87,11 @@ export function DiagnosticsSection() {
   });
   // 云同步是否已配置：未配置时云端清理卡片整块隐藏（点了也只会报「尚未配置」）。
   // 密钥解锁状态不在这里判定——它是会话态，卡片副标题提示，点击时由 core 拒绝。
+  // key 必须与设置页 / 标题栏状态钮同源（`["sync-config"]`）：写成
+  // `["sync_config"]` 会另开一份缓存，保存配置后本卡最长 60s 仍读旧配置
+  // （云端清理卡该显不显、该藏不藏）。
   const { data: syncConfig } = useQuery({
-    queryKey: ["sync_config"],
+    queryKey: ["sync-config"],
     queryFn: syncConfigGet,
     staleTime: 60_000,
   });
