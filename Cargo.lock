@@ -1444,7 +1444,6 @@ name = "orbit-core"
 version = "0.1.2"
 dependencies = [
  "aes-gcm",
- "anyhow",
  "async-trait",
  "base64",
  "bytes",

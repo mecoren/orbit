@@ -256,6 +256,186 @@ pub static ALL_COMPONENTS: LazyLock<Vec<OssComponent>> = LazyLock::new(|| {
             "https://github.com/tauri-apps/plugins-workspace",
             "",
         ),
+        c(
+            "@radix-ui/react-accordion",
+            "^1.2.20",
+            S::Frontend,
+            "可折叠面板的无障碍原语",
+            "MIT",
+            "https://github.com/radix-ui/primitives",
+            "https://radix-ui.com/primitives",
+        ),
+
+        c(
+            "@radix-ui/react-alert-dialog",
+            "^1.1.19",
+            S::Frontend,
+            "警告确认对话框的无障碍原语",
+            "MIT",
+            "https://github.com/radix-ui/primitives",
+            "https://radix-ui.com/primitives",
+        ),
+
+        c(
+            "@radix-ui/react-checkbox",
+            "^1.4.1",
+            S::Frontend,
+            "复选框的无障碍原语",
+            "MIT",
+            "https://github.com/radix-ui/primitives",
+            "https://radix-ui.com/primitives",
+        ),
+
+        c(
+            "@radix-ui/react-label",
+            "^2.1.11",
+            S::Frontend,
+            "表单标签的无障碍原语",
+            "MIT",
+            "https://github.com/radix-ui/primitives",
+            "https://radix-ui.com/primitives",
+        ),
+
+        c(
+            "@radix-ui/react-popover",
+            "^1.1.19",
+            S::Frontend,
+            "浮层定位与焦点管理原语",
+            "MIT",
+            "https://github.com/radix-ui/primitives",
+            "https://radix-ui.com/primitives",
+        ),
+
+        c(
+            "@radix-ui/react-scroll-area",
+            "^1.2.14",
+            S::Frontend,
+            "自定义滚动区域原语",
+            "MIT",
+            "https://github.com/radix-ui/primitives",
+            "https://radix-ui.com/primitives",
+        ),
+
+        c(
+            "@radix-ui/react-separator",
+            "1.1.11",
+            S::Frontend,
+            "分隔线的无障碍原语",
+            "MIT",
+            "https://github.com/radix-ui/primitives",
+            "https://radix-ui.com/primitives",
+        ),
+
+        c(
+            "@radix-ui/react-slot",
+            "^1.3.0",
+            S::Frontend,
+            "元素组合插槽原语",
+            "MIT",
+            "https://github.com/radix-ui/primitives",
+            "https://radix-ui.com/primitives",
+        ),
+
+        c(
+            "@radix-ui/react-switch",
+            "^1.3.3",
+            S::Frontend,
+            "开关的无障碍原语",
+            "MIT",
+            "https://github.com/radix-ui/primitives",
+            "https://radix-ui.com/primitives",
+        ),
+
+        c(
+            "@radix-ui/react-tooltip",
+            "^1.2.12",
+            S::Frontend,
+            "工具提示的无障碍原语",
+            "MIT",
+            "https://github.com/radix-ui/primitives",
+            "https://radix-ui.com/primitives",
+        ),
+
+        c(
+            "@tanstack/react-virtual",
+            "^3.14.10",
+            S::Frontend,
+            "虚拟滚动（整列表窗口化渲染）",
+            "MIT",
+            "https://github.com/TanStack/virtual",
+            "https://tanstack.com/virtual",
+        ),
+
+        c(
+            "@tauri-apps/plugin-fs",
+            "^2.5.1",
+            S::Frontend,
+            "文件读写插件的前端绑定",
+            "MIT OR Apache-2.0",
+            "https://github.com/tauri-apps/plugins-workspace",
+            "",
+        ),
+
+        c(
+            "@tauri-apps/plugin-global-shortcut",
+            "^2.3.2",
+            S::Frontend,
+            "全局快捷键插件的前端绑定",
+            "MIT OR Apache-2.0",
+            "https://github.com/tauri-apps/plugins-workspace",
+            "",
+        ),
+
+        c(
+            "@tauri-apps/plugin-process",
+            "^2.3.1",
+            S::Frontend,
+            "进程重启插件的前端绑定",
+            "MIT OR Apache-2.0",
+            "https://github.com/tauri-apps/plugins-workspace",
+            "",
+        ),
+
+        c(
+            "@tauri-apps/plugin-shell",
+            "^2.0.0",
+            S::Frontend,
+            "打开外部程序/链接插件的前端绑定",
+            "MIT OR Apache-2.0",
+            "https://github.com/tauri-apps/plugins-workspace",
+            "",
+        ),
+
+        c(
+            "@tauri-apps/plugin-updater",
+            "^2.11.0",
+            S::Frontend,
+            "应用内更新插件的前端绑定",
+            "MIT OR Apache-2.0",
+            "https://github.com/tauri-apps/plugins-workspace",
+            "",
+        ),
+
+        c(
+            "@tauri-apps/plugin-window-state",
+            "^2.0.0",
+            S::Frontend,
+            "窗口位置尺寸记忆插件的前端绑定",
+            "MIT OR Apache-2.0",
+            "https://github.com/tauri-apps/plugins-workspace",
+            "",
+        ),
+
+        c(
+            "tailwindcss-animate",
+            "1.0.7",
+            S::Frontend,
+            "Tailwind 动画工具类插件",
+            "MIT",
+            "",
+            "",
+        ),
+
         // ================= Rust（crates.io） =================
         c(
             "tauri",
@@ -447,15 +627,6 @@ pub static ALL_COMPONENTS: LazyLock<Vec<OssComponent>> = LazyLock::new(|| {
             "",
         ),
         c(
-            "anyhow",
-            "1",
-            S::Rust,
-            "灵活的错误处理工具",
-            "MIT / Apache-2.0",
-            "https://github.com/dtolnay/anyhow",
-            "",
-        ),
-        c(
             "once_cell",
             "1",
             S::Rust,
@@ -500,6 +671,307 @@ pub static ALL_COMPONENTS: LazyLock<Vec<OssComponent>> = LazyLock::new(|| {
             "https://github.com/ardaku/whoami",
             "",
         ),
+        c(
+            "async-trait",
+            "0.1",
+            S::Rust,
+            "异步 trait 方法支持",
+            "MIT OR Apache-2.0",
+            "https://github.com/dtolnay/async-trait",
+            "",
+        ),
+
+        c(
+            "futures",
+            "0.3",
+            S::Rust,
+            "异步流与组合器",
+            "MIT OR Apache-2.0",
+            "https://github.com/rust-lang/futures-rs",
+            "",
+        ),
+
+        c(
+            "zeroize",
+            "1",
+            S::Rust,
+            "敏感内存安全擦除",
+            "Apache-2.0 OR MIT",
+            "https://github.com/RustCrypto/utils",
+            "",
+        ),
+
+        c(
+            "bytes",
+            "1",
+            S::Rust,
+            "零拷贝字节缓冲",
+            "MIT",
+            "https://github.com/tokio-rs/bytes",
+            "",
+        ),
+
+        c(
+            "tempfile",
+            "3",
+            S::Rust,
+            "临时文件与目录",
+            "MIT OR Apache-2.0",
+            "https://github.com/Stebalien/tempfile",
+            "",
+        ),
+
+        c(
+            "tokio-util",
+            "0.7",
+            S::Rust,
+            "异步 IO 与流适配工具",
+            "MIT",
+            "https://github.com/tokio-rs/tokio",
+            "",
+        ),
+
+        c(
+            "url",
+            "2",
+            S::Rust,
+            "URL 解析与规范化",
+            "MIT OR Apache-2.0",
+            "https://github.com/servo/rust-url",
+            "",
+        ),
+
+        c(
+            "urlencoding",
+            "2",
+            S::Rust,
+            "URL 百分号编码",
+            "MIT",
+            "https://github.com/kornelski/rust_urlencoding",
+            "",
+        ),
+
+        c(
+            "log",
+            "0.4",
+            S::Rust,
+            "日志门面（各端后端接入）",
+            "MIT OR Apache-2.0",
+            "https://github.com/rust-lang/log",
+            "",
+        ),
+
+        c(
+            "pinyin",
+            "0.11",
+            S::Rust,
+            "汉字转拼音/首字母",
+            "MIT",
+            "https://github.com/mozillazg/rust-pinyin",
+            "",
+        ),
+
+
+        c(
+            "parking_lot",
+            "0.12",
+            S::Rust,
+            "高性能同步原语",
+            "MIT OR Apache-2.0",
+            "https://github.com/Amanieu/parking_lot",
+            "",
+        ),
+
+        c(
+            "android_logger",
+            "0.15",
+            S::Rust,
+            "Android logcat 日志后端",
+            "MIT OR Apache-2.0",
+            "https://github.com/rust-mobile/android_logger-rs",
+            "",
+        ),
+
+        c(
+            "zstd-sys",
+            "2.0",
+            S::Rust,
+            "zstd 压缩的 C 绑定",
+            "BSD-3-Clause AND BSD-2-Clause",
+            "https://github.com/gyscos/zstd-rs",
+            "",
+        ),
+
+        c(
+            "tauri-build",
+            "2",
+            S::Rust,
+            "Tauri 构建脚本",
+            "Apache-2.0 OR MIT",
+            "https://github.com/tauri-apps/tauri",
+            "",
+        ),
+
+        c(
+            "tauri-plugin-shell",
+            "2",
+            S::Rust,
+            "外部程序/链接打开插件",
+            "Apache-2.0 OR MIT",
+            "https://github.com/tauri-apps/plugins-workspace",
+            "",
+        ),
+
+        c(
+            "tauri-plugin-dialog",
+            "2",
+            S::Rust,
+            "系统文件对话框插件",
+            "Apache-2.0 OR MIT",
+            "https://github.com/tauri-apps/plugins-workspace",
+            "",
+        ),
+
+        c(
+            "tauri-plugin-fs",
+            "2",
+            S::Rust,
+            "文件系统插件",
+            "Apache-2.0 OR MIT",
+            "https://github.com/tauri-apps/plugins-workspace",
+            "",
+        ),
+
+        c(
+            "tauri-plugin-notification",
+            "2",
+            S::Rust,
+            "系统通知插件",
+            "Apache-2.0 OR MIT",
+            "https://github.com/tauri-apps/plugins-workspace",
+            "",
+        ),
+
+        c(
+            "tauri-plugin-global-shortcut",
+            "2",
+            S::Rust,
+            "全局快捷键插件",
+            "Apache-2.0 OR MIT",
+            "https://github.com/tauri-apps/plugins-workspace",
+            "",
+        ),
+
+        c(
+            "tauri-plugin-log",
+            "2",
+            S::Rust,
+            "日志落盘插件",
+            "Apache-2.0 OR MIT",
+            "https://github.com/tauri-apps/plugins-workspace",
+            "",
+        ),
+
+        c(
+            "tauri-plugin-updater",
+            "2",
+            S::Rust,
+            "应用内更新插件",
+            "Apache-2.0 OR MIT",
+            "https://github.com/tauri-apps/plugins-workspace",
+            "",
+        ),
+
+        c(
+            "tauri-plugin-process",
+            "2",
+            S::Rust,
+            "进程重启插件",
+            "Apache-2.0 OR MIT",
+            "https://github.com/tauri-apps/plugins-workspace",
+            "",
+        ),
+
+        c(
+            "notify-rust",
+            "4.18",
+            S::Rust,
+            "桌面系统通知",
+            "MIT OR Apache-2.0",
+            "https://github.com/hoodie/notify-rust",
+            "",
+        ),
+
+        c(
+            "tauri-plugin-window-state",
+            "2",
+            S::Rust,
+            "窗口状态记忆插件",
+            "Apache-2.0 OR MIT",
+            "https://github.com/tauri-apps/plugins-workspace",
+            "",
+        ),
+
+        c(
+            "keyring",
+            "3",
+            S::Rust,
+            "系统钥匙串访问",
+            "MIT OR Apache-2.0",
+            "https://github.com/hwchen/keyring-rs.git",
+            "",
+        ),
+
+        c(
+            "tauri-plugin-single-instance",
+            "2",
+            S::Rust,
+            "单实例保护插件",
+            "Apache-2.0 OR MIT",
+            "https://github.com/tauri-apps/plugins-workspace",
+            "",
+        ),
+
+        c(
+            "windows-registry",
+            "0.6",
+            S::Rust,
+            "Windows 注册表访问",
+            "MIT OR Apache-2.0",
+            "https://github.com/microsoft/windows-rs",
+            "",
+        ),
+
+        c(
+            "image",
+            "0.25",
+            S::Rust,
+            "图片解码（图标/附件）",
+            "MIT OR Apache-2.0",
+            "https://github.com/image-rs/image",
+            "",
+        ),
+
+        c(
+            "webview2-com-sys",
+            "0.38",
+            S::Rust,
+            "WebView2 COM 绑定",
+            "MIT",
+            "https://github.com/wravery/webview2-rs",
+            "",
+        ),
+
+        c(
+            "windows-core",
+            "0.61",
+            S::Rust,
+            "Windows API 核心绑定",
+            "MIT OR Apache-2.0",
+            "https://github.com/microsoft/windows-rs",
+            "",
+        ),
+
         // ================= 移动端 Flutter / Dart =================
         c(
             "flutter",

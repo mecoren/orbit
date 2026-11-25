@@ -99,6 +99,13 @@ jobs:
       - name: 双端桥一致性审计
         run: node perf-metrics/bridge-parity.mjs
 
+      # 开源组件归属：core 的 data.rs 是桌面/移动「关于 → 开源组件」页的唯一数据源。
+      # 新增依赖忘登记不会让任何测试变红，只会让许可证归属静默缺项（2026-11-25 盘查：
+      # 清单漏了 npm 18 条、Rust 31 条）。这里按四个 Cargo.toml + package.json +
+      # pubspec.yaml 的直接依赖比对，缺项即拦停。
+      - name: 开源组件清单与直接依赖一致性
+        run: node perf-metrics/oss-parity.mjs --gate
+
   rust-core:
     runs-on: ubuntu-latest
     steps:

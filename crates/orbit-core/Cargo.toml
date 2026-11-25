@@ -56,7 +56,6 @@ zstd.workspace = true
 
 # 工具
 thiserror.workspace = true
-anyhow.workspace = true
 once_cell.workspace = true
 uuid.workspace = true
 chrono.workspace = true
