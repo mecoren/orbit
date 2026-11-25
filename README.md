@@ -86,6 +86,8 @@ flutter_rust_bridge_codegen generate \
 - **Cargo workspace**：根 workspace 只管 `crates/*`，内部依赖版本一律
   `[workspace.dependencies]` 单点声明、成员以 `xxx.workspace = true` 引用；
   desktop 壳为嵌套独立 workspace；mobile 不入任何 workspace
-- **测试位置**：单元测试写在对应 crate 内（`#[cfg(test)]`）；e2e 放 `apps/*/e2e`
+- **测试位置**：Rust 单元测试写在对应 crate 内（`#[cfg(test)]`）、集成测试放
+  `crates/orbit-core/tests/`；桌面前端测试与源码共置 `*.test.ts`；Playwright e2e
+  在**仓库根 `e2e/`**（跑 mock IPC，不启动 Tauri 壳）；移动端在 `apps/mobile/test/`
 - **文档**：`docs/NN_主题.md` 编号递增；架构决策写 `docs/adr/`；
-  PRD 定稿后归档至 `prd/archive/`
+  功能规格按 `prd/<功能>/{requirements,design}.md` 两件套存放

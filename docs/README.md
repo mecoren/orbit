@@ -11,12 +11,17 @@
 | 平台 | Windows / macOS / Linux 桌面三端 **+** Android / iOS 移动双端 |
 | 重心 | **桌面端**（验收主体），移动端完全复刻现有观感但 MVP 验收标准放宽 |
 | 差异化 | 本地优先 + SQLCipher 本地加密 + 云端仅存端到端加密同步包 + 免注册免订阅 |
-| UI 策略 | **完全复刻** wait-home 现有两端 UI（桌面 React 版照搬规格；移动端用 React 重现 Flutter 版观感） |
+| UI 策略 | **完全复刻** wait-home 现有两端 UI（桌面 React 版照搬规格；移动端以 wait-home Flutter 版为视觉/交互蓝本，实现形态见 §二 状态说明 — ADR 0003） |
 | 许可证 | **MIT**（2026-09-03 拍板，仓库根 `LICENSE`；开源待办均以代码形式公开为前提，若转向闭源商业发行需先回改本行并替换 LICENSE 文件） |
 
 ## 二、选型决策记录（ADR）
 
-**决策：采用 B 方案 —— Tauri 2 全五端单前端（React）+ 共享 Rust 核心。**
+> **状态说明（2026-11-25 补）**：本节记录的是 2026-08 立项时的原始决策，**已被
+> [ADR 0003](adr/0003-mobile-split-flutter.md) 取代**——移动端最终拆为 Flutter 应用
+> （`apps/mobile`，经 `crates/orbit-flutter` 的 FRB 桥复用核心），本节「全五端单前端（React）」
+> 的表决结论不再是现状。保留原文仅为决策沿革，落地口径以 ADR 与 `AGENTS.md` 为准。
+
+**决策（历史）：采用 B 方案 —— Tauri 2 全五端单前端（React）+ 共享 Rust 核心。**
 
 ### 背景
 wait-home 现状是 Flutter（移动）+ Tauri/React（桌面）双前端共享 `wait_core`。独立成产品后若维持双框架，单人维护两套 UI 的成本不可持续。
@@ -57,6 +62,31 @@ wait-home 现状是 Flutter（移动）+ Tauri/React（桌面）双前端共享 
 | [12_双端功能对齐清单与差距.md](12_双端功能对齐清单与差距.md) | 桌面/移动九模块逐项比对（含文件:行）、G1–G16 差距与三批完成记录——只读盘点，状态以 docs/07 为准 |
 | [13_全面评估与优化方案-2026-10-18.md](13_全面评估与优化方案-2026-10-18.md) | 十二款产品对标后的全面评估：功能缺口、性能/UI/UX 方案，重点为整包内存风险与移动端门禁；候选池待圈选，不含代码改动 |
 | [14_大表读路径清单.md](14_大表读路径清单.md) | `sql-fetch-all` 审计提示的逐项分类（合法全表 / 可加 LIMIT / 天然有界 / 只读聚合）；新增 `fetch_all` 必须在此登记数据上界 |
+| [15_云端附件孤儿清理-2026-10-23.md](15_云端附件孤儿清理-2026-10-23.md) | 云端孤儿附件/分片清理的扫描与删除口径（诊断页手动触发，安全边界） |
+| [16_移动端flutter_miuix组件接入-2026-10-31.md](16_移动端flutter_miuix组件接入-2026-10-31.md) | flutter_miuix 组件映射与取舍全表、OS4 玻璃接线约束、Material 保留面清单 |
+| [17_同步端到端测试手册.md](17_同步端到端测试手册.md) | 真 WebDAV / S3 / OSS 端到端测试的操作手册与夹具配置 |
+
+历史专题报告（同步功能第五/六轮、性能与 UX、桌面自启动等）平铺在 `docs/` 根目录，按文件名日期归档，不再逐份进本表。
+
+## 三之二、架构决策记录（ADR）
+
+`docs/adr/NNNN-标题.md`，四段式（背景 / 备选 / 决策 / 后果），只增不改：
+
+| 编号 | 主题 |
+|---|---|
+| [0001](adr/0001-android-sqlcipher-strategy.md) | Android SQLCipher 策略 |
+| [0002](adr/0002-mobile-notification.md) | 移动端通知方案 |
+| [0003](adr/0003-mobile-split-flutter.md) | 移动端拆分为 Flutter 应用（**取代本节 §二**） |
+| [0004](adr/0004-release-engineering.md) | 发布工程（签名矩阵 / 流水线） |
+| [0005](adr/0005-trash-purge-tombstone-boundary.md) | 回收站 purge 与墓碑边界（延迟提交） |
+| [0006](adr/0006-desktop-resident-memory.md) | 桌面常驻内存口径 |
+| [0007](adr/0007-memory-measurement-gate.md) | 内存度量口径与门禁 |
+| [0010](adr/0010-sync-payload-aad-binding.md) | 同步载荷 AAD 绑定 |
+| [0011](adr/0011-backup-streaming-format.md) | 备份 v2 流式容器格式 |
+| [0012](adr/0012-asset-chunked-container.md) | 附件分片容器 |
+| [0013](adr/0013-local-day-planner.md) | 本地日排程 |
+
+> 0008 / 0009 为历史预留号，实际缺号（见 ADR 0010 编号说明），补建会造成二次混淆，故从 0011 顺延。
 
 ## 四、与 wait-home 的资产关系
 
@@ -86,3 +116,10 @@ wait-home                          Orbit
 | 日常同步载荷后缀 | `.orsync`（默认格式，沿用 wait-home 骨架，载荷 magic 为 `"OSYN"`；读侧兼容 `.waitsync`） |
 | 钥匙串 service | `orbit.sync-crypto` |
 | 云端路径根 | `{base_path}/orbit/` |
+
+## 六、外部框架文档
+
+- Tauri 2：<https://tauri.app/llms-full.txt>
+- React 19：<https://react.dev/reference/react>
+- Tailwind CSS v4：<https://tailwindcss.com/docs>
+- flutter_rust_bridge：<https://fzyzcjy.github.io/flutter_rust_bridge/>

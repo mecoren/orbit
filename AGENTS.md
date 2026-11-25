@@ -64,39 +64,22 @@ Orbit（循迹）是本地优先的跨平台任务管理应用：待办（项目
 **跨端契约**
 
 - 桥接签名双端一一对应：Tauri command 与 FRB 函数同名同参（如 `stats_aggregate`）；mock 桥（`mock_orbit_bridge.dart` / `src/test/ipc-mock.ts`）同口径实现，口径漂移会在测试暴露。
-- 前端 queryKey 约定（docs/02 §五）：`["todo_tasks", keyword, page, pageSize]`、`["count", …]`、`["nav-data"]`、统计 `["stats", "aggregate", …]`；变更后刷新沿命令式 `refetch()` 模式（复刻优先不做激进重构）。
+- 前端 queryKey 约定（docs/02 §五，2026-11-25 按代码校正）：`["todo_tasks", keyword, page, pageSize]`、侧栏计数 `["todo_tasks", "sidebar-counts", todayZero]`、统计 `["stats", "aggregate", …]`、同步配置 `["sync-config"]`；同域数据必须复用同域既有前缀（`["count", …]` / `["nav-data"]` 已无查询方，不要再按旧文档新增）。变更后刷新沿命令式 `refetch()` 模式（复刻优先不做激进重构）。
 - 同步白名单集中在 `orbit-core/src/db/sync_registry.rs` 单文件。
 
 ## 目录约定
 
 ```text
-crates/
-  orbit-core/            # 业务核心（零 FFI 依赖）：api/（业务 API）、db/migrations/、
-                         # sync/ + sync_adapters/（云同步）、eventbus/、crypto/、models/
-  orbit-flutter/         # FRB 薄壳：api/ 按域分文件（dto/todo/stats/…），codegen 产物入库
-apps/
-  desktop/
-    src/
-      features/todo/
-        desktop/         # 桌面视图与页面（stats-page、task-list-view、calendar-view…）
-        shared/          # 双端共享纯函数与组件（constants/position/time/heatmap…）+ 同目录 .test.ts
-        store.ts         # 局部 zustand
-      components/        # 应用级：layout/（app-shell 壳）、ui/（shadcn 原语）、business/
-      lib/tauri.ts       # invoke 包装与 DTO 类型（唯一 IPC 入口）
-      test/ipc-mock.ts   # 浏览器/e2e mock：伪造 __TAURI_INTERNALS__，window.__orbitMock 可直改内存库
-    src-tauri/src/commands/  # Tauri 命令薄层；lib.rs invoke_handler 注册
-    e2e                  # （根目录 e2e/）Playwright 冒烟
-  mobile/
-    lib/
-      core/              # theme/（AppColors/AppDimens/AppShapes/OrbitAccents）、routing/
-      data/api/          # OrbitBridge 接口 + Rust/Mock 两实现 + dto.dart（手写镜像）
-      modules/todo/      # 视图与页面 + providers/（Riverpod）+ logic/
-      shared/widgets/    # 跨模块组件：controller_disposer 等生命周期工具 +
-                         # shadcn/（设计系统 v3 原语层，orbit_*.dart）
-    test/                # flutter test（widget/单元），与 lib 镜像目录结构
-docs/                    # NN_主题.md 编号文档（01 产品需求 → 07 竞品 backlog）
-docs/adr/                # 架构决策记录（0001-0005）
+crates/orbit-core/     # 业务核心（零 FFI）：api/（按域 *_api.rs）、db/migrations/、sync/ + sync_adapters/、eventbus/、crypto/、models/
+crates/orbit-flutter/  # FRB 薄壳：api/ 按域分文件，codegen 产物入库
+apps/desktop/src/      # React：features/todo/{desktop,shared}+store.ts、components/{layout,ui,business}、lib/tauri.ts（唯一 IPC 入口）、test/ipc-mock.ts
+apps/desktop/src-tauri/src/commands/  # Tauri 薄命令，lib.rs 的 invoke_handler 注册；e2e/ 在仓库根（Playwright）
+apps/mobile/lib/       # Flutter：core/{theme,routing}、data/api/（桥 + 手写 DTO 镜像）、modules/todo/{providers,logic}、shared/widgets/shadcn/（orbit_*.dart 原语层）
+apps/mobile/test/      # flutter test，与 lib 镜像
+docs/NN_*.md           # 编号文档（01 需求 → 07 backlog 唯一状态源 ｜ 08 发布 ｜ 09 内存 ｜ … ｜ 17 同步 E2E 手册）
+docs/adr/              # 架构决策记录（0001-0007、0010-0013；0008/0009 为历史预留号）
 ```
+更细的目录树与资产处置见 `docs/02` §三。
 
 ## 常用命令
 
@@ -135,7 +118,7 @@ flutter test test/xxx_test.dart          # 定向用例
 
 # 内存门禁（详见 docs/09_内存与性能治理专项-2026-09-18.md）
 node perf-metrics/audit-unbounded.mjs --gate   # 无界累加容器审计（零依赖，秒级）
-node perf-metrics/growth-curve.mjs --gate      # 1k/5k/10k 增长曲线与泄漏判据（需先 pnpm build）
+node perf-metrics/growth-curve.mjs --gate      # 1k/5k/10k 增长曲线与泄漏判据（先 `VITE_E2E_MOCK=1 pnpm build`；普通 build 无 mock 桩会直接 FAIL）
 node perf-metrics/growth-curve.mjs --record    # 采纳新基线：只回写 baselines.json 的 measured
 node perf-metrics/operation-probe.mjs --gate   # 操作级四场景（备份导出/导入、CSV 导入、附件写入）；首次会构建 release example
 node perf-metrics/operation-probe.mjs --record # 只回写 operation-baselines.json 的 measured/datasets，不动 thresholds
@@ -145,13 +128,14 @@ node perf-metrics/memory3.mjs --record         # 回写 baselines.json#desktopEx
 # 双端一致性门禁（入 CI perf-gate job；零依赖，秒级）
 node perf-metrics/mobile-bridge-audit.mjs      # 禁止新增「整文件 List<int> 跨桥」的桥接口
 node perf-metrics/bridge-parity.mjs            # 桌面 Tauri 命令 vs 移动 FRB 函数：禁止单端能力未登记
+node perf-metrics/oss-parity.mjs --gate        # 开源组件清单 vs 真实直接依赖：新增依赖忘登记即拦停
 
 # 发版（详见 docs/08_发布与更新流程.md）
 pnpm bump 0.2.0           # 升版：写源 + 同步五处清单 + 两个 Cargo.lock
 pnpm bump:check           # 只校验一致性（零写入，CI/本地通用）
 ```
 
-- CI（`.github/workflows/ci.yml`）四 job：web（typecheck+vitest+build+e2e）/ rust-core（`cargo check --workspace --all-targets` + `cargo clippy --workspace --all-targets -- -D warnings` + `cargo test --workspace --tests`）/ flutter-mobile（FRB codegen 一致性 + analyze + test）/ perf-gate（无界审计 + 内存增长曲线）。提交前本地跑通同等检查。
+- CI（`.github/workflows/ci.yml`）五 job：web（typecheck+vitest+build+e2e）/ rust-core（`cargo check --workspace --all-targets` + `cargo clippy --workspace --all-targets -- -D warnings` + `cargo test --workspace --tests`）/ desktop-shell（嵌套 workspace 的 `cargo check --all-targets`，不含 fmt/clippy）/ flutter-mobile（FRB codegen 一致性 + analyze + test）/ perf-gate（无界审计 + 内存增长曲线 + 桥接口整包审计 + 双端桥一致性 + 开源组件清单 + 有设备时的帧耗时）。提交前本地跑通同等检查：`pnpm lint:rust` 对齐 rust-core 口径（只含 clippy，**不含 fmt**），`pnpm lint:rust:all` 才是「两 workspace fmt+clippy」全量口径（桌面壳既有 rustfmt/clippy 漂移，见下）。
 - rust-core 用 `--tests` 而非 `--lib` 的原因：`--lib` 口径下整份 `tests/` 都不执行，12 个集成测试文件（迁移链、备份流式、GC、取消、拼音索引台账守卫 `search_index_guard` 等）长期不在 CI，守卫翻红无人发现。`--tests` 同时覆盖库内单测与全部集成用例；`sync_fault_matrix` 自带零依赖假服务（`tests/common`，std `TcpListener` 内存假 WebDAV/S3），干净机器必全绿，是 F22 条件头上线、F23 分片协议的**唯一网络级证据**，已包含在该步骤内（含 9MiB 分片用例约 4.5 分钟），不再单独点名重复执行。「要真 WebDAV 的 m4_sync_e2e」带 `#[ignore]` 自动跳过，仍是本机口径的已知非回归失败；桌面壳（嵌套 workspace）不属根 workspace 且 clippy 有 21 处既有 `doc_lazy_continuation`，暂不入 CI。夹具的请求行解析必须容忍 origin-form 与 absolute-form 两种形态（本机常驻 `HTTP_PROXY` 时 reqwest 发后者）。
 - e2e/Playwright 专用端口 **5273**（非 vite 默认 5173，防撞其他项目 dev server）；strictPort 双保险。内存门禁端口 **5275**（`growth-curve` 自起 dist 静态服务）。
 
@@ -233,9 +217,9 @@ pnpm bump:check           # 只校验一致性（零写入，CI/本地通用）
 - toast 用 `WaitToast`（`shared/widgets/shadcn/orbit_toast.dart`，底层 = miuix `MiuixSnackbarHost` 队列 + squircle 毛玻璃卡面，支持 action 钮与横滑关闭；宿主 `OrbitToastHost` 挂在根装配 `app.dart` 的 Stack 里）；空态用 `EmptyState`（`shared/widgets/shadcn/orbit_empty_state.dart`，让出页头后剩余视口垂直居中）。**测试壳必须与生产根装配同构**——统一用 `test/support/orbit_test_app.dart` 的 `orbitTestApp` / `orbitTestAppRouter`（含 `OrbitToastHost`；toast 相关用例收尾用 `drainToastTimers`）；miuix 队列按宿主挂载实例隔离，不要在用例间共享。
 - **弹层体系现状（2026-11-01 复核）**：底部抽屉一律 `showModalBottomSheet(useRootNavigator: true)` + `OrbitSheetScaffold`（2026-09-21 从 shadcn `SheetConfiguration` 回退，见 `orbit_sheets.dart` 头注释）；抽屉在根 Navigator Overlay 之内，内容里的 Material `Tooltip` / `showModalBottomSheet` / `showDialog` 均正常可用。旧「shadcn 弹层三坑」（`DrawerOverlay` / `showOverlay` / `sh.closeOverlay`）已随 shadcn 弹层退场作废，**不要再按旧文档挂 `DrawerOverlay`**。
 - **测试收尾推掉 toast 计时器**：`WaitToast` 的停留时长交给 shadcn 库内 `Timer`（`showDuration` 非空，底层 `ToastEntry.showDuration = null` 的「常驻」公开入口传不进去，故「不自动收」用 `WaitToast.holdForever` 代理），该 Timer 在条目 dispose 时不取消——用例若在它触发前结束会命中 flutter_test 的「A Timer is still pending」，收尾调 `drainToastTimers(tester)`（`test/support/orbit_test_app.dart`，常驻档传 `holdForever: true`）。
-- **品牌图与启动屏同源**：移动端启动器图标（`mipmap-*/ic_launcher.png`）、原生启动屏图（`mipmap-xxxhdpi/launch_image.png`）、Flutter 等待画面资产（`assets/app_icon.png`）三处均出自 `scripts/generate_icons.py`，与桌面端**同一枚图标**——换版一次产出全平台，不手改单端位图；启动屏与 `BootGate` booting 态同口径：白底 + 居中品牌图（`AppDimens.splashLogoSize`），亮暗主题共用白底（`launch_bg` 双 values 同值）；API 31+ 还须在 `values-v31`/`values-night-v31` 显式 `windowSplashScreenBackground` 锁白（night 限定符优先于 version，两份缺一即深色下变黑），并显式 `windowSplashScreenAnimatedIcon`＝自适应前景层 + `windowSplashScreenIconBackgroundColor`＝`@color/ic_launcher_background`；启动器图标**必须走自适应分层图标**（`mipmap-anydpi-v26`，背景层 `@color/ic_launcher_background` **白色底板** + `ic_launcher_foreground` 前景层，Manifest 带 `roundIcon`，脚本产出）——**背景层必须不透明**：透明（`#00000000`，连 `#00FFFFFF` 也无效，ROM 按 alpha 合成）会被部分 ROM 的系统页（应用信息/最近任务/权限页）与启动器合成到黑底，即 2026-11-16 反馈的「图标背景是黑的」，故该色改 `#FFFFFFFF`（亮暗双 values 同值），代价是启动器上出现白色圆角方块——用户口径「宁要白底，不要黑底」；桌面图标、启动屏图、`assets/app_icon.png` 仍透明底，三者不要混为一谈；缺分层时系统会给 legacy 位图自造模糊底板（发灰脏底）；图标像素一律按 **2x 规格**给（如 48dp 图标给 96px、108dp 画布给 216px）——Android 按目录 bucket 换算 dp 后自行缩放，给足像素只赚清晰度，而启动器与系统/OEM 启动画面都会放大绘制，1x 像素会被放糊。
+- **品牌图与启动屏同源**：移动端启动器图标（`mipmap-*/ic_launcher.png`）、原生启动屏图（`mipmap-xxxhdpi/launch_image.png`）、Flutter 等待画面资产（`assets/app_icon.png`）三处均出自 `scripts/generate_icons.py`，与桌面端**同一枚图标**——换版一次产出全平台，不手改单端位图；启动屏与 `BootGate` booting 态同口径：白底 + 居中品牌图（`AppDimens.splashLogoSize`），亮暗主题共用白底（`launch_bg` 双 values 同值）；API 31+ 还须在 `values-v31`/`values-night-v31` 显式 `windowSplashScreenBackground` 锁白（night 限定符优先于 version，两份缺一即深色下变黑），并显式 `windowSplashScreenAnimatedIcon`＝自适应前景层 + `windowSplashScreenIconBackgroundColor`＝`@color/ic_launcher_background`；启动器图标**必须走自适应分层图标**（`mipmap-anydpi-v26`，背景层 `@color/ic_launcher_background` **白色底板** + `ic_launcher_foreground` 前景层，Manifest 带 `roundIcon`，脚本产出）——**背景层必须不透明**（`#FFFFFFFF`，亮暗双 values 同值）：透明底会被部分 ROM 的系统页与启动器合成到黑底（2026-11-16「图标背景是黑的」），代价是白圆角方块——用户口径「宁要白底不要黑底」；桌面图标、启动屏图、`assets/app_icon.png` 仍透明底，三者不要混为一谈；图标像素一律按 **2x 规格**给（如 48dp 图标给 96px、108dp 画布给 216px）——Android 按目录 bucket 换算 dp 后自行缩放，给足像素只赚清晰度，而启动器与系统/OEM 启动画面都会放大绘制，1x 像素会被放糊。
 - **单选类交互统一用页头菜单同源玻璃浮层**（2026-11-03 起，取代旧「一律底部抽屉」口径）：单选「从一组值里挑一个」一律走 `shared/widgets/shadcn/orbit_select_popup.dart` 的 `showOrbitSelectPopup`（兼容名 `showSelectBottomSheet` 保留并直接转发，21 处存量调用点零改动；底部表单/弹层 6 处已迁 `showOrbitSelectMenu`，宿主补 `PopScope` 兜底返回键）——行渲染复用页头 ⋮ 菜单的 `MiuixGlassPopupItem`（24 图标位 / 44 最小行高 / 选中转强调色并在行尾打勾），卡面走库内 `MiuixGlassPanel`（`puredThinGlass` + blur 32，与 ⋮ 菜单同档；无采样器退实色白卡，不叠实时模糊）；**贴触发行下沿弹出**（承载 = 库内 `MiuixGlassDropdownPopup`，落位/翻转/进场形变都由库内 dropdown motion 承担；点选先播逆形变、完成后再消费库内的 `LocalHistoryEntry` 并 pop；回调里 push 新页时只摘弹层路由），不铺遮罩、点面板外即关、不画标题行（`title` 仅读屏语义），**不再从底部升起玻璃抽屉**；选项带色点/图标/副标题时走同一 API（`SelectItem` 的 `colorDot`/`icon`/`hint`）。**不用** `PopupMenuButton` / `DropdownButton` / `AlertDialog` 列表做选择（`AlertDialog` 已清零，见下条）。**需要 Overlay 直挂（底部输入面板的工具栏按钮，键盘/焦点全程不落）或连选常驻时走 `orbit_menu_popup.dart` 的 `showOrbitMenuPopup`**（2026-11-05：传触发按钮的 `MiuixGlassPopupAnchor` + `anchorContent` 即**与底栏「更多」完全同款**的 `MiuixGlassTransformPopup` 形变；只给矩形则退 dropdown 形变。不新建路由、不抢焦点；`closeOnTap: false` 连选、`groupsBuilder` 每次重建重取勾选态；快速添加五档已接入）；两个入口共用 `OrbitMenuPopupBody`（卡面/行/方向判定/动效单点）。多选（标签 / 云端文件）与色板仍走底部抽屉——勾选清单不是下拉选择，不与单选混用。页面内的二级面板仍可用 Material `showModalBottomSheet`，但其形状/动效常量必须从 `shared/widgets/shadcn/orbit_actions_sheet.dart` 取（`bottomSheetTopShape` / `bottomSheetMotion`），保证与共享弹层族同口径。**例外（2026-09-23）：页头的「当前列表操作」入口走顶部下拉面板**——`shared/widgets/shadcn/orbit_dropdown_panel.dart` 的 `OrbitDropdownPanelView`（只出行；卡面/动效由 `orbit_menu_popup.dart` 的 `OrbitMenuPopupBody` 或 `OrbitGlassMenu` 承担，原手搓 `OrbitFloatCard` / `orbitFloatCardLayout` / `OrbitOverlayCard` 已于 2026-11-05 删除）：锚在触发钮下方、条目成组带分隔线、**带子项的条目就地展开**（展开期间其余条目置灰且不可选，点它们只收起子菜单）、点面板外关闭（不铺遮罩，列表照旧可读）。它承载「对这个列表做什么」（编辑项目 / 视图 / 隐藏已完成 / 筛选 / 排序 / 批量选择），**单选集（视图档 / 排序档 / 看板分组）在面板内就地展开、不再二次弹层**；只有表单类入口（筛选）仍开底部抽屉。理由：免遮罩可见上下文，且「就地展开子项」的层级感是抽屉表达不出来的（参考竞品列表页版式）。
-- **档位选择例外（2026-11-04，细化上条「单选类交互」口径）**：上条 `showOrbitSelectPopup` 只管「点开临时挑一个」；**设置/配置页里当前值要常驻行内的档位选择**一律走 `shared/widgets/shadcn/orbit_dropdown_preference.dart` 的 `OrbitDropdownPreference<T>`（与移动端「外观」页 `/settings/appearance` 四行逐像素同款：标题在左 + 尾随当前值 + `MiuixDropdownArrowEndAction` 上下双箭头，点行就地展开玻璃卡并播逆形变、当前档转主题色并打勾）。判据一句话：**点开前就得看见当前档 → 下拉偏好行；只为临时挑一个 → 锚定玻璃浮层**。**承载 = 与「今天」页头 ⋮ 菜单完全同款的 `MiuixGlassTransformPopup` 形变**（2026-11-05 收口：走 `showOrbitMenuPopup` 的 `transformAnchor` + `anchorContentBuilder` 路径，卡片从本行轮廓连续长出、关闭播逆形变、退场完成才移除条目；材质继承锚点表面，不走「无快照退实色」分支）。**不要给整行宽的触发件传 `simplified: true`**：那会在展开期同时隐藏行内容与副本，只剩一块行宽的空白玻璃条从行位置收缩到右侧菜单卡（观感＝「先到中间再到右边」、不流畅，2026-11-05 实测）；页头「今天 ▾」传 true 是因为其触发件只有标题那么窄。副本必须**复用同一个 `MiuixBasicComponent`**（库内行是自定义测量布局，手搓 `Row`+`Expanded` 的弹性分配规则不同，形变期文字会跳位）。**不要**退回 `showOrbitSelectMenu` 的 `MiuixGlassDropdownPopup`（贴行下沿揭开 + 退场叠 `(1-fade)*30` 整卡高斯模糊）——云同步「引擎」弹层曾因此看着像实色白卡、退场「模糊着闪没」，与页头菜单观感不一致。参考图的「外观」页是 Flutter 移动端 `appearance_page.dart`，**不是 Tauri 桌面端**（桌面设置只有「主题」分类、用 pill 按钮）。约束：`current` 必须命中 `items`（存量非档位值补一项「当前」，否则尾随值与对勾双双落空）、禁用态走 `enabled: false`；**按压灰底撑满整卡**（2026-11-04）：外层 `OrbitCard` 传 `padding: EdgeInsets.only(bottom: 16)`（零水平内边距）、行自带 16 水平 `insideMargin`、其余表单字段分组补回 16，行外总开关要作为 `startAction` 并入同一偏好行（否则灰底只盖开关右侧那段），表单列 `crossAxisAlignment: stretch` 保证行拿到整卡宽；几何回归见 `test/sync_settings_page_test.dart`。与旧 `OrbitDropdownTile`（自绘玻璃锚定下拉行）分工明确，设置项不要用它。已接入外观页四行、设置/备份/诊断/模板/通知历史/筛选等设置项；新增设置项直接复用该组件。回归用 `test/support/orbit_test_app.dart` 的 `dropdownPreferencePopupRows()` / `selectedDropdownPreferenceLabels()`（选中态读 `MiuixGlassPopupItem.selected`，不按图标数断言）。**表单里的所有条件行统一同款行样式**（2026-11-05，筛选器构建抽屉实测）：一个表单内不得混排「下拉偏好行」与手搓的「`标签：值` + `chevronRight` 右箭头」两种样式——状态/优先级早已走偏好行，而项目/标签/提醒/附件/未完成子任务五行曾是各自手搓值行（前三行还是底部三态抽屉），同屏两种行语言观感割裂。**取值是三档离散（不限/仅有/仅无）→ 直接用 `OrbitDropdownPreference<T>`**（它就是单选，点行就地展开玻璃菜单，无需另开抽屉）；**取值是多选集合（项目/标签这类勾选多个再确认）→ 只复用行外观、交互仍归多选抽屉**：用 `MiuixBasicComponent` + `MiuixDropdownArrowEndAction`（双箭头）+ 尾随 `MiuixText` 自绘一行（筛选器页的 `_FilterMultiRow`），**不要**把多选硬套进单选原语（会退化成单选、功能倒退）。判据一句话：**同一表单里每一行的「标题 + 尾随值 + 上下双箭头」必须一致**，只有「点开后是单选玻璃菜单还是多选抽屉」按数据形态区分。**行尾动作规则（2026-11-05）**：无值 → 上下双箭头；**有值且该维度可清除（日期/多选这类）→ X 顶替箭头位置，不并排、不占两格**——用户改完立刻能在原位清空，不必再瞄一个额外的叉号（筛选器日期行曾把 X 与 `chevronRight` 并排，被反馈「X 应该把右向图标覆盖」）。实现上统一走筛选器页的 `_FilterConditionRow`（`MiuixBasicComponent` + 可选 `onClear`：非空出 X、为空出双箭头），日期行与项目/标签行都复用它。回归见 `test/saved_filters_screen_test.dart` 的「五行统一为下拉偏好行样式」（断言 `MiuixDropdownArrowEndAction` 数量 = 行数，防止残留右箭头）。
+- **档位选择例外（2026-11-04，细化上条「单选类交互」口径）**：上条 `showOrbitSelectPopup` 只管「点开临时挑一个」；**设置/配置页里当前值要常驻行内的档位选择**一律走 `shared/widgets/shadcn/orbit_dropdown_preference.dart` 的 `OrbitDropdownPreference<T>`（与移动端「外观」页 `/settings/appearance` 四行逐像素同款：标题在左 + 尾随当前值 + `MiuixDropdownArrowEndAction` 上下双箭头，点行就地展开玻璃卡并播逆形变、当前档转主题色并打勾）。判据一句话：**点开前就得看见当前档 → 下拉偏好行；只为临时挑一个 → 锚定玻璃浮层**。**承载 = `showOrbitMenuPopup` 的 `transformAnchor` + `anchorContentBuilder`**（`MiuixGlassTransformPopup` 形变：卡片从本行轮廓长出、关闭播逆形变、退场完成才移除条目；材质继承锚点表面）。**整行宽触发件不要传 `simplified: true`**（展开期只剩空白玻璃条收缩，观感断裂；页头「今天 ▾」触发件窄才传 true），副本必须复用同一个 `MiuixBasicComponent`（否则形变期文字跳位）。**不要**退回 `MiuixGlassDropdownPopup`（实色白卡观感 + 退场整卡模糊）。参考的是 Flutter 移动端 `appearance_page.dart`，不是 Tauri 桌面设置。约束：`current` 必须命中 `items`（存量非档位值补一项「当前」，否则尾随值与对勾双双落空）、禁用态走 `enabled: false`；**按压灰底撑满整卡**（2026-11-04）：外层 `OrbitCard` 传 `padding: EdgeInsets.only(bottom: 16)`（零水平内边距）、行自带 16 水平 `insideMargin`、其余表单字段分组补回 16，行外总开关要作为 `startAction` 并入同一偏好行（否则灰底只盖开关右侧那段），表单列 `crossAxisAlignment: stretch` 保证行拿到整卡宽；几何回归见 `test/sync_settings_page_test.dart`。与旧 `OrbitDropdownTile`（自绘玻璃锚定下拉行）分工明确，设置项不要用它。已接入外观页四行、设置/备份/诊断/模板/通知历史/筛选等设置项；新增设置项直接复用该组件。回归用 `test/support/orbit_test_app.dart` 的 `dropdownPreferencePopupRows()` / `selectedDropdownPreferenceLabels()`（选中态读 `MiuixGlassPopupItem.selected`，不按图标数断言）。**表单里的所有条件行统一同款行样式**：不得混排「下拉偏好行」与手搓的「`标签：值` + `chevronRight`」值行（同屏两套行语言观感割裂）。**取值是三档离散（不限/仅有/仅无）→ 直接用 `OrbitDropdownPreference<T>`**（它就是单选，点行就地展开玻璃菜单，无需另开抽屉）；**取值是多选集合（项目/标签这类勾选多个再确认）→ 只复用行外观、交互仍归多选抽屉**：用 `MiuixBasicComponent` + `MiuixDropdownArrowEndAction`（双箭头）+ 尾随 `MiuixText` 自绘一行（筛选器页的 `_FilterMultiRow`），**不要**把多选硬套进单选原语（会退化成单选、功能倒退）。判据一句话：**同一表单里每一行的「标题 + 尾随值 + 上下双箭头」必须一致**，只有「点开后是单选玻璃菜单还是多选抽屉」按数据形态区分。**行尾动作规则（2026-11-05）**：无值 → 上下双箭头；**有值且该维度可清除（日期/多选这类）→ X 顶替箭头位置，不并排、不占两格**——用户改完立刻能在原位清空，不必再瞄一个额外的叉号（筛选器日期行曾把 X 与 `chevronRight` 并排，被反馈「X 应该把右向图标覆盖」）。实现上统一走筛选器页的 `_FilterConditionRow`（`MiuixBasicComponent` + 可选 `onClear`：非空出 X、为空出双箭头），日期行与项目/标签行都复用它。回归见 `test/saved_filters_screen_test.dart` 的「五行统一为下拉偏好行样式」（断言 `MiuixDropdownArrowEndAction` 数量 = 行数，防止残留右箭头）。
 - **确认类交互（尤其删除）统一走 `showConfirmBottomSheet`（兼容名，浮起卡片形态见下条）**：删除 / 清空 / 恢复 / 覆盖导入 / 断开云同步 / 关闭加密等一切「二次确认」一律走 `showConfirmBottomSheet`（`shared/widgets/shadcn/orbit_confirm_sheet.dart`，返回 `Future<bool>`）——`title` + `message`（长预览体走 `content`）+ `confirmLabel`，破坏性操作 `destructive: true`（**浅灰实心底 + 红字，不铺红底**，2026-11-06 收口：红底白字比左侧「取消」还抢眼、被读成默认推荐；底色与取消同档 `surfaceSecondary`，危险语义只走字色），返回 `bool`（确认 `true`；取消 / 点遮罩 / 下滑一律 `false`），纯告知场景传 `cancelLabel: null` 只留一个按钮；按钮行 = 取消 `OrbitButton.outline` + 确认 `OrbitButton.primary`（原语层，圆角取默认的项目统一档 `AppShapes.medium`＝14，不为弹层单设档）。**确认不再用 `AlertDialog`**（2026-09-20 全量迁移：回收站彻底删除/清空、任务单条与批量删除、项目删除与删除保护提示、筛选器/模板/标签删除、子任务/评论/附件删除、冲突恢复/清空、备份恢复/版本不一致/删除、通知历史清空、关闭加密与清除主密码、明文导出与 CSV 导入确认、断开云同步与清同步密码缓存）——`AlertDialog` 已清零（2026-09-24：最后 6 处密码输入迁入 `orbit_password_sheet.dart` 共享抽屉；普通文本输入如新建项目/新建编辑标签/模板/筛选器走输入型底部抽屉，骨架见 `orbit_sheet_scaffold.dart`）；仅剩附件图片预览用透明 `Dialog`（非选择/确认/输入，不算违规）；理由与选择类同源：抽屉落在拇指区、破坏性按钮有整行触控面积、点遮罩或下滑等同「取消」，不会误触发删除。
 - **确认弹层形态（2026-11-04 对齐 miuix 对话框参考，取代上方「弹层体系现状」里的一律贴边抽屉口径）**：`showConfirmBottomSheet` 不再是贴边全宽、带拖拽手柄/左对齐标题的抽屉，而是底部锚定的**浮起圆角卡片**——左/右/下各 16 留白（底边不贴屏幕、四角圆角完整可见）、四角 `AppShapes.xl`＝28、标题与 `message` 居中、无手柄、遮罩 0.32；`content` 与按钮行水平内边距 24，按钮圆角一律走 `OrbitButton` 默认的 `AppShapes.medium`（14，与卡片/输入框同档，docs/05 口径），**不要新增圆角覆写参数、不要传 `pill` 做胶囊**。承载仍是 `showModalBottomSheet(useRootNavigator: true)`（下滑关闭与 `Future<bool>` 语义、25 处调用点不变），但 `backgroundColor` 必须透明、卡片形状由 `Container` 自绘（`confirmDialogCardKey`），并补就近 `Material(type: transparency)` 兜底 `ListTile`/`InkWell` 水波纹。**2026-11-04 起该浮起卡片形态推广到全部底部弹层**（输入型、选择型、玻璃弹层、任务主表单），不再是确认弹层专属；差异只剩确认弹层的内容/按钮行水平内边距 24。形态/圆角/底部留白回归见 `test/orbit_sheets_test.dart`、`test/sheet_spacing_test.dart`。
 - **输入型底部弹层间距与承载（2026-11-04 全量收口）**：所有含文本输入 / 表单字段的底部抽屉（密码、新建编辑标签、模板、项目、筛选器、任务表单、描述编辑、重复规则、每日容量、自定义取色/时长、详情标签编辑等）一律遵守：① 承载 `showModalBottomSheet(useRootNavigator: true, isScrollControlled: true)` + `backgroundColor: Colors.transparent` + `shape: bottomSheetTopShape` + `sheetAnimationStyle: bottomSheetMotion`（形状/动效常量的唯一来源是 `orbit_sheets.dart`，页面级调用点不得漏传动效；遮罩 0.32 与承载底色由 `app_theme.dart` 的 `bottomSheetTheme` 统一，`clipBehavior` 必须 `Clip.none`，否则卡片顶角被裁）——**卡片由骨架自绘浮起圆角卡片**：左/右/下各 `space16` 留白、四角 `AppShapes.xl`=28、`popup` 底色、`Material(type: transparency)` 兜水波纹，不用骨架的自绘面板一律显式套 `OrbitFloatingSheetCard`，玻璃弹层套 `OrbitGlassSheet` 并给内部骨架传 `floatingCard: false` 防双层卡面；② 内容用 `OrbitSheetScaffold`，内边距统一交骨架 `contentPadding: EdgeInsets.fromLTRB(AppDimens.space16, 0, AppDimens.space16, AppDimens.space16)`，页面不再自写 `Padding` / `ListView.padding`；③ 骨架几何：标题 `16/16/16/8`（16sp/w600）、手柄 40×4 上距 8、按钮行 `16/16/16/20` + 双钮间隙 12、按钮高 `AppDimens.touchTarget`=48 / 圆角 `AppShapes.medium`=14；④ **字段 / 选择行 / 分区之间的纵向间距一律 `AppDimens.space12`**，`space16` 只用于分区之间，禁写 8/20/24 等其它值与裸数字（`SizedBox(height: ...)`）；⑤ 离散色板一律走 `shared/widgets/shadcn/orbit_color_swatches.dart` 的 `OrbitColorSwatches`（36 色点 / `space6` 补到 48 热区 / `space12` 间距），页面不手写 `Wrap` + 圆形 `Container`。
@@ -274,8 +258,4 @@ pnpm bump:check           # 只校验一致性（零写入，CI/本地通用）
 
 ## 外部文档
 
-- Tauri 2：<https://tauri.app/llms-full.txt>
-- React 19：<https://react.dev/reference/react>
-- Tailwind CSS v4：<https://tailwindcss.com/docs>
-- flutter_rust_bridge：<https://fzyzcjy.github.io/flutter_rust_bridge/>
-- 项目内权威文档：`docs/01-09`（产品/架构/数据/UI 规格/backlog/发布与更新流程/内存与性能治理专项）、`docs/adr/0001-0007`（SQLCipher/通知/双端拆分/发布工程/回收站边界/桌面驻留内存/内存度量口径与门禁）
+- 项目内权威文档：`docs/README.md`（索引 + ADR 全表）、`docs/01-17`、`docs/adr/`；外部框架文档链接见该索引末尾。

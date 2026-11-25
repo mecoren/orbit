@@ -6,8 +6,9 @@
 //! 数据库延迟到 db_init_plaintext / db_init_encrypted 命令中初始化，
 //! 由前端启动流程触发（未设置主密码 → 明文；已设置 → 解锁后加密）。
 //!
-//! 暂未平移（按里程碑推进）：
-//! - mica_cmd / font_cmd（Windows 壳增强，M0.5/M2 取舍）
+//! 剩余未平移：
+//! - font_cmd（系统字体枚举；字体选择暂由前端 CSS 字体栈承担，需要读系统已装
+//!   字体列表时再补）。mica_cmd 已平移并在 setup 阶段应用（`mica_cmd::apply_mica_dwm`）。
 //! - （M3 安全与同步已平移：sync_cmd / sync_crypto_cmd / cloud_sync_cmd /
 //!   full_sync_cmd + sync_runtime 单例 + sync_scheduler 60s tick 守护）
 //! - （提醒轮询守护已平移：commands/notification_scheduler.rs 专用 SQL 版）
