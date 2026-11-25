@@ -34,7 +34,13 @@ use crate::models::business::TodoTaskCreateInput;
 
 /// 行展开：CRLF（容忍裸 LF）后紧跟空格/TAB 的续行拼回上一行。
 pub fn unfold_ics(content: &str) -> Vec<String> {
-    let normalized = content.replace("\r\n", "\n").replace('\r', "\n");
+    // 去 UTF-8 BOM：带 BOM 的 ICS（Windows 记事本/Excel 另存）首行是
+    // `\u{feff}BEGIN:VTODO`，组件识别失败会让整份文件解析出 0 行。
+    // CSV 分支早已做（`strip_csv_bom`），ICS 侧此前漏了。
+    let normalized = content
+        .trim_start_matches('\u{feff}')
+        .replace("\r\n", "\n")
+        .replace('\r', "\n");
     let mut out: Vec<String> = Vec::new();
     for raw in normalized.split('\n') {
         if raw.is_empty() {

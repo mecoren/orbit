@@ -156,11 +156,14 @@ pub async fn export_ics(pool: &SqlitePool) -> sqlx::Result<IcsExportResult> {
             }
         }
         // 开始日期（可选）
-        if let Some(start) = t.start_date {
-            out.push_str(&format!(
-                "DTSTART;VALUE=DATE:{}\r\n",
-                &ms_to_ics_utc(start)[..8]
-            ));
+        //
+        // 必须取**本地日期**，不能 `ms_to_ics_utc(start)[..8]`：后者先转 UTC
+        // 再截前 8 位，东八区本地零点会落到前一天（导出→导入再退一天，
+        // 每往返一轮就少一天）。`VALUE=DATE` 的语义本来就是「哪一天」。
+        if let Some(start) = t.start_date
+            && let Some(d) = Local.timestamp_millis_opt(start).single()
+        {
+            out.push_str(&format!("DTSTART;VALUE=DATE:{}\r\n", d.format("%Y%m%d")));
         }
         // 完成：COMPLETED（UTC）；STATUS 映射 done→COMPLETED / 其余→NEEDS-ACTION
         if t.done == 1 {
