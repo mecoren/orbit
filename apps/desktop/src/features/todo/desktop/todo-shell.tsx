@@ -169,11 +169,19 @@ export default function TodoShell() {
   //   表达但「未分组」是低频视图，先不扩）
   // 工具栏状态/优先级筛选仍在前端 filterTasks（面板私有态不进壳层查询键，
   // 避免每改一档筛选触发一次全量 IPC）。
+  // 日界必须能跨零点滚动：托盘常驻整夜后，「我的一天」的谓词与侧栏计数 key
+  // 仍指向昨天的零点 → 今天的任务全不显示、角标停在昨天。60s tick 只驱动
+  // 这一个 memo 重算（谓词与计数 key 一起换桶），不触发其它重渲染。
+  const [todayTick, setTodayTick] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setTodayTick(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
   const todayZero = useMemo(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
     return d.getTime();
-  }, []);
+  }, [todayTick]);
 
   // 清单聚合集合：projects 就绪前回落 [projectId]（无后代可展开），
   // 列表到齐后自动补全。依赖 projects 数组本体——重命名/改色会换引用，

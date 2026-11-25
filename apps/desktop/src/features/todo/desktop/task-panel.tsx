@@ -291,12 +291,15 @@ export default function TaskPanel() {
   const logbookPagedMode = isLogbook && viewMode === "list" && !activeSavedFilter;
   // 日历：按可见月范围取数（范围有界，不需要无限滚动）
   const calendarPagedMode = viewMode === "calendar" && windowedBase;
+  // 四种「窗口化取数」视图共用一个判据：它们都不保证 tasks 是整份集合。
+  // 凡需要整份集合的地方（周回顾 / 收件箱分诊弹窗）必须按本判据换数据源，
+  // 否则弹窗拿到的是被 `needsFullTasks=false` 关掉查询后的空数组。
+  const windowedTasks =
+    pagedMode || boardGroupBy != null || logbookPagedMode || calendarPagedMode;
 
   useEffect(() => {
-    setNeedsFullTasks(
-      !(pagedMode || boardGroupBy != null || logbookPagedMode || calendarPagedMode),
-    );
-  }, [pagedMode, boardGroupBy, logbookPagedMode, calendarPagedMode, setNeedsFullTasks]);
+    setNeedsFullTasks(!windowedTasks);
+  }, [windowedTasks, setNeedsFullTasks]);
 
   // 逾期判定基准每分钟走一格：既不会每帧重建 queryKey，也不至于跨零点后一直用旧值
   const [nowTick, setNowTick] = useState(() => Date.now());
@@ -500,14 +503,14 @@ export default function TaskPanel() {
         page_size: TASK_LIST_PAGE_SIZE,
         ...taskPredicate,
       }),
-    enabled: (pagedMode || boardGroupBy != null || logbookPagedMode) && reviewOpen,
+    enabled: windowedTasks && reviewOpen,
     staleTime: 2 * 60 * 1000,
   });
   const triageTasksQuery = useQuery({
     queryKey: ["todo_tasks", "", "ungrouped-triage"],
     queryFn: () =>
       todoTaskList({ keyword: "", page: 1, page_size: TASK_LIST_PAGE_SIZE, ungrouped: true }),
-    enabled: (pagedMode || boardGroupBy != null || logbookPagedMode) && triageOpen,
+    enabled: windowedTasks && triageOpen,
     staleTime: 2 * 60 * 1000,
   });
 
@@ -635,6 +638,12 @@ export default function TaskPanel() {
     activeSavedFilter,
     taskLabels,
     hideDone,
+    // 保存筛选器带「有提醒 / 有附件 / 有未完成子任务」条件：三个派生集合
+    // 必须进依赖，否则给任务加了提醒或附件后命中集不重算（要等 keyword
+    // 或 tasks 变化才刷新）。
+    taskReminders,
+    attachmentTaskIds,
+    openSubtaskTaskIds,
   ]);
 
   const errorText = (e: unknown): string | null =>
@@ -988,14 +997,14 @@ export default function TaskPanel() {
       <WeeklyReviewDialog
         open={reviewOpen}
         onOpenChange={setReviewOpen}
-        tasks={pagedMode ? (reviewTasksQuery.data ?? []) : sourceTasks}
+        tasks={windowedTasks ? (reviewTasksQuery.data ?? []) : sourceTasks}
       />
 
       {/* 收件箱分诊（F2）：未分组任务逐条定归属；队列用全量缓存（非搜索命中集） */}
       <TriageDialog
         open={triageOpen}
         onOpenChange={setTriageOpen}
-        tasks={pagedMode ? (triageTasksQuery.data ?? []) : tasks}
+        tasks={windowedTasks ? (triageTasksQuery.data ?? []) : tasks}
         projects={projects}
       />
 
