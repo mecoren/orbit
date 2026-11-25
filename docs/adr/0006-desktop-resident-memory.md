@@ -78,3 +78,33 @@ Tauri emit 是「喊话」不是「留言」：窗口销毁期间守护 emit 的
   命中不可达；真实键盘流可注册但 handler 触发链未观察到）。Rust 侧
   逻辑已逐环探针断言（hotkey fallback register Ok、show_or_create
   分支就绪），待人工点一次托盘收口。
+
+## 七、唤起置前勘误（2026-11-25，用户反馈「点托盘/任务栏再也打不开界面」）
+
+- **现象**：关窗驻留超过 5 分钟（主窗被回收销毁）后点托盘图标，窗口确实被重建，
+  但停在 IDE / 微信等窗口**后面且不聚焦**——观感「点了完全没反应、界面打不开」，
+  反复点也一样；右下角提醒横幅弹出时最容易撞上（提醒在后台照常弹，用户顺手点托盘，
+  此时窗口往往已被回收）。
+- **实测证据**（release 0.1.2，脚本注入托盘单击消息 + 进程/窗口读数）：
+  回收销毁后托盘唤起 → 新 `Tauri Window` 出现且 `visible=true`（webview 子窗口齐全、
+  后台同步正常），但 `GetForegroundWindow()` 始终是别的应用；`SetWindowPos` 之外的
+  `show()` 只是把窗口显示在 z 序原位。
+- **根因**：重建窗口沿用冷启动的「前端首帧后 `show()`」显隐口径（`visible:false`
+  防空窗闪白），而 Windows 前台锁只放行「持有前台权」的进程调 `SetForegroundWindow`；
+  托盘单击与通知正文点击的输入事件都发生在 shell / 通知宿主进程里，本进程不是前台
+  进程 → `show()` 显示后拒绝激活，Tauri 的 `set_focus()` 同样被静默拒绝。
+  §六 的「遗留人工验收项」正是这一跳，从未被真实点托盘覆盖。
+- **修复**（`window_recycler::activate_window` / `watch_rebuilt_window`）：
+  ① 唤起统一入口先 `show + unminimize`，Windows 上再 `SetWindowPos(HWND_TOP)` 置前
+  （即使前台锁拒绝激活也保证「看得见」）+ AttachThreadInput 临时附加前台线程后
+  `SetForegroundWindow`（经典前台锁绕行，随后立即解除附加）+ `set_focus`；
+  ② 重建分支不提前 show（保留防闪白口径），改由守候泵在窗口可见后补置前/聚焦，
+  180ms 后复核未聚焦再补一次；5s 仍不可见则壳层兜底 show（对齐冷启动 8s 兜底），
+  10s 超时留痕；③ 顺带修掉两处实测缺口——window-state 插件在重建窗口上**不恢复
+  最大化态**（销毁前记 `is_maximized`，可见后补回，一次性消费）与重建并发防护
+  （托盘连点 / 通知同时唤起只允许一个重建者，失败按「窗口是否真的不在」重试一次）；
+  ④ 唤起链路改 `log::info!/warn!/error!` 落 `app_log.log`（此前 `eprintln` 在
+  release 下不可见，重建失败等于无声悬案）。
+- **回归**：`cargo test --lib window_recycler`（守候泵单拍决策/时长关系/最大化态
+  一次性消费/回收阈值）；实机链路按「隐藏 → 超时回收 → 托盘唤起」复核窗口可见、
+  最大化恢复与前台归属。

@@ -92,6 +92,9 @@ windows = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_UI_WindowsAndMessaging",
     "Win32_System_SystemInformation",
+    # 唤起置前（window_recycler）：AttachThreadInput / GetCurrentThreadId
+    # 绕 Windows 前台锁，否则托盘/通知唤起后窗口停在其它应用后面
+    "Win32_System_Threading",
     # Scheduled Toast（托盘退出后的离线提醒）：XML 组装 + 系统调度器
     "Data_Xml_Dom",
     "UI_Notifications",

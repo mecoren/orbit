@@ -33,9 +33,24 @@
 //! 窗口状态恢复：window-state 插件对重建窗口自动恢复缓存的位置/尺寸
 //! （销毁时窗口为隐藏态 → 恢复 visible=false 不闪窗，前端启动流程
 //! main.tsx 主动 show，与冷启动路径一致）。
+//!
+//! 唤起置前（2026-11-25 反馈「点托盘/任务栏再也打不开界面」的修复）：
+//! 重建窗口的显示由前端 main.tsx 首帧后 `show()` 承担（防空窗闪白），但
+//! Windows 前台锁只放行「持有前台权」的进程调 `SetForegroundWindow`——托盘
+//! 单击与通知正文点击的输入都发生在 shell / 通知宿主进程里，本进程不是前台
+//! 进程，`show()` 会把窗口「显示」在**其它应用后面**且拒绝激活。实测：300s
+//! 回收销毁后点托盘，窗口确实重建成功、webview 也起来了，但前台窗口始终是
+//! 别的应用——用户观感就是「点了完全没反应、界面打不开」，且反复点也一样。
+//! 故唤起路径统一由 `activate_window` 收口：show/unminimize 之外，Windows 上
+//! 补 `HWND_TOP` 置前（即使前台锁拒绝激活也保证「看得见」）+ AttachThreadInput
+//! 绕前台锁拿焦点；重建分支再起一个守候泵（`watch_rebuilt_window`），窗口一
+//! 出现就补最大化保留 + 置前聚焦，5s 仍不显示则壳层兜底 show。
+//! 另一处实测缺口：window-state 插件对重建窗口的 `restore_state` 只恢复了
+//! 位置/尺寸，**最大化态没生效**（重建后回到 1280×832）——故销毁前把
+//! `is_maximized` 记进 `RESTORE_MAXIMIZED`，重建后由壳层补一次。
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_window_state::WindowExt as _;
@@ -45,6 +60,27 @@ use crate::commands::webview_low_power;
 
 /// 隐藏后多久未见再唤起即销毁主窗（秒）
 pub const RECYCLE_AFTER_SECS: u64 = 300;
+
+/// 重建窗口守候泵的单拍间隔（毫秒）
+const REBUILD_POLL_MS: u64 = 125;
+/// 重建窗口壳层兜底 show 的时点（毫秒）：前端启动链失败的最后防线，
+/// 与冷启动的 8s 兜底同语义——「不出现」比「迟一点出现」严重得多
+const REBUILD_SHOW_FALLBACK_MS: u64 = 5_000;
+/// 重建窗口出现守候总时长（毫秒），超时判定唤起失败并留痕
+const REBUILD_WATCH_MS: u64 = 10_000;
+/// 置前后复核等待（毫秒）：前台锁竞态下再补一次激活
+const REBUILD_RAISE_RECHECK_MS: u64 = 180;
+/// 重建失败后的重试延迟（毫秒）
+const REBUILD_RETRY_DELAY_MS: u64 = 500;
+
+/// 隐藏超时回收销毁前记下的最大化态：重建路径靠它恢复「上一次是最大化」。
+/// 为什么不让 window-state 插件独扛：实测重建窗口上插件的 `restore_state`
+/// 只生效了位置/尺寸（见模块注释），最大化态必须壳层自己兜一次。
+static RESTORE_MAXIMIZED: AtomicBool = AtomicBool::new(false);
+
+/// 重建进行中（托盘连点 / 通知与托盘同时唤起时防并发建窗：
+/// `WebviewWindowBuilder::build` 对同 label 的第二次调用会直接报错）
+static REBUILDING: AtomicBool = AtomicBool::new(false);
 
 /// 销毁期间收到快速新建请求的补发标志（consume 语义：读即清）
 static PENDING_QUICK_ADD: AtomicBool = AtomicBool::new(false);
@@ -81,11 +117,12 @@ fn register_hotkey_fallback(app: &AppHandle) {
     });
 }
 
-/// 唤起主窗统一入口（托盘单击/菜单、全局热键共用）
+/// 唤起主窗统一入口（托盘单击/菜单、全局热键、通知正文点击共用）
 ///
-/// - 在：显示 + 聚焦 + 档位恢复 Normal + 取消回收排程；
+/// - 在：显示 + 置前 + 聚焦 + 档位恢复 Normal + 取消回收排程；
 /// - 不在（已被回收）：按 tauri.conf 窗口配置重建（label=main 的
-///   WindowConfig），Mica 重应用，如有补发意图则 postFrame 后 bump。
+///   WindowConfig），Mica 重应用，如有补发意图则 postFrame 后 bump，
+///   随后由守候泵接管「窗口一出现就置前」。
 pub fn show_or_create_main_window(app: &AppHandle) {
     cancel_recycle_on_show();
 
@@ -96,17 +133,243 @@ pub fn show_or_create_main_window(app: &AppHandle) {
 
     match app.get_webview_window("main") {
         Some(win) => {
-            let _ = win.show();
-            let _ = win.unminimize();
-            let _ = win.set_focus();
+            activate_window(&win, false);
             webview_low_power::set_memory_usage_level(app, false);
         }
         None => {
-            if let Err(e) = create_main_window(app) {
-                eprintln!("[window-recycler] 主窗重建失败: {e}");
+            // 托盘连点 / 通知正文点击与托盘同时到：只允许一个重建者，
+            // 否则第二次 build 撞同 label 直接报错（还会刷一条误导日志）
+            if REBUILDING.swap(true, Ordering::SeqCst) {
+                log::info!("[window-recycler] 主窗重建进行中，重复唤起已忽略");
+                return;
             }
+            rebuild_main_window(app);
         }
     }
+}
+
+/// 把主窗送到用户眼前：显示 + 取消最小化 +（可选）补最大化 + 置前 + 聚焦。
+///
+/// 为什么不只 `show() + set_focus()`：见模块注释「唤起置前」——后台进程
+/// 调 `SetForegroundWindow` 会被前台锁拒绝，窗口停在其它应用后面，用户观感
+/// 就是「点了没反应」。`restore_geometry=true` 只在重建分支用一次（把
+/// 销毁前记下的最大化态补回来）。
+fn activate_window(win: &tauri::WebviewWindow, restore_geometry: bool) {
+    let _ = win.show();
+    let _ = win.unminimize();
+    if restore_geometry {
+        restore_maximized(win);
+    }
+    #[cfg(target_os = "windows")]
+    force_foreground(win);
+    let _ = win.set_focus();
+}
+
+/// 回收销毁前记下最大化态（仅重建路径消费；非最大化时写入 false）
+fn remember_geometry(win: &tauri::WebviewWindow) {
+    RESTORE_MAXIMIZED.store(win.is_maximized().unwrap_or(false), Ordering::SeqCst);
+}
+
+/// 恢复「销毁前是最大化」——读一次即清，只在重建窗口上生效一次。
+///
+/// 位置/尺寸由 window-state 插件恢复；实测插件的 `restore_state` 在重建
+/// 窗口上没把最大化态落到实处，故壳层再兜一次（幂等：已最大化则跳过）。
+fn restore_maximized(win: &tauri::WebviewWindow) {
+    let want = RESTORE_MAXIMIZED.swap(false, Ordering::SeqCst);
+    if !want || win.is_maximized().unwrap_or(false) {
+        return;
+    }
+    match win.maximize() {
+        Ok(()) => log::info!("[window-recycler] 重建窗口已补回最大化态"),
+        Err(e) => log::warn!("[window-recycler] 重建窗口最大化失败（不影响可交互）: {e}"),
+    }
+}
+
+/// Windows 前台锁绕行（见模块注释「唤起置前」）。
+///
+/// 全程静默失败：调用方已经 show 过，最差只是「窗口可见但不聚焦」，
+/// 绝不会让界面消失或卡住。
+#[cfg(target_os = "windows")]
+fn force_foreground(win: &tauri::WebviewWindow) {
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
+    use windows::Win32::UI::WindowsAndMessaging::{
+        BringWindowToTop, GetForegroundWindow, GetWindowThreadProcessId, HWND_TOP, IsIconic,
+        SW_RESTORE, SW_SHOW, SWP_NOMOVE, SWP_NOSIZE, SWP_SHOWWINDOW, SetForegroundWindow,
+        SetWindowPos, ShowWindow,
+    };
+
+    let Ok(raw) = win.hwnd() else { return };
+    let hwnd = HWND(raw.0 as _);
+    unsafe {
+        let _ = ShowWindow(
+            hwnd,
+            if IsIconic(hwnd).as_bool() {
+                SW_RESTORE
+            } else {
+                SW_SHOW
+            },
+        );
+        // 顶到 z 序最前：即使前台锁拒绝激活，也必须让用户「看得见」
+        let _ = SetWindowPos(
+            hwnd,
+            Some(HWND_TOP),
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW,
+        );
+        let foreground = GetForegroundWindow();
+        if foreground == hwnd {
+            return;
+        }
+        // 经典前台锁绕行：本线程输入临时附加到当前前台线程 → SetForegroundWindow
+        // 生效 → 立即解除附加（不借走别人的输入状态）
+        let foreground_thread = GetWindowThreadProcessId(foreground, None);
+        let current_thread = GetCurrentThreadId();
+        let attached = foreground_thread != 0
+            && foreground_thread != current_thread
+            && AttachThreadInput(current_thread, foreground_thread, true).as_bool();
+        let _ = SetForegroundWindow(hwnd);
+        let _ = BringWindowToTop(hwnd);
+        if attached {
+            let _ = AttachThreadInput(current_thread, foreground_thread, false);
+        }
+    }
+}
+
+/// 重建主窗（收回 REBUILDING 标志；失败按「窗口是否真的不在」重试一次）
+fn rebuild_main_window(app: &AppHandle) {
+    let started = Instant::now();
+    match create_main_window(app) {
+        Ok(()) => {
+            log::info!(
+                "[window-recycler] 主窗重建成功（{}ms），等待前端首帧显示",
+                started.elapsed().as_millis()
+            );
+            REBUILDING.store(false, Ordering::SeqCst);
+            watch_rebuilt_window(app);
+        }
+        Err(e) => {
+            // 失败可能是「另一个线程刚建成功」的假阴性：以窗口实际存在为准
+            if app.get_webview_window("main").is_some() {
+                REBUILDING.store(false, Ordering::SeqCst);
+                activate_window_of(app, true);
+                return;
+            }
+            log::error!(
+                "[window-recycler] 主窗重建失败（{}ms），将重试一次: {e}",
+                started.elapsed().as_millis()
+            );
+            let app = app.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(REBUILD_RETRY_DELAY_MS));
+                let result = create_main_window(&app);
+                REBUILDING.store(false, Ordering::SeqCst);
+                match result {
+                    Ok(()) => {
+                        log::info!("[window-recycler] 主窗重建重试成功");
+                        watch_rebuilt_window(&app);
+                    }
+                    Err(e) => log::error!(
+                        "[window-recycler] 主窗重建重试仍失败（托盘菜单/热键可再试）: {e}"
+                    ),
+                }
+            });
+        }
+    }
+}
+
+/// 唤起已存在的主窗（内部辅助：仅在有窗口时操作）
+fn activate_window_of(app: &AppHandle, restore_geometry: bool) {
+    if let Some(win) = app.get_webview_window("main") {
+        activate_window(&win, restore_geometry);
+    }
+}
+
+/// 重建窗口守候泵单拍决策（纯函数，便于单测）
+#[derive(Debug, PartialEq, Eq)]
+enum WatchAction {
+    /// 还不可见，继续等
+    Wait,
+    /// 已到兜底时点且仍不可见：壳层主动 show（前端启动链失败的最后防线）
+    FallbackShow,
+    /// 已可见：补最大化 + 置前 + 聚焦
+    Raise,
+    /// 超过总时长仍不可见：放弃并留痕
+    GiveUp,
+}
+
+fn watch_action(visible: bool, elapsed_ms: u64, fallback_shown: bool) -> WatchAction {
+    if visible {
+        return WatchAction::Raise;
+    }
+    if !fallback_shown && elapsed_ms >= REBUILD_SHOW_FALLBACK_MS {
+        return WatchAction::FallbackShow;
+    }
+    if elapsed_ms >= REBUILD_WATCH_MS {
+        return WatchAction::GiveUp;
+    }
+    WatchAction::Wait
+}
+
+/// 重建窗口的出现守候：前端 main.tsx 首帧后 show 时，补「最大化 + 置前 + 聚焦」。
+///
+/// 为什么不在重建分支直接 show：与冷启动同口径的 `visible:false` + 前端
+/// 首帧后 show 是为了防空窗闪白；但前端 show 拿不到前台（前台锁），所以
+/// 这里等它可见后接管置前。5s 仍不可见则兜底 show（宁可闪一下，也不留下
+/// 一个打不开的窗口）。
+fn watch_rebuilt_window(app: &AppHandle) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let started = Instant::now();
+        let mut fallback_shown = false;
+        loop {
+            std::thread::sleep(Duration::from_millis(REBUILD_POLL_MS));
+            let Some(win) = app.get_webview_window("main") else {
+                return;
+            };
+            let visible = win.is_visible().unwrap_or(false);
+            let elapsed = started.elapsed().as_millis() as u64;
+            match watch_action(visible, elapsed, fallback_shown) {
+                WatchAction::Wait => continue,
+                WatchAction::FallbackShow => {
+                    fallback_shown = true;
+                    log::warn!(
+                        "[window-recycler] 重建窗口 {REBUILD_SHOW_FALLBACK_MS}ms 仍未显示，壳层兜底 show"
+                    );
+                    let _ = win.show();
+                }
+                WatchAction::Raise => {
+                    activate_window(&win, true);
+                    // 一拍复核：置前后仍未聚焦（前台锁竞态）再补一次后收工
+                    std::thread::sleep(Duration::from_millis(REBUILD_RAISE_RECHECK_MS));
+                    if let Some(win) = app.get_webview_window("main")
+                        && !win.is_focused().unwrap_or(false)
+                    {
+                        activate_window(&win, false);
+                    }
+                    if let Some(win) = app.get_webview_window("main") {
+                        log::info!(
+                            "[window-recycler] 重建窗口已唤起（{}ms）visible={} focused={} maximized={}",
+                            elapsed,
+                            win.is_visible().unwrap_or(false),
+                            win.is_focused().unwrap_or(false),
+                            win.is_maximized().unwrap_or(false)
+                        );
+                    }
+                    return;
+                }
+                WatchAction::GiveUp => {
+                    log::error!(
+                        "[window-recycler] 重建窗口 {REBUILD_WATCH_MS}ms 内未显示：唤起失败（托盘菜单/热键可再试）"
+                    );
+                    return;
+                }
+            }
+        }
+    });
 }
 
 /// 按 tauri.conf 的 main 窗口配置重建主窗
@@ -128,16 +391,20 @@ fn create_main_window(app: &AppHandle) -> tauri::Result<()> {
 
     // window-state 恢复缓存的位置/尺寸（on_window_ready 已在 build 内挂过
     // 监听，这里再手动 restore 一次以应用旧缓存——插件对 builder 创建的
-    // 窗口同样生效）；重建即恢复最大化态。标志与插件注册同源
-    // （crate::window_state_flags 剔除了 VISIBLE），故不会在此提前 show：
-    // 重建后的 webview 会重跑 main.tsx 的启动链，由前端决定显隐。
-    let _ = win.restore_state(crate::window_state_flags());
+    // 窗口同样生效）；标志与插件注册同源（crate::window_state_flags 剔除了
+    // VISIBLE），故不会在此提前 show：重建后的 webview 会重跑 main.tsx 的
+    // 启动链，由前端决定显隐。
+    // 注意：实测这条 restore 只恢复位置/尺寸，**最大化态不生效**——最大化
+    // 由 watch_rebuilt_window 在窗口可见后调 restore_maximized 补回。
+    if let Err(e) = win.restore_state(crate::window_state_flags()) {
+        log::warn!("[window-recycler] 重建窗口几何恢复失败（沿用默认尺寸）: {e}");
+    }
 
     // Mica 云母材质须对新 HWND 重应用（与冷启动 setup 同口径）
     #[cfg(all(desktop, target_os = "windows"))]
     {
         if let Err(e) = crate::commands::mica_cmd::apply_mica_dwm(app) {
-            eprintln!("[window-recycler] Mica 重应用失败（不影响功能）: {e}");
+            log::warn!("[window-recycler] Mica 重应用失败（不影响功能）: {e}");
         }
     }
 
@@ -178,6 +445,14 @@ pub fn schedule_recycle_on_hide(app: &AppHandle) {
             // Rust 侧兜底接管 Alt+Shift+O（重建后前端重新注册）
             #[cfg(desktop)]
             register_hotkey_fallback(&app);
+            // 记下最大化态：重建后由壳层补回（插件的 restore_state 在重建
+            // 窗口上不恢复最大化，见模块注释与 restore_maximized）
+            remember_geometry(&win);
+            log::info!(
+                "[window-recycler] 隐藏 {}s 未唤起，回收销毁主窗（maximized={}）",
+                RECYCLE_AFTER_SECS,
+                RESTORE_MAXIMIZED.load(Ordering::SeqCst)
+            );
             let _ = win.destroy();
             // 排程标志保留 true：destroy 后窗口不在，下一次隐藏前
             // swap 仍会排程（防「销毁-重建-再隐藏」漏排）由
@@ -225,5 +500,63 @@ mod tests {
         flag.store(true, Ordering::SeqCst);
         assert!(flag.swap(false, Ordering::SeqCst));
         assert!(!flag.swap(false, Ordering::SeqCst));
+    }
+
+    /// 守候泵决策：可见即置前；不可见先等到兜底时点，兜底过仍不可见则放弃
+    #[test]
+    fn watch_action_waits_then_falls_back_then_gives_up() {
+        // 刚重建、窗口还没被前端 show：继续等，不做任何动作
+        assert_eq!(
+            watch_action(false, 0, false),
+            WatchAction::Wait,
+            "首拍不应 show/置前"
+        );
+        assert_eq!(
+            watch_action(false, REBUILD_SHOW_FALLBACK_MS - 1, false),
+            WatchAction::Wait
+        );
+        // 到兜底时点仍不可见 → 壳层兜底 show
+        assert_eq!(
+            watch_action(false, REBUILD_SHOW_FALLBACK_MS, false),
+            WatchAction::FallbackShow
+        );
+        // 兜底 show 之后仍不可见 → 只能等它渲染完，不再反复 show
+        assert_eq!(
+            watch_action(false, REBUILD_SHOW_FALLBACK_MS + 1, true),
+            WatchAction::Wait
+        );
+        // 前端首帧后 show 完成 → 置前 + 聚焦（无论是否兜底过）
+        assert_eq!(watch_action(true, 0, false), WatchAction::Raise);
+        assert_eq!(
+            watch_action(true, REBUILD_SHOW_FALLBACK_MS, true),
+            WatchAction::Raise
+        );
+        // 兜底都没触发就到总时长（理论上兜底更早，属防御）→ 仍先兜底 show
+        assert_eq!(
+            watch_action(false, REBUILD_WATCH_MS, false),
+            WatchAction::FallbackShow
+        );
+        // 兜底过、到总时长仍不可见 → 放弃并留痕
+        assert_eq!(
+            watch_action(false, REBUILD_WATCH_MS, true),
+            WatchAction::GiveUp
+        );
+    }
+
+    /// 守候泵时长关系：兜底时点必须早于总时长，否则兜底永远轮不到执行
+    #[test]
+    fn fallback_precedes_watch_deadline() {
+        assert!(REBUILD_SHOW_FALLBACK_MS < REBUILD_WATCH_MS);
+        assert!(REBUILD_POLL_MS > 0 && REBUILD_POLL_MS < REBUILD_SHOW_FALLBACK_MS);
+    }
+
+    /// 最大化态记录语义：销毁前记录「是最大化」，重建后 consume 一次即清，
+    /// 不会把「上一次的最大化」泄漏到后续无关的唤起
+    #[test]
+    fn restore_maximized_consume_semantics() {
+        // 用局部原子量验证 swap 语义（全局静态被真实窗口路径使用）
+        let flag = AtomicBool::new(true);
+        assert!(flag.swap(false, Ordering::SeqCst), "第一次重建要补最大化");
+        assert!(!flag.swap(false, Ordering::SeqCst), "之后的唤起不再重复补");
     }
 }
