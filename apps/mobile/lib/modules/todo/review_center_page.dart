@@ -261,7 +261,10 @@ class _ReviewRow extends StatelessWidget {
                 child: const Text('已回顾'),
               ),
               const SizedBox(width: AppDimens.space8),
-              FilledButton.tonal(
+              // 原语层按钮：与上面两枚同档 compact，且 `secondary` 就是
+              // `FilledButton.tonal` 的 miuix 同源形态（页面层禁裸用 Material）。
+              OrbitButton.secondary(
+                compact: true,
                 onPressed: onStart,
                 child: const Text('开始回顾'),
               ),

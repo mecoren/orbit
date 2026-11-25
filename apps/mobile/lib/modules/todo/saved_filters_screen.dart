@@ -681,6 +681,27 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
                                 ),
                                 onLongPress: () => _delete(f),
                               ),
+                              // 展开列表只列前 20 条：副标已给「命中 N」，
+                              // 截断处必须自己说明还有多少条，否则 94 条命中
+                              // 只出现 20 行会被当成筛选器漏了任务。
+                              if (expanded && hit.length > 20)
+                                Padding(
+                                  padding: const EdgeInsets.only(
+                                    left: AppDimens.space16,
+                                    right: AppDimens.space16,
+                                    bottom: AppDimens.space4,
+                                  ),
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      '共 ${hit.length} 条命中，以下只列前 20 条',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: colors.secondaryText,
+                                      ),
+                                    ),
+                                  ),
+                                ),
                               if (expanded)
                                 ...hit
                                     .take(20)

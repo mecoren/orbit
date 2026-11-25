@@ -1375,16 +1375,21 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
     super.dispose();
   }
 
-  /// 变更统一出口：落库 → onChanged 失效
-  Future<void> _mutate(
+  /// 变更统一出口：落库 → onChanged 失效。
+  ///
+  /// 返回是否成功：失败提示已在本函数内弹出，调用方若还要跟一句「已…」的成功
+  /// 提示，必须判返回值——否则失败时会先弹错误再弹成功（两条互斥 toast）。
+  Future<bool> _mutate(
     Future<void> Function() action, {
     String failMessage = '操作失败',
   }) async {
     try {
       await action();
       widget.onChanged();
+      return true;
     } catch (_) {
       WaitToast.destructive(failMessage);
+      return false;
     }
   }
 
@@ -1431,13 +1436,13 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
 
   /// M10：提到顶层（嵌套行的降级出口，误嵌套不必删了重建）
   Future<void> _liftToTop(TodoSubtask subtask) async {
-    await _mutate(
+    final ok = await _mutate(
       () => ref
           .read(orbitBridgeProvider)
           .todoSubtaskUpdate(subtask.id, '{"parent_uuid":null}'),
       failMessage: '操作失败',
     );
-    WaitToast.success('已提到顶层');
+    if (ok) WaitToast.success('已提到顶层');
   }
 
   /// 子任务转独立任务（承接父任务 project/priority/due 上下文；

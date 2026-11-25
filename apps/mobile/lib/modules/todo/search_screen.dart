@@ -12,6 +12,7 @@ import '../../shared/utils/hex_color.dart';
 import '../../shared/widgets/shadcn/orbit_strikethrough.dart';
 import '../../shared/widgets/shadcn/orbit_bottom_nav.dart';
 import '../../shared/widgets/shadcn/orbit_empty_state.dart';
+import '../../shared/widgets/shadcn/orbit_spinner.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_header.dart';
 import '../../shared/widgets/shadcn/orbit_icon_button.dart';
@@ -69,9 +70,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
     final kw = _keyword.trim();
-    // family 参数复用 keyword 相等语义（防抖后重查）
-    final result =
-        kw.isEmpty ? null : ref.watch(searchProvider(kw)).value;
+    // family 参数复用 keyword 相等语义（防抖后重查）。必须保留整个 AsyncValue：
+    // 只取 `.value` 会让「首次查询未落定」与「查询失败」都变成 null，两者都落进
+    // 「输入关键词…」的引导空态——用户看到的是「搜索没生效」而不是加载/失败。
+    final search = kw.isEmpty ? null : ref.watch(searchProvider(kw));
 
     return Scaffold(
       // 搜索框在页头下方（顶部），键盘盖不住输入框，无需避让；关掉可避免
@@ -131,13 +133,25 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   ),
                 ),
                 Expanded(
-                  child: result == null
+                  child: search == null
                       // 初始态给引导占位：整块空白会让「搜不了」像「坏了」
                       ? const EmptyState(
                           message: '输入关键词，搜索任务、项目或评论',
                           icon: OrbitIcons.search,
                         )
-                      : _ResultList(result: result, scrollController: _scrollController),
+                      // 有旧结果时优先继续显示（刷新失败不抹掉已有内容）
+                      : search.value != null
+                          ? _ResultList(
+                              result: search.value!,
+                              scrollController: _scrollController,
+                            )
+                          : search.hasError
+                              ? const EmptyState(
+                                  message: '搜索失败，请换个关键词或稍后重试',
+                                  icon: OrbitIcons.search,
+                                )
+                              // 首次查询未落定
+                              : const Center(child: OrbitSpinner()),
                 ),
               ],
             ),
