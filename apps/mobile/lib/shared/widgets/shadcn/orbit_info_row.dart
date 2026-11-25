@@ -6,16 +6,16 @@ import '../../../core/theme/icon_map.dart';
 import '../../utils/hex_color.dart';
 import 'orbit_icon_button.dart';
 
-/// 信息行（详情页信息区与新�?编辑表单字段行共用，docs/05 §4.3�?
+/// 信息行（详情页信息区与新建/编辑表单字段行共用，docs/05 §4.3）。
 ///
-/// **公共 API 与旧 `InfoTile` 逐字一�?*�?0 处调用，2 个文件）�?
+/// **公共 API 与旧 `InfoTile` 逐字一致**（20 处调用，2 个文件）。
 ///
-/// 结构：label 固定列宽 80�?2px secondary）→ 可�?10×10 色点 + 值（15px�?
-/// �?可选清除叉 �?可选尾箭头。传 [onClick] 时整行可点——两侧调用方均以
-/// 「点行唤起底部选择抽屉」为交互口径（字段值不在行内直改）�?
+/// 结构：label 固定列宽 80（12px secondary）→ 可选 10×10 色点 + 值（15px），
+/// 加可选清除叉 + 可选尾箭头。传 [onClick] 时整行可点——两侧调用方均以
+/// 「点行唤起底部选择抽屉」为交互口径（字段值不在行内直改）。
 ///
-/// 设计系统 v3 变化：色�?箭头/清除叉统一走线性图标集（[OrbitIcons]），
-/// 不再混用 Material 的圆角实心图标�?
+/// 设计系统 v3 变化：色点/箭头/清除叉统一走线性图标集（[OrbitIcons]），
+/// 不再混用 Material 的圆角实心图标。
 class InfoTile extends StatelessWidget {
   const InfoTile({
     super.key,
@@ -31,13 +31,13 @@ class InfoTile extends StatelessWidget {
   final String value;
   final Color? valueColor;
 
-  /// 可选色点（六位/八位 hex，见 [hexToColor]�?
+  /// 可选色点（六位/八位 hex，见 [hexToColor]）。
   final String? dotColorHex;
 
-  /// 整行点击（唤起选择抽屉�?
+  /// 整行点击（唤起选择抽屉）。
   final VoidCallback? onClick;
 
-  /// 尾随清除�?
+  /// 尾随清除叉。
   final VoidCallback? onClear;
 
   @override
