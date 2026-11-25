@@ -505,7 +505,13 @@ async fn push_all_impl(
         if round_clean {
             next_state.last_pushed_clock_ms = next_state.last_pushed_clock_ms.max(clock_mark);
         }
-        next_state.update_from_manifest(&new_manifest);
+        // **push 不得消费远端清单**（P0，2026-11-25）：
+        // `update_from_manifest` 会把 `manifest_epoch` 与本机**从未下载过**的
+        // 他端桶指纹一起写进状态（它以 remote.table(table) 为底），下一轮 pull
+        // 要么命中 `manifest.epoch == state.manifest_epoch` 整轮早退，要么在
+        // 逐桶比对上命中那份假快照直接 skip —— 他端数据在本机永久不可见。
+        // 快照只由 pull 在「真正应用完一轮」后写。代价是本轮自推的桶下次 pull
+        // 会重新下载并合并一次（LWW 同版本幂等），用一点流量换正确性。
         state_store.save(&next_state)?;
         return Ok(result);
     }
