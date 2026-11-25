@@ -153,15 +153,16 @@ async fn write_v2_file(
         writer.write(&marker)?;
         writer.flush_frame()?;
 
-        let mut offset = 0i64;
+        let mut after_rowid = 0i64;
         loop {
-            let page = read_page_json(pool, table, offset, EXPORT_PAGE_ROWS).await?;
+            let (page, last_rowid) =
+                read_page_json(pool, table, after_rowid, EXPORT_PAGE_ROWS).await?;
             if page.is_empty() {
                 break;
             }
             let n = page.len();
             write_records(&mut writer, page.into_iter())?;
-            offset += n as i64;
+            after_rowid = last_rowid;
             if n < EXPORT_PAGE_ROWS as usize {
                 break;
             }
@@ -247,25 +248,39 @@ pub async fn import_v2_bytes(
 async fn read_page_json(
     pool: &SqlitePool,
     table: &str,
-    offset: i64,
+    after_rowid: i64,
     limit: i64,
-) -> FullSyncBackupResult<Vec<serde_json::Value>> {
-    // 与 v1 的 list_records_as_json 同源，只是加了 OFFSET/LIMIT
-    let sql =
-        format!("SELECT * FROM \"{table}\" WHERE is_deleted = 0 ORDER BY rowid LIMIT ? OFFSET ?");
+) -> FullSyncBackupResult<(Vec<serde_json::Value>, i64)> {
+    // keyset 分页（`rowid > after`）而非 `LIMIT/OFFSET`：后者每页独立读快照，
+    // 导出期间只要发生软删/插入，后续行就会前移或重复——软删行从 `is_deleted=0`
+    // 集合消失 → OFFSET 直接跳过一行；新插入 → 同一行被导出两次。恢复侧
+    // `actual != declared` 会拒绝这份半残备份，等于备份失败。顺带把成本从
+    // O(n²)（每页从头数 offset）降到 O(n)。
+    let sql = format!(
+        "SELECT rowid AS __rowid, * FROM \"{table}\" \
+         WHERE is_deleted = 0 AND rowid > ? ORDER BY rowid LIMIT ?"
+    );
     let rows = sqlx::query(&sql)
+        .bind(after_rowid)
         .bind(limit)
-        .bind(offset)
         .fetch_all(pool)
         .await
         .map_err(FullSyncBackupError::Db)?;
 
     use sqlx::{Column, Row, TypeInfo};
     let mut out = Vec::with_capacity(rows.len());
+    let mut last_rowid = after_rowid;
     for row in rows {
+        // rowid 只当游标，**不进 JSON**（备份列集必须与 DDL 一致）
+        if let Ok(rid) = row.try_get::<i64, _>("__rowid") {
+            last_rowid = rid;
+        }
         let mut obj = serde_json::Map::new();
         for (i, col) in row.columns().iter().enumerate() {
             let name = col.name().to_string();
+            if name == "__rowid" {
+                continue;
+            }
             let value = match col.type_info().name() {
                 "INTEGER" | "INT" | "BIGINT" => row
                     .try_get::<Option<i64>, _>(i)
@@ -296,7 +311,7 @@ async fn read_page_json(
         }
         out.push(serde_json::Value::Object(obj));
     }
-    Ok(out)
+    Ok((out, last_rowid))
 }
 
 /// 表行数（COUNT；只数存活行，与导出口径一致）
