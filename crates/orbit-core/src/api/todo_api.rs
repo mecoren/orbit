@@ -627,6 +627,15 @@ pub const REPEAT_MODE_WEEKLY: i32 = 2;
 pub const REPEAT_MODE_MONTHLY: i32 = 3;
 pub const REPEAT_MODE_YEARLY: i32 = 4;
 
+/// `repeat_after` 的防御上界（单位随 mode：天 / 周 / 月 / 年）。
+///
+/// 该值来自用户输入、CSV/ICS 导入与云同步载荷，写库侧没有取值范围校验；
+/// 而 weekly 掩码序列的推进是**逐日扫描最坏 7×N 天**（见 `next_repeat_at_ex`），
+/// 不钳制时 N=1e8 级别的脏数据会把同步 CPU 循环钉在 async 工作线程上。
+/// 1000 已远超任何合法排程（每 1000 天 / 每 1000 年），超出部分按上界处理
+/// 而不是中断序列——宁可在远未来继续重复，也不要让整条完成路径卡死。
+pub const REPEAT_AFTER_MAX: i64 = 1000;
+
 /// 月/年推进的日历语义：日号超过目标月天数时截断到月末（1/31 → 2/28），
 /// 避免溢出滚入下下月。截断后锚点随链式推进永久退化为短月日号
 /// （1/31 → 2/28 → 3/28，与桌面端 repeat.ts 评审 M3 口径一致）。
@@ -758,7 +767,10 @@ pub fn next_repeat_at_ex(
         // 周序号 = floor(本地日序号 / 7)，锚定自然周对齐；N=1 时即"每周的这几个天"。
         // 逐日扫描最坏 7N 天/步，5000 步上限内覆盖正常间隔。
         let mask = weekdays as u32;
-        let n = after.max(1);
+        // 必须钳制：`after` 来自用户输入 / CSV-ICS 导入 / 云同步载荷，
+        // 不设上界时上面的"最坏 7N 天"直接按 N 线性放大（N=1e8 等于把
+        // 同步 CPU 循环钉在 async 工作线程上）。1000 已远超任何合法排程。
+        let n = after.clamp(1, REPEAT_AFTER_MAX);
         let mut next = chrono::Local.timestamp_millis_opt(base_ms).single()?;
         let anchor_week = (next.num_days_from_ce() / 7) as i64;
         for _ in 0..5000i64 * n {
@@ -779,8 +791,9 @@ pub fn next_repeat_at_ex(
     {
         return next_monthly_nth_from(base_ms, after, weekday, nth_week, from_ms);
     }
-    // 非法配置回落日号语义（见函数头注释）
-    let step = after.max(1) as u32;
+    // 非法配置回落日号语义（见函数头注释）。同样钳上界：`as u32` 对超大
+    // `after` 会静默截断成无意义步长（如 2^32+1 → 1），序列凭空变密。
+    let step = after.clamp(1, REPEAT_AFTER_MAX) as u32;
     let mut next = chrono::Local.timestamp_millis_opt(base_ms).single()?;
     for _ in 0..5000 {
         match mode {
@@ -813,7 +826,7 @@ fn next_monthly_nth_from(
     let anchor = chrono::Local.timestamp_millis_opt(anchor_ms).single()?;
     let time = anchor.time();
     let (ay, am) = (anchor.year() as i64, anchor.month() as i64);
-    let step = after.max(1);
+    let step = after.clamp(1, REPEAT_AFTER_MAX);
     for k in 1..=5000i64 {
         let total = ay * 12 + (am - 1) + k * step;
         let (ty, tm) = (

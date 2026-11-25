@@ -120,10 +120,13 @@ impl<'a> CsvRows<'a> {
     }
 }
 
-impl Iterator for CsvRows<'_> {
-    type Item = Vec<String>;
-
-    fn next(&mut self) -> Option<Vec<String>> {
+impl CsvRows<'_> {
+    /// 解析一条**物理**行（空行原样返回，由 `Iterator::next` 过滤）。
+    ///
+    /// 不在此处递归取下一行：此前实现是「空行 → `self.next()`」，纯空行
+    /// 文件（20MB 换行）的调用栈深度等于行数，桌面壳 `panic = "abort"`
+    /// 下直接进程消失，且空行不进 `IMPORT_MAX_ROWS`，行数闸门拦不住。
+    fn parse_one(&mut self) -> Option<Vec<String>> {
         if self.finished {
             return None;
         }
@@ -157,12 +160,12 @@ impl Iterator for CsvRows<'_> {
                     // CRLF：等 '\n' 收行；孤立 \r 也收行
                     if self.chars.peek() != Some(&'\n') {
                         row.push(std::mem::take(&mut field));
-                        return self.finish_row(row);
+                        return Some(row);
                     }
                 }
                 '\n' if !in_quotes => {
                     row.push(std::mem::take(&mut field));
-                    return self.finish_row(row);
+                    return Some(row);
                 }
                 _ => field.push(c),
             }
@@ -175,18 +178,21 @@ impl Iterator for CsvRows<'_> {
         // 尾字段/尾行（无换行结尾的最后一行）
         row.push(field);
         self.finished = true;
-        self.finish_row(row)
+        Some(row)
     }
 }
 
-impl CsvRows<'_> {
-    /// 空行跳过（全空字段）——跳过时继续取下一条，直到拿到非空行或到尾部
-    fn finish_row(&mut self, mut row: Vec<String>) -> Option<Vec<String>> {
-        if !row.iter().all(|f| f.trim().is_empty()) {
-            return Some(row);
+impl Iterator for CsvRows<'_> {
+    type Item = Vec<String>;
+
+    /// 空行（全空字段）跳过：循环而非递归，栈深恒为 1。
+    fn next(&mut self) -> Option<Vec<String>> {
+        loop {
+            let row = self.parse_one()?;
+            if !row.iter().all(|f| f.trim().is_empty()) {
+                return Some(row);
+            }
         }
-        row.clear();
-        self.next()
     }
 }
 

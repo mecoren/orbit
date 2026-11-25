@@ -46,10 +46,13 @@ pub async fn list_todo_projects(
     } else {
         filter.page_size
     } as i32;
+    // 必须乘规范化后的 `page_size`：乘 `filter.page_size` 时 page_size=0
+    // 会让第 2 页起 offset 恒 0（每页都返第一页数据）——generic_repo 侧
+    // 已修过同一个坑，这里是它自拼 SQL 的并行实现，别再把两处改回不一样。
     let offset = filter
         .page
         .saturating_sub(1)
-        .saturating_mul(filter.page_size) as i32;
+        .saturating_mul(page_size.max(1) as u32) as i32;
 
     // 关键词过滤：与 generic_repo::list 保持一致（按 title/description LIKE）
     let keyword_clause = if let Some(kw) = filter.keyword.as_deref() {

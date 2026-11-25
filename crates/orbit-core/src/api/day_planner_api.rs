@@ -275,10 +275,14 @@ fn capacity_minutes(prefs: &DayPlanPrefs, now_minute: i64) -> i64 {
 /// 日排程预览（只读聚合）：从库内归集候选任务 → 分钟域投影 → [plan_day_slots]。
 ///
 /// 候选口径（docs/13 F3 输入）：今日到期 / 逾期 / 我的一天（今天）/ 未排期且带时长，
-/// 均须未完成未软删，且**今日已有 start_date 的行不再入候选**（阶段二应用过
-/// 的任务不重复建议——应用语义的自然闭环）。fetch_all 无 LIMIT：候选由日期
-/// 窗口与 my_day/时长谓词收敛（「今天相关」的任务，非全库；上界来源登记
-/// docs/14 C 档）。
+/// 均须未完成未软删。fetch_all 无 LIMIT：候选由日期窗口与 my_day/时长谓词收敛
+/// （「今天相关」的任务，非全库；上界来源登记 docs/14 C 档）。
+///
+/// **已知缺口**（2026-11-25 盘查）：本函数目前**不排除今日已有 `start_date` 的行**
+/// ——阶段二 `apply_day_plan` 写过的任务下一轮仍会作为候选出现（重复建议）。
+/// 补法是加 `AND NOT (start_date IS NOT NULL AND start_date >= ? AND start_date < ?)`
+/// 并把 day_start/day_end 追加绑定；因会改变既有候选数量与前端预览文案，留待
+/// 与 plan-day 交互一起改，不在只读审计批次里静默改口径。
 pub async fn plan_day(pool: &SqlitePool, prefs: &DayPlanPrefs, now_ms: i64) -> CoreResult<DayPlan> {
     // 候选行投影：id / title / priority / due_date / my_day_date / duration_minutes
     type PlannerRow = (i64, String, i32, Option<i64>, Option<i64>, Option<i64>);

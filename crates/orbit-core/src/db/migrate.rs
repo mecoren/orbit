@@ -41,7 +41,11 @@ pub async fn migrate_to_plaintext(pool: &SqlitePool, db_path: &Path) -> CoreResu
         .to_str()
         .ok_or_else(|| CoreError::Other("临时文件路径包含非 UTF-8 字符".to_string()))?;
 
-    let attach_sql = format!("ATTACH DATABASE '{}' AS plain KEY ''", tmp_path_str);
+    // 路径进 SQL 字面量：单引号必须成对转义（`pool.rs` 注入 key 处已按同一
+    // 口径处理）。路径来自应用数据目录，正常不含引号，但含引号时这里是语法错
+    // /注入面——而这条路径服务于「清除主密码」，失败会留下半成品明文副本。
+    let tmp_path_sql = tmp_path_str.replace('\'', "''");
+    let attach_sql = format!("ATTACH DATABASE '{tmp_path_sql}' AS plain KEY ''");
     sqlx::query(&attach_sql).execute(pool).await?;
 
     // sqlcipher_export 是 SQLCipher 内置函数，导出全部表结构 + 数据到指定数据库
@@ -114,10 +118,10 @@ pub async fn migrate_to_encrypted(
         .to_str()
         .ok_or_else(|| CoreError::Other("临时文件路径包含非 UTF-8 字符".to_string()))?;
 
-    // hex 格式 key → SQLCipher 的 x'...' 格式
+    // hex 格式 key → SQLCipher 的 x'...' 格式（key 只含 hex，路径同 plain 侧转义）
+    let tmp_path_sql = tmp_path_str.replace('\'', "''");
     let attach_sql = format!(
-        "ATTACH DATABASE '{}' AS enc KEY \"x'{}'\"",
-        tmp_path_str, db_key_hex
+        "ATTACH DATABASE '{tmp_path_sql}' AS enc KEY \"x'{db_key_hex}'\""
     );
     sqlx::query(&attach_sql).execute(pool).await?;
 
