@@ -38,6 +38,8 @@ class ReminderScheduler {
 
   Timer? _debounce;
   bool _syncing = false;
+  /// 本轮重排期间又被请求过一次：结束后补跑（见 rescheduleNow）
+  bool _dirty = false;
   bool _attached = false;
   bool _shutdown = false;
 
@@ -128,7 +130,14 @@ class ReminderScheduler {
 
   /// 立即全量重排（幂等；手动触发口）
   Future<void> rescheduleNow() async {
-    if (_syncing || _shutdown) return; // 上一轮未完成：防抖会再触发
+    if (_shutdown) return;
+    if (_syncing) {
+      // 上一轮未完成：记脏，本轮结束立刻再跑一次。此前直接 return 且注释假设
+      // 「防抖会再触发」——但触发本次调用的定时器已被消费，没有第二个定时器，
+      // 该窗口内新建/推迟的提醒要等下一次 db-change 或重启才排上（漏排）。
+      _dirty = true;
+      return;
+    }
     _syncing = true;
     try {
       var rows = await _bridge.todoReminderList(
@@ -175,6 +184,10 @@ class ReminderScheduler {
       debugPrint('[ReminderScheduler] 重排失败: $e\n$st');
     } finally {
       _syncing = false;
+      if (_dirty && !_shutdown) {
+        _dirty = false;
+        unawaited(rescheduleNow());
+      }
     }
   }
 }

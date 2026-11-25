@@ -447,6 +447,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final preview = await ref
           .read(orbitBridgeProvider)
           .csvImportPreview(content, _importPreset, 10);
+      // await 之后必须判存活（同函数其它分支都有；这里此前漏了，
+      // 选完文件立刻返回上一页会在已销毁 State 上 setState）
+      if (!mounted) return;
       setState(() {
         _importPreview = preview;
         _importResult = null;

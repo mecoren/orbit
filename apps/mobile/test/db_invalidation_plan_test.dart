@@ -82,8 +82,13 @@ void main() {
           DbCacheTarget.reviewDue,
         ],
       );
-      expect(planTableInvalidation('todo_labels'),
-          [DbCacheTarget.labels, DbCacheTarget.taskDetail]);
+      // 标签改名/改色要同步列表行内 chip：投影里的 title/hexColor 是副本，
+      // 不刷投影会停在旧颜色（桌面同表映射早已带 projection）。
+      expect(planTableInvalidation('todo_labels'), [
+        DbCacheTarget.labels,
+        DbCacheTarget.taskDetail,
+        DbCacheTarget.taskLabelProjection,
+      ]);
       expect(planTableInvalidation('todo_saved_filters'),
           [DbCacheTarget.savedFilters]);
     });

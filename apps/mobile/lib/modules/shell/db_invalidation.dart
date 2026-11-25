@@ -82,9 +82,13 @@ List<DbCacheTarget> planTableInvalidation(String table) => switch (table) {
           DbCacheTarget.search,
           DbCacheTarget.reviewDue,
         ],
+      // 标签改名/改色必须同时刷新**列表标签投影**：行内 chip 读的是投影里的
+      // title/hexColor，只刷 labels + 详情会让列表停在旧颜色（桌面同表映射
+      // 早已带 todo_task_labels/projection 并注明原因，移动端此前漏了）。
       'todo_labels' => const [
           DbCacheTarget.labels,
           DbCacheTarget.taskDetail,
+          DbCacheTarget.taskLabelProjection,
         ],
       // 标签关联改动同时影响详情聚合与列表投影（列表标签筛选/色点）
       'todo_task_labels' => const [

@@ -65,6 +65,11 @@ class _BootGateState extends ConsumerState<BootGate>
   StreamSubscription<dynamic>? _dbChangesSub;
   StreamSubscription<dynamic>? _reminderDueSub;
 
+  /// 角标数据口的 `listenManual` 订阅：dispose 必须 close。
+  /// 不保存返回值时，BootGate 重建（测试装配 / 热重启）后旧订阅仍挂在容器上，
+  /// 并在已销毁的 State 上跑 `_refreshBadge`。
+  ProviderSubscription<Object?>? _badgeSub;
+
   /// 外部入口（通知 / 小组件）同帧去重：只挡同一帧里重复投递的同一事件。
   /// 不能拿 `router.push` 的 Future 当门闸——它要等详情被 pop 才完成，
   /// 会把用户停留在详情期间的后续通知/小组件点击永久吞掉。
@@ -91,6 +96,7 @@ class _BootGateState extends ConsumerState<BootGate>
     WidgetsBinding.instance.removeObserver(this);
     _dbChangesSub?.cancel();
     _reminderDueSub?.cancel();
+    _badgeSub?.close();
     _widget.detach();
     super.dispose();
   }
@@ -414,7 +420,7 @@ class _BootGateState extends ConsumerState<BootGate>
     // B6 图标角标数据口：订阅单份任务缓存，每次换值（含失效重拉完成）即
     // 重算——订阅本身让失效立即重拉并回调，不必在 dbChanges 里抢跑
     //（ref.listen 仅限 build 期——异步流程用 listenManual）
-    ref.listenManual(sidebarCountsProvider, (_, _) => _refreshBadge());
+    _badgeSub = ref.listenManual(sidebarCountsProvider, (_, _) => _refreshBadge());
     _refreshBadge(); // 订阅前缓存已就绪（热重入）时补一次
 
     // 小组件快照（#3）：ready 首刷（后续由 todo_tasks 事件驱动）

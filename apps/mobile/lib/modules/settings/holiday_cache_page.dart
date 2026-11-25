@@ -157,11 +157,16 @@ class _HolidayCachePageState extends ConsumerState<HolidayCachePage> {
         failedYears.add(p.year);
       }
     });
+    // 进度层是否还在栈上：用户可能按系统返回把它弹掉（`barrierDismissible`
+    // 只拦点遮罩，返回键要走 PopScope 才拦得住）。此时若照旧 `navigator.pop()`
+    // 会落到本页路由上——关掉的是节日缓存页本身，后续 setState 还会打在已卸载
+    // 的 State 上。收口时只在进度层仍存在时才 pop。
+    var progressDialogOpen = true;
     final dialogClosed = showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (_) => const _HolidayProgressDialog(),
-    );
+    ).whenComplete(() => progressDialogOpen = false);
     HolidayRangeSummary? summary;
     Object? failure;
     try {
@@ -175,11 +180,13 @@ class _HolidayCachePageState extends ConsumerState<HolidayCachePage> {
     // 在 widget 测试的 FakeAsync 下把恢复链悬停到树销毁，进度弹层永不收口，
     // 是 holiday_cache_page 两个范围补写用例假红的根因）。
     await Future<void>.delayed(Duration.zero);
-    navigator.pop();
+    if (progressDialogOpen) navigator.pop();
     await dialogClosed;
+    // 必须在读 ref 之前判存活：用户补写中途返回上一页时 State 已销毁，
+    // 此时 ref.invalidate 会抛 StateError（Riverpod），且 _rangeBusy 永远停在 true。
+    if (!mounted) return;
     ref.invalidate(holidayProvider);
     ref.invalidate(holidayMetaProvider);
-    if (!mounted) return;
     setState(() => _rangeBusy = false);
     if (failure != null) {
       WaitToast.destructive('范围补写失败：$failure');
