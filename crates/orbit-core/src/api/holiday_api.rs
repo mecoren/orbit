@@ -597,17 +597,22 @@ async fn replace_years(pool: &SqlitePool, years: &[i32], rows: &[HolidayInfo]) -
             .execute(&mut *tx)
             .await?;
     }
-    let now_sec = chrono::Utc::now().timestamp();
+    // 与全库其余写路径一致用毫秒：此前写的是秒，同库该列比别处小 1000 倍，
+    // 任何「按时间筛/排」都会失准（DDL 注释也写的是 ms）。
+    let now_ms = chrono::Utc::now().timestamp_millis();
     for h in rows {
+        // OR REPLACE 而非裸 INSERT：`cfg_holidays.date` 有 UNIQUE 索引，12 月
+        // 拉 [本年, 次年] 时跨年条目（如次年 1 月 1 日）会被两个年份的响应
+        // 各给一次，裸 INSERT 让整个「整年替换」事务因约束冲突整体回滚。
         sqlx::query(
-            "INSERT INTO cfg_holidays (date, year, is_holiday, name, created_at) \
+            "INSERT OR REPLACE INTO cfg_holidays (date, year, is_holiday, name, created_at) \
              VALUES (?1, ?2, ?3, ?4, ?5)",
         )
         .bind(&h.date)
         .bind(h.year)
         .bind(h.is_holiday as i32)
         .bind(&h.name)
-        .bind(now_sec)
+        .bind(now_ms)
         .execute(&mut *tx)
         .await?;
     }
@@ -646,6 +651,24 @@ async fn auto_update_with<C: Clock>(
 
 /// 更新执行体（force=true 手动；force=false 定时/补更判定）
 ///
+/// 失败记账：`holiday_failure_count` 原子 +1。
+///
+/// 在 SQL 里自增而非「读 meta → +1 → 写回」：自动更新与单年/范围补写共用
+/// 同一张 `cfg_kv`，并发时读-改-写会丢更新（失败计数只少记一次不致命，
+/// 但没必要留这个洞）。记账失败不覆盖原错误——调用方拿到的仍是网络/DB 错。
+async fn account_failure(pool: &SqlitePool) {
+    let now = chrono::Utc::now().timestamp_millis();
+    let _ = sqlx::query(
+        "INSERT INTO cfg_kv (key, value, updated_at) VALUES (?1, '1', ?2) \
+         ON CONFLICT(key) DO UPDATE SET \
+           value = CAST(CAST(cfg_kv.value AS INTEGER) + 1 AS TEXT), updated_at = ?2",
+    )
+    .bind(KV_FAILURE_COUNT)
+    .bind(now)
+    .execute(pool)
+    .await;
+}
+
 /// 网络失败：记账 last_attempt + failure_count（保留旧缓存），下次 tick /
 /// 下次启动仍会重试（should_update 仍为 true）。
 async fn update_holidays_with<C: Clock>(
@@ -663,14 +686,31 @@ async fn update_holidays_with<C: Clock>(
     kv_set(pool, KV_LAST_ATTEMPT, &now_ms.to_string()).await?;
 
     let years = years_to_fetch(clock);
-    let mut fetched = Vec::new();
-    // 逐年拉取：单年失败即中止（保证「整年完整替换」而非半截数据）
-    for y in &years {
-        fetched.extend(fetch_year(&client, *y, REQ_TIMEOUT).await?);
+    // 逐年拉取：单年失败即中止（保证「整年完整替换」而非半截数据）。
+    // 失败必须走下面统一记账：此前 `?` 直接上抛，自动更新失败**不累加**
+    // failure_count，设置页的「连续失败 N 次」对自动更新恒为 0（单年补写
+    // 路径累加，两条路径口径不一致）。
+    let fetched: Vec<HolidayInfo> = match async {
+        let mut rows = Vec::new();
+        for y in &years {
+            rows.extend(fetch_year(&client, *y, REQ_TIMEOUT).await?);
+        }
+        Ok::<Vec<HolidayInfo>, crate::error::CoreError>(rows)
     }
+    .await
+    {
+        Ok(rows) => rows,
+        Err(e) => {
+            account_failure(pool).await;
+            return Err(e);
+        }
+    };
     // 整份传入 + 按年替换：12 月拉 [本年, 次年] 时跨年条目（如次年 1 月 1 日）
     // 会被两个年份的响应先后给出，整份写入才能保证两个年份的行都在。
-    replace_years(pool, &years, &fetched).await?;
+    if let Err(e) = replace_years(pool, &years, &fetched).await {
+        account_failure(pool).await;
+        return Err(e);
+    }
 
     let success_ms = clock.now_local().timestamp_millis();
     kv_set(pool, KV_LAST_SUCCESS, &success_ms.to_string()).await?;
