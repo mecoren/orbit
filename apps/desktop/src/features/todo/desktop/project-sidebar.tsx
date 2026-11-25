@@ -363,14 +363,24 @@ export function ProjectSidebar({
           }),
     );
 
-    for (const [id, so] of nextOrder) {
-      await todoProjectUpdateSortOrder(id, so);
+    try {
+      for (const [id, so] of nextOrder) {
+        await todoProjectUpdateSortOrder(id, so);
+      }
+      // 改父单独落库（三态：null = 移到顶层）
+      if (parentChanged) {
+        await todoProjectUpdate(activeId, { parent_uuid: plan.parentUuid });
+      }
+    } catch (e) {
+      // 乐观 sort_order/parent_uuid 已写进缓存：失败必须重拉真值，否则拖拽
+      // 结果看起来生效、实际没落库（onDragEnd 的 rejection 此前无人接）。
+      toast.error("项目排序保存失败", {
+        description: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      // 成败都重拉：成功收敛服务端排序，失败回滚乐观改动
+      void refetchProjects();
     }
-    // 改父单独落库（三态：null = 移到顶层）；失败由末尾 refetch 兜回原状
-    if (parentChanged) {
-      await todoProjectUpdate(activeId, { parent_uuid: plan.parentUuid });
-    }
-    void refetchProjects();
   };
 
   // ---- 折叠态窄条：快捷视图图标 + 项目色点 + 展开钮（hover 提示补足上下文）----

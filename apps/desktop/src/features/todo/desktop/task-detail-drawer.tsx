@@ -106,6 +106,7 @@ import {
 import { completeTask } from "@/features/todo/shared/task-actions";
 import { pushUndo } from "@/features/todo/shared/undo-bridge";
 import { patchQueriesData } from "@/lib/query-patch";
+import { errMsg } from "@/lib/error-text";
 import {
   todoTaskDuplicate,
   cloudSyncNow,
@@ -173,7 +174,9 @@ const UNDOABLE_FIELDS = [
   "start_date",
   "project_id",
   "my_day_date",
-  "favorite",
+  // 必须是真实写入字段名：撤销快照按 `key in patch` 匹配，写 "favorite"
+  // 时恒不命中 → 星标切换永远进不了撤销栈（静默不可撤销）。
+  "is_favorite",
 ] as const;
 
 interface TaskDetailDrawerProps {
@@ -1497,11 +1500,18 @@ function SubtasksSection({
                 onConfirm={() => {
                   const target = s;
                   void (async () => {
-                    await todoSubtaskDelete(target.id);
-                    onChanged();
-                    toast.success(
-                      childCount > 0 ? "已删除子任务及其下级" : "已删除子任务",
-                    );
+                    try {
+                      await todoSubtaskDelete(target.id);
+                      onChanged();
+                      toast.success(
+                        childCount > 0 ? "已删除子任务及其下级" : "已删除子任务",
+                      );
+                    } catch (e) {
+                      // 确认框已关，失败时也要让真值回填——否则界面继续显示
+                      // 已删行，用户以为删掉了。
+                      onChanged();
+                      toast.error("删除子任务失败", { description: errMsg(e) });
+                    }
                   })();
                 }}
               >

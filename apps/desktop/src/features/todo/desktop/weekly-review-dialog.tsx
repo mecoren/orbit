@@ -26,6 +26,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { type TodoTaskListItem } from "@/lib/tauri";
 import { todoTaskUpdate } from "@/lib/tauri";
+import { errMsg } from "@/lib/error-text";
 import { collectWeeklyReview } from "../shared/weekly-review";
 import { rolloverOverdueTasks } from "../shared/batch-actions";
 import { planRollover } from "../shared/rollover-overdue";
@@ -104,6 +105,17 @@ export function WeeklyReviewDialog({ open, onOpenChange, tasks, heading, onFinis
     if (ids.length > 0) toast.success(`${label} ${ids.length} 条`);
   };
 
+  /**
+   * 写失败统一口径：本地留痕 + 用户可见。
+   *
+   * 此前这三处只 `console.error`，用户点了「排期 / 唤醒」看不到任何变化也
+   * 收不到提示（行还留在清单里是唯一线索）。
+   */
+  const reportWriteFailure = (label: string, e: unknown) => {
+    console.error(`${label}失败:`, e);
+    toast.error(`${label}失败`, { description: errMsg(e) });
+  };
+
   /** 步骤 1：顺延全部逾期（按实际写入行标记处置，不用「前 N 条」近似） */
   const handleRolloverAll = async (preset: "today" | "tomorrow") => {
     if (busy) return;
@@ -111,8 +123,16 @@ export function WeeklyReviewDialog({ open, onOpenChange, tasks, heading, onFinis
     try {
       // 先算计划集：planRollover 会过滤「同日无变化」行，写入集与它同源
       const planIds = planRollover(currentList, preset).map((p) => p.task.id);
-      await rolloverOverdueTasks(currentList, preset, qc);
-      markHandled(planIds, preset === "today" ? "顺延到今天" : "顺延到明天");
+      const { failed } = await rolloverOverdueTasks(currentList, preset, qc);
+      // 有失败行时不能整批标记处置：失败行的截止时间没改，标掉就等于让它
+      // 从回顾清单里消失。部分失败已由 rolloverOverdueTasks 弹 warning。
+      if (failed === 0) {
+        markHandled(planIds, preset === "today" ? "顺延到今天" : "顺延到明天");
+      } else {
+        void qc.invalidateQueries({ queryKey: ["todo_tasks"] });
+      }
+    } catch (e) {
+      reportWriteFailure(preset === "today" ? "顺延到今天" : "顺延到明天", e);
     } finally {
       setBusy(false);
     }
@@ -126,7 +146,7 @@ export function WeeklyReviewDialog({ open, onOpenChange, tasks, heading, onFinis
       await todoTaskUpdate(t.id, { due_date: presetDueMs(preset) });
       markHandled([t.id], "已排期");
     } catch (e) {
-      console.error("排期失败:", e);
+      reportWriteFailure("排期", e);
     } finally {
       setBusy(false);
     }
@@ -141,7 +161,7 @@ export function WeeklyReviewDialog({ open, onOpenChange, tasks, heading, onFinis
       await todoTaskUpdate(t.id, {});
       markHandled([t.id], "已唤醒");
     } catch (e) {
-      console.error("唤醒失败:", e);
+      reportWriteFailure("唤醒", e);
     } finally {
       setBusy(false);
     }

@@ -12,6 +12,9 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarCheck, CheckCheck, Clock3 } from "lucide-react";
+import { toast } from "sonner";
+
+import { errMsg } from "@/lib/error-text";
 
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/business/empty-state";
@@ -62,12 +65,23 @@ export function ReviewPanel() {
 
   const refresh = () => qc.invalidateQueries({ queryKey: REVIEW_DUE_QUERY_KEY });
 
+  /**
+   * 写失败统一口径：这三个动作此前只有 `try/finally`，失败是未捕获 rejection
+   * ——行不消失、没有任何提示，用户只会反复点。按周回顾同口径补 toast。
+   */
+  const reportFailure = (label: string, e: unknown) => {
+    console.error(`${label}失败:`, e);
+    toast.error(`${label}失败`, { description: errMsg(e) });
+  };
+
   const handleSnooze = async (status: ProjectReviewStatus) => {
     if (busyId != null) return;
     setBusyId(status.project.id);
     try {
       await todoProjectSnoozeReview(status.project.id, SNOOZE_DAYS, Date.now());
       await refresh();
+    } catch (e) {
+      reportFailure("稍后一周", e);
     } finally {
       setBusyId(null);
     }
@@ -79,6 +93,8 @@ export function ReviewPanel() {
     try {
       await todoProjectMarkReviewed(status.project.id);
       await refresh();
+    } catch (e) {
+      reportFailure("标记已回顾", e);
     } finally {
       setBusyId(null);
     }
@@ -89,9 +105,15 @@ export function ReviewPanel() {
   const handleFinishReview = async () => {
     if (reviewing == null) return;
     const id = reviewing.project.id;
-    setReviewing(null);
-    await todoProjectMarkReviewed(id);
-    await refresh();
+    // 先写库再关向导：反过来的话失败时向导已关、用户以为「已完成」，
+    // 而 review_last_at 没有推进（下次仍到期）。
+    try {
+      await todoProjectMarkReviewed(id);
+      await refresh();
+      setReviewing(null);
+    } catch (e) {
+      reportFailure("标记已回顾", e);
+    }
   };
 
   const due = dueQuery.data;

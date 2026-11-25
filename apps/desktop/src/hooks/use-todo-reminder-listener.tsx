@@ -106,7 +106,6 @@ export function useTodoReminderListener() {
         }
         toast.success("已完成", { description: title, duration: 4_000 });
         void qc.invalidateQueries({ queryKey: ["todo_tasks"] });
-        void qc.invalidateQueries({ queryKey: ["count"] });
         void qc.invalidateQueries({ queryKey: ["todo-task-detail", task_id] });
       },
     );
