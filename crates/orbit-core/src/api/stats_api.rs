@@ -236,18 +236,12 @@ async fn stats_heatmap_impl(rows: &[TaskStatRow], year: i64) -> CoreResult<Heatm
     let (from, to) = heatmap_year_range(year);
     // 逐日铺格：日期序号整除即本地日界（chrono NaiveDate 全程本地语义，
     // 与 done_at 毫秒 → 本地日 index 的 local_day_index 口径一致）
-    let start_idx = local_day_index(
-        from.and_hms_opt(0, 0, 0)
-            .unwrap()
-            .and_utc()
-            .timestamp_millis(),
-    );
-    let end_idx = local_day_index(
-        to.and_hms_opt(0, 0, 0)
-            .unwrap()
-            .and_utc()
-            .timestamp_millis(),
-    );
+    // 直接从 NaiveDate 取日序号：`and_utc().timestamp_millis()` 再经
+    // `local_day_index` 换算会**多绕一次 UTC**，负偏移时区（UTC-5 等）整体
+    // 前移一天——窗口变成「上一年 12-31 ~ 当年 12-30」，丢掉当年 12-31。
+    // 东八区恰好正确，所以既有单测不会红。
+    let start_idx = from.num_days_from_ce() as i64 - 719_163;
+    let end_idx = to.num_days_from_ce() as i64 - 719_163;
 
     let mut counts: std::collections::HashMap<i64, i64> = std::collections::HashMap::new();
     for r in rows.iter().filter(|r| r.done == 1) {

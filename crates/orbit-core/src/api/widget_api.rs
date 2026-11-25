@@ -49,7 +49,12 @@ pub async fn widget_todo_query(pool: &SqlitePool, limit: i64) -> CoreResult<Vec<
          ORDER BY priority DESC, due_date ASC, id ASC
          LIMIT ?",
     )
-    .bind(chrono::Local::now().timestamp_millis() + 24 * 3600 * 1000)
+    // 口径 = 明日**本地零点**，不是 `now + 24h`：后者在 18:00 之后会把明天
+    // 上午的任务也算进「今天」（22:00 打开时明天的任务全进 widget），与
+    // B6 角标 / 列表视图的日界口径打架。
+    .bind(crate::api::digest_api::local_day_start(
+        chrono::Local::now().timestamp_millis(),
+    ) + 24 * 3600 * 1000)
     .bind(n)
     .fetch_all(pool)
     .await?;
