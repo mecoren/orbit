@@ -121,6 +121,7 @@ PagedTaskQuery? buildPagedQuery({
 
   bool? done;
   String? status;
+  List<String>? statusIn;
   bool? favoriteOnly;
   int? myDayToday;
   bool? hasDue;
@@ -156,16 +157,20 @@ PagedTaskQuery? buildPagedQuery({
     done = false;
   }
 
-  // 列表内筛选：状态/优先级可下推；优先级档是等值（priority_eq）
-  switch (filters.status) {
-    case 'undone':
-      done = false;
-    case 'done':
-      // 与 applyTaskListFilters 的 `isDone || status == 'done'` 同义：
-      // 完成位是真值，status 只是派生列
-      done = true;
-    case final s?:
-      status = s;
+  // 列表内筛选：状态/优先级可下推；优先级档是等值（priority_eq）。
+  // 状态多选（2026-11-27，对齐桌面 #118）：恰好单档 pending/doing 走原有
+  // 等值谓词（SQL 更省）；含 done 或并选时交给 `status_in` 集合——done 项
+  // 已含「done=1 或 status='done'」，故不能再叠 done=true（会漏老数据）。
+  final statuses = filters.statuses;
+  if (statuses.isNotEmpty) {
+    if (statuses.length == 1 && !statuses.contains('done')) {
+      status = statuses.first;
+    } else {
+      statusIn = statuses.toList(growable: false);
+      // 未勾「已完成」时仍强制 done=false：比 status_in 的派生状态更严，
+      // 排除 done=1 但 status 未同步的脏行；勾了才放开完成位（done=null）。
+      done = statuses.contains('done') ? null : false;
+    }
   }
 
   final sortKeyString = switch (sortKey) {
@@ -183,6 +188,7 @@ PagedTaskQuery? buildPagedQuery({
   var filter = ListFilter(
     done: done,
     status: status,
+    statusIn: statusIn,
     priorityEq: filters.priority,
     // 列表内标签筛选（单值档）与保存筛选器共用 label_ids 谓词
     labelIds: filters.labelId == null ? null : [filters.labelId!],
@@ -311,10 +317,20 @@ ListFilter mergeSavedFilterConditions(
       : math.max(condPriorityMin, base.priorityMin ?? condPriorityMin);
 
   // ── 状态 / 完成态 ──
+  // 列表内状态多选与保存筛选器的等值 `status` 取交集：集合含条件档时收窄为
+  // 单档等值，否则空结果（例：工具栏选「待办+进行中」+ 筛选器「已完成」= 空）。
   var status = base.status;
+  var statusIn = base.statusIn;
   final condStatus = c['status'] as String?;
   if (condStatus != null) {
-    if (status != null && status != condStatus) impossible = true;
+    if (statusIn != null) {
+      if (!statusIn.contains(condStatus)) {
+        impossible = true;
+      }
+      statusIn = null;
+    } else if (status != null && status != condStatus) {
+      impossible = true;
+    }
     status = condStatus;
   }
   var done = base.done;
@@ -361,6 +377,7 @@ ListFilter mergeSavedFilterConditions(
     pageSize: base.pageSize,
     done: done,
     status: status,
+    statusIn: statusIn,
     priorityMin: priorityMin,
     priorityEq: base.priorityEq,
     projectId: projectId,
@@ -398,76 +415,138 @@ ListFilter mergeSavedFilterConditions(
   );
 }
 
+/// 恒空结果：core 里 `project_ids: []` 是显式 `AND 1 = 0`（不是不过滤）。
+ListFilter _impossibleFilter(String sortKey, String sortDir) =>
+    ListFilter(projectIds: const [], sortKey: sortKey, sortDir: sortDir);
+
 /// 逾期置顶段查询：同一套谓词，截止上界收到「现在」并强制未完成。
 ///
 /// 主列表**不**带 excludeDueBefore（那会让 queryKey 挂上时间戳、每分钟重拉
 /// 首屏）；两段合并时按 id 去重即可（见 `mergeOverdueFirst`）。
-ListFilter overdueFilterOf(PagedTaskQuery query, int nowMs) => ListFilter(
-  done: false,
-  status: query.filter.status,
-  priorityMin: query.filter.priorityMin,
-  priorityEq: query.filter.priorityEq,
-  projectId: query.filter.projectId,
-  projectIds: query.filter.projectIds,
-  ungrouped: query.filter.ungrouped,
-  favoriteOnly: query.filter.favoriteOnly,
-  myDayToday: query.filter.myDayToday,
-  hasDue: query.filter.hasDue,
-  // 保存筛选器条件必须一起带过来：否则「筛选器只留某标签」时逾期段
-  // 仍会把别的标签行置顶出来（主列表与置顶段各说各话）。
-  labelIds: query.filter.labelIds,
-  hasReminder: query.filter.hasReminder,
-  hasAttachment: query.filter.hasAttachment,
-  hasOpenSubtask: query.filter.hasOpenSubtask,
-  createdFrom: query.filter.createdFrom,
-  doneFrom: query.filter.doneFrom,
-  dueTo: nowMs,
-  sortKey: 'due',
-  sortDir: 'asc',
-);
+///
+/// 状态多选含 done 时逾期段自然无行——把 done 从集合剔除后再下推；只剩
+/// done 一档直接返回恒空，避免「done=false ∩ status_in(done)」的脏数据缝隙。
+ListFilter overdueFilterOf(PagedTaskQuery query, int nowMs) {
+  final base = query.filter;
+  var statusIn = base.statusIn;
+  if (statusIn != null) {
+    statusIn = [
+      for (final s in statusIn)
+        if (s != 'done') s,
+    ];
+    if (statusIn.isEmpty) return _impossibleFilter('due', 'asc');
+  }
+  return ListFilter(
+    done: false,
+    status: base.status,
+    statusIn: statusIn,
+    priorityMin: base.priorityMin,
+    priorityEq: base.priorityEq,
+    projectId: base.projectId,
+    projectIds: base.projectIds,
+    ungrouped: base.ungrouped,
+    favoriteOnly: base.favoriteOnly,
+    myDayToday: base.myDayToday,
+    hasDue: base.hasDue,
+    // 保存筛选器条件必须一起带过来：否则「筛选器只留某标签」时逾期段
+    // 仍会把别的标签行置顶出来（主列表与置顶段各说各话）。
+    labelIds: base.labelIds,
+    hasReminder: base.hasReminder,
+    hasAttachment: base.hasAttachment,
+    hasOpenSubtask: base.hasOpenSubtask,
+    createdFrom: base.createdFrom,
+    doneFrom: base.doneFrom,
+    dueTo: nowMs,
+    sortKey: 'due',
+    sortDir: 'asc',
+  );
+}
 
 /// 列表尾部「已完成」窗口：完成时刻倒序取前 N 条（卡内直显）。
-ListFilter doneCardFilterOf(PagedTaskQuery query) => ListFilter(
-  done: true,
-  projectId: query.filter.projectId,
-  projectIds: query.filter.projectIds,
-  ungrouped: query.filter.ungrouped,
-  favoriteOnly: query.filter.favoriteOnly,
-  myDayToday: query.filter.myDayToday,
-  hasDue: query.filter.hasDue,
-  // 「已完成 N」卡与主窗口共用筛选器条件（标签/存在性/时间下界）
-  labelIds: query.filter.labelIds,
-  hasReminder: query.filter.hasReminder,
-  hasAttachment: query.filter.hasAttachment,
-  hasOpenSubtask: query.filter.hasOpenSubtask,
-  createdFrom: query.filter.createdFrom,
-  doneFrom: query.filter.doneFrom,
-  sortKey: 'done_at',
-  sortDir: 'desc',
-);
+///
+/// 状态多选未勾「已完成」时该卡无行；勾了则只取 done 子集（done 档走
+/// `status_in`，兼容 done=1 与 status='done' 两种来源）。
+ListFilter doneCardFilterOf(PagedTaskQuery query) {
+  final base = query.filter;
+  final statuses = base.statusIn;
+  if (statuses != null) {
+    if (!statuses.contains('done')) {
+      return _impossibleFilter('done_at', 'desc');
+    }
+    return ListFilter(
+      statusIn: const ['done'],
+      projectId: base.projectId,
+      projectIds: base.projectIds,
+      ungrouped: base.ungrouped,
+      favoriteOnly: base.favoriteOnly,
+      myDayToday: base.myDayToday,
+      hasDue: base.hasDue,
+      // 「已完成 N」卡与主窗口共用筛选器条件（标签/存在性/时间下界）
+      labelIds: base.labelIds,
+      hasReminder: base.hasReminder,
+      hasAttachment: base.hasAttachment,
+      hasOpenSubtask: base.hasOpenSubtask,
+      createdFrom: base.createdFrom,
+      doneFrom: base.doneFrom,
+      sortKey: 'done_at',
+      sortDir: 'desc',
+    );
+  }
+  if (base.status != null && base.status != 'done') {
+    return _impossibleFilter('done_at', 'desc');
+  }
+  return ListFilter(
+    done: true,
+    status: base.status,
+    projectId: base.projectId,
+    projectIds: base.projectIds,
+    ungrouped: base.ungrouped,
+    favoriteOnly: base.favoriteOnly,
+    myDayToday: base.myDayToday,
+    hasDue: base.hasDue,
+    labelIds: base.labelIds,
+    hasReminder: base.hasReminder,
+    hasAttachment: base.hasAttachment,
+    hasOpenSubtask: base.hasOpenSubtask,
+    createdFrom: base.createdFrom,
+    doneFrom: base.doneFrom,
+    sortKey: 'done_at',
+    sortDir: 'desc',
+  );
+}
 
 /// Logbook 通道：完成时刻倒序键集分页。
-ListFilter logbookFilterOf(PagedTaskQuery query) => ListFilter(
-  done: true,
-  status: query.filter.status,
-  priorityMin: query.filter.priorityMin,
-  priorityEq: query.filter.priorityEq,
-  projectId: query.filter.projectId,
-  projectIds: query.filter.projectIds,
-  ungrouped: query.filter.ungrouped,
-  favoriteOnly: query.filter.favoriteOnly,
-  myDayToday: query.filter.myDayToday,
-  hasDue: query.filter.hasDue,
-  // Logbook 与主窗口同一套筛选器条件（含 done_from 的时间下界）
-  labelIds: query.filter.labelIds,
-  hasReminder: query.filter.hasReminder,
-  hasAttachment: query.filter.hasAttachment,
-  hasOpenSubtask: query.filter.hasOpenSubtask,
-  createdFrom: query.filter.createdFrom,
-  doneFrom: query.filter.doneFrom,
-  sortKey: 'done_at',
-  sortDir: 'desc',
-);
+///
+/// 状态多选未勾「已完成」时 Logbook 无行；勾了则只取 done 子集。
+ListFilter logbookFilterOf(PagedTaskQuery query) {
+  final base = query.filter;
+  final statuses = base.statusIn;
+  if (statuses != null && !statuses.contains('done')) {
+    return _impossibleFilter('done_at', 'desc');
+  }
+  return ListFilter(
+    done: true,
+    status: base.status,
+    statusIn: statuses == null ? null : const ['done'],
+    priorityMin: base.priorityMin,
+    priorityEq: base.priorityEq,
+    projectId: base.projectId,
+    projectIds: base.projectIds,
+    ungrouped: base.ungrouped,
+    favoriteOnly: base.favoriteOnly,
+    myDayToday: base.myDayToday,
+    hasDue: base.hasDue,
+    // Logbook 与主窗口同一套筛选器条件（含 done_from 的时间下界）
+    labelIds: base.labelIds,
+    hasReminder: base.hasReminder,
+    hasAttachment: base.hasAttachment,
+    hasOpenSubtask: base.hasOpenSubtask,
+    createdFrom: base.createdFrom,
+    doneFrom: base.doneFrom,
+    sortKey: 'done_at',
+    sortDir: 'desc',
+  );
+}
 
 /// 逾期段与主窗口合并：按 id 去重，逾期行在前。
 ///

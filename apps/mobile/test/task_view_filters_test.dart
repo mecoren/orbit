@@ -65,16 +65,20 @@ TodoProject _project(int id, String title) => TodoProject(
 
 void main() {
   group('TaskListFilters', () {
-    test('copyWith 未传参保持原值，显式 null 清除该档', () {
-      const f = TaskListFilters(status: 'doing', priority: 3, labelId: 7);
+    test('copyWith 未传参保持原值，显式空集清除状态档', () {
+      const f = TaskListFilters(
+        statuses: {'doing'},
+        priority: 3,
+        labelId: 7,
+      );
 
       final kept = f.copyWith(labelId: 9);
-      expect(kept.status, 'doing');
+      expect(kept.statuses, {'doing'});
       expect(kept.priority, 3);
       expect(kept.labelId, 9);
 
-      final cleared = f.copyWith(status: null);
-      expect(cleared.status, isNull);
+      final cleared = f.copyWith(statuses: const {});
+      expect(cleared.statuses, isEmpty);
       expect(cleared.priority, 3);
       expect(cleared.activeCount, 2);
     });
@@ -82,7 +86,19 @@ void main() {
     test('isEmpty / activeCount', () {
       expect(TaskListFilters.empty.isEmpty, isTrue);
       expect(TaskListFilters.empty.activeCount, 0);
-      expect(const TaskListFilters(status: 'done').activeCount, 1);
+      expect(const TaskListFilters(statuses: {'done'}).activeCount, 1);
+      expect(
+        const TaskListFilters(statuses: {'pending', 'doing'}).activeCount,
+        1,
+      );
+    });
+
+    test('statusFilterOf：空集 all、单档原值、待办+进行中派生 undone', () {
+      expect(statusFilterOf(const {}), 'all');
+      expect(statusFilterOf(const {'pending'}), 'pending');
+      expect(statusFilterOf(const {'pending', 'doing'}), 'undone');
+      expect(statusFilterOf(const {'pending', 'done'}), 'all');
+      expect(statusFilterOf(const {'pending', 'doing', 'done'}), 'all');
     });
   });
 
@@ -98,21 +114,45 @@ void main() {
       expect(applyTaskListFilters(tasks, TaskListFilters.empty), tasks);
     });
 
-    test('状态档：pending/doing/done 为 status 字段匹配', () {
+    test('状态档：单档 pending/doing/done 为派生状态匹配', () {
       final r = applyTaskListFilters(
-          tasks, const TaskListFilters(status: 'doing'));
+          tasks, const TaskListFilters(statuses: {'doing'}));
       expect(r.map((t) => t.id), [2]);
     });
 
-    test('状态档：未完成 = !done（跨 pending/doing）；完成 = done 位或状态双来源', () {
+    test('状态档：多选为「或」；未完成 = 待办+进行中；完成含 done 位双来源', () {
       final undone = applyTaskListFilters(
-          tasks, const TaskListFilters(status: 'undone'));
+          tasks, const TaskListFilters(statuses: {'pending', 'doing'}));
       expect(undone.map((t) => t.id), [1, 2, 4]);
+      final multi = applyTaskListFilters(
+        tasks,
+        const TaskListFilters(statuses: {'doing', 'done'}),
+      );
+      expect(multi.map((t) => t.id), [2, 3]);
       // done=1 但 status 未同步为 'done' 的行也要进完成档（同桌面双来源口径）
       final done = applyTaskListFilters(
-          [...tasks, _task(id: 5, doneFlag: true)],
-          const TaskListFilters(status: 'done'));
+        [...tasks, _task(id: 5, doneFlag: true)],
+        const TaskListFilters(statuses: {'done'}),
+      );
       expect(done.map((t) => t.id), [3, 5]);
+    });
+
+    test('状态档：未知 status 回落 pending（与 core status_in 派生口径一致）', () {
+      final dirty = [_task(id: 1, status: 'weird')];
+      expect(
+        applyTaskListFilters(
+          dirty,
+          const TaskListFilters(statuses: {'pending'}),
+        ).map((t) => t.id),
+        [1],
+      );
+      expect(
+        applyTaskListFilters(
+          dirty,
+          const TaskListFilters(statuses: {'doing'}),
+        ),
+        isEmpty,
+      );
     });
 
     test('优先级等值档（含无优先级 P0）', () {
@@ -147,7 +187,7 @@ void main() {
     test('多档叠加为交集', () {
       final r = applyTaskListFilters(
         tasks,
-        const TaskListFilters(status: 'doing', priority: 3),
+        const TaskListFilters(statuses: {'doing'}, priority: 3),
       );
       expect(r.map((t) => t.id), [2]);
     });

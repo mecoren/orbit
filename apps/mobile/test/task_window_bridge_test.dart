@@ -23,6 +23,7 @@ void main() {
     int? doneAt,
     int? myDay,
     int favorite = 0,
+    String? status,
   }) {
     final id = (bridge.store.tasks.keys.fold<int>(0, (a, b) => a > b ? a : b)) + 1;
     bridge.store.tasks[id] = <String, dynamic>{
@@ -32,7 +33,7 @@ void main() {
       'description': null,
       'project_id': projectId,
       'priority': priority,
-      'status': done == 1 ? 'done' : 'pending',
+      'status': status ?? (done == 1 ? 'done' : 'pending'),
       'done': done,
       'done_at': doneAt,
       'due_date': due,
@@ -85,6 +86,41 @@ void main() {
         100,
       );
       expect(scoped.items.single.title, '未完成-1');
+    });
+
+    test('status_in：派生状态多选（done 含完成位，未知 status 回落 pending）', () async {
+      mk(title: '待办', status: 'pending');
+      mk(title: '进行中', status: 'doing');
+      mk(title: '已完成', done: 1, doneAt: base);
+      mk(title: '脏状态', status: 'weird');
+      mk(title: '状态完成但未勾选', status: 'done');
+
+      final pending = await bridge.todoTaskPage(
+        const ListFilter(statusIn: ['pending']),
+        null,
+        100,
+      );
+      expect(
+        pending.items.map((t) => t.title),
+        ['待办-1', '脏状态-4'],
+      );
+
+      final open = await bridge.todoTaskPage(
+        const ListFilter(statusIn: ['pending', 'doing']),
+        null,
+        100,
+      );
+      expect(open.items.map((t) => t.title), ['待办-1', '进行中-2', '脏状态-4']);
+
+      final done = await bridge.todoTaskPage(
+        const ListFilter(statusIn: ['done']),
+        null,
+        100,
+      );
+      expect(
+        done.items.map((t) => t.title),
+        ['已完成-3', '状态完成但未勾选-5'],
+      );
     });
 
     test('start 区间：NULL 不命中（日历时间轴按块起点取数）', () async {

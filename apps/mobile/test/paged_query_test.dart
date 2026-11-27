@@ -101,6 +101,21 @@ void main() {
       expect(q.filter.done, isFalse);
       expect(q.filter.dueTo, _dayStart);
     });
+
+    test('工具栏状态多选与筛选器等值 status 取交集', () {
+      final hit = _build(
+        filters: const TaskListFilters(statuses: {'pending', 'doing'}),
+        savedConditions: '{"status":"doing"}',
+      )!;
+      expect(hit.filter.status, 'doing');
+      expect(hit.filter.statusIn, isNull);
+
+      final miss = _build(
+        filters: const TaskListFilters(statuses: {'pending', 'doing'}),
+        savedConditions: '{"status":"done"}',
+      )!;
+      expect(miss.filter.projectIds, isEmpty);
+    });
   });
 
   group('buildPagedQuery：快捷视图 → ListFilter', () {
@@ -192,17 +207,29 @@ void main() {
       expect(emptyIds.filter.projectId, 7);
     });
 
-    test('状态档：undone/done 映射完成位，pending 等映射 status 等值', () {
-      expect(
-        _build(filters: const TaskListFilters(status: 'undone'))!.filter.done,
-        isFalse,
-      );
-      expect(
-        _build(filters: const TaskListFilters(status: 'done'))!.filter.done,
-        isTrue,
-      );
-      final doing = _build(filters: const TaskListFilters(status: 'doing'))!;
+    test('状态档：单档 pending/doing 映射 status 等值；done/多选走 status_in', () {
+      final undone = _build(
+        filters: const TaskListFilters(statuses: {'pending', 'doing'}),
+      )!;
+      expect(undone.filter.done, isFalse);
+      expect(undone.filter.status, isNull);
+      expect(undone.filter.statusIn, ['pending', 'doing']);
+
+      final done = _build(filters: const TaskListFilters(statuses: {'done'}))!;
+      expect(done.filter.done, isNull);
+      expect(done.filter.status, isNull);
+      expect(done.filter.statusIn, ['done']);
+
+      final doing = _build(filters: const TaskListFilters(statuses: {'doing'}))!;
+      expect(doing.filter.done, isFalse);
       expect(doing.filter.status, 'doing');
+      expect(doing.filter.statusIn, isNull);
+
+      final pendingDone = _build(
+        filters: const TaskListFilters(statuses: {'pending', 'done'}),
+      )!;
+      expect(pendingDone.filter.done, isNull);
+      expect(pendingDone.filter.statusIn, ['pending', 'done']);
     });
 
     test('优先级档是等值（priority_eq），不是下限', () {
@@ -250,6 +277,33 @@ void main() {
       expect(f.done, isTrue);
       expect(f.sortKey, 'done_at');
       expect(f.sortDir, 'desc');
+    });
+
+    test('状态多选下的派生查询：逾期剔除 done、完成卡仅 done、Logbook 不含未完成', () {
+      final onlyDone =
+          _build(filters: const TaskListFilters(statuses: {'done'}))!;
+      // 逾期段必定无行：done 从集合剔除后为空 → 恒空谓词
+      expect(overdueFilterOf(onlyDone, _now).projectIds, isEmpty);
+      final doneCard = doneCardFilterOf(onlyDone);
+      expect(doneCard.done, isNull);
+      expect(doneCard.statusIn, ['done']);
+
+      final undone = _build(
+        filters: const TaskListFilters(statuses: {'pending', 'doing'}),
+      )!;
+      expect(
+        overdueFilterOf(undone, _now).statusIn,
+        ['pending', 'doing'],
+      );
+      // 完成卡 / Logbook 未勾「已完成」→ 恒空
+      expect(doneCardFilterOf(undone).projectIds, isEmpty);
+      expect(logbookFilterOf(undone).projectIds, isEmpty);
+
+      final pendingAndDone = _build(
+        filters: const TaskListFilters(statuses: {'pending', 'done'}),
+      )!;
+      expect(doneCardFilterOf(pendingAndDone).statusIn, ['done']);
+      expect(logbookFilterOf(pendingAndDone).statusIn, ['done']);
     });
   });
 

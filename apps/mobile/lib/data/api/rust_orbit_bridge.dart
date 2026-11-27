@@ -2159,6 +2159,7 @@ class RustOrbitBridge implements OrbitBridge {
     pageSize: f.pageSize,
     done: f.done,
     status: f.status,
+    statusIn: f.statusIn,
     priorityMin: f.priorityMin,
     priorityEq: f.priorityEq,
     projectId: f.projectId,

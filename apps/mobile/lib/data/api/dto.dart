@@ -20,6 +20,11 @@ class ListFilter {
   /// 状态等值（pending/doing/done）
   final String? status;
 
+  /// 状态多选集合（2026-11-27，对齐桌面 `status_in`）：非空时优先于
+  /// [status]；空集合 = 不过滤。判定为派生状态（done 含完成位，
+  /// 未知 status 回落 pending），与 core 同源。
+  final List<String>? statusIn;
+
   /// 优先级下限（priority >= 此值）
   final int? priorityMin;
 
@@ -93,6 +98,7 @@ class ListFilter {
     this.pageSize = 500,
     this.done,
     this.status,
+    this.statusIn,
     this.priorityMin,
     this.priorityEq,
     this.projectId,
@@ -139,6 +145,7 @@ class ListFilter {
     pageSize: pageSize ?? this.pageSize,
     done: clearDone ? null : (done ?? this.done),
     status: status,
+    statusIn: statusIn,
     priorityMin: priorityMin,
     priorityEq: priorityEq,
     projectId: projectId,
@@ -170,6 +177,7 @@ class ListFilter {
     'page_size': pageSize,
     'done': done,
     'status': status,
+    'status_in': statusIn,
     'priority_min': priorityMin,
     'priority_eq': priorityEq,
     'project_id': projectId,
@@ -202,6 +210,15 @@ class ListFilter {
     return true;
   }
 
+  static bool _sameStrings(List<String>? a, List<String>? b) {
+    if (identical(a, b)) return true;
+    if (a == null || b == null || a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -211,6 +228,7 @@ class ListFilter {
           pageSize == other.pageSize &&
           done == other.done &&
           status == other.status &&
+          _sameStrings(statusIn, other.statusIn) &&
           priorityMin == other.priorityMin &&
           priorityEq == other.priorityEq &&
           projectId == other.projectId &&
@@ -241,6 +259,7 @@ class ListFilter {
     pageSize,
     done,
     status,
+    statusIn == null ? null : Object.hashAll(statusIn!),
     priorityMin,
     priorityEq,
     projectId,

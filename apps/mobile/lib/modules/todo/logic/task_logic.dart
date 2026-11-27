@@ -1072,42 +1072,46 @@ QuickViewCreateDefaults quickViewCreateDefaults(
 /// copyWith 的「未传参」哨兵：区分「不修改」与「显式置 null（清除该档）」
 const Object _keepFilterValue = Object();
 
-/// 列表内附加过滤档（null = 该维度不限制）
+/// 列表内附加过滤档（空集 / null = 该维度不限制）
 ///
 /// 与桌面 `task-filters.ts` 工具栏三枚筛选同口径：
-/// - [status]：'undone'（未完成：!done）| 'pending' | 'doing' | 'done'
-///   （完成档含 `done=1` 与 `status='done'` 两种来源——与桌面
-///   `!!t.done || status==='done'` 一致，状态与完成位是两套字段）；
+/// - [statuses]：状态**多选**（2026-11-27 对齐桌面 #118）：空集 = 全部状态，
+///   多档之间是「或」；`done` 档含 `done=1` 与 `status='done'` 两种来源
+///   （与桌面 `!!t.done || status==='done'` 一致），其余脏 status 回落
+///   `pending`（与 core `status_in` 的派生状态子句同源）；
 /// - [priority]：优先级**等值**档（0–5 七档含「无优先级」，同桌面
 ///   `t.priority === priorityFilter`；曾为「下限 ≥」语义，与桌面不等价已校正）；
 /// - [labelId]：命中该标签（需要任务→标签投影辅助判据）。
 ///
 /// 与 `filterTasks` 正交：先按入口/快捷视图筛，再叠加本档。
 class TaskListFilters {
-  final String? status;
+  final Set<String> statuses;
   final int? priority;
   final int? labelId;
 
-  const TaskListFilters({this.status, this.priority, this.labelId});
+  const TaskListFilters({
+    this.statuses = const {},
+    this.priority,
+    this.labelId,
+  });
 
   static const empty = TaskListFilters();
 
-  bool get isEmpty => status == null && priority == null && labelId == null;
+  bool get isEmpty => statuses.isEmpty && priority == null && labelId == null;
 
   /// 已启用的过滤维度数（标题栏角标用）
   int get activeCount =>
-      (status != null ? 1 : 0) +
+      (statuses.isNotEmpty ? 1 : 0) +
       (priority != null ? 1 : 0) +
       (labelId != null ? 1 : 0);
 
   TaskListFilters copyWith({
-    Object? status = _keepFilterValue,
+    Set<String>? statuses,
     Object? priority = _keepFilterValue,
     Object? labelId = _keepFilterValue,
   }) =>
       TaskListFilters(
-        status:
-            identical(status, _keepFilterValue) ? this.status : status as String?,
+        statuses: statuses ?? this.statuses,
         priority: identical(priority, _keepFilterValue)
             ? this.priority
             : priority as int?,
@@ -1116,12 +1120,29 @@ class TaskListFilters {
       );
 }
 
+/// 状态多选集合 → 单档派生（保存筛选器预填 / 摘要用）。
+///
+/// 与桌面 `statusFilterOf` 逐字同义：空集 = all；待办+进行中 = undone
+/// （语义等价，不是「混合档」）；其余多选装不进条件 JSON 的等值键
+/// `status`，回落 all 由调用方丢弃。
+String statusFilterOf(Set<String> statuses) {
+  if (statuses.isEmpty) return 'all';
+  if (statuses.length == 1) return statuses.first;
+  if (statuses.length == 2 &&
+      statuses.contains('pending') &&
+      statuses.contains('doing')) {
+    return 'undone';
+  }
+  return 'all';
+}
+
 /// 列表内筛选态 → 保存的筛选器条件 JSON（「保存为筛选器」预填，G1）。
 ///
 /// 镜像桌面 `saved-filter-builder.ts` 的 `toolbarToForm` + `buildConditions`：
 /// 空维度不落键（缺键 = 不过滤），全空产出空 Map（Rust 端空条件 = 万能视图）。
 /// 口径细节与桌面逐字一致：
-/// - 状态档 `undone` 无对应白名单键 → 丢弃；`pending`/`doing`/`done` 落 `status`；
+/// - 状态档只有恰好单档 `pending`/`doing`/`done` 才落 `status`；`undone`
+///   与多选（条件 JSON 的 `status` 是等值键）丢弃；
 /// - 优先级档落 `priority_min`（桌面 toolbarToForm 同款映射）；
 /// - 标签档落 `label_ids` 单元素集合；
 /// - 收藏快捷视图落 `favorite_only`。
@@ -1130,8 +1151,10 @@ Map<String, dynamic> filterToSavedConditions({
   required QuickViewKey? quickView,
 }) {
   final out = <String, dynamic>{};
-  final status = filters.status;
-  if (status != null && status != 'undone') out['status'] = status;
+  final status = statusFilterOf(filters.statuses);
+  if (status == 'pending' || status == 'doing' || status == 'done') {
+    out['status'] = status;
+  }
   if (filters.priority != null) out['priority_min'] = filters.priority;
   if (filters.labelId != null) out['label_ids'] = [filters.labelId];
   if (quickView == QuickViewKey.favorite) out['favorite_only'] = true;
@@ -1146,13 +1169,8 @@ List<TodoTask> applyTaskListFilters(
 }) {
   if (filters.isEmpty) return tasks;
   Iterable<TodoTask> list = tasks;
-  final status = filters.status;
-  if (status != null) {
-    list = switch (status) {
-      'undone' => list.where((t) => !t.isDone),
-      'done' => list.where((t) => t.isDone || t.status == 'done'),
-      _ => list.where((t) => t.status == status),
-    };
+  if (filters.statuses.isNotEmpty) {
+    list = list.where((t) => _matchesStatusSet(t, filters.statuses));
   }
   final priority = filters.priority;
   if (priority != null) {
@@ -1163,6 +1181,15 @@ List<TodoTask> applyTaskListFilters(
     list = list.where((t) => labelIdsByTask[t.id]?.contains(labelId) ?? false);
   }
   return list.toList();
+}
+
+/// 状态集合匹配（派生状态口径，与 core `status_in` / 桌面 `statusMatches`
+/// 同源）：完成位为真或 `status='done'` 记为完成；其余脏值回落 pending。
+bool _matchesStatusSet(TodoTask task, Set<String> statuses) {
+  if (task.isDone || task.status == 'done') {
+    return statuses.contains('done');
+  }
+  return statuses.contains(task.status == 'doing' ? 'doing' : 'pending');
 }
 
 /// 任务 → 标签 id 集索引（由桥投影构造；同一任务多标签走并集，不做交集）

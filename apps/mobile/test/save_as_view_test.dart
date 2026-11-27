@@ -56,18 +56,26 @@ void main() {
       );
     });
 
-    test('状态 all/undone 丢弃、真实状态落键', () {
+    test('状态 all/undone/多选丢弃、恰好单档真实状态落键', () {
       expect(
         filterToSavedConditions(
-          filters: const TaskListFilters(status: 'undone'),
+          filters: const TaskListFilters(statuses: {'pending', 'doing'}),
           quickView: null,
         ),
         isEmpty,
-        reason: 'undone 无对应白名单键，丢弃（桌面同口径）',
+        reason: 'undone 派生档无对应白名单键，丢弃（桌面同口径）',
       );
       expect(
         filterToSavedConditions(
-          filters: const TaskListFilters(status: 'pending'),
+          filters: const TaskListFilters(statuses: {'pending', 'done'}),
+          quickView: null,
+        ),
+        isEmpty,
+        reason: '条件 JSON 的 status 是等值键，多选装不进去',
+      );
+      expect(
+        filterToSavedConditions(
+          filters: const TaskListFilters(statuses: {'pending'}),
           quickView: null,
         )['status'],
         'pending',

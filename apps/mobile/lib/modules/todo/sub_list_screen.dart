@@ -926,21 +926,39 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
             padding: EdgeInsets.zero,
             children: [
               _sheetSectionTitle(sheetContext, '状态'),
+              // 多选（2026-11-27 对齐桌面 #118）：空集 = 全部状态；多档并选
+              // 为「或」。「未完成」保留为一键选中/取消「待办+进行中」的
+              // 派生快捷档（与桌面 statusFilterOf 的 undone 语义等价）。
               _chipRow([
-                _filterChip('全部', _filters.status == null, () {
+                _filterChip('全部', _filters.statuses.isEmpty, () {
                   setSheetState(() {});
-                  _setFilters(_filters.copyWith(status: null));
+                  _setFilters(_filters.copyWith(statuses: const {}));
                 }),
-                // 未完成档（跨 pending/doing 的完成位口径）与桌面一致，
-                // 故不走 statusLabel（它不是真实任务状态，只是筛选伪档）
-                _filterChip('未完成', _filters.status == 'undone', () {
-                  setSheetState(() {});
-                  _setFilters(_filters.copyWith(status: 'undone'));
-                }),
-                for (final s in const ['pending', 'doing', 'done'])
-                  _filterChip(statusLabel(s), _filters.status == s, () {
+                _filterChip(
+                  '未完成',
+                  _filters.statuses.length == 2 &&
+                      _filters.statuses.contains('pending') &&
+                      _filters.statuses.contains('doing'),
+                  () {
                     setSheetState(() {});
-                    _setFilters(_filters.copyWith(status: s));
+                    final undone = _filters.statuses.length == 2 &&
+                        _filters.statuses.contains('pending') &&
+                        _filters.statuses.contains('doing');
+                    _setFilters(
+                      _filters.copyWith(
+                        statuses: undone
+                            ? const {}
+                            : const {'pending', 'doing'},
+                      ),
+                    );
+                  },
+                ),
+                for (final s in const ['pending', 'doing', 'done'])
+                  _filterChip(statusLabel(s), _filters.statuses.contains(s), () {
+                    setSheetState(() {});
+                    final next = {..._filters.statuses};
+                    if (!next.remove(s)) next.add(s);
+                    _setFilters(_filters.copyWith(statuses: next));
                   }),
               ]),
               _sheetSectionTitle(sheetContext, '优先级'),
@@ -1119,7 +1137,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   /// 或「完成」动作本身——未完成任务区只承载未完成行，勾完即离场（改由尾部
   /// 已完成卡承载）。取消完成是**进**未完成区而非离场，不播 ghost。
   bool _toggleWillLeave(TodoTask task) =>
-      _filters.status != null || !task.isDone;
+      _filters.statuses.isNotEmpty || !task.isDone;
 
   /// 已完成区展开 / 收起（本机偏好持久化，下次进入沿用上次档位）
   void _toggleDoneSection() {

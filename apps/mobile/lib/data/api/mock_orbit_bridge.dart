@@ -253,7 +253,23 @@ class MockOrbitBridge implements OrbitBridge {
     if (f.done != null) {
       rows = rows.where((t) => (t['done'] == 1) == f.done).toList();
     }
-    if (f.status != null) {
+    final statusIn = f.statusIn;
+    if (statusIn != null && statusIn.isNotEmpty) {
+      // 派生状态口径（与 core `status_in` 同源）：done 含完成位，
+      // 未知 status 回落 pending；集合之间是「或」。集合优先于 [status]。
+      final wantsDone = statusIn.contains('done');
+      final plain = {
+        for (final s in statusIn)
+          if (s == 'pending' || s == 'doing') s,
+      };
+      rows = rows
+          .where((t) {
+            final isDone = t['done'] == 1 || t['status'] == 'done';
+            if (isDone) return wantsDone;
+            return plain.contains(t['status'] == 'doing' ? 'doing' : 'pending');
+          })
+          .toList();
+    } else if (f.status != null) {
       rows = rows.where((t) => t['status'] == f.status).toList();
     }
     if (f.priorityMin != null) {
