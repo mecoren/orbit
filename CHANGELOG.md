@@ -184,6 +184,18 @@
 - docs/08「依赖审计基线」节同步补录编号、日期与最新告警计数（两份 lock 现 5 / 15 条
   warning），并在复跑方式里补「cargo-audit < 0.23 无法解析新 advisory 格式」的前置要求。
 
+### 构建：依赖升级消除两条新 advisory + 桌面壳 lock 同步（2026-11-27）
+
+- `v0.1.3` 首推 tag 时 `release.yml` 的 audit job 被 `RUSTSEC-2026-0594`（cookie 0.18.2：
+  fork 进程里私有 cookie nonce 可能重复）与 `RUSTSEC-2026-0592`（url 2.5.8：`Url::origin()`
+  遇嵌套 `blob:` 栈溢出）拦下——两条都是 advisory-db 在 0.1.2 发布后补录，与代码改动无关。
+- 二者都能按 patch 升级消除（不登记例外）：`cookie 0.18.2 → 0.18.3`、`url 2.5.8 → 2.5.9`
+  （连带 `form_urlencoded 1.2.2 → 1.2.3`），两个 workspace 的 `Cargo.lock` 同步后复跑
+  `cargo audit` 均 `exit 0`，warning 计数维持 5 / 15。
+- 顺带修正桌面壳 `Cargo.lock` 的本地包漂移：`orbit-core` 版本跟上 0.1.3、去掉上一批已移除的
+  `anyhow` 依赖行；`scripts/bump-version.mjs` 与 `bump:check`、发版一致性护栏一并覆盖桌面壳
+  lock 的 `orbit-core`，下次 `pnpm bump` 不再漏。
+
 ## [0.1.2] - 2026-11-20
 
 ### 新增：持续提醒可设置「提醒间隔」（2026-11-17）

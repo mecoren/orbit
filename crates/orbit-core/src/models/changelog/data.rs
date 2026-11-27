@@ -101,6 +101,10 @@ pub static ALL_VERSIONS: LazyLock<Vec<ChangelogVersion>> = LazyLock::new(|| {
                 C::Chore,
                 "依赖审计基线：补录 advisory-db 新收录的 RUSTSEC-2026-0545 / 0548（同属 zip 4.6.1 读取路径例外），解除 0.1.2 发版卡点；docs/08 同步告警计数与复跑前置要求",
             ),
+            e(
+                C::Chore,
+                "依赖升级与 lock 同步：cookie 0.18.2→0.18.3、url 2.5.8→2.5.9（连带 form_urlencoded）消除 advisory-db 新补录的 RUSTSEC-2026-0594 / 0592，解除 0.1.3 首发 audit 卡点；桌面壳 lock 的 orbit-core 版本与依赖行跟上，bump 脚本与发版一致性护栏改为同时校验",
+            ),
         ],
     ),
     v(
