@@ -2023,8 +2023,18 @@ function RemindersSection({
         )}
 
         {editing?.id === null && (
-          <div className="max-w-xs space-y-1.5 rounded-lg bg-muted/40 p-2">
-            <DateTimePicker value={editing.draft} onChange={(v) => setEditing({ ...editing, draft: v })} />
+          <div
+            className="max-w-xs space-y-1.5 rounded-lg bg-muted/40 p-2"
+            data-testid="reminder-draft"
+          >
+            {/* 新增提醒与「编辑既有提醒」同口径：必须带上任务截止/结束上下文，
+                否则「结束与截止」相对档在详情页添加提醒时整组消失（2026-11-27） */}
+            <DateTimePicker
+              value={editing.draft}
+              dueDateMs={dueDateMs}
+              endMs={endMs}
+              onChange={(v) => setEditing({ ...editing, draft: v })}
+            />
             <ReminderConstantFields
               enabled={editing.isConstant}
               intervalMs={editing.intervalMs}

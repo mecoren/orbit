@@ -636,6 +636,25 @@ test("详情属性：开始日期可见/可改可清除 + 完成时间展示（2
   expect(inViewport).toBe(true);
 });
 
+test("详情页添加提醒：相对截止/结束档跟随任务截止时间（2026-11-27）", async ({ page }) => {
+  const row = page.getByRole("button", { name: "未完成任务：既有任务-今天截止" });
+  await row.click();
+  const drawer = page.getByRole("dialog");
+  await expect(drawer).toBeVisible();
+
+  // 详情「提醒」区块 → 添加提醒 → 展开新提醒草稿的时间弹层
+  await drawer.getByRole("button", { name: "添加提醒" }).click();
+  const draft = page.getByTestId("reminder-draft");
+  await expect(draft).toBeVisible();
+  // 第一个按钮是 DateTimePicker 触发钮（第二个是清空 X）
+  await draft.getByRole("button").first().click();
+
+  // seed 任务带截止时刻（今天 10:00）→ 相对组必须出现「结束与截止」
+  await expect(page.getByText("结束与截止")).toBeVisible();
+  await expect(page.getByText("截止当天 09:00")).toBeVisible();
+  await expect(page.getByText("截止前 15 分钟")).toBeVisible();
+});
+
 test("附件：详情抽屉区块渲染 + 列表/移除链路（mock 命令面）", async ({ page }) => {
   // 任务行点击打开详情抽屉
   const row = page.getByRole("button", { name: "未完成任务：既有任务-今天截止" });
