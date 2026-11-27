@@ -85,6 +85,10 @@ describe("发版一致性", () => {
     expect(lockVersion(read(path.join(DESKTOP, "src-tauri/Cargo.lock")), "orbit")).toBe(
       sourceVersion,
     );
+    // 桌面壳 lock 还记录 path 依赖 orbit-core（0.1.3 曾漏同步，bump:check 已纳入）
+    expect(lockVersion(read(path.join(DESKTOP, "src-tauri/Cargo.lock")), "orbit-core")).toBe(
+      sourceVersion,
+    );
   });
 
   it("应用内更新日志头部条目 = 当前版本（Rust 数据源，发版时两处日志同一次提交写完）", () => {

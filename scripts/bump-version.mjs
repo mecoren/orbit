@@ -30,7 +30,9 @@ const FILES = {
 /** lock 文件 + 各文件内需要同步版本的本地包名 */
 const LOCKS = [
   { file: "Cargo.lock", packages: ["orbit-core", "orbit-flutter"] },
-  { file: "apps/desktop/src-tauri/Cargo.lock", packages: ["orbit"] },
+  // 桌面壳 lock 除外层 `orbit` 包外，还记录 path 依赖 `orbit-core` 的版本；
+  // 漏同步会让该 workspace 的 `cargo --locked` 直接报错（0.1.3 曾漏）。
+  { file: "apps/desktop/src-tauri/Cargo.lock", packages: ["orbit", "orbit-core"] },
 ];
 
 const SEMVER = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/;
