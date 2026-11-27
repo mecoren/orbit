@@ -14,6 +14,31 @@ import { BellRing, ExternalLink, X } from "lucide-react";
 import { SNOOZE_PRESETS, snoozeTargetLabel } from "./reminder-snooze";
 import { formatConstantInterval } from "./constant-interval";
 
+/**
+ * 到期卡停留时长（ms）：与 04 §六 的提醒兜底同口径 10s。
+ *
+ * 普通 toast 是 4s，但本卡带「查看任务」+ 三档推迟共四个按钮——给足
+ * 阅读与点击时间；sonner 在鼠标悬停/按在卡上时会暂停计时，真要操作
+ * 不会读到一半被收走。**不要改回 Infinity**：常驻卡会一直压住右上角
+ * （2026-11-27 用户反馈「这个一直没收」），而系统通知是并列通道。
+ */
+export const REMINDER_TOAST_DWELL_MS = 10_000;
+
+/**
+ * 到期卡的 sonner 选项：到点自动收 + 收卡时清 id 登记。
+ *
+ * sonner 的 `onDismiss` 只在显式 dismiss / 划掉时触发，**到点自动收只回调
+ * `onAutoClose`**；两个都挂才不会在 `reminderToastIds` 里留下指向已消失
+ * toast 的僵尸映射（留了也无害，但下次同 id 到期会先去 dismiss 一个死 id）。
+ */
+export function reminderToastOptions(onGone: () => void) {
+  return {
+    duration: REMINDER_TOAST_DWELL_MS,
+    onAutoClose: onGone,
+    onDismiss: onGone,
+  };
+}
+
 export interface ReminderToastProps {
   title: string;
   remindAt: number;

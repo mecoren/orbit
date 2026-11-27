@@ -24,7 +24,7 @@ import { toast } from "sonner";
 
 import { router } from "@/router";
 import { remindAtClockLabel, snoozeReminder } from "@/features/todo/shared/reminder-snooze";
-import { ReminderToast } from "@/features/todo/shared/reminder-toast";
+import { ReminderToast, reminderToastOptions } from "@/features/todo/shared/reminder-toast";
 import { openTaskFromReminder } from "@/features/todo/shared/reminder-nav";
 
 interface ReminderDuePayload {
@@ -62,19 +62,20 @@ interface ReminderOpenPayload {
 /**
  * reminder.id → in-app toast id（snoozed/completed 事件到达时按源 id 关对应 toast）
  *
- * 删除路径三条：snoozed/completed 事件、onDone 按钮、onDismiss（手动划掉）。
+ * 删除路径四条：snoozed/completed 事件、onDone 按钮、onDismiss（手动划掉）、
+ * onAutoClose（到点自动收，2026-11-27 改为 10s 自动收时补）。
  * 前两条自初始版在位；手动划掉路径 2026-10-12 补齐（docs/09 §五 复核结论，
  * 此前每手动划掉一个常驻 toast 残留一项）。
  */
-// bounded-by-data: 键为提醒行 id，同一提醒重复响只覆盖同键；三条删除路径覆盖后不残留
+// bounded-by-data: 键为提醒行 id，同一提醒重复响只覆盖同键；四条删除路径覆盖后不残留
 const reminderToastIds = new Map<number, number | string>();
 
 export function useTodoReminderListener() {
   const qc = useQueryClient();
   useEffect(() => {
     // 系统通知（右下角弹窗）点推迟按钮后：Rust 已删旧建新并广播。
-    // 前端三件事：按 reminder_id 关闭对应 in-app toast（duration Infinity
-    // 常驻，不关会一直挂着，且其引用的提醒行已被删——再点它会建出
+    // 前端三件事：按 reminder_id 关闭对应 in-app toast（到期卡停留 10s，
+    // 但用户可能正停在卡上；且它引用的提醒行已被删——再点它会建出
     // 平行提醒）+ 弹与站内推迟同款确认 + 失效详情缓存刷新提醒区块
     const unlistenSnoozed = listen<ReminderSnoozedPayload>(
       "todo_reminder:snoozed",
@@ -112,13 +113,13 @@ export function useTodoReminderListener() {
     const unlistenPromise = listen<ReminderDuePayload>("todo_reminder:due", (event) => {
       const r = event.payload;
       // 窗口隐藏（驻留托盘）期间不弹 in-app toast：系统通知才是后台
-      // 提醒通道；隐藏期弹的 Infinity toast 会在恢复窗口时堆积成
-      // 一片过期卡片（「8 点的提醒 12 点打开还在」的另一半根因）。
+      // 提醒通道；隐藏期攒下的到期卡会在恢复窗口时排成一片过期卡片
+      //（「8 点的提醒 12 点打开还在」的另一半根因）。
       // WebView 隐藏时 visibilityState=hidden（Win/mac 实测语义）
       if (document.visibilityState !== "visible") return;
-      // 持续提醒顺延后同一 id 会再次到期（G2）：先关上一轮常驻卡再挂新的。
-      // 不关则 Infinity toast 逐轮堆积；更糟的是旧卡的 onDismiss 闭包里
-      // 持有同一个 r.id，用户划掉旧卡会把新卡的映射一并删掉，
+      // 持续提醒顺延后同一 id 会再次到期（G2）：先关上一轮卡再挂新的。
+      // 不关则一轮卡叠一轮；更糟的是旧卡的收卡回调持有同一个 r.id，
+      // 用户在旧卡上点关闭会把新卡的映射一并删掉，
       // 后续 snoozed/completed 事件再也关不掉新卡。
       const prevToastId = reminderToastIds.get(r.id);
       if (prevToastId != null) {
@@ -161,13 +162,9 @@ export function useTodoReminderListener() {
             />
           );
         },
-        // 不自动消失：推迟/关闭都由按钮驱动；避免超时关闭后用户失去入口
-        {
-          duration: Infinity,
-          // 覆盖最后一条删除路径：用户手动划掉 toast（sonner 的 dismiss
-          // 与按钮关闭都会回调 onDismiss），避免登记表残留
-          onDismiss: () => reminderToastIds.delete(r.id),
-        },
+        // 到点自动收（常驻会一直压在右上角挡标题栏）：停留 10s，
+        // 悬停/按在卡上时 sonner 暂停计时；收卡清理口径见 reminderToastOptions
+        reminderToastOptions(() => reminderToastIds.delete(r.id)),
       );
       // 到期处置（重复任务续排/已完成实例清理）由 Rust 轮询守护在 emit
       // 前后异步执行（orbit-core advance_fired_reminder），本监听器只呈现
