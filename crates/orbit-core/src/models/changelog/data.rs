@@ -37,6 +37,73 @@ fn v(version: &str, date: &str, summary: &str, changes: Vec<ChangelogEntry>) -> 
 // bounded-by-data: 编译期静态只读常量，上界 = 已发布版本数（每次发版 +1，历史不可删）
 pub static ALL_VERSIONS: LazyLock<Vec<ChangelogVersion>> = LazyLock::new(|| {
     vec![v(
+        "0.1.3",
+        "2026-11-27",
+        "双端能力对齐与一批数据一致性修复：移动端列表状态筛选改多选（对齐桌面 #118），移动端「检查更新」可在应用内下载并安装 APK（未授权/失败回退发布页）；桌面修复关窗驻留过久后托盘/通知唤起窗口停在后台打不开、详情「添加提醒」缺相对截止档；数据层收口同步 push 快照误记已消费、v2 备份导出跳行/重复、ICS 导出往返退一天、统计热力图与小组件日界、节假日跨年写入失败等缺陷。含一次增量迁移（0003：补同步表 uuid 唯一索引与 FTS 活行谓词，存量数据行为不变）",
+        vec![
+            e(
+                C::Feature,
+                "移动端列表状态筛选改多选：全部 / 未完成 / 待办 / 进行中 / 已完成可多档并选（多档为「或」，空集 = 全部），「未完成」保留为一键选中/取消「待办 + 进行中」的派生快捷档；恰好单档待办/进行中仍走等值谓词，已完成或多档改下推 core status_in（done 兼容 done=1 与 status='done'，未知 status 回落 pending）；逾期置顶段剔除 done、「已完成 N」卡与 Logbook 仅取 done 子集、保存筛选器等值 status 与列表多选取交集",
+            ),
+            e(
+                C::Feature,
+                "移动端应用内下载并安装 APK：core 清单补 apk_url（按 Orbit_<ver>.apk 资产名拼直链），Android 新增安装通道（未知来源权限检查、授权页跳转、FileProvider + 安装器 Intent）；下载流式化（200ms 进度节流、可取消、截断与非 ZIP 头拒绝、版本串净化），下载完成确认后交系统安装器；未授权/下载失败/拉起失败均回退发布页，仍不轮询、不静默安装、不校验包签名（覆盖安装由 Android 安装器按固定 release keystore 判定）",
+            ),
+            e(
+                C::Fix,
+                "托盘/任务栏唤起打不开界面：关窗驻留超过 5 分钟（主窗被空闲回收销毁）后点托盘图标或通知正文，窗口重建却停在别的应用后面且不聚焦——统一走 activate_window（show + unminimize + Windows SetWindowPos(HWND_TOP) + AttachThreadInput 绕前台锁 + set_focus），重建分支起守候泵补最大化/置前/聚焦并二次复核；顺带修复重建窗口丢最大化与重建并发防护，唤起链路改 log 落盘（此前 eprintln 在 release 下不可见）",
+            ),
+            e(
+                C::Fix,
+                "桌面详情「添加提醒」缺相对截止/结束档：新增提醒草稿分支漏传 dueDateMs/endMs，快捷选项不渲染「结束与截止」组，与编辑既有提醒两套行为；补齐同一组上下文并加回归 testid",
+            ),
+            e(
+                C::Fix,
+                "同步 push 快照只由 pull 写：push 结束不再 update_from_manifest 把本机从未下载过的他端桶指纹与 manifest_epoch 记进 sync_state（否则下一轮 pull 命中假快照跳过，他端数据在本机永久不可见）；代价是本轮自推的桶下次 pull 重下一次（LWW 同版本幂等）",
+            ),
+            e(
+                C::Fix,
+                "v2 备份导出改键集分页（is_deleted = 0 AND rowid > ? ORDER BY rowid）：原 LIMIT/OFFSET 每页独立读快照，导出期间软删导致跳行、插入导致重复，恢复侧计数不符会整份拒收；游标 rowid 只作分页不进 JSON",
+            ),
+            e(
+                C::Fix,
+                "迁移 0003：attachments / saved_filters / templates 三张同步表补 uuid 唯一索引（先回填去重再建索引，防同步主键僵尸行复活），四个 FTS *_ai 触发器补 is_deleted = 0 并清理已索引墓碑（同步合并/备份恢复直写墓碑会占 MATCH 名额致存活结果漏命中）",
+            ),
+            e(
+                C::Fix,
+                "输入边界与解析：repeat_after 增上界 1000（weekly 掩码逐日扫描按 N 线性放大，脏数据可钉死 async 线程）与另两处 as u32 截断钳制；项目分页 offset 用规范化 page_size（page_size=0 时第 2 页起恒返第一页）；CSV 空行跳过改迭代（递归下 20MB 纯换行文件栈深=行数，panic=abort 直接退进程）；迁移 ATTACH 路径单引号转义",
+            ),
+            e(
+                C::Fix,
+                "日界与缓存：ICS 导出 DTSTART;VALUE=DATE 改取本地日期（原先毫秒→UTC 截前 8 位，东八区本地零点落到前一天，往返一次退一天），导入 unfold 去 UTF-8 BOM（带 BOM 首行识别失败整份解析 0 行）；节假日 created_at 改毫秒、整年替换改 INSERT OR REPLACE（12 月跨年条目被两个年份响应各给一次会整年事务回滚）、自动更新失败也累计 failure_count；统计热力图去掉 NaiveDate→and_utc→local_day_index 往返（负偏移时区整体错一天并丢 12-31），小组件「今天」改明日本地零点（原 now+24h 在 18:00 后把明天任务算进今天）",
+            ),
+            e(
+                C::Fix,
+                "桌面写路径失败反馈：回顾中心/周回顾统一 toast + errMsg（此前裸 try/finally 或只 console.error），回顾中心改为先写库成功再关向导、周回顾顺延部分失败不再整批标处置；星标撤销白名单字段名 favorite → is_favorite（此前恒不命中、静默不可撤销）；子任务删除与项目拖拽失败补 catch 并重拉真值回滚乐观排序",
+            ),
+            e(
+                C::Fix,
+                "桌面窗口化视图与跨零点：周回顾/收件箱分诊在看板/日历/四象限/Logbook 下拿到空数组（判据漏 board/calendar，查询 enabled 也漏 calendar），统一 windowedTasks；visibleTasks memo 补 taskReminders/attachmentTaskIds/openSubtaskTaskIds 依赖（「有提醒/有附件/有未完成子任务」筛选此前不重算）；壳层 todayZero 补 60s tick（托盘跨零点后「我的一天」与今日角标停在昨天）",
+            ),
+            e(
+                C::Fix,
+                "移动端失效链与交互：todo_labels 补 taskLabelProjection（标签改名/改色后列表 chip 不再停在旧色）；节日补写进度层被返回键弹掉后不再误关节日缓存页、ref.invalidate 前判 mounted、CSV 预览 await 后补 mounted、BootGate listenManual 订阅 dispose close、提醒重排进行中请求记 dirty 结束后补跑（此前直接丢弃致漏排）；搜索页区分加载/失败、保存筛选器前 20 条加条数提示、回顾中心按钮档位对齐、子任务「提到顶层」失败不再弹成功",
+            ),
+            e(
+                C::Fix,
+                "设置页缓存与回读：断开云同步补失效 sync-config（断开不产生 sync-progress 事件，标题栏云图标仍显示已配置）；诊断卡 sync_config 与设置页 sync-config 两份缓存统一 key（保存后诊断卡最长 60s 读旧值）；CSV 导入轮询失败在 finally 回收 job 并清 jobRef；自启回读失败改为「已提交但未核实」而非拿假设值冒充系统真值",
+            ),
+            e(
+                C::Chore,
+                "开源组件清单对齐真实依赖：补 npm 18 条、Rust 31 条（许可证/仓库取自 cargo metadata 与 node_modules），删跨来源重名的 flutter_rust_bridge 与零使用的 anyhow；新增 perf-metrics/oss-parity.mjs 比对四个 Cargo.toml + package.json + pubspec.yaml 的直接依赖（未登记 / 幽灵条目 / 重名），--gate 缺项即红并接入 CI perf-gate",
+            ),
+            e(
+                C::Chore,
+                "依赖审计基线：补录 advisory-db 新收录的 RUSTSEC-2026-0545 / 0548（同属 zip 4.6.1 读取路径例外），解除 0.1.2 发版卡点；docs/08 同步告警计数与复跑前置要求",
+            ),
+        ],
+    ),
+    v(
         "0.1.2",
         "2026-11-20",
         "持续提醒可按条设置间隔：提醒间隔从写死 5 分钟改为行级可选（1/5/10/15/30/60 分钟），双端表单与详情页可直接调整、设置页提供新建默认值；桌面端修复每次双击 exe 多开一个托盘图标与进程，`--hidden` 自启后唤起主窗不显示。含一次增量迁移（存量行为默认值，语义不变）",

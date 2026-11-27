@@ -25,6 +25,8 @@
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-11-27
+
 ### 新增：移动端列表状态筛选多选（2026-11-27）
 
 - **对齐桌面 #118**：桌面工具栏状态早于 2026-10-28 改为多选，移动端筛选抽屉仍是单档；
@@ -48,6 +50,88 @@
   `dueDateMs` / `endMs`，新增提醒分支漏传；快捷选项组件据此不渲染相对组。
 - **修复**：新增提醒分支补齐同一组上下文（并加 `data-testid="reminder-draft"` 便于
   回归）；新增 Playwright 用例断言 seed 任务（截止今天 10:00）上「结束与截止」组可见。
+
+### 修复：同步快照、备份分页与迁移 0003——数据层一致性与不可见数据（2026-11-25）
+
+- **同步 push 不再把远端清单记成已消费**：push 结束时原会 `update_from_manifest`——把
+  `manifest_epoch` 与本机从未下载过的他端桶指纹一起写进 `sync_state`，下一轮 pull 要么
+  命中 epoch 快路径整轮早退、要么逐桶比对命中假快照跳过，他端数据在本机永久不可见。
+  快照改为只由 pull 在真正应用完一轮后写；代价是本轮自推的桶下次 pull 重下一次
+  （LWW 同版本幂等），用一点流量换正确性。
+- **v2 备份导出改键集分页**：原 `LIMIT/OFFSET` 每页独立读快照，导出期间软删会让后续行
+  前移（跳行）、插入会重复，恢复侧 `actual != declared` 会整份拒收，等于备份失败；
+  改 `WHERE is_deleted = 0 AND rowid > ? ORDER BY rowid`，游标 rowid 只作分页不进 JSON。
+- **迁移 0003 补齐 uuid 唯一索引与 FTS 活行谓词**：attachments / saved_filters / templates
+  三张同步表此前只有普通 `idx_uuid`，缺 UNIQUE 就丢了「同步主键防僵尸行复活」的兜底
+  （先回填/去重再建索引，已有脏数据的老库不会启动即迁移失败）；四个 FTS `*_ai` 触发器
+  补 `is_deleted = 0`（与 `*_au` 同构）并清理已索引墓碑——同步合并/备份恢复直写墓碑会
+  占 MATCH 名额，导致存活结果漏命中。docs/03 登记 0003。
+- **输入边界与解析一组修正**：`repeat_after` 增上界 1000（weekly 掩码分支逐日扫描按 N
+  线性放大，脏数据可把 async 工作线程钉死），另两处 `as u32` 截断一并钳制；项目列表
+  分页 offset 改用规范化后的 `page_size`（`page_size=0` 时第 2 页起恒返第一页）；CSV
+  空行跳过改迭代实现（递归下 20MB 纯换行文件栈深=行数，panic=abort 直接退进程，且空行
+  不计入 20 万行闸门）；迁移 ATTACH 路径补单引号转义（与 pool.rs 的 key 注入口径统一）。
+
+### 修复：日界与缓存——ICS 往返、节假日跨年写入、热力图与小组件（2026-11-25）
+
+- **ICS 导出日期按本地取、导入去 BOM**：`DTSTART;VALUE=DATE` 原先毫秒 → UTC 再截前 8 位，
+  东八区本地零点落到前一天，导出 → 导入每往返一次再退一天；改取本地日期。`unfold_ics`
+  补去 UTF-8 BOM：带 BOM 的 ICS 首行识别失败会整份解析出 0 行（CSV 侧早有剥离，ICS 漏了）。
+- **节假日缓存三处修正**：`cfg_holidays.created_at` 改用毫秒（此前写秒，比全库小 1000 倍）；
+  整年替换改 `INSERT OR REPLACE`（date 有 UNIQUE，12 月跨年条目会被两个年份的响应各给
+  一次，裸 INSERT 让整年事务因约束冲突整体回滚）；自动更新失败也累加 `failure_count`
+  （SQL 侧原子自增），设置页「连续失败 N 次」此前对自动更新恒为 0。
+- **统计热力图日界与小组件「今天」**：热力图窗口去掉 `NaiveDate → and_utc →
+  local_day_index` 往返——负偏移时区整体错一天并丢掉当年 12-31（东八区恰好正确，既有
+  单测不会红）；小组件「今天」改明日本地零点，原先 `now+24h` 会在 18:00 后把明天任务
+  算进今天，与角标/列表日界口径冲突。
+
+### 修复：桌面写路径失败反馈与乐观回滚（2026-11-25）
+
+- 回顾中心/周回顾失败此前是裸 `try/finally` 或只 `console.error`，用户点了没反应；统一
+  toast + `errMsg`，回顾中心改为「先写库成功再关向导」，周回顾顺延部分失败不再整批标
+  处置（失败行会从清单里消失）。
+- 星标撤销白名单字段名 `favorite` → `is_favorite`（此前恒不命中、静默不可撤销）；子任务
+  删除、项目拖拽失败补 catch，拖拽失败重拉真值回滚乐观排序；删除不存在的 `["count"]`
+  失效（角标实际键是 `todo_tasks/sidebar-counts`）。
+
+### 修复：桌面窗口化视图弹窗空数据、筛选重算与跨零点日界（2026-11-25）
+
+- 周回顾/收件箱分诊在看板/日历/四象限/Logbook 下拿到空数组：数据源判据漏了
+  `board/calendar`，`review/triage` 查询的 `enabled` 也漏 `calendar`；统一 `windowedTasks`。
+- `visibleTasks` 的 memo 补 `taskReminders/attachmentTaskIds/openSubtaskTaskIds` 依赖：
+  保存筛选器里「有提醒/有附件/有未完成子任务」条件此前不重算。
+- 壳层 `todayZero` 只算一次：托盘跨零点后「我的一天」与今日角标停在昨天，补 60s tick。
+
+### 修复：移动端失效链、订阅清理与交互细节（2026-11-25）
+
+- **失效链**：`todo_labels` 补 `taskLabelProjection`——标签改名/改色后列表行内 chip 不再
+  停在旧颜色（桌面同表映射早已带 projection）。
+- **订阅与守卫**：节日补写进度层被返回键弹掉后不再误关节日缓存页；`ref.invalidate` 前先
+  判 `mounted`；CSV 预览 await 后补 mounted 守卫；`BootGate` 保存 `listenManual` 订阅并在
+  dispose close（重建后不再挂在已销毁 State 上）；提醒重排进行中的请求记 dirty、结束后
+  补跑（此前直接丢弃且没有第二个定时器 → 漏排）。
+- **交互细节**：搜索页区分加载/失败（此前两者都渲染成「输入关键词…」引导空态，失败零
+  反馈）；保存筛选器展开只列 20 条补「共 N 条，以下只列前 20 条」；回顾中心「开始回顾」改
+  `OrbitButton.secondary(compact)` 与同排另两颗同档；子任务「提到顶层」失败不再弹成功
+  （`_mutate` 返回 bool，成功才提示）。
+
+### 修复：设置页断开同步缓存、诊断缓存键与自启回读（2026-11-25）
+
+- 断开云同步补失效 `["sync-config"]`：断开不产生 sync-progress 事件，标题栏云图标此前
+  仍显示已配置。
+- 诊断卡用 `["sync_config"]`、设置页/状态钮用 `["sync-config"]`，同一份数据两份缓存；
+  统一 key，保存后诊断卡不再最长 60s 读旧值。
+- CSV 导入轮询失败/异常在 finally 回收 job 并清 `jobRef`（此前双残留）；自启回读失败不再
+  拿假设值冒充系统真值，改为「已提交但未核实」提示。
+
+### 构建：开源组件清单对齐真实依赖并加一致性门禁（2026-11-25）
+
+- 清单补 npm 18 条、Rust 31 条（许可证/仓库取自 `cargo metadata` 与 `node_modules`，
+  非手填）；删跨来源重名的 flutter_rust_bridge，并移除零使用的 anyhow 依赖与其条目。
+- 新增 `perf-metrics/oss-parity.mjs`：按四个 `Cargo.toml` + `package.json` +
+  `pubspec.yaml` 的直接依赖比对「未登记 / 幽灵条目 / 重名」，`--gate` 缺项即红；接入 CI
+  perf-gate。清单 119 条 vs 依赖 120 名（跨 npm/crates 去重），门禁通过。
 
 ### 修复：托盘/任务栏唤起打不开界面（2026-11-25）
 
