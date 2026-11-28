@@ -1441,7 +1441,7 @@ dependencies = [
 
 [[package]]
 name = "orbit-core"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "aes-gcm",
  "async-trait",
@@ -1479,7 +1479,7 @@ dependencies = [
 
 [[package]]
 name = "orbit-flutter"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "android_logger",
  "base64",
