@@ -68,7 +68,7 @@ const CRASH_LOG_MAX_BYTES: u64 = 1_000_000;
 /// 追加一条崩溃记录到 `{log_dir}/crash.log`（PRIVACY.md 承诺的本地崩溃留痕）
 ///
 /// 本函数在 panic hook 内调用，**任何一步失败都只能放弃**（不能再 panic）。
-fn append_crash_log(message: &str) {
+pub(crate) fn append_crash_log(message: &str) {
     let Some(dir) = log_dir() else {
         return;
     };
@@ -188,6 +188,12 @@ pub fn run() {
     // crash.log（PRIVACY.md §三「崩溃信息仅落本地 logs/crash.log」的实现点）。
     install_crash_hook();
 
+    // 二次实例握手看门狗：必须早于单实例插件（它在 Builder::build 里就跑握手）。
+    // 单实例插件在 Windows 用**同步** SendMessageW 转交 argv，首实例主线程卡死
+    // 时这次发送永不返回——每点一次图标多一个僵尸进程（2026-11-28 现场 11 个）。
+    // 看门狗在 setup 未完成且首实例确认无响应时结束它并重新拉起，见模块文档。
+    commands::single_instance_guard::arm();
+
     // WebView2 内存参数（2026-09-12 F5/M3，Windows）：
     // - --disk-cache-size=52428800：磁盘缓存 50MB 封顶，防附件/图片
     //   预览撑大 cache 目录。
@@ -305,6 +311,7 @@ pub fn run() {
                         return;
                     }
                     let _ = window.emit("tray-close-hint", ());
+                    commands::window_recycler::mark_user_close();
                     window.hide().ok();
                     commands::webview_low_power::set_memory_usage_level(window.app_handle(), true);
                     commands::window_recycler::schedule_recycle_on_hide(window.app_handle());
@@ -373,6 +380,9 @@ pub fn run() {
             // 即由壳层兜底 show。--hidden 自启（静默驻留）不适用本兜底——
             // 该标志会被 window_recycler 的显式唤起清除（startup_cmd::mark_activated），
             // 因此「自启驻留 → 用户唤起」之后兜底重新生效，语义自动对齐。
+            // 用户自己关窗（CloseRequested → 隐藏驻留）同样不适用：否则启动 8s 内
+            // 关掉的窗口会被兜底重新弹出来（2026-11-28 实测复现，且会让回收排程
+            // 因「窗口可见」被取消，内存档位白白切回前台）。
             // 窗口重建路径无需覆盖：重建后 webview 重跑启动链，失败可经托盘/热键
             // 的 Rust 侧 show_main_window_cmd 唤起。
             #[cfg(desktop)]
@@ -381,6 +391,9 @@ pub fn run() {
                 std::thread::spawn(move || {
                     std::thread::sleep(std::time::Duration::from_secs(8));
                     if commands::startup_cmd::is_launched_hidden() {
+                        return;
+                    }
+                    if commands::window_recycler::is_hidden_by_user_close() {
                         return;
                     }
                     if let Some(win) = handle.get_webview_window("main")
@@ -455,6 +468,11 @@ pub fn run() {
             // 桌面专属：依赖钥匙串密码缓存，移动端无持久凭据库
             #[cfg(desktop)]
             commands::backup_scheduler::backup_scheduler_start(_app.handle().clone());
+
+            // setup 就绪：放行二次实例握手看门狗 + 开启主线程无响应留痕
+            // （窗口与托盘全依赖主线程，卡死时用户侧没有任何可反馈线索）
+            commands::single_instance_guard::mark_ready();
+            commands::single_instance_guard::start_main_thread_monitor(_app.handle().clone());
 
             Ok(())
         })

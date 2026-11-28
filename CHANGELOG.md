@@ -25,6 +25,24 @@
 
 ## [Unreleased]
 
+### 修复：关窗驻留回收后主窗建出来却打不开（2026-11-28）
+
+- **现象**：关窗驻留超过 5 分钟（主窗被回收销毁）后，点托盘或再双击 exe 都没反应；
+  之后每双击一次 exe 就多一个卡死的进程（现场 11 个，父进程 explorer）。
+- **根因**：唤起入口在**窗口过程**里同步重建主窗（托盘 WndProc / 单实例插件
+  `WM_COPYDATA` WndProc / 热键 WndProc），此时 tao 不在事件回调内，窗口几何变化
+  产生的 Moved/Resized 被内联派发；与 `restore_state()` 持有的 window-state 插件
+  互斥量互等 → 主线程卡在 futex 上永不返回（现场 RIP =
+  `ntdll!ZwWaitForAlertByThreadId`）。是否触发取决于旧状态是否真的改变窗口几何，
+  故表现为「有时候」。
+- **修复**：唤起统一入口只切原子状态，建窗/恢复几何改为「工作线程 →
+  `run_on_main_thread`」投递进事件循环，保证落在 tao 事件回调上下文（窗口事件
+  排队而非内联）；单实例插件用同步 `SendMessageW` 转交 argv（无超时），新增启动
+  看门狗——30s 未完成 setup 且首实例 `IsHungAppWindow` + 1s `WM_NULL` 探测双条件
+  成立才结束它并重新拉起（判不出来只留痕，不误杀）；补主线程心跳（20s 无响应写
+  `crash.log`）；冷启动 8s 兜底 show 不再重弹用户自己关掉的窗口。
+- 详见 ADR 0006 §八（含现场取证与 0.1.3 复现步骤）。
+
 ### 修复：桌面到期提醒卡改为 10 秒自动收（2026-11-27）
 
 - 到期提醒卡（`ReminderToast`，含「查看任务」+ 三档推迟）此前 `duration: Infinity`

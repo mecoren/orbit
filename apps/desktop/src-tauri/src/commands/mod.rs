@@ -32,6 +32,7 @@ pub mod plaintext_export_cmd;
 pub mod saved_filter_cmd;
 #[cfg(target_os = "windows")]
 pub mod scheduled_toast;
+pub mod single_instance_guard;
 pub mod startup_cmd;
 pub mod stats_cmd;
 pub mod sync_cmd;

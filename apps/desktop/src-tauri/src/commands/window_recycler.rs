@@ -48,6 +48,12 @@
 //! 另一处实测缺口：window-state 插件对重建窗口的 `restore_state` 只恢复了
 //! 位置/尺寸，**最大化态没生效**（重建后回到 1280×832）——故销毁前把
 //! `is_maximized` 记进 `RESTORE_MAXIMIZED`，重建后由壳层补一次。
+//!
+//! 执行上下文（2026-11-28 挂死修复）：唤起/重建只能在 tao 的事件回调上下文里
+//! 做，不能在窗口过程（托盘 WndProc / 单实例 WM_COPYDATA / 热键 WndProc）里
+//! 同步做，否则窗口事件会被内联派发、与插件的 `restore_state` 锁互等，主线程
+//! 永久卡死（现场见 `show_or_create_main_window` 文档）。因此本模块所有窗口
+//! 侧动作都经「工作线程 → `run_on_main_thread`」投递，调用点保持薄。
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
@@ -92,6 +98,20 @@ static RECYCLE_SCHEDULED: AtomicBool = AtomicBool::new(false);
 /// ExitRequested」（须阻止退出）与用户主动退出（须放行）
 static QUITTING: AtomicBool = AtomicBool::new(false);
 
+/// 用户主动关窗（CloseRequested → 隐藏驻留）标记：冷启动 8s 兜底 show 必须让路。
+/// 否则启动 8s 内关掉的窗口会被兜底重新弹出来（2026-11-28 实测复现），并且
+/// 窗口重新可见让回收排程判定「用户还在用」而取消，内存档位也白白切回前台。
+static USER_CLOSED: AtomicBool = AtomicBool::new(false);
+
+pub fn mark_user_close() {
+    USER_CLOSED.store(true, Ordering::SeqCst);
+}
+
+/// 主窗是否是被用户主动关掉（而非前端 show 未达）
+pub fn is_hidden_by_user_close() -> bool {
+    USER_CLOSED.load(Ordering::SeqCst)
+}
+
 pub fn mark_quitting() {
     QUITTING.store(true, Ordering::SeqCst);
 }
@@ -117,12 +137,25 @@ fn register_hotkey_fallback(app: &AppHandle) {
     });
 }
 
-/// 唤起主窗统一入口（托盘单击/菜单、全局热键、通知正文点击共用）
+/// 唤起主窗统一入口（托盘单击/菜单、全局热键、通知正文点击、重复双击 exe 共用）
 ///
-/// - 在：显示 + 置前 + 聚焦 + 档位恢复 Normal + 取消回收排程；
-/// - 不在（已被回收）：按 tauri.conf 窗口配置重建（label=main 的
-///   WindowConfig），Mica 重应用，如有补发意图则 postFrame 后 bump，
-///   随后由守候泵接管「窗口一出现就置前」。
+/// **执行上下文（2026-11-28 挂死根因）**：本入口会被窗口过程里同步调用——
+/// 托盘图标的 WndProc、单实例插件 `WM_COPYDATA` 的 WndProc、全局热键的
+/// WndProc 都跑在主线程的消息派发里，而不是 tao 的事件回调里。在那里直接
+/// 建窗/改窗会踩两类事故：
+/// 1. tao 事件循环状态机被重入（`crash.log` 里的 "cannot move state from
+///    Destroyed" panic 就是这个类）；
+/// 2. 此时 tao 不在回调内（`in_callback == 0`），窗口几何突变产生的
+///    Moved/Resized 会被 `send_event` **内联**派发进 tauri 的事件链，和
+///    正在持锁执行 `restore_state` 的 window-state 插件互相等待 → 主线程
+///    卡在 futex 上永不返回。真实现场（2026-11-28）：回收销毁后点图标，主窗
+///    建出来但永不显示，主线程停在 `ntdll!ZwWaitForAlertByThreadId`；此后
+///    托盘完全无响应，每点一次 exe 还多一个卡在同步 `SendMessage` 的僵尸进程。
+///
+/// 故本函数只做**原子量**状态切换（取消回收排程 / 退出静默驻留姿态），窗口
+/// 侧动作一律投递到事件循环执行：`run_on_main_thread` 只在**非主线程**调用时
+/// 才是投递（主线程调用会内联执行），所以先进一条工作线程再投递——两跳之后
+/// 一定落在 tao 的事件回调上下文里，窗口事件会被排队而不是内联。
 pub fn show_or_create_main_window(app: &AppHandle) {
     cancel_recycle_on_show();
 
@@ -131,6 +164,17 @@ pub fn show_or_create_main_window(app: &AppHandle) {
     // 判定就会跳过 show，界面永不出现（见 startup_cmd::mark_activated）。
     crate::commands::startup_cmd::mark_activated();
 
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let handle = app.clone();
+        if let Err(e) = app.run_on_main_thread(move || wake_main_window(&handle)) {
+            log::error!("[window-recycler] 唤起任务投递失败: {e}");
+        }
+    });
+}
+
+/// 事件循环回调上下文里的唤起实现（上下文约束见 `show_or_create_main_window`）
+fn wake_main_window(app: &AppHandle) {
     match app.get_webview_window("main") {
         Some(win) => {
             activate_window(&win, false);

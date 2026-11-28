@@ -108,3 +108,50 @@ Tauri emit 是「喊话」不是「留言」：窗口销毁期间守护 emit 的
 - **回归**：`cargo test --lib window_recycler`（守候泵单拍决策/时长关系/最大化态
   一次性消费/回收阈值）；实机链路按「隐藏 → 超时回收 → 托盘唤起」复核窗口可见、
   最大化恢复与前台归属。
+
+## 八、重建窗口挂死勘误（2026-11-28，用户反馈「有时候点不开软件，托盘也点不开」）
+
+- **现象**：关窗驻留超过 5 分钟（主窗被回收销毁）后，再点托盘图标或再双击 exe，
+  界面**永不出现**；托盘单击/菜单此后完全无响应；之后每双击一次 exe 就多一个
+  应用进程，任务管理器里越积越多（现场 11 个，父进程都是 explorer，每个 ~18MB
+  工作集 / 2 线程、0 CPU）。
+- **实测证据**（安装版 0.1.3 + 现场进程/堆栈取证 + 脚本复现）：
+  - 现场：`Tauri Window` 已重建且存在，但 `visible=false`；`tray_icon_app` /
+    `global_hotkey_app` / 单实例窗口 `cn.wait.orbit-siw` 与主窗同属主线程，
+    `IsHungAppWindow` 全体为 true；主线程 RIP 落在
+    `ntdll!ZwWaitForAlertByThreadId`（Rust std futex 等待），即**主线程自锁**，
+    不是慢 IO。二次实例全部卡在向该窗口的同步 `SendMessageW` 上。
+  - 复现（0.1.3 安装版，脚本：启动 → WM_CLOSE 关窗 → 等 335s → 起第二个实例
+    等同双击图标）：回收销毁已生效（主窗 hwnd 消失），唤醒 15s 后主窗重建出来
+    但 `visible=false`、`hung=true`、`WM_NULL` 探测超时，第二个实例进程不退出。
+  - 历史日志：两次「隐藏 300s 未唤起，回收销毁主窗」都成功，但 `app_log.log`
+    里**从未出现过**「主窗重建成功」——重建路径在本机一次都没走通过。
+- **根因**：唤起入口被**窗口过程**同步调用——托盘图标的 WndProc、单实例插件的
+  `WM_COPYDATA` WndProc、全局热键的 WndProc 都跑在主线程消息派发里，而不是 tao
+  的事件回调里。此时 tao 的 `send_event` 判定「不在回调内」，会把窗口几何变化
+  （Moved/Resized 等）**内联**派发进 tauri 的事件链；而 `create_main_window` 在
+  `build()` 之后立刻调 `restore_state()`，该函数持有 window-state 插件的
+  `WindowStateCache` 互斥量并连续 `set_position` / `set_size` / `maximize`，
+  内联回来的窗口事件再进插件 `on_window_event` 的 `cache.lock()`——std Mutex
+  不可重入 → 主线程卡在 futex 上永不返回。是否触发取决于旧状态是否真的改变了
+  窗口几何（状态与默认一致时不产生事件）——这就是「有时候」；而 §七 的置前修复
+  把唤起路径做得更重，掩盖了这条真正的死锁。
+- **修复**（`window_recycler` + 新增 `single_instance_guard`）：
+  ① `show_or_create_main_window` 只做原子量状态切换（取消回收排程、清「静默驻留」），
+  窗口侧动作改成「工作线程 → `run_on_main_thread`」投递进事件循环——
+  `run_on_main_thread` 只有在**非主线程**调用时才是投递（主线程调用会内联执行），
+  故先进一条线程再投递，保证建窗/恢复几何落在 tao 事件回调上下文里，窗口事件
+  走排队而不是内联；
+  ② 单实例插件在 Windows 用**同步** `SendMessageW` 转交 argv（无超时），首实例
+  卡死时二次实例既启动不了也退不掉。新增启动看门狗：30s 未完成 setup 且首实例
+  `IsHungAppWindow` + 1s `WM_NULL` 探测**双条件**成立才判定卡死 → 结束首实例
+  并重新拉起本程序（用户这一次点击就能拿回界面）；判不出来只留痕不动手，宁可
+  多等也不误杀正常启动/正在同步的实例；
+  ③ 主线程心跳：setup 后每 5s 投递一拍，连续 4 拍（>20s）没执行即写一条
+  `crash.log`——窗口与托盘全依赖主线程，卡死时用户侧本来没有任何可反馈线索；
+  ④ 冷启动 8s 兜底 show 不再重弹「用户自己关掉的窗口」（`mark_user_close`），
+  否则启动 8s 内关窗会被重新弹出、还会让回收排程误判「用户在用」而取消。
+- **回归**：单元测试 `cargo test --lib single_instance_guard`（看门狗决策三条件、
+  期限与心跳阈值）；实机链路按「启动 → 关窗 → >300s 回收 → 二次实例/托盘唤起」
+  复核主窗可见、可聚焦、二次实例进程正常退出、`app_log.log` 出现
+  「主窗重建成功」。
